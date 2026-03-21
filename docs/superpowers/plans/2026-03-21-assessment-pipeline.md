@@ -1468,9 +1468,11 @@ git commit -m "feat(asset): assessment scraper with tier 1 sweep and tier 2 enri
 
 ---
 
-## Task 7: Local Integration Test
+## Task 7: Local Smoke Test (Quick — NOT full scrape)
 
-**Files:** None new — this task validates the pipeline end-to-end.
+**Files:** None new — this task validates the pipeline works end-to-end with a tiny subset.
+
+**Important:** This is a quick smoke test (~2-5 minutes), NOT a full scrape. It only processes 3 properties from Tier 2 to verify the plumbing works. Tier 1 will search one prefix only, which should complete in under a minute.
 
 - [ ] **Step 1: Ensure Docker Postgres is running with latest schema**
 
@@ -1482,9 +1484,9 @@ export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/countyi
 alembic upgrade head
 ```
 
-- [ ] **Step 2: Seed staging.parcels with a few test PIDNs**
+- [ ] **Step 2: Seed staging.parcels with a few test PIDNs (one district prefix)**
 
-The assessment scraper needs district prefixes from `staging.parcels`. Insert a few test rows:
+The assessment scraper needs district prefixes from `staging.parcels`. Insert 3 rows — all in district "46" so Tier 1 only searches one prefix:
 
 ```bash
 PGPASSWORD=localtest psql -h localhost -p 5433 -U dagster_admin -d countyiq -c "
@@ -1497,7 +1499,7 @@ ON CONFLICT DO NOTHING;
 "
 ```
 
-- [ ] **Step 3: Run the asset with small batch size**
+- [ ] **Step 3: Run the asset with max_per_run=3**
 
 ```bash
 export DATABASE_HOST=localhost
@@ -1512,12 +1514,12 @@ from countyiq.assets.scrapers.assessment import assessment_scrape
 from countyiq.resources.database import make_database_resource
 from countyiq.resources.storage import make_s3_resource
 from unittest.mock import MagicMock
+from dataclasses import replace
 
-# Override max_per_run for testing
+# Override max_per_run=3 for smoke test (only 3 Tier 2 detail pages)
 import countyiq.lib.county_config as cc
-cc.COUNTY_CONFIGS['york'] = cc.CountyConfig(
-    **{**vars(cc.get_county_config()), 'assessment_max_per_run': 3}
-)
+original = cc.get_county_config()
+cc.COUNTY_CONFIGS['york'] = replace(original, assessment_max_per_run=3)
 
 # Create a mock context
 context = MagicMock()
@@ -1532,7 +1534,7 @@ print(f'Result metadata: {result.metadata}')
 "
 ```
 
-Expected: The scraper runs Tier 1 (searches prefix "46"), collects results, upserts to staging, then runs Tier 2 for up to 3 properties.
+Expected: Tier 1 searches prefix "46" (may subdivide if >500), upserts results, then Tier 2 enriches exactly 3 properties. Total runtime ~2-5 minutes.
 
 - [ ] **Step 4: Verify data in staging**
 
@@ -1545,21 +1547,21 @@ LIMIT 5;
 "
 ```
 
-Expected: At least 1 row with populated fields.
+Expected: Rows present. At least some with `assessed_total` populated (from Tier 2 enrichment).
 
 - [ ] **Step 5: Verify checkpoint was saved**
 
 ```bash
 PGPASSWORD=localtest psql -h localhost -p 5433 -U dagster_admin -d countyiq -c "
 SELECT source_name, updated_at,
-       checkpoint->>'tier1' IS NOT NULL AS has_tier1,
+       checkpoint->'tier1'->>'status' AS tier1_status,
        checkpoint->'tier2'->>'properties_enriched' AS enriched
 FROM meta.scrape_checkpoints
 WHERE source_name = 'assessment';
 "
 ```
 
-Expected: Row exists with tier1 data and enriched count.
+Expected: `tier1_status = 'complete'`, `enriched = '3'`.
 
 - [ ] **Step 6: Run all parser tests**
 
@@ -1571,11 +1573,11 @@ Expected: All tests PASS.
 
 - [ ] **Step 7: Commit any test fixes**
 
-If any adjustments were needed during integration testing, commit them:
+If any adjustments were needed during smoke testing, commit them:
 
 ```bash
 git add -u
-git commit -m "fix: adjust assessment scraper based on integration testing"
+git commit -m "fix: adjust assessment scraper based on smoke testing"
 ```
 
 ---
