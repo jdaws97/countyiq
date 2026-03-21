@@ -1,8 +1,12 @@
-"""Parse FEMA NFHL GeoJSON features into staging.flood_zones records."""
+"""Parse FEMA NFHL features into staging.flood_zones records.
+
+Supports both ArcGIS JSON (f=json, used in production — more reliable)
+and GeoJSON (f=geojson) formats from the FEMA MapServer.
+"""
 
 FEMA_SENTINEL = -9999
 
-# GeoJSON property → staging column name
+# Feature attribute → staging column name
 COLUMN_MAP = {
     "DFIRM_ID": "dfirm_id",
     "FLD_AR_ID": "fld_ar_id",
@@ -20,19 +24,48 @@ COLUMN_MAP = {
 SENTINEL_FIELDS = {"STATIC_BFE", "DEPTH"}
 
 
-def parse_fema_geojson(geojson: dict) -> list[dict]:
-    """Parse a FEMA NFHL GeoJSON FeatureCollection into staging records.
+def _rings_to_geojson(geometry: dict) -> dict | None:
+    """Convert ArcGIS JSON rings geometry to GeoJSON Polygon."""
+    rings = geometry.get("rings")
+    if not rings:
+        return None
+    return {"type": "Polygon", "coordinates": rings}
+
+
+def _extract_props_and_geom(feature: dict) -> tuple[dict, dict | None]:
+    """Extract properties and GeoJSON geometry from either format.
+
+    ArcGIS JSON: {"attributes": {...}, "geometry": {"rings": [...]}}
+    GeoJSON:     {"properties": {...}, "geometry": {"type": "Polygon", ...}}
+    """
+    # ArcGIS JSON format (f=json)
+    if "attributes" in feature:
+        props = feature.get("attributes", {})
+        raw_geom = feature.get("geometry")
+        geojson_geom = _rings_to_geojson(raw_geom) if raw_geom else None
+        return props, geojson_geom
+
+    # GeoJSON format (f=geojson)
+    props = feature.get("properties", {})
+    geom = feature.get("geometry")
+    return props, geom
+
+
+def parse_fema_geojson(data: dict) -> list[dict]:
+    """Parse FEMA NFHL features into staging records.
+
+    Accepts both ArcGIS JSON and GeoJSON FeatureCollection formats.
 
     Args:
-        geojson: Parsed GeoJSON dict (FeatureCollection from FEMA MapServer).
+        data: Parsed JSON dict from FEMA MapServer (either format).
 
     Returns:
         List of dicts with staging column names + "geojson" key containing
-        the raw geometry dict for PostGIS insertion via ST_GeomFromGeoJSON.
+        the geometry dict for PostGIS insertion via ST_GeomFromGeoJSON.
     """
     records = []
-    for feature in geojson.get("features", []):
-        props = feature.get("properties", {})
+    for feature in data.get("features", []):
+        props, geojson_geom = _extract_props_and_geom(feature)
 
         # FLD_AR_ID is the primary key — skip if missing
         if not props.get("FLD_AR_ID"):
@@ -49,10 +82,9 @@ def parse_fema_geojson(geojson: dict) -> list[dict]:
                 val = None
             record[db_col] = val
 
-        # Attach raw geometry for PostGIS insertion
-        geom = feature.get("geometry")
-        if geom:
-            record["geojson"] = geom
+        # Attach GeoJSON geometry for PostGIS insertion
+        if geojson_geom:
+            record["geojson"] = geojson_geom
 
         records.append(record)
 

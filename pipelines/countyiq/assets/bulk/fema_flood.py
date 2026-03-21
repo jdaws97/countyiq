@@ -7,6 +7,7 @@ Schedule: Weekly (Sunday 04:00)
 """
 
 import json
+import time
 
 import requests
 from psycopg2.extras import execute_batch
@@ -25,8 +26,16 @@ from countyiq.lib.parsers.fema import parse_fema_geojson
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
-PAGE_SIZE = 2000
+PAGE_SIZE = 1000  # FEMA MapServer returns 500 at 2000 with geometry; 1000 is reliable
 REQUEST_TIMEOUT = 120
+MAX_RETRIES = 3
+RETRY_BACKOFF = 5  # seconds, multiplied by attempt number
+
+# Only request the fields we need (reduces server load vs outFields=*)
+OUT_FIELDS = ",".join([
+    "DFIRM_ID", "FLD_AR_ID", "FLD_ZONE", "ZONE_SUBTY", "SFHA_TF",
+    "STATIC_BFE", "V_DATUM", "DEPTH", "STUDY_TYP", "SOURCE_CIT",
+])
 
 KEY_COLUMNS = ["fld_ar_id"]
 VALUE_COLUMNS = [
@@ -48,24 +57,40 @@ EXPECTED_FIELDS = {
 }
 
 
+def _fetch_page(url: str, attempt: int = 1) -> dict:
+    """Fetch a single page with retry on 5xx errors."""
+    try:
+        resp = requests.get(url, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.HTTPError as e:
+        if attempt < MAX_RETRIES and e.response is not None and e.response.status_code >= 500:
+            wait = RETRY_BACKOFF * attempt
+            time.sleep(wait)
+            return _fetch_page(url, attempt + 1)
+        raise
+
+
 def _fetch_all_pages(base_url: str, layer_id: int, dfirm_id: str, context) -> dict:
-    """Paginate through FEMA MapServer and return a merged GeoJSON FeatureCollection."""
+    """Paginate through FEMA MapServer and return merged ArcGIS JSON features.
+
+    Uses f=json (not f=geojson) because FEMA's GeoJSON endpoint returns 500
+    errors at higher offsets with geometry. The parser handles both formats.
+    """
     all_features = []
     offset = 0
     while True:
         url = (
             f"{base_url}/{layer_id}/query"
             f"?where=DFIRM_ID%3D%27{dfirm_id}%27"
-            f"&outFields=*"
+            f"&outFields={OUT_FIELDS}"
             f"&outSR=4326"
             f"&resultRecordCount={PAGE_SIZE}"
             f"&resultOffset={offset}"
-            f"&f=geojson"
+            f"&f=json"
         )
         context.log.info(f"Fetching page at offset {offset}")
-        resp = requests.get(url, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        page = resp.json()
+        page = _fetch_page(url)
         features = page.get("features", [])
         all_features.extend(features)
         context.log.info(f"  Got {len(features)} features (total: {len(all_features)})")

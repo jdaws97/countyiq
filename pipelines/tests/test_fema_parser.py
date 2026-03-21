@@ -83,3 +83,58 @@ def test_parse_skips_features_without_fld_ar_id():
 
 def test_sentinel_value():
     assert FEMA_SENTINEL == -9999
+
+
+def test_parse_arcgis_json_format():
+    """Parser handles ArcGIS JSON (f=json) with attributes/rings format."""
+    data = {
+        "features": [
+            {
+                "attributes": {
+                    "DFIRM_ID": "42133C",
+                    "FLD_AR_ID": "42133C_7777",
+                    "FLD_ZONE": "AE",
+                    "ZONE_SUBTY": None,
+                    "SFHA_TF": "T",
+                    "STATIC_BFE": 300.0,
+                    "V_DATUM": "NAVD88",
+                    "DEPTH": -9999,
+                    "STUDY_TYP": "SFHAs WITH HIGH FLOOD RISK",
+                    "SOURCE_CIT": "42133C_STUDY1",
+                },
+                "geometry": {
+                    "rings": [[[-76.38, 39.73], [-76.37, 39.73], [-76.37, 39.74], [-76.38, 39.74], [-76.38, 39.73]]]
+                },
+            }
+        ]
+    }
+    records = parse_fema_geojson(data)
+    assert len(records) == 1
+    r = records[0]
+    assert r["fld_ar_id"] == "42133C_7777"
+    assert r["fld_zone"] == "AE"
+    assert r["static_bfe"] == 300.0
+    assert r["depth"] is None  # sentinel converted
+    assert r["geojson"]["type"] == "Polygon"
+    assert r["geojson"]["coordinates"] == [[[-76.38, 39.73], [-76.37, 39.73], [-76.37, 39.74], [-76.38, 39.74], [-76.38, 39.73]]]
+
+
+def test_parse_arcgis_json_no_geometry():
+    """ArcGIS JSON feature without geometry is parsed without geojson key."""
+    data = {
+        "features": [
+            {
+                "attributes": {
+                    "DFIRM_ID": "42133C",
+                    "FLD_AR_ID": "42133C_8888",
+                    "FLD_ZONE": "X",
+                    "SFHA_TF": "F",
+                    "STATIC_BFE": -9999,
+                    "DEPTH": -9999,
+                },
+            }
+        ]
+    }
+    records = parse_fema_geojson(data)
+    assert len(records) == 1
+    assert "geojson" not in records[0]
