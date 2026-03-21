@@ -163,6 +163,7 @@ Entity resolution has two scopes: an MVP contract (parcels + assessment only) an
 - Matches owner names from `staging.parcels` (GIS `owner_full` field) against `staging.assessment_properties` owner records
 - Joins on PIDN (strongest link — same parcel across both sources)
 - Falls back to name + address fuzzy matching (pg_trgm) for records without a PIDN match
+- **Future fallback (after AddressPts layer is loaded):** When PROPADR is messy or missing, match owner mailing addresses against `staging.address_points` for geocoded resolution. This is a second-chance geocoder that comes free from the GIS portal.
 - This already provides meaningful value: unified ownership across the two largest datasets
 
 **Phase 2 enriched resolution (+ deeds, business filings, licenses):**

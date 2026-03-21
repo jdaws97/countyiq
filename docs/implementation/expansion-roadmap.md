@@ -132,6 +132,59 @@ Recommended order based on value-add and difficulty. Tackle the highest-value, e
 
 ---
 
+## Expansion A2: GIS Supplemental Layers (Source 1)
+
+These layers come from the same ArcGIS REST API as Parcels (Source 1) — same access pattern, no new authentication, same `arcgis_client.py` pagination. They should be built immediately after the Parcels pipeline because downstream features depend on them.
+
+### Build Order
+
+| Priority | Layer | Records | Geometry | Why Now |
+|----------|-------|---------|----------|---------|
+| 1 | **Municipal_Boundary** | ~72 | Polygon | Parcels have no municipality field — this layer provides it via spatial join. Entity resolution uses municipality for scoping. Blocks everything that filters by municipality. |
+| 2 | **AddressPts** | ~100K+ | Point | Entity resolution fallback when PROPADR is messy. Canonical address list for `/api/search`. Clickable map targets at low zoom. |
+| 3 | **BLDG_Footprint** | ~213K | Polygon | Single biggest visual upgrade to the map. Vacancy detection (parcel with no footprint = likely vacant). Assessment analysis (footprint sqft vs assessed living area). |
+
+### Municipal_Boundary — Fills the Municipality Gap
+
+The parcels layer has no municipality field. Every record in `staging.parcels` has `municipality = NULL` until this layer is loaded and a spatial join enrichment runs. This is a **blocker** for:
+- Entity resolution (municipality scoping for fuzzy matches)
+- Any frontend filter or API query that filters by municipality
+- The `public.properties` VIEW (municipality comes from parcels)
+
+**Pipeline:** Same `arcgis_client.py` → `staging.municipalities` (already defined in migration 001). After load, run a spatial join enrichment asset:
+```sql
+UPDATE staging.parcels p SET municipality = m.name
+FROM staging.municipalities m
+WHERE ST_Intersects(p.geom, m.geom)
+  AND p.valid_to IS NULL AND m.valid_to IS NULL AND p.municipality IS NULL;
+```
+
+### AddressPts — Entity Resolution Fallback + Search Backbone
+
+Geocoded point for every address in the county — roughly one per structure.
+
+**Entity resolution fallback.** When a parcel's PROPADR field is messy or missing, match an owner's mailing address against address points to locate them on the map. It's a second-chance geocoder you already have for free.
+
+**Search accuracy.** The `/api/search` endpoint does fuzzy matching on addresses. Address points give you a canonical, pre-geocoded address list to match against, instead of relying solely on the freetext PROPADR field from parcels (which has inconsistent formatting — "ST" vs "STREET", missing unit numbers, etc.).
+
+**Clickable map targets.** At low zoom levels where parcel polygons aren't rendered, address points give you something to click on and get details for.
+
+**Pipeline:** `arcgis_client.py` → `staging.address_points` (new migration needed). Link to parcels via spatial containment (`ST_Within`) or address text matching.
+
+### BLDG_Footprint — Visual Quality + Vacancy Detection
+
+Polygon outline of every building in the county.
+
+**Visual quality.** At zoom 15-16, a map showing parcel boundaries alone looks like a grid of empty lots. Add building footprints and suddenly it looks like a real place — users can see which parcels have structures, how big they are, where on the lot they sit. This is the single biggest visual upgrade for minimal effort.
+
+**Vacancy/improvement detection.** Compare building footprints to parcels — a parcel with no footprint is likely vacant land. A parcel assessed as "improved" with no footprint is a data quality flag worth surfacing.
+
+**Future analysis.** Square footage from footprints vs. assessed living area can flag assessment discrepancies — useful for the civic intelligence angle.
+
+**Pipeline:** `arcgis_client.py` → `staging.structures` (new migration needed). Spatial join to parcels via `ST_Intersects`. Generate vector tiles for the map overlay.
+
+---
+
 ## Expansion B: Phase 3 Data Sources
 
 ### Source 10 — Municipal Meeting Minutes (72 Municipalities)

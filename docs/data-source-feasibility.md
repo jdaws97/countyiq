@@ -66,10 +66,13 @@ This report documents the actual accessibility, ingestion method, legal basis, a
 The portal shows **49 Feature Service datasets** in the OPEN_DATA folder, including:
 
 - **Parcels** — 176,060 records, last updated Oct 27, 2025. 47 attribute fields including PIDN, owner name (full, first, last), previous owner, property address, mailing address, deed book/page, assessed values (land/building/total), sale date/price/previous price, year built, living area, stories, heating system, school district, land use code, acreage, class (R/C/I), commercial building sq ft, grade, CDU
-- Municipal Boundary, Zoning, Zoning Overlays
+- **Municipal_Boundary** — 72 polygon boundaries (boroughs, townships, city). Provides the municipality name for every parcel via spatial join (`ST_Intersects`). The parcels layer itself has no municipality field — this layer is the authoritative source.
+- **AddressPts** — Geocoded point for every address in the county (~1 per structure). Three key uses: (1) **Entity resolution fallback** — when a parcel's PROPADR is messy or missing, match an owner's mailing address against address points for a second-chance geocode. (2) **Search accuracy** — provides a canonical, pre-geocoded address list for `/api/search` fuzzy matching, rather than relying solely on the inconsistent PROPADR field ("ST" vs "STREET", missing unit numbers, etc.). (3) **Clickable map targets** — at low zoom levels where parcel polygons aren't rendered, address points give users something to click and get details.
+- **BLDG_Footprint** — Polygon outline of every building in the county. Three key uses: (1) **Visual quality** — at zoom 15-16, parcel boundaries alone look like empty lot grids; adding building footprints makes it look like a real place (single biggest visual upgrade for minimal effort). (2) **Vacancy/improvement detection** — a parcel with no footprint is likely vacant; a parcel assessed as "improved" with no footprint is a data quality flag. (3) **Assessment analysis** — footprint square footage vs assessed living area can flag assessment discrepancies.
+- Zoning, Zoning Overlays
 - HYDRO_Floodplains, Streams, Watersheds, Wetlands, Lakes/Ponds
 - DIST_School, DIST_House, DIST_Senate, DIST_Precinct, DIST_Magisterial
-- AddressPts, Roads, BLDG_Footprint, Contours
+- Roads, Contours
 - LANDUSE_Future_Landuse, Growth_Areas, Geology, Soils
 - Parks, RECREATION_Trails, Transit_Routes, Traffic_Counts
 - DES_EMS_Stations, DES_Fire_Stations, DES_Police_Stations
@@ -144,9 +147,15 @@ The portal shows **49 Feature Service datasets** in the OPEN_DATA folder, includ
 ### Ingestion Strategy (Updated)
 - **Method:** Direct REST API queries with pagination — no Playwright needed, pure HTTP GET
 - **Bulk load:** Page through all 176,060 records using `resultRecordCount=2000&resultOffset=N`
-- **Coordinate system:** Transform from State Plane PA South (WKID 2272) to WGS84 (EPSG:4326) for PostGIS storage
-- **Refresh:** Scheduled Dagster asset, weekly
-- **Storage:** Parse JSON into PostGIS `parcels` table (geometry + all attributes), plus `municipalities`, `school_districts`, `zoning_districts`, `flood_zones` from other layers
+- **Coordinate system:** Request `outSR=4326` for WGS84 coordinates directly from the API
+- **Refresh:** Scheduled Dagster asset, weekly (Sunday 02:00)
+- **Storage:** Parse JSON into PostGIS tables with SCD Type 2:
+  - `staging.parcels` — 176K+ polygons, all attributes, PIDN as natural key
+  - `staging.municipalities` — 72 polygons from Municipal_Boundary layer
+  - `staging.address_points` — geocoded points from AddressPts layer
+  - `staging.structures` — building footprint polygons from BLDG_Footprint layer
+  - `staging.school_districts`, `staging.zoning_districts` from other layers
+- **Enrichment (post-load):** Spatial join municipalities → parcels to populate `staging.parcels.municipality`
 
 ### Legal Basis
 **Minimal risk.** Data is explicitly published as "Public — Anyone can see this content" on an official government ArcGIS portal. Custom license is a standard liability disclaimer, not a usage restriction. YCPC Planning Commission maintains the data for public use.
