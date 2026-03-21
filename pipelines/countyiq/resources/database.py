@@ -5,7 +5,7 @@ from dagster import ConfigurableResource, InitResourceContext
 
 
 class DatabaseResource(ConfigurableResource):
-    """PostgreSQL connection resource for the york_county_intel database.
+    """PostgreSQL connection resource for the countyiq database.
 
     Reads connection parameters from environment variables (set by .env on EC2,
     or DATABASE_* vars for local dev). Reuses a single connection per resource
@@ -60,7 +60,7 @@ def make_database_resource() -> DatabaseResource:
     return DatabaseResource(
         host=os.environ.get("DATABASE_HOST", "localhost"),
         port=int(os.environ.get("DATABASE_PORT", "5432")),
-        dbname=os.environ.get("DATABASE_NAME", "york_county_intel"),
+        dbname=os.environ.get("DATABASE_NAME", "countyiq"),
         user=os.environ.get("DATABASE_USER", "dagster_admin"),
         password=os.environ.get("DATABASE_PASSWORD", "localtest"),
     )

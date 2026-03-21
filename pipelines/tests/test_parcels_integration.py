@@ -18,7 +18,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 DB_PARAMS = {
     "host": os.environ.get("DATABASE_HOST", "localhost"),
     "port": int(os.environ.get("DATABASE_PORT", "5433")),
-    "dbname": os.environ.get("DATABASE_NAME", "york_county_intel"),
+    "dbname": os.environ.get("DATABASE_NAME", "countyiq"),
     "user": os.environ.get("DATABASE_USER", "dagster_admin"),
     "password": os.environ.get("DATABASE_PASSWORD", "localtest"),
 }

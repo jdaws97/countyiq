@@ -5,9 +5,9 @@ lifetime of the process. Runs on EC2 (which has internet access) — NOT
 called from Lambda.
 
 Channels:
-  - critical: /york-county/slack-webhook-critical  (#alerts-critical)
-  - warning:  /york-county/slack-webhook-warning   (#alerts-warning)
-  - pipeline: /york-county/slack-webhook-pipeline   (#pipeline-runs)
+  - critical: /countyiq/slack-webhook-critical  (#alerts-critical)
+  - warning:  /countyiq/slack-webhook-warning   (#alerts-warning)
+  - pipeline: /countyiq/slack-webhook-pipeline   (#pipeline-runs)
 """
 
 import json
@@ -18,9 +18,9 @@ import requests
 from dagster import get_dagster_logger
 
 SLACK_SSM_PARAMS = {
-    "critical": "/york-county/slack-webhook-critical",
-    "warning": "/york-county/slack-webhook-warning",
-    "pipeline": "/york-county/slack-webhook-pipeline",
+    "critical": "/countyiq/slack-webhook-critical",
+    "warning": "/countyiq/slack-webhook-warning",
+    "pipeline": "/countyiq/slack-webhook-pipeline",
 }
 
 _webhook_cache: dict[str, str] = {}

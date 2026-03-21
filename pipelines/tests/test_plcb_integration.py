@@ -11,7 +11,7 @@ import psycopg2
 def _pg_available():
     try:
         conn = psycopg2.connect(
-            host="localhost", port=5433, dbname="york_county_intel",
+            host="localhost", port=5433, dbname="countyiq",
             user="dagster_admin", password="localtest", connect_timeout=3,
         )
         conn.close()
@@ -36,7 +36,7 @@ def test_plcb_parser_to_staging():
     assert len(records) == 5
 
     conn = psycopg2.connect(
-        host="localhost", port=5433, dbname="york_county_intel",
+        host="localhost", port=5433, dbname="countyiq",
         user="dagster_admin", password="localtest",
     )
     conn.autocommit = True

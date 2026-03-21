@@ -9,11 +9,11 @@ from dagster import ConfigurableResource, get_dagster_logger
 class S3StorageResource(ConfigurableResource):
     """S3 client for archiving raw pipeline responses.
 
-    Archives to s3://york-county-raw/<source>/<date>/<filename>.
+    Archives to s3://countyiq-raw/<source>/<date>/<filename>.
     In local dev (no AWS creds), logs a warning and skips the upload.
     """
 
-    bucket: str = "york-county-raw"
+    bucket: str = "countyiq-raw"
     region: str = "us-east-1"
 
     def archive(self, source_path: str, data, filename: str = "response.json"):
@@ -45,6 +45,6 @@ class S3StorageResource(ConfigurableResource):
 
 def make_s3_resource() -> S3StorageResource:
     return S3StorageResource(
-        bucket=os.environ.get("S3_RAW_BUCKET", "york-county-raw"),
+        bucket=os.environ.get("S3_RAW_BUCKET", "countyiq-raw"),
         region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
     )

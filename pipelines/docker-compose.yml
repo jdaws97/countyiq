@@ -2,7 +2,7 @@ services:
   postgres-test:
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_DB: york_county_intel
+      POSTGRES_DB: countyiq
       POSTGRES_USER: dagster_admin
       POSTGRES_PASSWORD: localtest
     ports:
