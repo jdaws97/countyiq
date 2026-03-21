@@ -5,6 +5,7 @@ Schedule: Weekly (Monday 02:00)
 """
 
 import requests
+from psycopg2.extras import execute_batch
 from dagster import (
     asset,
     asset_check,
@@ -115,27 +116,29 @@ def parcels_arcgis(
 
 
 def _update_geometries(cursor, raw_features: list[dict]):
-    """Set geometry on newly inserted records (valid_to IS NULL) from raw features."""
-    update_sql = """
-        UPDATE staging.parcels
-        SET geom = ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)
-        WHERE pidn = %s AND valid_to IS NULL AND geom IS NULL
+    """Set geometry on newly inserted records (valid_to IS NULL, geom IS NULL).
+
+    Uses execute_batch for performance with 176K+ records.
     """
     import json
 
+    update_sql = """
+        UPDATE staging.parcels
+        SET geom = ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326)
+        WHERE pidn = %s AND valid_to IS NULL AND geom IS NULL
+    """
     batch = []
     for feat in raw_features:
         geom = feat.get("geometry")
         attrs = feat.get("attributes", {})
         pidn = attrs.get("PIDN")
         if geom and pidn:
-            # Convert ArcGIS geometry to GeoJSON-like format
             geojson = _arcgis_geom_to_geojson(geom)
             if geojson:
                 batch.append((json.dumps(geojson), pidn))
 
     if batch:
-        cursor.executemany(update_sql, batch)
+        execute_batch(cursor, update_sql, batch, page_size=500)
 
 
 def _arcgis_geom_to_geojson(geom: dict) -> dict | None:
