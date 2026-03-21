@@ -1,8 +1,18 @@
 # Frontend Architecture
 
-## Frontend Architecture
+## Who Uses This
 
-### Stack
+CountyIQ serves five distinct audiences. Each arrives with different questions, but all share the same pain: getting answers about York County property currently requires searching 3-5 disconnected county systems manually.
+
+| Audience | What they need | How they arrive |
+|----------|---------------|-----------------|
+| **County & municipal staff** | Total assessed value, delinquency rates, ownership changes in their jurisdiction. Exportable reports for meetings. | Search their township name, bookmark municipality pages |
+| **Title companies & RE attorneys** | Owner, deed reference, delinquent taxes, other properties owned by same entity. Fast lookups, not browsing. | Search by address or PIDN, need the property report card |
+| **Developers & investors** | Vacant land with specific zoning/size/location, adjacent parcel ownership for assemblage, recent sale prices for market validation. | Filtered map views, vacancy finder |
+| **Journalists & civic watchdogs** | Top property owners, suspicious transfers ($1 sales), delinquency patterns, institutional buying trends. | Top owners dashboard, change feed |
+| **General taxpayers** | "What's my property assessed at vs my neighbors?" "Who owns that vacant lot?" "Am I in a flood zone?" | Search their own address |
+
+## Stack
 
 | Component | Technology | Purpose |
 |---|---|---|
@@ -23,77 +33,229 @@ Deck.gl sits on top of the map as a data visualization layer. The key advantage:
 
 Both are free and open source with no usage limits. Unlike Mapbox, there's no per-map-load pricing.
 
-### What the UI looks like
+---
+
+## Product: What the User Sees
+
+### Homepage (search-first dashboard)
+
+The landing page is a search bar + at-a-glance intelligence — not a blank map. Every audience starts by looking for something specific.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  [🔍 Search owners, addresses, parcels...]     [Layer ▾] [⚙]  │
-├────────────────────────────────────┬────────────────────────────┤
-│                                    │                            │
-│                                    │   PARCEL DETAILS           │
-│                                    │                            │
-│          MAP VIEW                  │   Parcel: 43-000-01-0001   │
-│                                    │   Owner: JOHN A SMITH      │
-│     (MapLibre + Deck.gl)           │   Assessed: $185,000       │
-│                                    │   Zoning: R-1 Residential  │
-│     Parcels color-coded            │   Municipality: Conewago   │
-│     by active layer                │   Acres: 1.24              │
-│                                    │                            │
-│     Click parcel → details         │                            │
-│     in side panel                  │   (Assessment data shown)  │
-│                                    │   (Deeds, licenses, and    │
-│                                    │    business records added   │
-│                                    │    in Phase 2)             │
-│                                    │                            │
-│                                    │   [View Full Entity ▸]     │
-│                                    │                            │
-├────────────────────────────────────┴────────────────────────────┤
-│  York County Civic Intelligence Platform     Data as of 3/20   │
-└─────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------+
+|  CountyIQ - York County Civic Intelligence                        |
+|                                                                   |
+|  +------------------------------------------------------------+  |
+|  |  Search any address, owner, parcel ID...                    |  |
+|  +------------------------------------------------------------+  |
+|                                                                   |
+|  +---------------+  +---------------+  +----------------+        |
+|  |  176,059      |  |  423          |  |  $14.2B        |        |
+|  |  Parcels      |  |  Changed      |  |  Total         |        |
+|  |  Tracked      |  |  This Week    |  |  Assessed      |        |
+|  +---------------+  +---------------+  +----------------+        |
+|                                                                   |
+|  QUICK ACCESS                                                     |
+|  +-------------+ +-------------+ +-------------+ +-------------+ |
+|  | Explore Map | | Vacant Land | | Top Owners  | | Recent Sales| |
+|  +-------------+ +-------------+ +-------------+ +-------------+ |
+|  +-------------+ +-------------+ +-------------+                 |
+|  | Flood Risk  | | Delinquent  | | Municipalities|                |
+|  +-------------+ +-------------+ +-------------+                 |
+|                                                                   |
+|  RECENT CHANGES                                                   |
+|  - 12 parcels transferred: YORK DEV LLC -> KEYSTONE REALTY       |
+|  - 3 new delinquencies in West Manchester Twp                     |
+|  - Largest sale: 125 MAIN ST, $420,000 (Mar 18)                  |
+|                                                                   |
+|  TOP OWNERS                                                       |
+|  1. YORK COUNTY INDUSTRIAL DEV    | 847 parcels | $142M         |
+|  2. DALLMEYER PROPERTIES LLC      | 234 parcels | $38M          |
+|  3. FIRST NATIONAL COMMUNITY BANK | 189 parcels | $31M          |
+|  [See all ->]                                                     |
++------------------------------------------------------------------+
 ```
 
-### Core views (MVP)
+**Stats bar** — live counts from the database. Updates weekly with pipeline runs.
 
-**1. Map view (default):** Full-screen map of York County with multiple data layers that create a rich, real-place feel:
+**Quick access cards** — each opens a pre-filtered view. "Vacant Land" opens the map filtered to parcels without building footprints. "Top Owners" opens the ownership dashboard. "Flood Risk" opens the map with FEMA overlay. These are the zero-learning-curve entry points.
 
-- **Parcels** — polygons rendered at zoom 13+, colored by assessment value, zoning, or owner. Click to open side panel with details.
-- **Building footprints** — polygon outlines of every structure, rendered at zoom 15+. Makes the map look like a real place instead of an empty grid. Parcels without footprints are visually flagged as likely vacant.
+**Recent changes** — derived from SCD2 history. Ownership transfers, new delinquencies, large sales. Queries `/api/changes?limit=5`.
+
+**Top owners** — the "who owns York County" hook. Queries `/api/owners/top?limit=3`.
+
+### Map view
+
+Full-screen interactive map — the core exploration tool. Reached via "Explore Map" or any filtered quick-access card.
+
+```
++------------------------------------------------------------------+
+|  [<- Home] [Search...                    ] [Layer v] [Filter v]   |
++----------------------------------------------+-------------------+
+|                                              |                    |
+|                                              |  PROPERTY REPORT   |
+|              MAP VIEW                        |                    |
+|                                              |  JOHN A SMITH      |
+|         (MapLibre + Deck.gl)                 |  123 Main St       |
+|                                              |  Conewago Twp      |
+|   Layers:                                    |                    |
+|   - Parcels (color-coded)                    |  Assessed: $185K   |
+|   - Building footprints                      |  Last sale: $240K  |
+|   - Municipal boundaries                     |  Ratio: 77%        |
+|   - Flood zones                              |  1.24 acres | R    |
+|   - Delinquent tax overlay                   |  Year built: 1955  |
+|                                              |  Not in flood zone |
+|   Click parcel -> report card                |                    |
+|   in side panel                              |  Also owns 3 other |
+|                                              |  parcels ($450K)   |
+|                                              |                    |
+|                                              |  [Full Profile ->] |
+|                                              |  [Compare]         |
+|                                              |  [Export PDF]       |
++----------------------------------------------+-------------------+
+```
+
+**Map layers:**
+- **Parcels** — polygons at zoom 13+, colored by active filter (assessed value, zoning, owner, recent sale, delinquency). Click opens property report card in side panel.
+- **Building footprints** — polygon outlines at zoom 15+, on by default. Makes the map look like a real place. Parcels without footprints are visually distinct (likely vacant).
 - **Municipal boundaries** — toggleable polygon overlay with labels.
 - **Flood zones** — toggleable FEMA flood hazard overlay (AE/A zones highlighted).
-- **Delinquent tax heatmap** — red = delinquent, from assessment data.
+- **Delinquent tax overlay** — toggleable, highlights delinquent properties in red.
 - **Roads** — reference layer.
 
-Toggle layers via the [Layer] dropdown. Building footprints and parcels are on by default; others are opt-in.
+**Filter bar** — pre-built filters that don't require GIS knowledge:
+- Vacant land (no building footprint)
+- Recently sold (last 90/180/365 days)
+- Flood risk (in FEMA SFHA zone)
+- Delinquent taxes
+- By municipality, school district, class (R/C/I)
+- By assessed value range, acreage range
 
-**2. Search:** Text search for owner names, addresses, or parcel IDs. Results appear as a list and are highlighted on the map. Searches hit the `/api/search` endpoint which queries the `owners` and `parcels` tables with `pg_trgm` fuzzy matching.
+### Property report card (side panel)
 
-**3. Entity profile:** Clicking "View Full Entity" in the side panel opens a full-page view of a resolved owner — every parcel they own, and their assessment data.
+When you click a parcel or search an address, the side panel shows a human-readable summary — not a raw data dump. Template-rendered from structured data, no LLM needed.
 
-**4. Property detail — comparables:** The parcel side panel includes a "Similar Properties" section. Shows nearby properties of the same class with comparable acreage/year built and their assessed values. Includes a percentile ranking ("Assessed higher than 72% of residential parcels in Conewago Twp"). Queries `/api/parcels/{pidn}/comparables`. No ML — SQL window functions over assessment data.
+**What it shows:**
+- Owner name (linked to full profile if entity-resolved)
+- Address, municipality, school district
+- Assessed value with assessment-to-sale ratio ("Assessed at $185K, last sold for $240K — 77% ratio")
+- Comparable percentile ("Assessed higher than 68% of residential parcels in Conewago Twp")
+- Flood zone status (spatial join against FEMA data)
+- Sale history (current sale date/price, previous sale date/price)
+- Acres, class, year built, living area
+- Building footprint: present/absent (vacancy indicator)
+- Other properties owned by same entity (count + total value, from entity resolution)
+- Deed reference (DEED_BK/DEED_PG)
 
-**5. Ownership concentration dashboard:** Accessible from the nav bar. Shows a leaderboard of top property owners by parcel count, total assessed value, or total acreage. Filterable by municipality. Click an owner → highlights all their parcels on the map. Queries `/api/owners/top`. This is the "who owns York County" view that no existing tool provides.
+**Actions:**
+- **Full Profile** — opens owner entity page showing all properties they own
+- **Compare** — add to comparison tray (select 2-3 parcels for side-by-side)
+- **Export PDF** — downloadable property summary for meetings/reports
+- **View on county site** — direct link to the source record on the county GIS viewer
 
-**6. Change detection feed:** "What changed this week" page. Shows recent ownership transfers, new delinquencies, assessment value changes, and new parcels — all derived from SCD2 history (records where `valid_to` was set recently = expired, `valid_from` is recent = new). Queries `/api/changes`. Filterable by change type and municipality.
+### Owner profile page
 
-> **MVP scope:** Entity detail shows parcels + assessment data only. Deeds, business filings, and licenses are added to entity views as their Phase 2 pipelines are built.
+Full-page view of a resolved owner entity. The question it answers: "What does this person or company own?"
 
-### What it does NOT include (MVP)
+- Owner name, entity type (individual/LLC/trust/government)
+- Total parcels owned, total assessed value, total acreage
+- Map showing all owned parcels highlighted
+- Table of all properties with address, municipality, assessed value, class, year acquired
+- Assessment data for each (when assessment pipeline is built)
+- Sortable by any column
+
+### Parcel comparison
+
+Select 2-3 parcels → side-by-side comparison table. Useful for title companies comparing properties, taxpayers checking if their assessment is fair, developers evaluating adjacent lots.
+
+| Field | 123 Main St | 125 Main St | 200 Oak Ave |
+|-------|------------|------------|-------------|
+| Assessed | $185,000 | $160,000 | $195,000 |
+| Last sale | $240,000 | $210,000 | $225,000 |
+| Ratio | 77% | 76% | 87% |
+| Acres | 1.24 | 0.50 | 1.10 |
+| Year built | 1955 | 1970 | 1985 |
+| Flood zone | No | No | AE |
+
+### Municipality profile pages
+
+`/municipality/{name}` — a dashboard for each of the 72 municipalities. Municipal staff would bookmark their township's page.
+
+- Total parcels, total assessed value, total acreage
+- Top 10 owners in this municipality
+- Delinquency rate (count and total value of delinquent properties)
+- Recent ownership changes
+- Vacant land count and acreage
+- Class breakdown (residential / commercial / industrial)
+- School district(s) serving this municipality
+
+### Top owners dashboard
+
+The "who owns York County" view. Leaderboard of property owners ranked by parcel count, assessed value, or acreage. Filterable by municipality.
+
+- Click an owner → highlights all their parcels on the map
+- Filter: municipality, class, minimum parcel count
+- Columns: rank, owner name, entity type, parcel count, total assessed, total acres
+- Export to CSV
+
+### Change detection feed
+
+`/changes` — "What changed this week." All derived from SCD2 history.
+
+- **Ownership transfers** — records where `owner_full` changed (old value → new value)
+- **New delinquencies** — records entering delinquent status
+- **Assessment changes** — records where `aprtotal` changed
+- **New parcels** — records with recent `valid_from` and no prior history
+- **Suspicious transfers** — sales at $1 or $0 (gift/transfer/foreclosure signals)
+
+Filterable by change type and municipality. Queries `/api/changes`.
+
+### Ops health page
+
+`/ops/health` — internal monitoring page. Shows pipeline status (green/yellow/red), last run times, record counts, infrastructure metrics. Queries `/api/ops/health`. See `docs/operations/health-dashboard.md`.
+
+---
+
+## What it does NOT include (MVP)
 
 - **No user accounts or login** — fully public, read-only
 - **No editing or data entry** — read-only intelligence platform
 - **No real-time updates** — data refreshes weekly; frontend serves cached responses
+- **No LLM/AI features** — all summaries are template-rendered from structured data. Natural language search and AI-generated narratives are Phase 2 (see `docs/implementation/expansion-roadmap.md`).
 
-### API endpoints (FastAPI on Lambda)
+---
+
+## API Endpoints (FastAPI on Lambda)
 
 | Endpoint | Method | Purpose | Example |
 |---|---|---|---|
-| `/api/parcels/bbox` | GET | Parcels within a map bounding box | `?west=-76.8&south=39.8&east=-76.6&north=40.0` |
-| `/api/parcels/{pidn}` | GET | Single parcel full details | `/api/parcels/4300006006500` |
-| `/api/owners/{owner_id}` | GET | Resolved entity with all source links | `/api/owners/12345` |
+| `/api/parcels/bbox` | GET | Parcels within a map bounding box | `?west=-76.8&south=39.8&east=-76.6&north=40.0&layer=delinquent` |
+| `/api/parcels/{pidn}` | GET | Property report card (full details + computed fields) | `/api/parcels/4300006006500` |
+| `/api/parcels/{pidn}/comparables` | GET | Similar properties nearby with percentile ranking | `/api/parcels/4300006006500/comparables?radius=5` |
+| `/api/parcels/{pidn}/adjacent` | GET | Neighboring parcel owners (for assemblage) | `/api/parcels/4300006006500/adjacent` |
+| `/api/owners/top` | GET | Ownership concentration leaderboard | `?by=parcel_count&municipality=Conewago&limit=50` |
+| `/api/owners/{owner_id}` | GET | Owner profile with all properties | `/api/owners/12345` |
 | `/api/search` | GET | Fuzzy search across owners, addresses, parcels | `?q=smith+main+st&municipality=Conewago` |
+| `/api/changes` | GET | Recent data changes across all sources | `?since=7d&type=ownership_transfer,new_delinquency` |
+| `/api/municipalities` | GET | List all municipalities with summary stats | — |
+| `/api/municipalities/{name}` | GET | Municipality profile data | `/api/municipalities/conewago-twp` |
+| `/api/stats` | GET | Homepage stats (total parcels, changes this week, total assessed) | — |
 | `/api/ops/health` | GET | System health dashboard data | See `docs/operations/health-dashboard.md` |
 
-### Vector tiles
+### Computed fields (calculated at query time, not stored)
+
+These fields are derived from existing data and returned by the API, not stored in staging tables:
+
+- **Assessment-to-sale ratio:** `aprtotal / price` (when both non-null)
+- **Comparable percentile:** SQL window function over same-class parcels in same municipality
+- **Flood zone status:** Spatial join `staging.parcels` against `staging.flood_zones` via `ST_Intersects`
+- **Vacancy indicator:** LEFT JOIN `staging.structures` — null means no building footprint
+- **Adjacent owners:** Spatial query using `ST_Touches` or `ST_DWithin` on parcel geometries
+- **Owner portfolio summary:** Aggregate from entity resolution (parcel count, total assessed, for the same `owner_id`)
+
+---
+
+## Vector Tiles
 
 Tiles are **not served by Lambda**. They are pre-generated by the Dagster tile pipeline, uploaded to `s3://countyiq-tiles/`, and served via CloudFront at `/tiles/{layer}/{z}/{x}/{y}.pbf` (7-day cache). The API has no tile routes. MapLibre loads tiles directly from the CloudFront URL.
 
@@ -109,6 +271,10 @@ Tiles are **not served by Lambda**. They are pre-generated by the Dagster tile p
 **Not a map layer:** `staging.address_points` is backend-only — used by `/api/search` for canonical address matching and by entity resolution as a geocoding fallback when PROPADR is messy. No vector tiles generated.
 
 **See `docs/api/lambda-api.md` for Lambda configuration, FastAPI app code, package size awareness, handler entry point, and CORS setup.**
+
+---
+
+## Infrastructure
 
 ### CloudFront distribution
 

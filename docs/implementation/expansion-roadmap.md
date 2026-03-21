@@ -217,7 +217,67 @@ This is the highest-effort data source in the entire platform. York County has 7
 
 ---
 
-## Expansion C: Platform Upgrades
+## Expansion C: LLM-Powered Features
+
+These features add AI capabilities on top of the existing structured data platform. None are needed for MVP — the template-rendered property report cards, SQL-based comparables, and pre-built filters handle 90% of use cases. LLM features are additive improvements for specific use cases.
+
+### Priority 1: Natural Language Search
+
+**What it does:** Users type "vacant commercial land in Spring Garden over 5 acres not in a flood zone" → translates to the right combination of SQL filters and spatial joins. Returns the same results as the filter UI, but without requiring users to learn the filter interface.
+
+**Why it matters:** The filter bar works for repeat users who know the vocabulary (zoning codes, municipality names, class codes). But a title attorney typing "properties owned by KEYSTONE REALTY in York" or a municipal clerk typing "delinquent parcels on Main Street" shouldn't need to learn our filter syntax.
+
+**Architecture:**
+- LLM receives the user's query + a schema description of available filters (municipality list, class codes, acreage range, etc.)
+- LLM returns a structured JSON filter object: `{"municipality": "Spring Garden Twp", "class": "C", "min_acres": 5, "flood_zone": false, "vacancy": true}`
+- Frontend applies the filter to the existing `/api/parcels/bbox` or `/api/search` endpoint — same data path, just a smarter input parser
+- Fallback: if the LLM can't parse the query, show the filter UI with the user's text pre-filled in the search bar
+
+**Cost:** ~$0.01-0.05 per query (Claude Haiku for structured extraction). At 1,000 queries/month = $10-50/month. Can be cached for repeated queries.
+
+**Effort:** 1-2 days. The hard part (the filter API) already exists. This is a thin translation layer.
+
+### Priority 2: Weekly Change Narrative
+
+**What it does:** Instead of showing "47 records changed this week" as a list of raw changes, generate a 2-3 paragraph summary: "The largest ownership transfer this week was 12 parcels from YORK DEVELOPMENT LLC to KEYSTONE REALTY TRUST, valued at a combined $4.2M in Spring Garden Township. 3 new properties entered tax delinquency in West Manchester Twp, bringing the township's total delinquent value to $890K..."
+
+**Why it matters:** Journalists and civic watchdogs scan for stories. A raw list of 47 changes is noise. A narrative summary surfaces the signal.
+
+**Architecture:**
+- Dagster pipeline generates the change summary once per week (after all source refreshes complete)
+- Input: structured change data (top transfers by value, new delinquencies by municipality, notable sales)
+- LLM generates 2-3 paragraphs from the structured input
+- Stored in `meta.change_narratives` table, served by `/api/changes/narrative`
+- One API call per week at pipeline time — not real-time, not per-user
+
+**Cost:** ~$0.02 per week (one Claude Sonnet call with structured input). Negligible.
+
+**Effort:** 4-8 hours. SQL to extract the "notable changes" is the real work; the LLM call is straightforward.
+
+### Priority 3: Property Summary Paragraphs
+
+**What it does:** For each property report card, generate a plain-English paragraph: "This is a 1,800 sqft residential home built in 1955 on 1.24 acres in Conewago Township. It was last assessed at $185,000 but sold for $240,000 in June 2020, suggesting the assessment is below market value. The owner, JOHN A SMITH, also owns 3 other properties in the township with a combined assessed value of $450,000. The property is not in a FEMA flood zone."
+
+**Why it matters:** General taxpayers and non-professionals don't know what "CDU: AV" or "Class: R" means. A paragraph connects the dots in plain language.
+
+**Architecture:**
+- Could be pre-generated at pipeline time (batch) or generated on-demand with caching
+- Batch approach: generate for all 176K parcels after each refresh (~$50-100 per run with Haiku)
+- On-demand approach: generate when a user views a parcel, cache for 7 days (~$0.01 per view)
+- Template fallback: if LLM is unavailable, show the structured report card (MVP behavior)
+
+**Cost:** Batch: $50-100/week. On-demand: $0.01/view, capped by cache. Start with on-demand.
+
+**Effort:** 1-2 days. The structured data for the prompt is already in the API response; this wraps it.
+
+### Not Recommended for Phase 2
+
+- **Chatbot / conversational interface** — the data is structured and the queries are predictable. A chat interface adds complexity without proportional value. Structured search + filters + natural language search translation covers the same ground with better UX.
+- **LLM-powered entity resolution** — the pg_trgm + PIDN join approach works well for the current scale. LLM-based matching adds latency and cost without clear improvement until we have many more data sources with ambiguous names.
+
+---
+
+## Expansion D: Platform Upgrades
 
 These are infrastructure improvements, not data sources. Tackle when the trigger condition is met.
 
