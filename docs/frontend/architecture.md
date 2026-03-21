@@ -216,6 +216,31 @@ Filterable by change type and municipality. Queries `/api/changes`.
 
 ---
 
+### Export strategy
+
+All exports are **client-side** — no server-side export endpoints needed.
+
+- **CSV export** (top owners, municipality profiles, search results): Frontend converts JSON API response to CSV using a library like `papaparse`. Download as `.csv` file.
+- **PDF export** (property report card): Frontend uses `html2pdf.js` or `jspdf` to render the report card panel to PDF. Avoids adding heavy PDF libraries to the Lambda package (250MB limit).
+- **Municipality report export**: CSV of municipality profile data for township meeting handouts.
+
+### Dependencies and graceful degradation
+
+Some features depend on pipelines that may not yet be operational:
+
+| Feature | Depends on | If not available |
+|---------|-----------|------------------|
+| Owner profile, "Also owns X parcels" | Entity resolution pipeline (`public.owners`) | Hide the section; show owner name from `staging.parcels.owner_full` only |
+| Flood zone status in report card | `staging.flood_zones` loaded | Show "Flood data unavailable" |
+| Vacancy indicator | `staging.structures` loaded | Hide vacancy indicator |
+| Municipality filter | `staging.municipalities` spatial join | Municipality field is NULL; hide municipality-based features |
+| "Recently sold" filter | `saledt` is a `String(11)`, not a date | Parse with `CAST(saledt AS DATE)` at query time; consider adding a `sale_date DATE` column in a future migration for index-friendly filtering |
+| Address-based search accuracy | `staging.address_points` loaded | Fall back to fuzzy matching on `staging.parcels.propadr` only |
+
+The frontend should check for null/empty responses and hide sections rather than showing "0" or broken UI.
+
+---
+
 ## What it does NOT include (MVP)
 
 - **No user accounts or login** — fully public, read-only

@@ -19,11 +19,12 @@ Reference: Infrastructure Plan, Frontend Architecture → Lambda Configuration s
 | `api/main.py` | FastAPI app with routes |
 | `api/handler.py` | Mangum adapter for Lambda |
 | `api/requirements.txt` | Python dependencies |
-| `api/routes/parcels.py` | Parcel search/detail endpoints |
-| `api/routes/properties.py` | Unified property view endpoints |
+| `api/routes/parcels.py` | Parcel search/detail/comparables/adjacent endpoints |
 | `api/routes/owners.py` | Owner entity + concentration endpoints |
-| `api/routes/search.py` | Cross-entity search |
+| `api/routes/search.py` | Cross-entity search (uses address_points for canonical matching when available) |
 | `api/routes/changes.py` | Change detection feed |
+| `api/routes/municipalities.py` | Municipality profiles and listing |
+| `api/routes/stats.py` | Homepage stats (total parcels, changes this week, total assessed) |
 | `api/routes/ops.py` | Health dashboard endpoint |
 | `api/lib/database.py` | RDS connection (reads DATABASE_* env vars set by Terraform — NOT Parameter Store at runtime; see Infra Plan, VPC networking constraint) |
 
@@ -32,12 +33,16 @@ Reference: Infrastructure Plan, Frontend Architecture → Lambda Configuration s
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/parcels/bbox?west=...&south=...&east=...&north=...` | Parcels within map bounding box (supports `&layer=delinquent` for heatmap) |
-| GET | `/api/parcels/{pidn}` | Single parcel detail (current record from `public.properties` VIEW) |
+| GET | `/api/parcels/{pidn}` | Property report card — full details + computed fields (assessment ratio, flood status, vacancy, owner portfolio summary). Queries `staging.parcels` directly (not the VIEW) to get all 37 columns. |
 | GET | `/api/parcels/{pidn}/comparables` | Similar nearby properties with percentile ranking |
-| GET | `/api/owners/top?by=parcel_count&limit=50` | Ownership concentration leaderboard |
-| GET | `/api/owners/{owner_id}` | Owner entity with all linked source records |
-| GET | `/api/search?q=...` | Full-text search across owners, addresses, PIDNs |
-| GET | `/api/changes?since=7d` | Recent changes: ownership transfers, delinquencies, value changes |
+| GET | `/api/parcels/{pidn}/adjacent` | Neighboring parcel owners — uses `ST_Touches` on parcel geometries for assemblage planning. Performance note: use `ST_Touches` (cheaper than `ST_DWithin`); GIST index on `staging.parcels.geom` makes this fast. |
+| GET | `/api/owners/top?by=parcel_count&limit=50` | Top owners leaderboard |
+| GET | `/api/owners/{owner_id}` | Owner profile with all linked properties |
+| GET | `/api/search?q=...` | Full-text search across owners, addresses, PIDNs. Uses `staging.address_points` for canonical address matching when available; falls back to `staging.parcels.propadr` if address_points table is empty. |
+| GET | `/api/changes?since=7d&limit=5` | Recent changes: ownership transfers, delinquencies, value changes. Supports both `since` (time window) and `limit` (count) params. |
+| GET | `/api/municipalities` | List all 72 municipalities with summary stats |
+| GET | `/api/municipalities/{name}` | Municipality profile: parcels, assessed value, delinquency rate, top owners |
+| GET | `/api/stats` | Homepage stats: total parcels, changes this week, total assessed value |
 | GET | `/api/ops/health` | System health dashboard data |
 
 **Test locally:**
@@ -59,10 +64,23 @@ curl http://localhost:8000/api/ops/health
 
 | Endpoint | SQL approach |
 |---|---|
-| `/api/parcels/{pidn}/comparables` | Window function over `staging.parcels` + `staging.assessment_properties` — filter by same `class` and `municipality`, rank by `aprtotal` difference, return top 10 with `PERCENT_RANK()` for the queried parcel |
+| `/api/parcels/{pidn}` | Query `staging.parcels` directly (all 37 columns) + LEFT JOIN `staging.flood_zones` via `ST_Intersects` for flood status + LEFT JOIN `staging.structures` via `ST_Intersects` for vacancy indicator + aggregate owner portfolio from `public.owners`/`public.owner_source_links`. Returns template-ready JSON with computed fields (assessment ratio, flood zone name, vacancy boolean). |
+| `/api/parcels/{pidn}/comparables` | Window function over `staging.parcels` — filter by same `class` and `municipality`, rank by `aprtotal` difference, return top 10 with `PERCENT_RANK()` for the queried parcel |
+| `/api/parcels/{pidn}/adjacent` | `SELECT pidn, owner_full, aprtotal FROM staging.parcels WHERE ST_Touches(geom, (SELECT geom FROM staging.parcels WHERE pidn=$1)) AND valid_to IS NULL`. Uses GIST index. |
 | `/api/owners/top` | `SELECT * FROM public.owners ORDER BY parcel_count DESC LIMIT $limit` with optional `WHERE municipality = $muni`. Already computed by entity resolution. |
+| `/api/search` | Fuzzy match via `pg_trgm` on `owner_full` and `propadr` in `staging.parcels`. When `staging.address_points` exists, also matches against canonical addresses for better accuracy. Falls back gracefully if address_points table is empty. |
 | `/api/changes` | Query SCD2 tables for recent activity: `WHERE valid_to >= NOW() - INTERVAL $since` (expired records = changes) UNION `WHERE valid_from >= NOW() - INTERVAL $since AND valid_to IS NULL` (new records). Categorize as ownership_transfer, value_change, new_delinquency based on which columns changed. |
+| `/api/municipalities` | `SELECT name, COUNT(*) as parcels, SUM(aprtotal::numeric) as total_assessed FROM staging.parcels WHERE valid_to IS NULL GROUP BY municipality`. |
+| `/api/municipalities/{name}` | Same aggregation for one municipality + top owners + recent changes + delinquency count. |
+| `/api/stats` | Simple aggregation: `SELECT COUNT(*), SUM(aprtotal::numeric) FROM staging.parcels WHERE valid_to IS NULL` + changes count from SCD2 history. Cached aggressively (1 hour TTL). |
 | `/api/parcels/bbox` with `layer=delinquent` | Same bbox query but joins `staging.assessment_properties` and includes `delinquent_taxes IS NOT NULL` as a boolean flag for the frontend heatmap layer |
+
+**Implementation notes:**
+
+- **`saledt` is a string, not a date.** The "recently sold" filter needs `CAST(saledt AS DATE)` or a regex parse. Consider adding a `sale_date DATE` computed column in a future migration for index-friendly date filtering.
+- **Export strategy:** CSV export is client-side — the frontend converts JSON API responses to CSV/downloadable files using a library like `papaparse`. PDF export for the property report card uses client-side `html2pdf.js` or `jspdf` — avoids adding heavy PDF libraries to the Lambda package (which has a 250MB limit). No server-side export endpoints needed.
+- **Owner profile depends on entity resolution.** Until the entity resolution pipeline runs, `/api/owners/{owner_id}` returns empty results and the "Also owns X other parcels" field in the property report card will be absent. The frontend should handle this gracefully (hide the section rather than show "0 other parcels").
+- **`public.properties` VIEW is too narrow for the property report card.** The VIEW only includes a subset of parcel columns. The `/api/parcels/{pidn}` endpoint should query `staging.parcels` directly to get all fields (year built, living area, deed book/page, previous owner, previous price). Consider widening the VIEW in a future migration.
 
 **Package and deploy to Lambda (Phase 5 — after `terraform apply`):**
 
@@ -91,15 +109,17 @@ Reference: Infrastructure Plan, Frontend Architecture section (UI mockup, core v
 
 **Core views to implement:**
 
-| View | Description |
-|---|---|
-| **Map View** (default) | MapLibre GL JS map with Deck.gl data layers. Parcel boundaries, color-coded by type. Click a parcel → sidebar with details. Includes delinquent tax heatmap layer (toggle). |
-| **Search** | Search bar that queries `/api/search`. Results show on map and in a list. |
-| **Property Detail** | Sidebar/panel showing parcel info, owner, assessment, comparables ("Similar Properties" section with percentile ranking), history timeline, linked records. |
-| **Owner Detail** | Entity view showing all properties linked to a resolved entity with assessment data. |
-| **Ownership Dashboard** | Leaderboard of top owners by parcel count/assessed value/acreage. Filter by municipality. Click owner → highlights parcels on map. |
-| **Change Feed** | "What changed this week" — recent ownership transfers, new delinquencies, value changes. Filter by type and municipality. |
-| **Ops Health** | `/ops/health` — the operational dashboard (see Operational Visibility section in Infra Plan). |
+| View | Route | Description |
+|---|---|---|
+| **Homepage** (default) | `/` | Search-first dashboard: search bar, stats cards, quick-access tiles (Explore Map, Vacant Land, Top Owners, Recent Sales, Flood Risk, Delinquent Taxes), recent changes feed, top owners preview. Queries `/api/stats`, `/api/changes?limit=5`, `/api/owners/top?limit=3`. |
+| **Map View** | `/map` | MapLibre GL JS + Deck.gl. Parcels + building footprints + toggleable layers (municipal boundaries, flood zones, delinquent tax overlay). Filter bar with presets: vacant land, recently sold, flood risk, by municipality/class/value range. Click parcel → property report card in side panel. |
+| **Property Report Card** | Side panel on map | Template-rendered summary: owner, address, assessment ratio, flood status, comparable percentile, sale history, vacancy indicator, owner portfolio count, deed reference. Actions: Full Profile, Compare, Export PDF. |
+| **Owner Profile** | `/owners/{id}` | All properties owned by a resolved entity. Map highlighting + sortable table. **Depends on entity resolution pipeline being operational.** |
+| **Parcel Comparison** | Modal/panel | Select 2-3 parcels → side-by-side table (assessed value, sale price, ratio, acres, year built, flood zone). |
+| **Municipality Profile** | `/municipality/{name}` | Township/borough dashboard: total parcels, assessed value, delinquency rate, top owners, recent changes, vacant land count, class breakdown. Export CSV for municipal meetings. |
+| **Top Owners** | `/owners` | Leaderboard by parcel count/assessed value/acreage. Filter by municipality. Click owner → highlights parcels on map. Export CSV. |
+| **Change Feed** | `/changes` | "What changed this week" — ownership transfers, new delinquencies, value changes, suspicious transfers ($1 sales). Filter by type and municipality. |
+| **Ops Health** | `/ops/health` | Operational dashboard (see `docs/operations/health-dashboard.md`). |
 
 ```bash
 cd frontend/

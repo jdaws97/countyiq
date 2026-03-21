@@ -56,7 +56,7 @@ That's the entire Lambda entry point. Mangum translates API Gateway events into 
 ```python
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import parcels, owners, search, changes, ops
+from routes import parcels, owners, search, changes, municipalities, stats, ops
 
 app = FastAPI(
     title="CountyIQ API",
@@ -77,6 +77,8 @@ app.include_router(parcels.router, prefix="/api/parcels", tags=["parcels"])
 app.include_router(owners.router, prefix="/api/owners", tags=["owners"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
 app.include_router(changes.router, prefix="/api/changes", tags=["changes"])
+app.include_router(municipalities.router, prefix="/api/municipalities", tags=["municipalities"])
+app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 app.include_router(ops.router, prefix="/api/ops", tags=["ops"])
 
 @app.get("/api/health")
