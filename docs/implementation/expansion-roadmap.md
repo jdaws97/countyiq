@@ -132,9 +132,9 @@ Recommended order based on value-add and difficulty. Tackle the highest-value, e
 
 ---
 
-## Expansion A2: GIS Supplemental Layers (Source 1)
+## ~~Expansion A2~~ → MVP: GIS Supplemental Layers (Source 1)
 
-These layers come from the same ArcGIS REST API as Parcels (Source 1) — same access pattern, no new authentication, same `arcgis_client.py` pagination. They should be built immediately after the Parcels pipeline because downstream features depend on them.
+> **Promoted to MVP.** These layers are now part of the MVP build order in `docs/implementation/phase-3-pipelines.md` (Steps 4a-4c). They come from the same ArcGIS REST API as Parcels — same access pattern, no new authentication, same `arcgis_client.py` pagination. They are built immediately after Parcels because downstream features (municipality enrichment, map quality, search) depend on them.
 
 ### Build Order
 

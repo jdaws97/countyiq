@@ -1,6 +1,6 @@
 # Phase 3: Dagster Pipelines & MVP Data Sources
 
-**Goal:** All 6 MVP data sources (per Feasibility Report: #1, #2, #3, #4, #5, #13) are ingesting data, plus PLCB (#22, technically Phase 2 but trivially easy — CSV download — so it's built here to validate the pipeline framework). Entity resolution is running. The database is populated with real data.
+**Goal:** All 6 MVP data sources (per Feasibility Report: #1, #2, #3, #4, #5, #13) are ingesting data, plus PLCB (#22, technically Phase 2 but trivially easy — CSV download — so it's built here to validate the pipeline framework). Source #1 includes not just Parcels but also the **Municipal_Boundary, AddressPts, and BLDG_Footprint** GIS layers — these are MVP because municipalities, search, and map quality depend on them. Entity resolution is running. The database is populated with real data.
 
 **Time estimate:** 1.5–2 weeks solo. This is the bulk of the project. Framework setup ~4 hours, each source 2–16 hours depending on complexity (Assessment is the hardest at 12–16 hours), entity resolution ~8 hours, vector tile generation ~4 hours, Day 1 backfill ~4–6 hours. Assessment DB is critical path — RTK request takes 5–35 business days; Playwright scraping is the fallback.
 
@@ -35,7 +35,10 @@ Build each source, test it locally, then move to the next. Start with the simple
 | 1 | PLCB Liquor Licenses | 22 | CSV download | Easy | Bulk CSV; simplest possible pipeline. Good first test. |
 | 2 | FEMA Flood Hazard Layer | 3 | Direct download | Easy | Single file download + PostGIS import |
 | 3 | York County GIS Portal (Parcels) | 1 | ArcGIS REST API | Medium | Pagination, coordinate transform, 176K records. Core dataset. |
-| 4 | York County GIS Portal (Other layers) | 1 | ArcGIS REST API | Medium | Same pattern as parcels, just different endpoints |
+| 4a | GIS: Municipal_Boundary | 1 | ArcGIS REST API | Easy | 72 polygons. **Blocks municipality on parcels** — spatial join enrichment populates `staging.parcels.municipality`. Must run before entity resolution. |
+| 4b | GIS: AddressPts | 1 | ArcGIS REST API | Easy | ~100K+ geocoded points. Entity resolution fallback when PROPADR is messy. Canonical address list for `/api/search`. Clickable map targets at low zoom. |
+| 4c | GIS: BLDG_Footprint | 1 | ArcGIS REST API | Easy | ~213K building polygons. Biggest visual upgrade to the map. Vacancy detection (parcel with no footprint). Assessment discrepancy analysis (footprint sqft vs assessed area). |
+| 4d | GIS: Other layers (zoning, school districts) | 1 | ArcGIS REST API | Easy | Same pattern as above, different endpoints |
 | 5 | PA Open Data Portal | 4 | SODA API | Medium | Different API pattern (SODA vs ArcGIS) |
 | 6 | PennDOT Open Data | 5 | ArcGIS REST API | Medium | Same ArcGIS pattern as #3. ⚠️ Not live-tested — verify the endpoint responds before building. If it's down, skip and revisit; the other 5 MVP sources are sufficient for launch. |
 | 7 | PennDOT Projects | 13 | ArcGIS MapServer | Medium | MapServer (slightly different from FeatureServer) |
@@ -97,8 +100,9 @@ Build each source, test it locally, then move to the next. Start with the simple
 Sources that share no code dependencies can be built in parallel using `superpowers:dispatching-parallel-agents`:
 
 - **Parallel batch 1:** PLCB (#22) + FEMA (#3) — both are simple downloads, no shared code
-- **Parallel batch 2:** PA Open Data (#4) + PennDOT (#5, #13) — different API patterns, independent
-- **Sequential:** Assessment (#2) must be built after parcels (#1) since entity resolution needs both
+- **Parallel batch 2:** GIS supplemental layers (Municipal_Boundary + AddressPts + BLDG_Footprint) — same ArcGIS pattern, independent datasets
+- **Parallel batch 3:** PA Open Data (#4) + PennDOT (#5, #13) — different API patterns, independent
+- **Sequential:** Municipality spatial join must run after parcels + municipalities are loaded. Assessment (#2) must be built after parcels (#1) since entity resolution needs both.
 
 ### Step 3.3: Run Day 1 Backfill
 
@@ -108,20 +112,29 @@ Reference: Infrastructure Plan, Backfill Strategy section.
 
 ```
 Phase 1 (parallel where possible):
-  - GIS Portal (all 49 layers)       ~30 min
-  - FEMA Flood Layer                  ~2 min
+  - GIS: Parcels (176K polygons)      ~4 min
+  - GIS: Municipal_Boundary (72)      ~10 sec
+  - GIS: AddressPts (~100K+ points)   ~2 min
+  - GIS: BLDG_Footprint (~213K)       ~4 min
+  - GIS: Other layers (zoning, etc.)  ~5 min
+  - FEMA Flood Layer                  ~30 sec
   - PA Open Data                      ~5 min
   - PennDOT (Open Data + Projects)    ~10 min
   - PLCB Licenses                     ~1 min
 
-Phase 2 (sequential — Playwright memory):
+Phase 2 (enrichment — must run after Phase 1):
+  - Spatial join: municipalities → parcels  ~2 min
+  - Spatial join: footprints → parcels      ~5 min
+
+Phase 3 (sequential — Playwright memory):
   - Assessment Database               ~2-4 hours
 
-Phase 3 (enrichment):
+Phase 4 (enrichment):
   - Entity Resolution                 ~20 min
 
-Phase 4 (frontend data):
+Phase 5 (frontend data):
   - Vector Tile Generation            ~15 min
+    (parcels, footprints, flood zones, municipalities)
 ```
 
 Trigger from the Dagster UI with `full_history: true` config.

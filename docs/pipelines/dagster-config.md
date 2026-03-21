@@ -40,7 +40,7 @@ Dagster needs a storage backend for run history, event logs, and schedule state.
 ## Schedules (staggered to avoid memory contention)
 
 ```
-02:00  ArcGIS REST sources (parcels, zoning, roads, structures, PennDOT)
+02:00  ArcGIS REST sources (parcels, municipalities, address_points, structures, zoning, PennDOT)
 02:30  SODA API sources (PA Open Data Portal datasets)
 03:00  Playwright scrapers — sequential:
          03:00  eFACTS
