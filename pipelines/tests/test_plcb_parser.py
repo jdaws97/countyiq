@@ -8,7 +8,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 def test_parse_filters_to_york_county():
     csv_text = (FIXTURES_DIR / "plcb_sample.csv").read_text()
     records = parse_plcb_csv(csv_text)
-    assert len(records) == 4  # 4 York County rows, 1 non-York excluded
+    assert len(records) == 5  # 4 York County rows, 1 non-York excluded
 
 
 def test_parse_maps_columns_correctly():
@@ -55,9 +55,19 @@ def test_parse_handles_completely_wrong_headers():
     assert records == []
 
 
+def test_parse_deduplicates_by_lid():
+    csv_text = (FIXTURES_DIR / "plcb_sample.csv").read_text()
+    records = parse_plcb_csv(csv_text)
+    lids = [r["lid"] for r in records]
+    assert len(lids) == len(set(lids))  # no duplicates
+    # LID 88888 appears twice in fixture, last one wins
+    r = next(r for r in records if r["lid"] == "88888")
+    assert r["last_issue_date"] == "Jul 1,2025"  # second row's date
+
+
 def test_parse_handles_bom_prefix():
     csv_text = (FIXTURES_DIR / "plcb_sample.csv").read_text()
     bom_text = "\ufeff" + csv_text
     records = parse_plcb_csv(bom_text)
-    assert len(records) == 4
+    assert len(records) == 5
     assert records[0]["lid"] is not None

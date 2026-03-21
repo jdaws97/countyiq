@@ -48,7 +48,7 @@ def parse_plcb_csv(csv_text: str) -> list[dict]:
         List of dicts with staging column names, filtered to York County.
     """
     reader = csv.DictReader(StringIO(csv_text.lstrip("\ufeff")))
-    records = []
+    by_lid: dict[str, dict] = {}
 
     for row in reader:
         if row.get("County", "").strip() != "York County":
@@ -58,6 +58,12 @@ def parse_plcb_csv(csv_text: str) -> list[dict]:
         for csv_col, db_col in COLUMN_MAP.items():
             val = row.get(csv_col, "").strip()
             record[db_col] = val if val else None
-        records.append(record)
 
-    return records
+        # Deduplicate by LID — PLCB CSV has multiple rows per LID
+        # (e.g. Special Occasion Permits with different date ranges).
+        # Keep the last occurrence (most recent in file order).
+        lid = record.get("lid")
+        if lid:
+            by_lid[lid] = record
+
+    return list(by_lid.values())

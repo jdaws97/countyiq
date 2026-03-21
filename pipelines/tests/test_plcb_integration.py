@@ -33,7 +33,7 @@ def test_plcb_parser_to_staging():
 
     fixture = (Path(__file__).parent / "fixtures" / "plcb_sample.csv").read_text()
     records = parse_plcb_csv(fixture)
-    assert len(records) == 4
+    assert len(records) == 5
 
     conn = psycopg2.connect(
         host="localhost", port=5433, dbname="york_county_intel",
@@ -57,13 +57,13 @@ def test_plcb_parser_to_staging():
         )
         conn.commit()
 
-        assert stats["inserted"] == 4
+        assert stats["inserted"] == 5
         assert stats["expired"] == 0
 
         # Verify data landed
         cur.execute("SELECT COUNT(*) FROM staging.plcb_licenses WHERE valid_to IS NULL")
         count = cur.fetchone()[0]
-        assert count >= 4
+        assert count >= 5
 
         # Verify a specific record
         cur.execute(
