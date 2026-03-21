@@ -28,8 +28,11 @@ DB_PARAMS = {
 def db_conn():
     conn = psycopg2.connect(**DB_PARAMS)
     conn.autocommit = True
+    # Clean up before test (live materialization data may exist)
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM staging.parcels")
     yield conn
-    # Clean up test data
+    # Clean up after test
     with conn.cursor() as cur:
         cur.execute("DELETE FROM staging.parcels")
     conn.close()
