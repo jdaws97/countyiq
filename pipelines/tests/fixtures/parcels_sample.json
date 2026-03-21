@@ -1,0 +1,92 @@
+[
+  {
+    "attributes": {
+      "PIDN": "4300006006500",
+      "DISTRICT": "43",
+      "BLOCK": "000",
+      "MAP": "06",
+      "PARCEL": "006500",
+      "DEED_BK": "1234",
+      "DEED_PG": "5678",
+      "PROPADR": "123 MAIN ST",
+      "OWNER_FULL": "SMITH JOHN A",
+      "OWN_NAME1": "JOHN",
+      "OWN_NAME2": "SMITH",
+      "MAIL_ADDR_FULL": "123 MAIN ST YORK PA 17401",
+      "PREV_OWNER": "DOE JANE",
+      "CLASS": "R",
+      "LUC": "1101",
+      "ACRES": 1.24,
+      "STYLE": "10",
+      "NUM_STORIE": 2.0,
+      "RES_LIVING_AREA": 1800,
+      "YRBLT": 1955,
+      "CLEAN_GREEN": null,
+      "HEATSYS": 2,
+      "FUEL": 2,
+      "APRLAND": 25000.0,
+      "APRBLDG": 85000.0,
+      "APRTOTAL": 110000.0,
+      "SALEDT": "2020-06-15",
+      "PRICE": 185000.0,
+      "PREV_PRICE": 150000.0,
+      "MUNICIPALITY": "Conewago Twp",
+      "SCHOOL_DIS": "01402",
+      "COMM_STRUC": null,
+      "COMM_YEAR_BUILT": null,
+      "COMM_BUILDING_SQ_FT": null,
+      "GRADE": "B ",
+      "CDU": "AV"
+    },
+    "geometry": {
+      "rings": [
+        [[-76.7, 39.95], [-76.7, 39.96], [-76.69, 39.96], [-76.69, 39.95], [-76.7, 39.95]]
+      ]
+    }
+  },
+  {
+    "attributes": {
+      "PIDN": "4300006007000",
+      "DISTRICT": "43",
+      "BLOCK": "000",
+      "MAP": "06",
+      "PARCEL": "007000",
+      "DEED_BK": "2345",
+      "DEED_PG": "6789",
+      "PROPADR": "125 MAIN ST",
+      "OWNER_FULL": "DOE JANE M",
+      "OWN_NAME1": "JANE",
+      "OWN_NAME2": "DOE",
+      "MAIL_ADDR_FULL": "125 MAIN ST YORK PA 17401",
+      "PREV_OWNER": null,
+      "CLASS": "R",
+      "LUC": "1101",
+      "ACRES": 0.5,
+      "STYLE": "04",
+      "NUM_STORIE": 1.0,
+      "RES_LIVING_AREA": 1200,
+      "YRBLT": 1970,
+      "CLEAN_GREEN": null,
+      "HEATSYS": 3,
+      "FUEL": 3,
+      "APRLAND": 15000.0,
+      "APRBLDG": 45000.0,
+      "APRTOTAL": 60000.0,
+      "SALEDT": "2022-09-01",
+      "PRICE": 120000.0,
+      "PREV_PRICE": null,
+      "MUNICIPALITY": "Conewago Twp",
+      "SCHOOL_DIS": "01402",
+      "COMM_STRUC": null,
+      "COMM_YEAR_BUILT": null,
+      "COMM_BUILDING_SQ_FT": null,
+      "GRADE": "C+",
+      "CDU": "AV"
+    },
+    "geometry": {
+      "rings": [
+        [[-76.69, 39.95], [-76.69, 39.96], [-76.68, 39.96], [-76.68, 39.95], [-76.69, 39.95]]
+      ]
+    }
+  }
+]

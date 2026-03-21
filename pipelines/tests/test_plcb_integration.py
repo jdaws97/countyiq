@@ -28,19 +28,22 @@ pytestmark = pytest.mark.skipif(
 def test_plcb_parser_to_staging():
     """Parse real fixture CSV and SCD2 upsert to staging.plcb_licenses."""
     from pathlib import Path
-    from york_county.lib.parsers.plcb import parse_plcb_csv
-    from york_county.lib.scd import scd2_upsert
+    from countyiq.lib.parsers.plcb import parse_plcb_csv
+    from countyiq.lib.scd import scd2_upsert
 
     fixture = (Path(__file__).parent / "fixtures" / "plcb_sample.csv").read_text()
-    records = parse_plcb_csv(fixture)
+    records = parse_plcb_csv(fixture, county_filter="York County")
     assert len(records) == 5
 
     conn = psycopg2.connect(
         host="localhost", port=5433, dbname="york_county_intel",
         user="dagster_admin", password="localtest",
     )
-    conn.autocommit = False
+    conn.autocommit = True
     cur = conn.cursor()
+    # Clean slate — remove any leftover data from previous runs
+    cur.execute("DELETE FROM staging.plcb_licenses")
+    conn.autocommit = False
     try:
         stats = scd2_upsert(
             cursor=cur,

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from york_county.lib.parsers.plcb import parse_plcb_csv
+from countyiq.lib.parsers.plcb import parse_plcb_csv
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -71,3 +71,10 @@ def test_parse_handles_bom_prefix():
     records = parse_plcb_csv(bom_text)
     assert len(records) == 5
     assert records[0]["lid"] is not None
+
+
+def test_parse_with_different_county_filter():
+    csv_text = (FIXTURES_DIR / "plcb_sample.csv").read_text()
+    records = parse_plcb_csv(csv_text, county_filter="Allegheny County")
+    assert len(records) == 1  # Only the Pittsburgh Shake Shack row
+    assert records[0]["lid"] == "128829"

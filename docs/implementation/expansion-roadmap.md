@@ -183,13 +183,38 @@ These are infrastructure improvements, not data sources. Tackle when the trigger
 
 ### Multi-County Expansion Notes
 
-The entity resolution schema was designed to be source-agnostic (see Infrastructure Plan, Entity Resolution section). Expanding to another county means:
+All pipeline assets read county-specific configuration from `pipelines/york_county/lib/county_config.py`. Expanding to another PA county means:
 
-1. Create a new RDS database (or schema per county within the same instance)
-2. Copy the Dagster asset templates — most sources (ArcGIS, PA state portals) work the same way across counties
-3. Update ArcGIS endpoints for the new county's GIS portal
-4. The county-specific scrapers (assessment, sheriff sales) need new implementations per county
-5. Entity resolution runs per-county initially; cross-county matching is a future capability
+1. **Add a `CountyConfig` entry** in `county_config.py` with the new county's source URLs, filter strings, and thresholds
+2. **Set `COUNTY=<key>`** when running pipelines (env var on EC2 or in `.env`)
+3. **Create a new RDS database** (or schema per county within the same instance)
+4. **Run Alembic migrations** — the staging schema is source-type based, not county-specific, so the same tables work
+5. **Verify source URLs** — most PA state sources (PLCB, PA Open Data, PennDOT) work identically across counties. ArcGIS endpoints vary per county's GIS portal.
+6. **County-specific scrapers** (assessment portals, sheriff sales) need new implementations per county — different websites, different DOM structures
+7. Entity resolution runs per-county initially; cross-county matching is a future capability
+
+**Example — adding Lancaster County:**
+
+```python
+# In county_config.py, add:
+"lancaster": CountyConfig(
+    name="Lancaster County",
+    plcb_filter="Lancaster County",
+    plcb_min_records=400,
+    arcgis_parcels_url="https://<lancaster-gis-server>/...",
+    arcgis_base_url="https://<lancaster-gis-server>/...",
+    assessment_url="https://<lancaster-assessment-portal>/",
+    assessment_min_records=100000,
+    s3_prefix="lancaster",
+),
+```
+
+Then run with `COUNTY=lancaster dagster asset materialize --select plcb_licenses`. The same asset code downloads the statewide CSV, filters to Lancaster County, and upserts to `staging.plcb_licenses`.
+
+**Known limitations:**
+- The Python package is named `york_county` — this works for any county but the name is misleading. Rename to `county_pipelines` if multi-county becomes the primary use case.
+- S3 archive paths changed from `bulk/plcb/` to `york/bulk/plcb/` with the county prefix. Historical archives from before this change are at the old paths.
+- The S3 bucket is named `york-county-raw` — configurable via the `S3_RAW_BUCKET` env var for a shared bucket, or use a separate bucket per county.
 
 The hardest part isn't the code — it's finding and verifying each county's data source URLs and access methods. Budget 1-2 weeks per new county for the research + implementation.
 

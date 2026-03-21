@@ -45,21 +45,24 @@ Build each source, test it locally, then move to the next. Start with the simple
 
 #### Per-Source Workflow
 
+> **County config rule:** Every new asset MUST use `get_county_config()` for URLs, filter strings, and thresholds. Every parser MUST accept county-specific params (e.g., `county_filter`) rather than hardcoding values. See `pipelines/york_county/lib/county_config.py`. Add any new source-specific config fields to `CountyConfig` if needed (e.g., a new URL for the source). We are building for York County but the code must be county-agnostic.
+
 **For API sources (ArcGIS, SODA, CSV downloads):**
 
 ```
 1. Check library docs:         Use Context7 for Dagster asset/resource API
-2. Write the asset file:       pipelines/york_county/assets/<type>/<source>.py
-3. Write the parser:           pipelines/york_county/lib/parsers/<source>.py
-4. Write the schema test:      pipelines/tests/test_<source>_parser.py
-5. Save a test fixture:        pipelines/tests/fixtures/<source>_sample.json
-6. Write asset checks:         (in the asset file or lib/checks.py)
-7. Add the schedule:           pipelines/york_county/schedules/
-8. Run pytest locally:         pytest tests/test_<source>_parser.py -v
-9. Test against live API:      dagster asset materialize -a <asset_name>  (local Dagster)
-10. Verify data in Postgres:   psql → SELECT COUNT(*) FROM staging.<table>;
-11. Code review:               Use superpowers:requesting-code-review
-12. Commit and push
+2. Add config fields:          Add any new source URLs/thresholds to CountyConfig in county_config.py
+3. Write the asset file:       pipelines/york_county/assets/<type>/<source>.py (use get_county_config())
+4. Write the parser:           pipelines/york_county/lib/parsers/<source>.py (accept county params, don't hardcode)
+5. Write the schema test:      pipelines/tests/test_<source>_parser.py
+6. Save a test fixture:        pipelines/tests/fixtures/<source>_sample.json
+7. Write asset checks:         (in the asset file or lib/checks.py)
+8. Add the schedule:           pipelines/york_county/schedules/
+9. Run pytest locally:         pytest tests/test_<source>_parser.py -v
+10. Test against live API:     dagster asset materialize -a <asset_name>  (local Dagster)
+11. Verify data in Postgres:   psql → SELECT COUNT(*) FROM staging.<table>;
+12. Code review:               Use superpowers:requesting-code-review
+13. Commit and push
 ```
 
 **For Playwright scraper sources (Assessment, eFACTS, CRIMEWATCH, PALS):**
@@ -73,17 +76,18 @@ Build each source, test it locally, then move to the next. Start with the simple
    - Document selectors that work
    - Check for anti-bot measures (Cloudflare, CAPTCHAs)
 2. Check library docs:         Use Context7 for Playwright + Dagster APIs
-3. Write the asset file:       pipelines/york_county/assets/scrapers/<source>.py
-4. Write the parser:           pipelines/york_county/lib/parsers/<source>.py
-5. Write the schema test:      pipelines/tests/test_<source>_parser.py
-6. Save a test fixture:        pipelines/tests/fixtures/<source>_sample.html
-7. Write asset checks:         (in the asset file or lib/checks.py)
-8. Add the schedule:           pipelines/york_county/schedules/
-9. Run pytest locally:         pytest tests/test_<source>_parser.py -v
-10. Test against live site:    dagster asset materialize -a <asset_name>  (local Dagster)
-11. Verify data in Postgres:   psql → SELECT COUNT(*) FROM staging.<table>;
-12. Code review:               Use superpowers:requesting-code-review
-13. Commit and push
+3. Add config fields:          Add source URL/thresholds to CountyConfig in county_config.py
+4. Write the asset file:       pipelines/york_county/assets/scrapers/<source>.py (use get_county_config())
+5. Write the parser:           pipelines/york_county/lib/parsers/<source>.py (accept county params)
+6. Write the schema test:      pipelines/tests/test_<source>_parser.py
+7. Save a test fixture:        pipelines/tests/fixtures/<source>_sample.html
+8. Write asset checks:         (in the asset file or lib/checks.py)
+9. Add the schedule:           pipelines/york_county/schedules/
+10. Run pytest locally:        pytest tests/test_<source>_parser.py -v
+11. Test against live site:    dagster asset materialize -a <asset_name>  (local Dagster)
+12. Verify data in Postgres:   psql → SELECT COUNT(*) FROM staging.<table>;
+13. Code review:               Use superpowers:requesting-code-review
+14. Commit and push
 ```
 
 > **Why explore first for scrapers:** The Assessment portal (Source #2) is ASP.NET Web Forms with session-based navigation — no RESTful URLs, no stable selectors without inspecting the live DOM. Going in blind wastes hours. The Playwright MCP lets you interactively explore the page, test selectors, and verify the navigation flow before writing any code.

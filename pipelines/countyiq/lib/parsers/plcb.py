@@ -1,4 +1,4 @@
-"""Parse PLCB liquor license CSV and filter to York County."""
+"""Parse PLCB liquor license CSV and filter to a specific county."""
 
 import csv
 from io import StringIO
@@ -38,20 +38,21 @@ COLUMN_MAP = {
 }
 
 
-def parse_plcb_csv(csv_text: str) -> list[dict]:
-    """Parse PLCB CSV text and return York County records.
+def parse_plcb_csv(csv_text: str, county_filter: str = "York County") -> list[dict]:
+    """Parse PLCB CSV text and return records for a specific county.
 
     Args:
         csv_text: Raw CSV string (full statewide file).
+        county_filter: Value to match in the "County" CSV column.
 
     Returns:
-        List of dicts with staging column names, filtered to York County.
+        List of dicts with staging column names, filtered to county_filter.
     """
     reader = csv.DictReader(StringIO(csv_text.lstrip("\ufeff")))
     by_lid: dict[str, dict] = {}
 
     for row in reader:
-        if row.get("County", "").strip() != "York County":
+        if row.get("County", "").strip() != county_filter:
             continue
 
         record = {}

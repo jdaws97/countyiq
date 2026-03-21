@@ -266,13 +266,14 @@ assets = [parcels_arcgis]
 
 | File | Purpose | Used by |
 |---|---|---|
+| `lib/county_config.py` | `CountyConfig` dataclass + registry. Per-county source URLs, filter strings, thresholds. Active county set via `COUNTY` env var (default: `york`). | All assets — `get_county_config()` replaces hardcoded URLs and filter values |
 | `lib/arcgis_client.py` | Handles ArcGIS REST API pagination (queries return max 1000–2000 records at a time, so it loops until all records are fetched) and GeoJSON conversion | All `arcgis/` assets |
 | `lib/playwright_utils.py` | Launches Playwright Chromium with consistent settings (headless, timeout, viewport), captures screenshots for debugging | All `scrapers/` assets that need Playwright |
-| `lib/scd.py` | SCD Type 2 upsert helper — expire changed records, insert new/changed, skip unchanged, detect deletes | All assets that write to `staging.*` |
+| `lib/scd.py` | SCD Type 2 upsert helper — expire changed records, insert new/changed, skip unchanged, detect deletes. Runs inside an explicit transaction for crash safety. | All assets that write to `staging.*` |
 | `lib/slack.py` | 3-channel Slack webhook helper (critical/warning/pipeline), reads URLs from SSM Parameter Store, caches them | Sensors (`sensors/alerting.py`) |
-| `lib/parsers/` | Per-source parsing functions (e.g. `parcels.py`) — extract and normalize fields from raw API responses | All assets |
+| `lib/parsers/` | Per-source parsing functions (e.g. `parcels.py`, `plcb.py`) — extract and normalize fields from raw API responses. Parsers accept county-specific params (e.g. `county_filter`) rather than hardcoding values. | All assets |
 | `resources/database.py` | PostgreSQL connection resource using psycopg2, reads `DATABASE_*` env vars | All assets via Dagster resource injection |
-| `resources/storage.py` | S3 client for archiving raw responses to `s3://york-county-raw/<source>/<date>/` | All assets via Dagster resource injection |
+| `resources/storage.py` | S3 client for archiving raw responses to `s3://york-county-raw/<prefix>/<source>/<date>/` | All assets via Dagster resource injection |
 
 ## How jobs and schedules connect
 
