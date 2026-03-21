@@ -9,7 +9,7 @@ resource "aws_iam_openid_connect_provider" "github" {
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -17,7 +17,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 # --- GitHub Actions IAM Role ---
 
 resource "aws_iam_role" "github_actions" {
-  name = "york-county-github-actions"
+  name = "countyiq-github-actions"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -41,7 +41,7 @@ resource "aws_iam_role" "github_actions" {
   })
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -49,7 +49,7 @@ resource "aws_iam_role" "github_actions" {
 # --- Deploy Policy ---
 
 resource "aws_iam_role_policy" "deploy" {
-  name = "york-county-deploy-policy"
+  name = "countyiq-deploy-policy"
   role = aws_iam_role.github_actions.id
 
   policy = jsonencode({

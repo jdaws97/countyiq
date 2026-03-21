@@ -5,7 +5,7 @@ resource "aws_s3_bucket" "frontend" {
 
   tags = {
     Name        = var.frontend_bucket_name
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -50,7 +50,7 @@ resource "aws_s3_bucket" "tiles" {
 
   tags = {
     Name        = var.tiles_bucket_name
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -95,7 +95,7 @@ resource "aws_s3_bucket" "raw" {
 
   tags = {
     Name        = var.raw_bucket_name
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -118,7 +118,7 @@ resource "aws_s3_bucket_versioning" "raw" {
 }
 
 # No lifecycle rule on raw bucket — historical snapshots are kept indefinitely.
-# Storage is date-keyed (s3://york-county-raw/<source>/<date>/), not overwrites,
+# Storage is date-keyed (s3://countyiq-raw/<source>/<date>/), not overwrites,
 # so versioning noncurrent expiration doesn't apply. At $0.023/GB/month the
 # projected 15 GB by Phase 3 costs ~$0.35/month. Not worth optimizing.
 
@@ -283,7 +283,7 @@ resource "aws_cloudfront_distribution" "main" {
 
   tags = {
     Name        = "countyiq-distribution"
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }

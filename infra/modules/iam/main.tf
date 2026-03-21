@@ -17,7 +17,7 @@ resource "aws_iam_role" "dagster_ec2" {
   })
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -92,7 +92,7 @@ resource "aws_iam_role_policy" "s3_tiles_access" {
   })
 }
 
-# --- Inline Policy: Parameter Store (read-only, scoped to /york-county/*) ---
+# --- Inline Policy: Parameter Store (read-only, scoped to /countyiq/*) ---
 
 resource "aws_iam_role_policy" "ssm_params" {
   name = "dagster-ssm-params"
@@ -107,7 +107,7 @@ resource "aws_iam_role_policy" "ssm_params" {
           "ssm:GetParameter",
           "ssm:GetParameters"
         ]
-        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/york-county/*"
+        Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/countyiq/*"
       }
     ]
   })

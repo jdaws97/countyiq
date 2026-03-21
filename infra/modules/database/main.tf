@@ -1,7 +1,7 @@
 # --- RDS Parameter Group ---
 
 resource "aws_db_parameter_group" "postgres16" {
-  name   = "york-county-pg16"
+  name   = "countyiq-pg16"
   family = "postgres16"
 
   parameter {
@@ -38,8 +38,8 @@ resource "aws_db_parameter_group" "postgres16" {
   }
 
   tags = {
-    Name        = "york-county-pg16"
-    Project     = "york-county-intel"
+    Name        = "countyiq-pg16"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -47,7 +47,7 @@ resource "aws_db_parameter_group" "postgres16" {
 # --- RDS Instance ---
 
 resource "aws_db_instance" "main" {
-  identifier     = "york-county-db"
+  identifier     = "countyiq-db"
   engine         = "postgres"
   engine_version = "16"
   instance_class = var.instance_class
@@ -75,14 +75,14 @@ resource "aws_db_instance" "main" {
   maintenance_window        = "sun:07:00-sun:07:30"
   copy_tags_to_snapshot     = true
   delete_automated_backups  = true
-  final_snapshot_identifier = "york-county-db-final"
+  final_snapshot_identifier = "countyiq-db-final"
 
   # Free tier: skip performance insights
   performance_insights_enabled = false
 
   tags = {
-    Name        = "york-county-db"
-    Project     = "york-county-intel"
+    Name        = "countyiq-db"
+    Project     = "countyiq"
     Environment = "production"
   }
 }

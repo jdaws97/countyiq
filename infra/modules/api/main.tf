@@ -1,7 +1,7 @@
 # --- Lambda IAM Role ---
 
 resource "aws_iam_role" "lambda" {
-  name = "york-county-api-lambda"
+  name = "countyiq-api-lambda"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -17,7 +17,7 @@ resource "aws_iam_role" "lambda" {
   })
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -48,7 +48,7 @@ data "archive_file" "lambda_placeholder" {
 }
 
 resource "aws_lambda_function" "api" {
-  function_name = "york-county-api"
+  function_name = "countyiq-api"
   role          = aws_iam_role.lambda.arn
   handler       = "handler.handler"
   runtime       = "python3.11"
@@ -76,8 +76,8 @@ resource "aws_lambda_function" "api" {
   }
 
   tags = {
-    Name        = "york-county-api"
-    Project     = "york-county-intel"
+    Name        = "countyiq-api"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -93,7 +93,7 @@ resource "aws_api_gateway_rest_api" "countyiq" {
   }
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -170,7 +170,7 @@ resource "aws_api_gateway_stage" "prod" {
   stage_name    = "prod"
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -188,12 +188,12 @@ resource "aws_lambda_permission" "api_gateway" {
 # --- CloudWatch Event: Lambda Keepalive (cold start mitigation) ---
 
 resource "aws_cloudwatch_event_rule" "lambda_keepalive" {
-  name                = "york-county-api-keepalive"
+  name                = "countyiq-api-keepalive"
   description         = "Ping Lambda every 5 minutes to prevent cold starts"
   schedule_expression = "rate(5 minutes)"
 
   tags = {
-    Project = "york-county-intel"
+    Project = "countyiq"
   }
 }
 

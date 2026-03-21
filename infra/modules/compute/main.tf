@@ -47,8 +47,8 @@ resource "aws_instance" "dagster" {
   }
 
   tags = {
-    Name        = "york-county-dagster"
-    Project     = "york-county-intel"
+    Name        = "countyiq-dagster"
+    Project     = "countyiq"
     Environment = "production"
   }
 }

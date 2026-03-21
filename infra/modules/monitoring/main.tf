@@ -1,10 +1,10 @@
 # --- SNS Topic for Alerts ---
 
 resource "aws_sns_topic" "alerts" {
-  name = "york-county-alerts"
+  name = "countyiq-alerts"
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -18,7 +18,7 @@ resource "aws_sns_topic_subscription" "email" {
 # --- AWS Budget ---
 
 resource "aws_budgets_budget" "monthly" {
-  name         = "york-county-monthly"
+  name         = "countyiq-monthly"
   budget_type  = "COST"
   limit_amount = "50"
   limit_unit   = "USD"
@@ -68,21 +68,21 @@ resource "aws_budgets_budget" "monthly" {
 # --- CloudWatch Log Groups ---
 
 resource "aws_cloudwatch_log_group" "dagster" {
-  name              = "/york-county/dagster"
+  name              = "/countyiq/dagster"
   retention_in_days = 7
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
 
 resource "aws_cloudwatch_log_group" "system" {
-  name              = "/york-county/system"
+  name              = "/countyiq/system"
   retention_in_days = 7
 
   tags = {
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -91,7 +91,7 @@ resource "aws_cloudwatch_log_group" "system" {
 
 # 1. High CPU
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "york-county-high-cpu"
+  alarm_name          = "countyiq-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 3
   metric_name         = "CPUUtilization"
@@ -107,17 +107,17 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   }
 
   tags = {
-    Project = "york-county-intel"
+    Project = "countyiq"
   }
 }
 
 # 2. High Memory (requires CloudWatch Agent)
 resource "aws_cloudwatch_metric_alarm" "high_memory" {
-  alarm_name          = "york-county-high-memory"
+  alarm_name          = "countyiq-high-memory"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "mem_used_percent"
-  namespace           = "YorkCounty/EC2"
+  namespace           = "CountyIQ/EC2"
   period              = 300
   statistic           = "Average"
   threshold           = 85
@@ -129,17 +129,17 @@ resource "aws_cloudwatch_metric_alarm" "high_memory" {
   }
 
   tags = {
-    Project = "york-county-intel"
+    Project = "countyiq"
   }
 }
 
 # 3. High Disk
 resource "aws_cloudwatch_metric_alarm" "high_disk" {
-  alarm_name          = "york-county-high-disk"
+  alarm_name          = "countyiq-high-disk"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = "disk_used_percent"
-  namespace           = "YorkCounty/EC2"
+  namespace           = "CountyIQ/EC2"
   period              = 300
   statistic           = "Average"
   threshold           = 80
@@ -153,13 +153,13 @@ resource "aws_cloudwatch_metric_alarm" "high_disk" {
   }
 
   tags = {
-    Project = "york-county-intel"
+    Project = "countyiq"
   }
 }
 
 # 4. Instance Status Check Failed
 resource "aws_cloudwatch_metric_alarm" "instance_status" {
-  alarm_name          = "york-county-instance-status"
+  alarm_name          = "countyiq-instance-status"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   metric_name         = "StatusCheckFailed"
@@ -175,17 +175,17 @@ resource "aws_cloudwatch_metric_alarm" "instance_status" {
   }
 
   tags = {
-    Project = "york-county-intel"
+    Project = "countyiq"
   }
 }
 
 # 5. Dagster Health (process not running — custom metric from CloudWatch Agent)
 resource "aws_cloudwatch_metric_alarm" "dagster_health" {
-  alarm_name          = "york-county-dagster-health"
+  alarm_name          = "countyiq-dagster-health"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 1
   metric_name         = "procstat_lookup_pid_count"
-  namespace           = "YorkCounty/EC2"
+  namespace           = "CountyIQ/EC2"
   period              = 300
   statistic           = "Minimum"
   threshold           = 1
@@ -199,6 +199,6 @@ resource "aws_cloudwatch_metric_alarm" "dagster_health" {
   }
 
   tags = {
-    Project = "york-county-intel"
+    Project = "countyiq"
   }
 }

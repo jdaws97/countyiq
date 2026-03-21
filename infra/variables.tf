@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "db_name" {
   description = "RDS database name — single source of truth for all modules"
   type        = string
-  default     = "york_county_intel"
+  default     = "countyiq"
 }
 
 variable "db_username" {
@@ -42,17 +42,17 @@ variable "github_repo" {
 variable "frontend_bucket_name" {
   description = "S3 bucket name for frontend static site"
   type        = string
-  default     = "york-county-frontend"
+  default     = "countyiq-frontend"
 }
 
 variable "tiles_bucket_name" {
   description = "S3 bucket name for vector tiles"
   type        = string
-  default     = "york-county-tiles"
+  default     = "countyiq-tiles"
 }
 
 variable "raw_bucket_name" {
   description = "S3 bucket name for raw data archives"
   type        = string
-  default     = "york-county-raw"
+  default     = "countyiq-raw"
 }

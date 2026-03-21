@@ -22,7 +22,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "york-county-intel"
+      Project     = "countyiq"
       Environment = "production"
       ManagedBy   = "terraform"
     }
@@ -36,25 +36,25 @@ resource "random_password" "rds" {
 }
 
 resource "aws_ssm_parameter" "rds_password" {
-  name  = "/york-county/rds-password"
+  name  = "/countyiq/rds-password"
   type  = "SecureString"
   value = random_password.rds.result
 }
 
 resource "aws_ssm_parameter" "rds_host" {
-  name  = "/york-county/rds-host"
+  name  = "/countyiq/rds-host"
   type  = "String"
   value = module.database.rds_endpoint
 }
 
 resource "aws_ssm_parameter" "rds_dbname" {
-  name  = "/york-county/rds-dbname"
+  name  = "/countyiq/rds-dbname"
   type  = "String"
   value = var.db_name
 }
 
 resource "aws_ssm_parameter" "rds_username" {
-  name  = "/york-county/rds-username"
+  name  = "/countyiq/rds-username"
   type  = "String"
   value = var.db_username
 }

@@ -43,7 +43,7 @@ resource "aws_security_group" "dagster_ec2" {
 
   tags = {
     Name        = "dagster-ec2-sg"
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -67,7 +67,7 @@ resource "aws_security_group" "api_lambda" {
 
   tags = {
     Name        = "api-lambda-sg"
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -82,7 +82,7 @@ resource "aws_security_group" "dagster_rds" {
 
   tags = {
     Name        = "dagster-rds-sg"
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }
@@ -116,7 +116,7 @@ resource "aws_db_subnet_group" "dagster_rds" {
 
   tags = {
     Name        = "dagster-rds-subnets"
-    Project     = "york-county-intel"
+    Project     = "countyiq"
     Environment = "production"
   }
 }

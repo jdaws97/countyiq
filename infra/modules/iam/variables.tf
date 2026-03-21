@@ -7,11 +7,11 @@ variable "aws_region" {
 variable "raw_bucket_name" {
   description = "S3 bucket name for raw data"
   type        = string
-  default     = "york-county-raw"
+  default     = "countyiq-raw"
 }
 
 variable "tiles_bucket_name" {
   description = "S3 bucket name for vector tiles"
   type        = string
-  default     = "york-county-tiles"
+  default     = "countyiq-tiles"
 }
