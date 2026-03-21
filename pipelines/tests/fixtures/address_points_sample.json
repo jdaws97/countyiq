@@ -1,0 +1,393 @@
+{
+    "objectIdFieldName": "OBJECTID",
+    "globalIdFieldName": "",
+    "geometryType": "esriGeometryPoint",
+    "spatialReference": {
+        "wkid": 4326,
+        "latestWkid": 4326
+    },
+    "fields": [
+        {
+            "name": "OBJECTID",
+            "alias": "OBJECTID",
+            "type": "esriFieldTypeOID"
+        },
+        {
+            "name": "DiscroAgID",
+            "alias": "Source",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "DateUpdate",
+            "alias": "DateUpdate",
+            "type": "esriFieldTypeDate",
+            "length": 8
+        },
+        {
+            "name": "Effective",
+            "alias": "Effective",
+            "type": "esriFieldTypeDate",
+            "length": 8
+        },
+        {
+            "name": "Expire",
+            "alias": "Expire",
+            "type": "esriFieldTypeDate",
+            "length": 8
+        },
+        {
+            "name": "Site_NGUID",
+            "alias": "Site_NGUID",
+            "type": "esriFieldTypeString",
+            "length": 254
+        },
+        {
+            "name": "Country",
+            "alias": "Country",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "State",
+            "alias": "State",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "County",
+            "alias": "County",
+            "type": "esriFieldTypeString",
+            "length": 40
+        },
+        {
+            "name": "AddCode",
+            "alias": "AddCode",
+            "type": "esriFieldTypeString",
+            "length": 6
+        },
+        {
+            "name": "AddDataURI",
+            "alias": "AddDataURI",
+            "type": "esriFieldTypeString",
+            "length": 254
+        },
+        {
+            "name": "Inc_Muni",
+            "alias": "Inc_Muni",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "Uninc_Comm",
+            "alias": "Uninc_Comm",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "Nbrhd_Comm",
+            "alias": "Nbrhd_Comm",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "AddNum_Pre",
+            "alias": "AddNum_Pre",
+            "type": "esriFieldTypeString",
+            "length": 15
+        },
+        {
+            "name": "Add_Number",
+            "alias": "Add_Number",
+            "type": "esriFieldTypeSmallInteger"
+        },
+        {
+            "name": "AddNum_Suf",
+            "alias": "AddNum_Suf",
+            "type": "esriFieldTypeString",
+            "length": 15
+        },
+        {
+            "name": "St_PreMod",
+            "alias": "St_PreMod",
+            "type": "esriFieldTypeString",
+            "length": 15
+        },
+        {
+            "name": "St_PreDir",
+            "alias": "St_PreDir",
+            "type": "esriFieldTypeString",
+            "length": 9
+        },
+        {
+            "name": "St_PreTyp",
+            "alias": "St_PreTyp",
+            "type": "esriFieldTypeString",
+            "length": 50
+        },
+        {
+            "name": "St_PreSep",
+            "alias": "St_PreSep",
+            "type": "esriFieldTypeString",
+            "length": 20
+        },
+        {
+            "name": "StreetName",
+            "alias": "StreetName",
+            "type": "esriFieldTypeString",
+            "length": 60
+        },
+        {
+            "name": "St_PosTyp",
+            "alias": "St_PosTyp",
+            "type": "esriFieldTypeString",
+            "length": 50
+        },
+        {
+            "name": "St_PosDir",
+            "alias": "St_PosDir",
+            "type": "esriFieldTypeString",
+            "length": 30
+        },
+        {
+            "name": "St_PosMod",
+            "alias": "St_PosMod",
+            "type": "esriFieldTypeString",
+            "length": 25
+        },
+        {
+            "name": "LSt_PreDir",
+            "alias": "LSt_PreDir",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "LSt_Name",
+            "alias": "LSt_Name",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "LSt_Type",
+            "alias": "LSt_Type",
+            "type": "esriFieldTypeString",
+            "length": 4
+        },
+        {
+            "name": "LStPosDir",
+            "alias": "LStPosDir",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "MSAGComm",
+            "alias": "MSAGComm",
+            "type": "esriFieldTypeString",
+            "length": 30
+        },
+        {
+            "name": "Post_Comm",
+            "alias": "Post_Comm",
+            "type": "esriFieldTypeString",
+            "length": 40
+        },
+        {
+            "name": "Post_Code",
+            "alias": "Post_Code",
+            "type": "esriFieldTypeString",
+            "length": 7
+        },
+        {
+            "name": "Post_Code4",
+            "alias": "Post_Code4",
+            "type": "esriFieldTypeString",
+            "length": 4
+        },
+        {
+            "name": "Building",
+            "alias": "Building",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "Floor",
+            "alias": "Floor",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "Unit",
+            "alias": "Unit",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "Room",
+            "alias": "Room",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "Seat",
+            "alias": "Seat",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "Addtl_Loc",
+            "alias": "Addtl_Loc",
+            "type": "esriFieldTypeString",
+            "length": 225
+        },
+        {
+            "name": "LandmkName",
+            "alias": "LandmkName",
+            "type": "esriFieldTypeString",
+            "length": 150
+        },
+        {
+            "name": "Mile_Post",
+            "alias": "Mile_Post",
+            "type": "esriFieldTypeString",
+            "length": 150
+        },
+        {
+            "name": "Place_Type",
+            "alias": "Place_Type",
+            "type": "esriFieldTypeString",
+            "length": 50
+        },
+        {
+            "name": "Placement",
+            "alias": "Placement",
+            "type": "esriFieldTypeString",
+            "length": 25
+        },
+        {
+            "name": "Long",
+            "alias": "Long",
+            "type": "esriFieldTypeDouble"
+        },
+        {
+            "name": "Lat",
+            "alias": "Lat",
+            "type": "esriFieldTypeDouble"
+        },
+        {
+            "name": "Elev",
+            "alias": "Elev",
+            "type": "esriFieldTypeSmallInteger"
+        }
+    ],
+    "features": [
+        {
+            "attributes": {
+                "OBJECTID": 1,
+                "DiscroAgID": "@ycdes.org",
+                "DateUpdate": 1686268800000,
+                "Effective": null,
+                "Expire": null,
+                "Site_NGUID": "SSAP_5769732 @YCDES.ORG",
+                "Country": "US",
+                "State": "PA",
+                "County": "York County",
+                "AddCode": null,
+                "AddDataURI": null,
+                "Inc_Muni": "SPRINGFIELD TWP",
+                "Uninc_Comm": null,
+                "Nbrhd_Comm": null,
+                "AddNum_Pre": null,
+                "Add_Number": 471,
+                "AddNum_Suf": null,
+                "St_PreMod": null,
+                "St_PreDir": null,
+                "St_PreTyp": null,
+                "St_PreSep": null,
+                "StreetName": "Mill",
+                "St_PosTyp": "Road",
+                "St_PosDir": null,
+                "St_PosMod": null,
+                "LSt_PreDir": null,
+                "LSt_Name": "MILL",
+                "LSt_Type": "RD",
+                "LStPosDir": null,
+                "MSAGComm": "SPRINGFIELD TWP",
+                "Post_Comm": null,
+                "Post_Code": null,
+                "Post_Code4": null,
+                "Building": null,
+                "Floor": null,
+                "Unit": null,
+                "Room": null,
+                "Seat": null,
+                "Addtl_Loc": "471 MILL RD",
+                "LandmkName": null,
+                "Mile_Post": null,
+                "Place_Type": null,
+                "Placement": null,
+                "Long": -76.71853941,
+                "Lat": 39.84588918,
+                "Elev": null
+            },
+            "geometry": {
+                "x": -76.71854166561525,
+                "y": 39.845889178982645
+            }
+        },
+        {
+            "attributes": {
+                "OBJECTID": 2,
+                "DiscroAgID": "@ycdes.org",
+                "DateUpdate": 1686268800000,
+                "Effective": null,
+                "Expire": null,
+                "Site_NGUID": "SSAP_5769733 @YCDES.ORG",
+                "Country": "US",
+                "State": "PA",
+                "County": "York County",
+                "AddCode": null,
+                "AddDataURI": null,
+                "Inc_Muni": "HANOVER BORO",
+                "Uninc_Comm": null,
+                "Nbrhd_Comm": null,
+                "AddNum_Pre": null,
+                "Add_Number": 861,
+                "AddNum_Suf": null,
+                "St_PreMod": null,
+                "St_PreDir": null,
+                "St_PreTyp": null,
+                "St_PreSep": null,
+                "StreetName": "Blossom",
+                "St_PosTyp": "Drive",
+                "St_PosDir": null,
+                "St_PosMod": null,
+                "LSt_PreDir": null,
+                "LSt_Name": "BLOSSOM",
+                "LSt_Type": "DR",
+                "LStPosDir": null,
+                "MSAGComm": "HANOVER BORO",
+                "Post_Comm": null,
+                "Post_Code": null,
+                "Post_Code4": null,
+                "Building": null,
+                "Floor": null,
+                "Unit": null,
+                "Room": null,
+                "Seat": null,
+                "Addtl_Loc": "861 BLOSSOM DR",
+                "LandmkName": null,
+                "Mile_Post": null,
+                "Place_Type": null,
+                "Placement": null,
+                "Long": -76.97090446,
+                "Lat": 39.81381847,
+                "Elev": null
+            },
+            "geometry": {
+                "x": -76.97090679604435,
+                "y": 39.81381846929755
+            }
+        }
+    ],
+    "exceededTransferLimit": true
+}

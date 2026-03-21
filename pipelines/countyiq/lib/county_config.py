@@ -28,6 +28,16 @@ class CountyConfig:
     # ArcGIS GIS Portal
     arcgis_parcels_url: str = ""    # FeatureServer/0 URL for parcels layer
     arcgis_base_url: str = ""       # Base REST services URL
+    arcgis_zoning_url: str = ""     # FeatureServer/0 URL for zoning layer
+    arcgis_roads_url: str = ""      # FeatureServer/0 URL for roads layer
+    arcgis_structures_url: str = "" # FeatureServer/0 URL for building footprints
+    arcgis_municipalities_url: str = ""  # FeatureServer/0 URL for municipal boundaries
+    arcgis_address_pts_url: str = ""     # FeatureServer/0 URL for address points
+    arcgis_zoning_min_records: int = 100
+    arcgis_roads_min_records: int = 1000
+    arcgis_structures_min_records: int = 10000
+    arcgis_municipalities_min_records: int = 10
+    arcgis_address_pts_min_records: int = 10000
 
     # Assessment portal
     assessment_url: str = ""        # Assessment portal base URL
@@ -50,6 +60,16 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         plcb_min_records=500,
         arcgis_parcels_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Parcels/FeatureServer/0",
         arcgis_base_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA",
+        arcgis_zoning_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Zoning/FeatureServer/0",
+        arcgis_roads_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Roads/FeatureServer/0",
+        arcgis_structures_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/BLDG_Footprint/FeatureServer/0",
+        arcgis_municipalities_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Municipal_Boundary/FeatureServer/0",
+        arcgis_address_pts_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/AddressPts/FeatureServer/0",
+        arcgis_zoning_min_records=500,
+        arcgis_roads_min_records=10000,
+        arcgis_structures_min_records=100000,
+        arcgis_municipalities_min_records=50,
+        arcgis_address_pts_min_records=100000,
         assessment_url="https://assessmentpublic.yorkcountypa.gov/",
         assessment_min_records=150000,
         fema_nfhl_url="https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer",

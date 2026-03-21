@@ -1,0 +1,616 @@
+{
+    "objectIdFieldName": "OBJECTID",
+    "globalIdFieldName": "",
+    "geometryType": "esriGeometryPolyline",
+    "spatialReference": {
+        "wkid": 4326,
+        "latestWkid": 4326
+    },
+    "fields": [
+        {
+            "name": "OBJECTID",
+            "alias": "OBJECTID",
+            "type": "esriFieldTypeOID"
+        },
+        {
+            "name": "Source",
+            "alias": "Source",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "DateUpdate",
+            "alias": "DateUpdate",
+            "type": "esriFieldTypeDate",
+            "length": 8
+        },
+        {
+            "name": "Effective",
+            "alias": "Effective",
+            "type": "esriFieldTypeDate",
+            "length": 8
+        },
+        {
+            "name": "Expire",
+            "alias": "Expire",
+            "type": "esriFieldTypeDate",
+            "length": 8
+        },
+        {
+            "name": "RCL_NGUID",
+            "alias": "RCL_NGUID",
+            "type": "esriFieldTypeString",
+            "length": 254
+        },
+        {
+            "name": "AdNumPre_L",
+            "alias": "AdNumPre_L",
+            "type": "esriFieldTypeString",
+            "length": 15
+        },
+        {
+            "name": "AdNumPre_R",
+            "alias": "AdNumPre_R",
+            "type": "esriFieldTypeString",
+            "length": 15
+        },
+        {
+            "name": "FromAddr_L",
+            "alias": "FromAddr_L",
+            "type": "esriFieldTypeSmallInteger"
+        },
+        {
+            "name": "ToAddr_L",
+            "alias": "ToAddr_L",
+            "type": "esriFieldTypeSmallInteger"
+        },
+        {
+            "name": "FromAddr_R",
+            "alias": "FromAddr_R",
+            "type": "esriFieldTypeSmallInteger"
+        },
+        {
+            "name": "ToAddr_R",
+            "alias": "ToAddr_R",
+            "type": "esriFieldTypeSmallInteger"
+        },
+        {
+            "name": "Parity_L",
+            "alias": "Parity_L",
+            "type": "esriFieldTypeString",
+            "length": 1
+        },
+        {
+            "name": "Parity_R",
+            "alias": "Parity_R",
+            "type": "esriFieldTypeString",
+            "length": 1
+        },
+        {
+            "name": "St_PreMod",
+            "alias": "St_PreMod",
+            "type": "esriFieldTypeString",
+            "length": 15
+        },
+        {
+            "name": "St_PreDir",
+            "alias": "St_PreDir",
+            "type": "esriFieldTypeString",
+            "length": 9
+        },
+        {
+            "name": "St_PreTyp",
+            "alias": "St_PreTyp",
+            "type": "esriFieldTypeString",
+            "length": 50
+        },
+        {
+            "name": "St_PreSep",
+            "alias": "St_PreSep",
+            "type": "esriFieldTypeString",
+            "length": 20
+        },
+        {
+            "name": "StreetName",
+            "alias": "StreetName",
+            "type": "esriFieldTypeString",
+            "length": 60
+        },
+        {
+            "name": "St_PosTyp",
+            "alias": "St_PosTyp",
+            "type": "esriFieldTypeString",
+            "length": 50
+        },
+        {
+            "name": "St_PosDir",
+            "alias": "St_PosDir",
+            "type": "esriFieldTypeString",
+            "length": 20
+        },
+        {
+            "name": "St_PosMod",
+            "alias": "St_PosMod",
+            "type": "esriFieldTypeString",
+            "length": 25
+        },
+        {
+            "name": "LSt_PreDir",
+            "alias": "LSt_PreDir",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "LSt_Name",
+            "alias": "LSt_Name",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "LSt_Type",
+            "alias": "LSt_Type",
+            "type": "esriFieldTypeString",
+            "length": 4
+        },
+        {
+            "name": "LStPosDir",
+            "alias": "LStPosDir",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "MSAGComm_L",
+            "alias": "MSAGComm_L",
+            "type": "esriFieldTypeString",
+            "length": 30
+        },
+        {
+            "name": "MSAGComm_R",
+            "alias": "MSAGComm_R",
+            "type": "esriFieldTypeString",
+            "length": 30
+        },
+        {
+            "name": "Country_L",
+            "alias": "Country_L",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "Country_R",
+            "alias": "Country_R",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "State_L",
+            "alias": "State_L",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "State_R",
+            "alias": "State_R",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "County_L",
+            "alias": "County_L",
+            "type": "esriFieldTypeString",
+            "length": 40
+        },
+        {
+            "name": "County_R",
+            "alias": "County_R",
+            "type": "esriFieldTypeString",
+            "length": 40
+        },
+        {
+            "name": "AddCode_L",
+            "alias": "AddCode_L",
+            "type": "esriFieldTypeString",
+            "length": 6
+        },
+        {
+            "name": "AddCode_R",
+            "alias": "AddCode_R",
+            "type": "esriFieldTypeString",
+            "length": 6
+        },
+        {
+            "name": "IncMuni_L",
+            "alias": "IncMuni_L",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "IncMuni_R",
+            "alias": "IncMuni_R",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "UnincCom_L",
+            "alias": "UnincCom_L",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "UnincCom_R",
+            "alias": "UnincCom_R",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "NbrhdCom_L",
+            "alias": "NbrhdCom_L",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "NbrhdCom_R",
+            "alias": "NbrhdCom_R",
+            "type": "esriFieldTypeString",
+            "length": 100
+        },
+        {
+            "name": "PostCode_L",
+            "alias": "PostCode_L",
+            "type": "esriFieldTypeString",
+            "length": 7
+        },
+        {
+            "name": "PostCode_R",
+            "alias": "PostCode_L",
+            "type": "esriFieldTypeString",
+            "length": 7
+        },
+        {
+            "name": "PostComm_L",
+            "alias": "PostComm_L",
+            "type": "esriFieldTypeString",
+            "length": 40
+        },
+        {
+            "name": "PostComm_R",
+            "alias": "PostComm_R",
+            "type": "esriFieldTypeString",
+            "length": 40
+        },
+        {
+            "name": "RoadClass",
+            "alias": "RoadClass",
+            "type": "esriFieldTypeString",
+            "length": 15
+        },
+        {
+            "name": "OneWay",
+            "alias": "OneWay",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "Valid_L",
+            "alias": "Valid_L",
+            "type": "esriFieldTypeString",
+            "length": 1
+        },
+        {
+            "name": "Valid_R",
+            "alias": "Valid_R",
+            "type": "esriFieldTypeString",
+            "length": 1
+        },
+        {
+            "name": "SpeedLimit",
+            "alias": "SpeedLimit",
+            "type": "esriFieldTypeSmallInteger"
+        },
+        {
+            "name": "RTE_NUM",
+            "alias": "ROUTE_NUMBER",
+            "type": "esriFieldTypeString",
+            "length": 5
+        },
+        {
+            "name": "L_DISTRICT",
+            "alias": "LEFT_DISTRICT",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "R_DISTRICT",
+            "alias": "RIGHT_DISTRICT",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "TRAVEL_TIME",
+            "alias": "TRAVEL_TIME",
+            "type": "esriFieldTypeDouble"
+        },
+        {
+            "name": "Z_VALUE",
+            "alias": "Z_VALUE_ELEVATION",
+            "type": "esriFieldTypeSmallInteger"
+        },
+        {
+            "name": "JOIN_ID",
+            "alias": "JOIN_ID",
+            "type": "esriFieldTypeDouble"
+        },
+        {
+            "name": "EDIT_NAME",
+            "alias": "EDIT_NAME",
+            "type": "esriFieldTypeString",
+            "length": 20
+        },
+        {
+            "name": "EDIT_TYPE",
+            "alias": "EDIT_TYPE",
+            "type": "esriFieldTypeString",
+            "length": 30
+        },
+        {
+            "name": "PRETYPE",
+            "alias": "PRETYPE",
+            "type": "esriFieldTypeString",
+            "length": 7
+        },
+        {
+            "name": "STDIR",
+            "alias": "STREET_DIRECTION",
+            "type": "esriFieldTypeString",
+            "length": 2
+        },
+        {
+            "name": "STSUF",
+            "alias": "STREET_SUFFIX",
+            "type": "esriFieldTypeString",
+            "length": 6
+        },
+        {
+            "name": "STTYPE",
+            "alias": "STREET_TYPE",
+            "type": "esriFieldTypeString",
+            "length": 4
+        },
+        {
+            "name": "RDNAME",
+            "alias": "ROAD_NAME",
+            "type": "esriFieldTypeString",
+            "length": 40
+        },
+        {
+            "name": "GC_Exception",
+            "alias": "GC_Exception",
+            "type": "esriFieldTypeString",
+            "length": 75
+        },
+        {
+            "name": "Shape__Length",
+            "alias": "Shape.STLength()",
+            "type": "esriFieldTypeDouble"
+        }
+    ],
+    "features": [
+        {
+            "attributes": {
+                "OBJECTID": 1,
+                "Source": "@ycdes.org",
+                "DateUpdate": 1727395200000,
+                "Effective": null,
+                "Expire": null,
+                "RCL_NGUID": "RCL_328930 @YCDES.ORG",
+                "AdNumPre_L": null,
+                "AdNumPre_R": null,
+                "FromAddr_L": 2000,
+                "ToAddr_L": 2098,
+                "FromAddr_R": 2001,
+                "ToAddr_R": 2099,
+                "Parity_L": "E",
+                "Parity_R": "O",
+                "St_PreMod": null,
+                "St_PreDir": null,
+                "St_PreTyp": null,
+                "St_PreSep": null,
+                "StreetName": "BANK",
+                "St_PosTyp": "Lane",
+                "St_PosDir": null,
+                "St_PosMod": null,
+                "LSt_PreDir": "",
+                "LSt_Name": "BANK",
+                "LSt_Type": "LN",
+                "LStPosDir": null,
+                "MSAGComm_L": "WEST MANCHESTER TWP",
+                "MSAGComm_R": "WEST MANCHESTER TWP",
+                "Country_L": "US",
+                "Country_R": "US",
+                "State_L": "PA",
+                "State_R": "PA",
+                "County_L": "York County",
+                "County_R": "York County",
+                "AddCode_L": null,
+                "AddCode_R": null,
+                "IncMuni_L": "WEST MANCHESTER TWP",
+                "IncMuni_R": "WEST MANCHESTER TWP",
+                "UnincCom_L": null,
+                "UnincCom_R": null,
+                "NbrhdCom_L": null,
+                "NbrhdCom_R": null,
+                "PostCode_L": null,
+                "PostCode_R": null,
+                "PostComm_L": null,
+                "PostComm_R": null,
+                "RoadClass": null,
+                "OneWay": null,
+                "Valid_L": null,
+                "Valid_R": null,
+                "SpeedLimit": 30,
+                "RTE_NUM": null,
+                "L_DISTRICT": "51",
+                "R_DISTRICT": "51",
+                "TRAVEL_TIME": 0.27836162,
+                "Z_VALUE": 0,
+                "JOIN_ID": null,
+                "EDIT_NAME": null,
+                "EDIT_TYPE": null,
+                "PRETYPE": " ",
+                "STDIR": " ",
+                "STSUF": " ",
+                "STTYPE": "LN",
+                "RDNAME": "BANK LN",
+                "GC_Exception": null,
+                "Shape__Length": 734.8744832571524
+            },
+            "geometry": {
+                "paths": [
+                    [
+                        [
+                            -76.792658425333,
+                            39.975759789567746
+                        ],
+                        [
+                            -76.79300049929816,
+                            39.97588417930486
+                        ],
+                        [
+                            -76.79360617074842,
+                            39.97609655105009
+                        ],
+                        [
+                            -76.79407762217284,
+                            39.976272060980214
+                        ],
+                        [
+                            -76.7942625967716,
+                            39.97633436854057
+                        ],
+                        [
+                            -76.79461366472943,
+                            39.97648027625389
+                        ],
+                        [
+                            -76.79502687421127,
+                            39.97662398524101
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "attributes": {
+                "OBJECTID": 2,
+                "Source": "@ycdes.org",
+                "DateUpdate": 1727395200000,
+                "Effective": null,
+                "Expire": null,
+                "RCL_NGUID": "RCL_328931 @YCDES.ORG",
+                "AdNumPre_L": null,
+                "AdNumPre_R": null,
+                "FromAddr_L": 50,
+                "ToAddr_L": 98,
+                "FromAddr_R": 55,
+                "ToAddr_R": 99,
+                "Parity_L": "E",
+                "Parity_R": "O",
+                "St_PreMod": null,
+                "St_PreDir": null,
+                "St_PreTyp": null,
+                "St_PreSep": null,
+                "StreetName": "HIGHLAND",
+                "St_PosTyp": "Avenue",
+                "St_PosDir": null,
+                "St_PosMod": null,
+                "LSt_PreDir": "",
+                "LSt_Name": "HIGHLAND",
+                "LSt_Type": "AVE",
+                "LStPosDir": null,
+                "MSAGComm_L": "NEWBERRY TWP",
+                "MSAGComm_R": "NEWBERRY TWP",
+                "Country_L": "US",
+                "Country_R": "US",
+                "State_L": "PA",
+                "State_R": "PA",
+                "County_L": "York County",
+                "County_R": "York County",
+                "AddCode_L": null,
+                "AddCode_R": null,
+                "IncMuni_L": "NEWBERRY TWP",
+                "IncMuni_R": "NEWBERRY TWP",
+                "UnincCom_L": null,
+                "UnincCom_R": null,
+                "NbrhdCom_L": null,
+                "NbrhdCom_R": null,
+                "PostCode_L": null,
+                "PostCode_R": null,
+                "PostComm_L": null,
+                "PostComm_R": null,
+                "RoadClass": null,
+                "OneWay": null,
+                "Valid_L": null,
+                "Valid_R": null,
+                "SpeedLimit": 30,
+                "RTE_NUM": null,
+                "L_DISTRICT": "39",
+                "R_DISTRICT": "39",
+                "TRAVEL_TIME": 0.24906661,
+                "Z_VALUE": 0,
+                "JOIN_ID": null,
+                "EDIT_NAME": "YCDES",
+                "EDIT_TYPE": "ATTRIBUTE UPDATE",
+                "PRETYPE": " ",
+                "STDIR": " ",
+                "STSUF": " ",
+                "STTYPE": "AVE",
+                "RDNAME": "HIGHLAND AVE",
+                "GC_Exception": null,
+                "Shape__Length": 657.535853740456
+            },
+            "geometry": {
+                "paths": [
+                    [
+                        [
+                            -76.71509544353266,
+                            40.085182296002
+                        ],
+                        [
+                            -76.71516726427154,
+                            40.08520883093112
+                        ],
+                        [
+                            -76.71526287221776,
+                            40.08525406920786
+                        ],
+                        [
+                            -76.71541036104983,
+                            40.08537004587676
+                        ],
+                        [
+                            -76.71559597775897,
+                            40.085512250243845
+                        ],
+                        [
+                            -76.71576317048239,
+                            40.08559881706731
+                        ],
+                        [
+                            -76.71600297917693,
+                            40.08566014381162
+                        ],
+                        [
+                            -76.7170563731275,
+                            40.085824713871354
+                        ],
+                        [
+                            -76.71720864824371,
+                            40.08584850268566
+                        ]
+                    ]
+                ]
+            }
+        }
+    ],
+    "exceededTransferLimit": true
+}

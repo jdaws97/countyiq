@@ -41,7 +41,7 @@ EXPECTED_FIELDS = {
 
 
 @asset(
-    group_name="gis_layers",
+    group_name="arcgis",
     description=f"{get_county_config().name} address points from ArcGIS REST API → staging.address_points",
     kinds={"postgres", "arcgis"},
 )
