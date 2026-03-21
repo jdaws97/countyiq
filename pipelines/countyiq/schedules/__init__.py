@@ -12,7 +12,7 @@ from countyiq.jobs import arcgis_refresh, scraper_refresh, bulk_refresh, fema_re
 all_schedules = [
     ScheduleDefinition(
         job=arcgis_refresh,
-        cron_schedule="0 2 * * 1",  # Monday 02:00
+        cron_schedule="0 2 * * 0",  # Sunday 02:00
         name="weekly_arcgis",
     ),
     ScheduleDefinition(
