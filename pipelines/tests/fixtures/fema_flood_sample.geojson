@@ -1,0 +1,98 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-76.38, 39.73], [-76.37, 39.73], [-76.37, 39.74], [-76.38, 39.74], [-76.38, 39.73]]]
+      },
+      "properties": {
+        "DFIRM_ID": "42133C",
+        "FLD_AR_ID": "42133C_5239",
+        "FLD_ZONE": "AE",
+        "ZONE_SUBTY": null,
+        "SFHA_TF": "T",
+        "STATIC_BFE": 450.5,
+        "V_DATUM": "NAVD88",
+        "DEPTH": -9999,
+        "STUDY_TYP": "SFHAs WITH HIGH FLOOD RISK",
+        "SOURCE_CIT": "42133C_STUDY1"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-76.33, 39.73], [-76.32, 39.73], [-76.32, 39.74], [-76.33, 39.74], [-76.33, 39.73]]]
+      },
+      "properties": {
+        "DFIRM_ID": "42133C",
+        "FLD_AR_ID": "42133C_5240",
+        "FLD_ZONE": "X",
+        "ZONE_SUBTY": "0.2 PCT ANNUAL CHANCE FLOOD HAZARD",
+        "SFHA_TF": "F",
+        "STATIC_BFE": -9999,
+        "V_DATUM": null,
+        "DEPTH": -9999,
+        "STUDY_TYP": "NOT APPLICABLE",
+        "SOURCE_CIT": "42133C_STUDY1"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-76.40, 39.75], [-76.39, 39.75], [-76.39, 39.76], [-76.40, 39.76], [-76.40, 39.75]]]
+      },
+      "properties": {
+        "DFIRM_ID": "42133C",
+        "FLD_AR_ID": "42133C_1001",
+        "FLD_ZONE": "AE",
+        "ZONE_SUBTY": "FLOODWAY",
+        "SFHA_TF": "T",
+        "STATIC_BFE": 520.0,
+        "V_DATUM": "NAVD88",
+        "DEPTH": -9999,
+        "STUDY_TYP": "SFHAs WITH HIGH FLOOD RISK",
+        "SOURCE_CIT": "42133C_STUDY2"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-76.50, 39.80], [-76.49, 39.80], [-76.49, 39.81], [-76.50, 39.81], [-76.50, 39.80]]]
+      },
+      "properties": {
+        "DFIRM_ID": "42133C",
+        "FLD_AR_ID": "42133C_2001",
+        "FLD_ZONE": "VE",
+        "ZONE_SUBTY": null,
+        "SFHA_TF": "T",
+        "STATIC_BFE": 15.0,
+        "V_DATUM": "NAVD88",
+        "DEPTH": 3.5,
+        "STUDY_TYP": "SFHAs WITH HIGH FLOOD RISK",
+        "SOURCE_CIT": "42133C_STUDY3"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "DFIRM_ID": "42133C",
+        "FLD_AR_ID": "42133C_9999",
+        "FLD_ZONE": "X",
+        "ZONE_SUBTY": null,
+        "SFHA_TF": "F",
+        "STATIC_BFE": -9999,
+        "V_DATUM": null,
+        "DEPTH": -9999,
+        "STUDY_TYP": "NOT APPLICABLE",
+        "SOURCE_CIT": "42133C_STUDY1"
+      }
+    }
+  ],
+  "exceededTransferLimit": true
+}
