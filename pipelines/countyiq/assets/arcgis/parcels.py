@@ -4,7 +4,16 @@ Records: ~176,000 parcels with geometry + 40+ attribute fields
 Schedule: Weekly (Monday 02:00)
 """
 
-from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
+import requests
+from dagster import (
+    asset,
+    asset_check,
+    AssetCheckResult,
+    AssetCheckSeverity,
+    AssetExecutionContext,
+    MaterializeResult,
+    MetadataValue,
+)
 
 from countyiq.lib.arcgis_client import query_all_features
 from countyiq.lib.county_config import get_county_config
@@ -28,6 +37,15 @@ VALUE_COLUMNS = [
     "acres",
     "class",
 ]
+
+# Expected fields from ArcGIS FeatureServer (for schema drift check)
+EXPECTED_FIELDS = {
+    "PIDN", "OWNER_FULL", "PROPADR", "APRTOTAL", "SALEDT", "PRICE",
+    "MUNICIPALITY", "SCHOOL_DIS", "ACRES", "CLASS", "DISTRICT", "BLOCK",
+    "MAP", "PARCEL", "DEED_BK", "DEED_PG", "OWN_NAME1", "OWN_NAME2",
+    "MAIL_ADDR_FULL", "PREV_OWNER", "LUC", "STYLE", "NUM_STORIE",
+    "RES_LIVING_AREA", "YRBLT", "APRLAND", "APRBLDG", "PREV_PRICE",
+}
 
 
 @asset(
@@ -160,3 +178,44 @@ def _is_clockwise(ring: list[list[float]]) -> bool:
         x2, y2 = ring[i + 1][0], ring[i + 1][1]
         total += (x2 - x1) * (y2 + y1)
     return total > 0
+
+
+@asset_check(asset=parcels_arcgis)
+def parcels_record_count(database: DatabaseResource) -> AssetCheckResult:
+    """Verify staging.parcels has > 150,000 current records."""
+    county = get_county_config()
+    result = database.execute(
+        "SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL"
+    )
+    count = result[0][0] if result else 0
+    return AssetCheckResult(
+        passed=count > county.assessment_min_records,
+        severity=AssetCheckSeverity.ERROR,
+        metadata={"current_record_count": MetadataValue.int(count)},
+    )
+
+
+@asset_check(asset=parcels_arcgis)
+def parcels_schema_drift() -> AssetCheckResult:
+    """Verify ArcGIS FeatureServer still has expected parcel fields."""
+    county = get_county_config()
+    try:
+        resp = requests.get(f"{county.arcgis_parcels_url}?f=json", timeout=30)
+        resp.raise_for_status()
+        layer_meta = resp.json()
+        actual_fields = {f["name"] for f in layer_meta.get("fields", [])}
+        missing = EXPECTED_FIELDS - actual_fields
+        return AssetCheckResult(
+            passed=len(missing) == 0,
+            severity=AssetCheckSeverity.WARN,
+            metadata={
+                "missing_fields": MetadataValue.text(str(missing) if missing else "none"),
+                "total_fields": MetadataValue.int(len(actual_fields)),
+            },
+        )
+    except requests.exceptions.RequestException as e:
+        return AssetCheckResult(
+            passed=False,
+            severity=AssetCheckSeverity.WARN,
+            metadata={"error": MetadataValue.text(f"Network error: {e}")},
+        )
