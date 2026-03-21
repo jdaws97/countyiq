@@ -141,7 +141,7 @@ Recommended order based on value-add and difficulty. Tackle the highest-value, e
 | Priority | Layer | Records | Geometry | Why Now |
 |----------|-------|---------|----------|---------|
 | 1 | **Municipal_Boundary** | ~72 | Polygon | Parcels have no municipality field — this layer provides it via spatial join. Entity resolution uses municipality for scoping. Blocks everything that filters by municipality. |
-| 2 | **AddressPts** | ~100K+ | Point | Entity resolution fallback when PROPADR is messy. Canonical address list for `/api/search`. Clickable map targets at low zoom. |
+| 2 | **AddressPts** | ~100K+ | Point | Backend-only (not a map layer). Entity resolution fallback when PROPADR is messy. Canonical address list for `/api/search` fuzzy matching. |
 | 3 | **BLDG_Footprint** | ~213K | Polygon | Single biggest visual upgrade to the map. Vacancy detection (parcel with no footprint = likely vacant). Assessment analysis (footprint sqft vs assessed living area). |
 
 ### Municipal_Boundary — Fills the Municipality Gap
