@@ -9,6 +9,7 @@ services:
       - "5433:5432"
     volumes:
       - pgdata-test:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
 
 volumes:
   pgdata-test:

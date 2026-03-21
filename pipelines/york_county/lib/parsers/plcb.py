@@ -47,7 +47,7 @@ def parse_plcb_csv(csv_text: str) -> list[dict]:
     Returns:
         List of dicts with staging column names, filtered to York County.
     """
-    reader = csv.DictReader(StringIO(csv_text))
+    reader = csv.DictReader(StringIO(csv_text.lstrip("\ufeff")))
     records = []
 
     for row in reader:

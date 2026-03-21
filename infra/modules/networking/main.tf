@@ -16,6 +16,14 @@ data "aws_subnets" "default" {
   }
 }
 
+# Deterministic subnet selection — filter by the chosen AZ to avoid
+# relying on the arbitrary order of data.aws_subnets.default.ids
+data "aws_subnet" "primary" {
+  vpc_id            = data.aws_vpc.default.id
+  availability_zone = var.primary_az
+  default_for_az    = true
+}
+
 # --- Security Group: EC2 (Dagster) ---
 # No inbound rules — Session Manager connects via outbound SSM agent.
 # All outbound allowed for scraping, package installs, SSM, CloudWatch.

@@ -54,18 +54,23 @@ Both are free and open source with no usage limits. Unlike Mapbox, there's no pe
 
 ### Core views (MVP)
 
-**1. Map view (default):** Full-screen map of York County. Parcels render as polygons when zoomed in. Click a parcel to open the side panel with details. Toggle layers: parcels (colored by assessment value, zoning, or owner), roads, municipal boundaries, flood zones.
+**1. Map view (default):** Full-screen map of York County. Parcels render as polygons when zoomed in. Click a parcel to open the side panel with details. Toggle layers: parcels (colored by assessment value, zoning, or owner), roads, municipal boundaries, flood zones, **delinquent tax heatmap** (red = delinquent, from assessment data).
 
 **2. Search:** Text search for owner names, addresses, or parcel IDs. Results appear as a list and are highlighted on the map. Searches hit the `/api/search` endpoint which queries the `owners` and `parcels` tables with `pg_trgm` fuzzy matching.
 
 **3. Entity profile:** Clicking "View Full Entity" in the side panel opens a full-page view of a resolved owner — every parcel they own, and their assessment data.
+
+**4. Property detail — comparables:** The parcel side panel includes a "Similar Properties" section. Shows nearby properties of the same class with comparable acreage/year built and their assessed values. Includes a percentile ranking ("Assessed higher than 72% of residential parcels in Conewago Twp"). Queries `/api/parcels/{pidn}/comparables`. No ML — SQL window functions over assessment data.
+
+**5. Ownership concentration dashboard:** Accessible from the nav bar. Shows a leaderboard of top property owners by parcel count, total assessed value, or total acreage. Filterable by municipality. Click an owner → highlights all their parcels on the map. Queries `/api/owners/top`. This is the "who owns York County" view that no existing tool provides.
+
+**6. Change detection feed:** "What changed this week" page. Shows recent ownership transfers, new delinquencies, assessment value changes, and new parcels — all derived from SCD2 history (records where `valid_to` was set recently = expired, `valid_from` is recent = new). Queries `/api/changes`. Filterable by change type and municipality.
 
 > **MVP scope:** Entity detail shows parcels + assessment data only. Deeds, business filings, and licenses are added to entity views as their Phase 2 pipelines are built.
 
 ### What it does NOT include (MVP)
 
 - **No user accounts or login** — fully public, read-only
-- **No dashboards or charts** — add later once you know what questions keep coming up
 - **No editing or data entry** — read-only intelligence platform
 - **No real-time updates** — data refreshes weekly; frontend serves cached responses
 

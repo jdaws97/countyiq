@@ -190,64 +190,28 @@ countyiq/
 This is the single file Dagster reads on startup. It registers all assets, jobs, schedules, and resources. Think of it as the "table of contents" for your entire data platform:
 
 ```python
-from dagster import Definitions, EnvVar
+from dagster import Definitions, load_assets_from_package_module
 
-from york_county.resources.database import database_resource
-from york_county.resources.storage import s3_resource
-from york_county.assets.arcgis import parcels, zoning, roads, structures, penndot
-from york_county.assets.scrapers import (
-    efacts, crimewatch, pals, assessment,
-    county_bids, tax_claim, commissioners, york_city_rfp
-)
-from york_county.assets.bulk import plcb, pa_open_data, ujs
-from york_county.assets.pdf import conservation, subdivision
-from york_county.assets.enrichment import owners, parcel_enriched
-from york_county.jobs import (
-    arcgis_refresh, scraper_refresh, bulk_refresh, enrichment
-)
-from york_county.schedules.daily import all_schedules
+from york_county import assets
+from york_county.jobs import arcgis_refresh, scraper_refresh, bulk_refresh, enrichment_refresh
+from york_county.schedules import all_schedules
+from york_county.sensors.alerting import success_reporter, failure_alerter
+from york_county.resources.database import make_database_resource
+from york_county.resources.storage import make_s3_resource
 
 defs = Definitions(
-    assets=[
-        # ArcGIS REST sources
-        *parcels.assets,
-        *zoning.assets,
-        *roads.assets,
-        *structures.assets,
-        *penndot.assets,
-        # Scrapers
-        *efacts.assets,
-        *crimewatch.assets,
-        *pals.assets,
-        *assessment.assets,
-        *county_bids.assets,
-        *tax_claim.assets,
-        *commissioners.assets,
-        *york_city_rfp.assets,
-        # Bulk downloads
-        *plcb.assets,
-        *pa_open_data.assets,
-        *ujs.assets,
-        # PDF extraction
-        *conservation.assets,
-        *subdivision.assets,
-        # Enrichment
-        *owners.assets,
-        *parcel_enriched.assets,
-    ],
-    jobs=[
-        arcgis_refresh.job,
-        scraper_refresh.job,
-        bulk_refresh.job,
-        enrichment.job,
-    ],
+    assets=load_assets_from_package_module(assets),
+    jobs=[arcgis_refresh, scraper_refresh, bulk_refresh, enrichment_refresh],
     schedules=all_schedules,
+    sensors=[success_reporter, failure_alerter],
     resources={
-        "database": database_resource,
-        "s3": s3_resource,
+        "database": make_database_resource(),
+        "s3": make_s3_resource(),
     },
 )
 ```
+
+`load_assets_from_package_module` auto-discovers all `@asset`-decorated functions under `york_county/assets/`. As new source assets are added, they're picked up automatically without editing `definitions.py`.
 
 When Dagster starts, it loads this file and knows about every asset, every dependency, every schedule. The Dagster UI then renders the full graph and lets you monitor everything.
 
@@ -296,66 +260,76 @@ assets = [parcels_arcgis]
 - `database.scd2_upsert()` handles SCD Type 2 logic (expire changed records, insert new)
 - Raw response archived to S3 first (audit trail), then parsed into `staging.*`
 - The `context.log` calls show up in the Dagster UI so you can see what happened
-- The `assets` list at the bottom is what `definitions.py` imports
+- `load_assets_from_package_module` auto-discovers `@asset` functions, so no manual `assets` list export needed
 
 ## What the shared `lib/` utilities do
 
 | File | Purpose | Used by |
 |---|---|---|
-| `arcgis_client.py` | Handles ArcGIS REST API pagination (queries return max 1000–2000 records at a time, so it loops until all records are fetched), coordinate system transforms, and GeoJSON conversion | All `arcgis/` assets |
-| `playwright_utils.py` | Launches Playwright Chromium with consistent settings (headless, timeout, viewport), handles anti-bot detection basics, captures screenshots for debugging | All `scrapers/` assets that need Playwright |
-| `s3_archive.py` | Uploads raw API responses / HTML / PDFs to S3 with timestamped keys for audit trail and debugging | All assets (archive before processing) |
-| `scrape_utils.py` | Common BeautifulSoup helpers — extract tables from HTML, clean whitespace, normalize dates | HTML scraper assets |
+| `lib/arcgis_client.py` | Handles ArcGIS REST API pagination (queries return max 1000–2000 records at a time, so it loops until all records are fetched) and GeoJSON conversion | All `arcgis/` assets |
+| `lib/playwright_utils.py` | Launches Playwright Chromium with consistent settings (headless, timeout, viewport), captures screenshots for debugging | All `scrapers/` assets that need Playwright |
+| `lib/scd.py` | SCD Type 2 upsert helper — expire changed records, insert new/changed, skip unchanged, detect deletes | All assets that write to `staging.*` |
+| `lib/slack.py` | 3-channel Slack webhook helper (critical/warning/pipeline), reads URLs from SSM Parameter Store, caches them | Sensors (`sensors/alerting.py`) |
+| `lib/parsers/` | Per-source parsing functions (e.g. `parcels.py`) — extract and normalize fields from raw API responses | All assets |
+| `resources/database.py` | PostgreSQL connection resource using psycopg2, reads `DATABASE_*` env vars | All assets via Dagster resource injection |
+| `resources/storage.py` | S3 client for archiving raw responses to `s3://york-county-raw/<source>/<date>/` | All assets via Dagster resource injection |
 
 ## How jobs and schedules connect
 
 A **job** selects which assets to build. A **schedule** triggers that job on a cron timer:
 
 ```python
-# york_county/jobs/arcgis_refresh.py
+# york_county/jobs/__init__.py
 
 from dagster import define_asset_job, AssetSelection
 
-job = define_asset_job(
+arcgis_refresh = define_asset_job(
     name="arcgis_refresh",
-    selection=AssetSelection.groups("arcgis"),  # all assets in the "arcgis" group
+    selection=AssetSelection.groups("arcgis"),
     description="Refresh all ArcGIS REST API data sources",
+)
+
+scraper_refresh = define_asset_job(
+    name="scraper_refresh",
+    selection=AssetSelection.groups("scrapers"),
+    description="Refresh all Playwright/BeautifulSoup scraper sources",
+)
+
+bulk_refresh = define_asset_job(
+    name="bulk_refresh",
+    selection=AssetSelection.groups("bulk"),
+    description="Refresh all bulk download / API sources",
+)
+
+enrichment_refresh = define_asset_job(
+    name="enrichment_refresh",
+    selection=AssetSelection.groups("enrichment"),
+    description="Run entity resolution and enrichment assets",
 )
 ```
 
 ```python
-# york_county/schedules/daily.py
+# york_county/schedules/__init__.py
 
 from dagster import ScheduleDefinition
-from york_county.jobs.arcgis_refresh import job as arcgis_job
-from york_county.jobs.scraper_refresh import job as scraper_job
-from york_county.jobs.bulk_refresh import job as bulk_job
-from york_county.jobs.enrichment import job as enrichment_job
+from york_county.jobs import arcgis_refresh, scraper_refresh, bulk_refresh
 
 all_schedules = [
     ScheduleDefinition(
-        job=arcgis_job,
-        cron_schedule="0 2 * * 1",      # Every Monday at 2:00 AM
+        job=arcgis_refresh,
+        cron_schedule="0 2 * * 1",      # Monday 02:00
         name="weekly_arcgis",
     ),
     ScheduleDefinition(
-        job=scraper_job,
-        cron_schedule="0 3 * * 1",      # Every Monday at 3:00 AM
+        job=scraper_refresh,
+        cron_schedule="0 3 * * 1",      # Monday 03:00
         name="weekly_scrapers",
     ),
     ScheduleDefinition(
-        job=bulk_job,
-        cron_schedule="0 5 1 * *",      # First of each month at 5:00 AM
+        job=bulk_refresh,
+        cron_schedule="0 5 1 * *",      # 1st of month 05:00
         name="monthly_bulk",
     ),
-    # Enrichment runs via a Dagster sensor that triggers after all
-    # upstream weekly sources have completed successfully.
-    # Not cron-scheduled — see entity-resolution.md for the sensor logic.
-    # ScheduleDefinition(
-    #     job=enrichment_job,
-    #     cron_schedule="0 6 * * 0",   # Alternative: Sunday 6 AM if sensor approach is too complex
-    #     name="weekly_enrichment",
-    # ),
 ]
 ```
 
@@ -416,12 +390,12 @@ To work on pipelines on your own machine:
 git clone <repo-url>
 cd countyiq/pipelines
 
-# 2. Create a virtual environment
-python -m venv .venv
+# 2. Create a virtual environment (Python 3.11 via uv)
+uv venv .venv --python 3.11
 source .venv/bin/activate
 
 # 3. Install dependencies
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
 playwright install chromium
 
 # 4. Start local Postgres (for testing)

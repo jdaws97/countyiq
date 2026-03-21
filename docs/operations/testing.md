@@ -151,7 +151,7 @@ After the Dagster deploy workflow restarts services, verify they came up cleanly
             --parameters 'commands=[
               "source /opt/york-county/venv/bin/activate",
               "cd /opt/york-county/pipelines",
-              "python -c \"from definitions import defs; print(f\"{len(defs.get_all_asset_keys())} assets loaded\")\" "
+              "python -c \"from york_county.definitions import defs; print(f\\\"{len(list(defs.resolve_all_asset_specs()))} assets loaded\\\")\" "
             ]' \
             --query "Command.CommandId" \
             --output text)

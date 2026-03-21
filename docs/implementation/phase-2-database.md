@@ -4,29 +4,43 @@
 
 **Time estimate:** 1-2 hours
 
-**Prerequisites:** Phase 1 complete. RDS is available. Extensions and schemas are created.
+**Prerequisites:** Phase 1 complete (Terraform written and validated, NOT applied). Docker Postgres running locally (`docker compose up -d postgres-test`).
+
+### Schema Ownership
+
+| Owner | What it creates |
+|---|---|
+| `init.sql` | Extensions (postgis, pg_trgm, pg_stat_statements), schemas (staging, meta), `dagster` database |
+| **Alembic** | **All table-level objects** — staging.\*, public.\*, meta.\*, views, functions, indexes |
+
+`init.sql` runs first (via `initialize.sh`), then Alembic runs on top. This split exists because extensions and cross-database DDL can't be managed by Alembic.
 
 ### Step 2.1: Set Up Alembic
 
-Reference: Infrastructure Plan, Schema Migrations (Alembic) section.
+Alembic is already configured in the repo:
+
+```
+pipelines/
+├── alembic.ini                          # Config (DATABASE_URL override from env)
+├── alembic/
+│   ├── env.py                           # Migration environment
+│   ├── script.py.mako                   # Template for new migrations
+│   └── versions/
+│       └── 001_initial_schema_mvp_sources.py
+├── docker-compose.yml                   # Local PostGIS for testing
+└── pyproject.toml                       # Dependencies
+```
 
 ```bash
 cd pipelines/
 
-# Alembic is already in pyproject.toml dependencies
+# Install dependencies
 pip install -e ".[dev]"
-
-# Initialize Alembic
-alembic init migrations
 ```
-
-Configure `alembic.ini` and `migrations/env.py` as specified in the Infrastructure Plan.
 
 ### Step 2.2: Create the Initial Migration
 
-This is the "baseline" migration that creates all tables needed for MVP sources.
-
-**Tables to create (in this migration):**
+The baseline migration (`001_initial_schema_mvp_sources.py`) is already written. It creates:
 
 **`staging` schema:** (Cleaned, normalized, change-tracked — NO `raw` schema; raw data goes to S3 only)
 - `parcels` — GIS parcel data with SCD Type 2 (valid_from/valid_to)
@@ -48,24 +62,38 @@ This is the "baseline" migration that creates all tables needed for MVP sources.
 - `pipeline_status` — One row per source, updated by Dagster sensor after each run
 - `infra_metrics` — EC2/RDS CloudWatch metrics, written by Dagster sensor every 5 min
 - `data_quality_checks` — Pass/fail results from Dagster asset checks
-- See Infrastructure Plan, **Meta Schema DDL** section for full CREATE TABLE statements
+
+**Functions:** `staging.parid_to_pidn()`, `public.normalize_name()`, `public.normalize_address()`
+
+### Step 2.2b: Test Locally with Docker Postgres
 
 ```bash
-# Generate the migration
-alembic revision -m "initial_schema_mvp_sources"
+cd pipelines/
 
-# Edit the generated file with the table definitions
-# (reference Infrastructure Plan: Entity Resolution schema + Pipeline Code Structure)
+# Start local PostGIS 16
+docker compose up -d postgres-test
 
-# Test locally first with Docker Postgres
-docker compose up -d postgres
+# Run migration against local DB
+export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/york_county_intel"
 alembic upgrade head
+
+# Verify reversibility
 alembic downgrade base
 alembic upgrade head
-docker compose down
+
+# Inspect
+PGPASSWORD=localtest psql -h localhost -p 5433 -U dagster_admin -d york_county_intel \
+  -c "\dt staging.*" -c "\dt public.*" -c "\dv public.*" -c "\dt meta.*"
+
+# Clean up
+docker compose down -v
 ```
 
 ### Step 2.3: Apply Migration to RDS
+
+On RDS, `initialize.sh` handles this automatically — it runs `init.sql` then `alembic upgrade head` in sequence. No manual step needed.
+
+For subsequent migrations (after initial setup), apply via SSM port forward:
 
 ```bash
 # Set up SSM port forwarding to RDS
@@ -80,6 +108,6 @@ DATABASE_URL="postgresql://dagster_admin:<password>@localhost:5433/york_county_i
   alembic upgrade head
 ```
 
-> **Checkpoint:** Connect to RDS. `\dt staging.*` shows all staging tables. `\dt public.*` shows owners, owner_source_links, properties. All tables have the expected columns including `valid_from`/`valid_to` on SCD Type 2 tables.
+> **Checkpoint:** Connect to RDS. `\dt staging.*` shows 9 staging tables. `\dt public.*` shows owners, owner_source_links. `\dv public.*` shows the properties view. `\dt meta.*` shows 3 meta tables. All tables have the expected columns including `valid_from`/`valid_to` on SCD Type 2 tables.
 
 ---

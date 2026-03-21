@@ -1,8 +1,6 @@
-import csv
-from io import StringIO
 from pathlib import Path
 
-from york_county.lib.parsers.plcb import parse_plcb_csv, EXPECTED_HEADERS
+from york_county.lib.parsers.plcb import parse_plcb_csv
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -51,8 +49,15 @@ def test_parse_empty_csv_returns_empty():
     assert records == []
 
 
-def test_validate_headers_detects_drift():
-    csv_text = "BAD_COL,License Number\nfoo,bar\n"
-    reader = csv.DictReader(StringIO(csv_text))
-    actual = set(reader.fieldnames)
-    assert not EXPECTED_HEADERS.issubset(actual)
+def test_parse_handles_completely_wrong_headers():
+    csv_text = "BAD_COL,Other Column\nfoo,bar\n"
+    records = parse_plcb_csv(csv_text)
+    assert records == []
+
+
+def test_parse_handles_bom_prefix():
+    csv_text = (FIXTURES_DIR / "plcb_sample.csv").read_text()
+    bom_text = "\ufeff" + csv_text
+    records = parse_plcb_csv(bom_text)
+    assert len(records) == 4
+    assert records[0]["lid"] is not None

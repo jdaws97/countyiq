@@ -163,14 +163,21 @@ set -euxo pipefail
 
 source /opt/york-county/.env
 
-# Run init.sql against RDS
+# Step 1: Run init.sql — extensions, schemas, dagster database
+# (Things Alembic can't own)
 PGPASSWORD="$DATABASE_PASSWORD" psql \
   -h "$DATABASE_HOST" \
   -U "$DATABASE_USER" \
   -d "$DATABASE_NAME" \
   -f /opt/york-county/repo/infra/modules/database/init.sql
 
-# Create the gate file so systemd services can start
+# Step 2: Run Alembic migrations — all table-level objects
+# (staging.*, public.*, meta.*, functions, indexes)
+export DATABASE_URL="postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:5432/${DATABASE_NAME}"
+cd /opt/york-county/repo/pipelines
+/opt/york-county/venv/bin/alembic upgrade head
+
+# Step 3: Create the gate file so systemd services can start
 touch /opt/york-county/.initialized
 
 # Start Dagster services

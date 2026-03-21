@@ -8,6 +8,11 @@ output "api_gateway_invoke_url" {
   value       = aws_api_gateway_stage.prod.invoke_url
 }
 
+output "api_gateway_stage_name" {
+  description = "API Gateway stage name (used by CloudFront origin path)"
+  value       = aws_api_gateway_stage.prod.stage_name
+}
+
 output "lambda_function_name" {
   description = "Lambda function name"
   value       = aws_lambda_function.api.function_name

@@ -11,21 +11,24 @@ variable "allocated_storage" {
 }
 
 variable "db_name" {
-  description = "Database name"
+  description = "Database name (passed from root — no default, single source of truth)"
   type        = string
-  default     = "york_county_intel"
 }
 
 variable "db_username" {
-  description = "Master database username"
+  description = "Master database username (passed from root — no default, single source of truth)"
   type        = string
-  default     = "dagster_admin"
 }
 
 variable "db_password" {
   description = "Master database password"
   type        = string
   sensitive   = true
+}
+
+variable "availability_zone" {
+  description = "AZ to place the RDS instance in (should match EC2 to avoid cross-AZ charges)"
+  type        = string
 }
 
 variable "rds_security_group_id" {

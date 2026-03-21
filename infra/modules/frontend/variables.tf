@@ -22,9 +22,8 @@ variable "api_gateway_id" {
 }
 
 variable "api_gateway_stage" {
-  description = "API Gateway stage name"
+  description = "API Gateway stage name (passed from API module output — no default)"
   type        = string
-  default     = "prod"
 }
 
 variable "origin_verify_secret" {

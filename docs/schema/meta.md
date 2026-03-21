@@ -24,7 +24,7 @@
 
 ### Database Initialization (post-Terraform, one-time)
 
-After `terraform apply` creates the RDS instance, connect via Session Manager port forwarding and run:
+After `terraform apply`, run `sudo /opt/york-county/initialize.sh` on EC2 via SSM. This runs `init.sql` (extensions + schemas + dagster DB) followed by `alembic upgrade head` (all tables including meta.\*). The SQL below shows what `init.sql` handles — **meta tables are created by Alembic, not init.sql**:
 
 ```sql
 -- Connect to york_county_intel database

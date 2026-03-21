@@ -117,6 +117,11 @@ resource "aws_s3_bucket_versioning" "raw" {
   }
 }
 
+# No lifecycle rule on raw bucket — historical snapshots are kept indefinitely.
+# Storage is date-keyed (s3://york-county-raw/<source>/<date>/), not overwrites,
+# so versioning noncurrent expiration doesn't apply. At $0.023/GB/month the
+# projected 15 GB by Phase 3 costs ~$0.35/month. Not worth optimizing.
+
 # --- CloudFront Origin Access Control ---
 
 resource "aws_cloudfront_origin_access_control" "s3" {

@@ -27,7 +27,7 @@ The EC2 user data script runs on first boot and sets up the entire Dagster envir
 4. Clones the `jarod/countyiq` repo to `/opt/york-county/repo` and installs the pipelines package
 5. Writes Dagster workspace and dagster.yaml configuration
 6. Creates systemd services for `dagster-webserver` and `dagster-daemon` (enabled but **not started** — gated on `/opt/york-county/.initialized`)
-7. Creates `/opt/york-county/initialize.sh` helper script (runs init.sql, creates gate file, starts Dagster)
+7. Creates `/opt/york-county/initialize.sh` helper script (runs init.sql, then alembic upgrade head, creates gate file, starts Dagster)
 8. Installs and configures CloudWatch Agent (memory, disk, and procstat metrics)
 
 ### Dagster as systemd services

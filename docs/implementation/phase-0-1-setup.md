@@ -112,13 +112,15 @@ gh repo create countyiq --private --source=. --push
 
 ---
 
-## Phase 1: AWS Account Bootstrap & Terraform Infrastructure
+## Phase 1: Terraform Infrastructure (Write & Validate Only)
 
-**Goal:** All AWS resources are provisioned and accessible. EC2 is running. RDS is available. S3 buckets exist. No application code is deployed yet.
+**Goal:** All Terraform modules are written, validated, and ready to apply. **Do NOT run `terraform apply` yet** — that happens in Phase 5 after the full stack is verified locally against Docker Postgres.
 
 **Time estimate:** 2-3 hours
 
 **Prerequisites:** Phase 0 complete.
+
+> **Local-first strategy:** Phases 2–4 run entirely against local Docker Postgres. The only AWS resource created before Phase 5 is the Terraform state bucket (Step 1.1). This means zero AWS cost during development and no risk of broken infrastructure while iterating on code.
 
 ### Step 1.1: Create Terraform State Backend (Manual — One Time)
 
@@ -195,24 +197,28 @@ aws ssm get-parameters \
 
 > **Note:** Lambda gets DB credentials as Terraform-set encrypted environment variables (NOT from SSM at runtime — see Infrastructure Plan, VPC networking constraint). EC2 reads from SSM at boot time via the IAM instance profile.
 
-### Step 1.5: Terraform Init, Plan, Apply
+### Step 1.5: Terraform Init & Validate (No Apply Yet)
 
 ```bash
 cd infra/
 
-# Initialize (connects to S3 backend)
+# Initialize with the S3 backend (or use -backend=false for local-only validation)
 terraform init
 
-# Review what will be created
-terraform plan -out=plan.tfplan
+# Validate all modules
+terraform validate
 
-# Apply (review output carefully before confirming)
-terraform apply plan.tfplan
+# Preview what will be created (optional — useful for reviewing the resource graph)
+terraform plan -out=plan.tfplan
 ```
 
-> ⚠️ **This takes ~10-15 minutes.** RDS instance creation is the slowest part.
+> **Stop here.** Do NOT run `terraform apply`. Proceed to Phase 2 and build everything locally against Docker Postgres. Come back to apply in Phase 5 after the full stack is verified.
 
-### Step 1.6: Verify Infrastructure
+### Steps 1.6–1.7: Deferred to Phase 5
+
+Steps 1.6 (Verify Infrastructure) and 1.7 (Initialize Database and Start Dagster) run **after `terraform apply`**, which happens in Phase 5 after local verification is complete. They are documented here for reference but should not be executed until Phase 5.
+
+### Step 1.6: Verify Infrastructure (Phase 5)
 
 ```bash
 # EC2 instance is running
@@ -247,14 +253,13 @@ aws ssm start-session --target <instance-id>
 sudo /opt/york-county/initialize.sh
 ```
 
-The script runs `init.sql` against RDS, which creates:
-- `postgis`, `pg_trgm`, `pg_stat_statements` extensions
-- `staging`, `meta` schemas (the `public` schema exists by default in PostgreSQL)
-- The separate `dagster` database (for Dagster internals)
-- `meta.pipeline_status`, `meta.infra_metrics`, `meta.data_quality_checks` tables
-- **No `raw` schema** — raw data goes to S3 only (see Infrastructure Plan, Schema Strategy)
+The script does three things in sequence:
 
-Then it creates the gate file and starts both Dagster services.
+1. **Runs `init.sql`** — extensions (postgis, pg_trgm, pg_stat_statements), schemas (staging, meta), and the separate `dagster` database
+2. **Runs `alembic upgrade head`** — all table-level objects (staging.\*, public.\*, meta.\*, views, functions, indexes)
+3. **Creates the gate file and starts Dagster services**
+
+> **Note:** `init.sql` handles only what Alembic can't (extensions, cross-database DDL). All tables are owned by Alembic. See `docs/implementation/phase-2-database.md` for the schema ownership split.
 
 > **Checkpoint:** Connect to RDS and verify: `\dx` shows postgis and pg_trgm. `\dn` shows staging and meta. `\l` shows both `york_county_intel` and `dagster` databases. `systemctl status dagster-webserver dagster-daemon` shows both services running.
 

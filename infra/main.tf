@@ -50,18 +50,20 @@ resource "aws_ssm_parameter" "rds_host" {
 resource "aws_ssm_parameter" "rds_dbname" {
   name  = "/york-county/rds-dbname"
   type  = "String"
-  value = "york_county_intel"
+  value = var.db_name
 }
 
 resource "aws_ssm_parameter" "rds_username" {
   name  = "/york-county/rds-username"
   type  = "String"
-  value = "dagster_admin"
+  value = var.db_username
 }
 
 # --- Module 1: Networking ---
 module "networking" {
   source = "./modules/networking"
+
+  primary_az = var.primary_az
 }
 
 # --- Module 2: IAM ---
@@ -77,7 +79,10 @@ module "iam" {
 module "database" {
   source = "./modules/database"
 
+  db_name               = var.db_name
+  db_username           = var.db_username
   db_password           = random_password.rds.result
+  availability_zone     = module.networking.primary_az
   rds_security_group_id = module.networking.rds_security_group_id
   rds_subnet_group_name = module.networking.rds_subnet_group_name
 }
@@ -88,7 +93,7 @@ module "database" {
 module "compute" {
   source = "./modules/compute"
 
-  subnet_id             = module.networking.subnet_ids[0]
+  subnet_id             = module.networking.primary_subnet_id
   ec2_security_group_id = module.networking.ec2_security_group_id
   instance_profile_name = module.iam.instance_profile_name
   aws_region            = var.aws_region
@@ -116,6 +121,8 @@ module "api" {
   subnet_ids               = module.networking.subnet_ids
   lambda_security_group_id = module.networking.lambda_security_group_id
   database_host            = module.database.rds_endpoint
+  database_name            = var.db_name
+  database_user            = var.db_username
   database_password        = random_password.rds.result
   origin_verify_secret     = var.origin_verify_secret
 }
@@ -128,6 +135,7 @@ module "frontend" {
   tiles_bucket_name    = var.tiles_bucket_name
   raw_bucket_name      = var.raw_bucket_name
   api_gateway_id       = module.api.api_gateway_id
+  api_gateway_stage    = module.api.api_gateway_stage_name
   origin_verify_secret = var.origin_verify_secret
   aws_region           = var.aws_region
 }

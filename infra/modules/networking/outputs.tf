@@ -23,6 +23,16 @@ output "rds_security_group_id" {
   value       = aws_security_group.dagster_rds.id
 }
 
+output "primary_subnet_id" {
+  description = "Subnet ID in the primary AZ (for EC2 placement)"
+  value       = data.aws_subnet.primary.id
+}
+
+output "primary_az" {
+  description = "Availability zone for EC2 and RDS co-location"
+  value       = var.primary_az
+}
+
 output "rds_subnet_group_name" {
   description = "RDS subnet group name"
   value       = aws_db_subnet_group.dagster_rds.name

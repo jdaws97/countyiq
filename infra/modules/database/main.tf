@@ -66,6 +66,7 @@ resource "aws_db_instance" "main" {
   parameter_group_name   = aws_db_parameter_group.postgres16.name
 
   multi_az            = false
+  availability_zone   = var.availability_zone
   publicly_accessible = false
 
   # Backups

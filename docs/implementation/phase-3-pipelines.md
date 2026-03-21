@@ -4,11 +4,11 @@
 
 **Time estimate:** 1.5–2 weeks solo. This is the bulk of the project. Framework setup ~4 hours, each source 2–16 hours depending on complexity (Assessment is the hardest at 12–16 hours), entity resolution ~8 hours, vector tile generation ~4 hours, Day 1 backfill ~4–6 hours. Assessment DB is critical path — RTK request takes 5–35 business days; Playwright scraping is the fallback.
 
-**Prerequisites:** Phase 2 complete. All tables exist in RDS.
+**Prerequisites:** Phase 2 complete. All tables exist in local Docker Postgres (migrations applied). No AWS resources needed — pipelines fetch from live public APIs and write to local Postgres.
 
 ### Step 3.1: Build the Pipeline Framework
 
-Before writing individual source assets, build the shared infrastructure:
+Before writing individual source assets, **use Context7 to pull current Dagster API docs**. The Dagster API changes between versions (e.g., `get_all_asset_keys()` was deprecated in favor of `resolve_all_asset_specs()`). Check the installed version and verify the API surface before writing definitions.py or resource classes.
 
 | File | Purpose | Infra Plan Reference |
 |---|---|---|
@@ -22,7 +22,7 @@ Before writing individual source assets, build the shared infrastructure:
 | `pipelines/york_county/lib/scd.py` | SCD Type 2 upsert helper | Build-time (see docs/open-items.md) |
 | `pipelines/york_county/sensors/alerting.py` | Success/failure Slack sensors | Error Handling → Dagster Sensors |
 
-> **Checkpoint:** `python -c "from definitions import defs; print(len(defs.get_all_asset_keys()))"` runs without import errors (even though no source assets exist yet).
+> **Checkpoint:** `python -c "from york_county.definitions import defs; print(len(list(defs.resolve_all_asset_specs())))"` runs without import errors (even though no source assets exist yet).
 
 ### Step 3.2: Implement MVP Source Assets (One at a Time)
 
@@ -43,20 +43,58 @@ Build each source, test it locally, then move to the next. Start with the simple
 | 9 | Entity Resolution (MVP scope) | — | SQL enrichment | Medium | MVP: parcels + assessment only. Matches GIS owner_full against assessment owner_name using PIDN join + pg_trgm fallback. Phase 2 sources added incrementally. |
 | 10 | Vector Tile Generation | — | PostGIS → S3 | Medium | ST_AsMVT, upload to S3 |
 
-**For each source, the workflow is:**
+#### Per-Source Workflow
+
+**For API sources (ArcGIS, SODA, CSV downloads):**
 
 ```
-1. Write the asset file:        pipelines/assets/<type>/<source>.py
-2. Write the parser:            pipelines/lib/parsers/<source>.py
-3. Write the schema test:       pipelines/tests/test_<source>_parser.py
-4. Save a test fixture:         pipelines/tests/fixtures/<source>_sample.json
-5. Write asset checks:          (in the asset file or lib/checks.py)
-6. Add the schedule:            pipelines/jobs/schedules.py
-7. Run pytest locally:          pytest pipelines/tests/test_<source>_parser.py -v
-8. Test against live API:       dagster asset materialize -a <asset_name>  (local Dagster)
-9. Verify data in RDS:          psql → SELECT COUNT(*) FROM staging.<table>;
-10. Commit and push
+1. Check library docs:         Use Context7 for Dagster asset/resource API
+2. Write the asset file:       pipelines/york_county/assets/<type>/<source>.py
+3. Write the parser:           pipelines/york_county/lib/parsers/<source>.py
+4. Write the schema test:      pipelines/tests/test_<source>_parser.py
+5. Save a test fixture:        pipelines/tests/fixtures/<source>_sample.json
+6. Write asset checks:         (in the asset file or lib/checks.py)
+7. Add the schedule:           pipelines/york_county/schedules/
+8. Run pytest locally:         pytest tests/test_<source>_parser.py -v
+9. Test against live API:      dagster asset materialize -a <asset_name>  (local Dagster)
+10. Verify data in Postgres:   psql → SELECT COUNT(*) FROM staging.<table>;
+11. Code review:               Use superpowers:requesting-code-review
+12. Commit and push
 ```
+
+**For Playwright scraper sources (Assessment, eFACTS, CRIMEWATCH, PALS):**
+
+```
+1. Explore the live site:      Use Playwright MCP to navigate, screenshot, inspect DOM
+   - Navigate to the target URL
+   - Take a snapshot of the page structure
+   - Identify form fields, search controls, result containers
+   - Test the navigation flow (search → results → detail page)
+   - Document selectors that work
+   - Check for anti-bot measures (Cloudflare, CAPTCHAs)
+2. Check library docs:         Use Context7 for Playwright + Dagster APIs
+3. Write the asset file:       pipelines/york_county/assets/scrapers/<source>.py
+4. Write the parser:           pipelines/york_county/lib/parsers/<source>.py
+5. Write the schema test:      pipelines/tests/test_<source>_parser.py
+6. Save a test fixture:        pipelines/tests/fixtures/<source>_sample.html
+7. Write asset checks:         (in the asset file or lib/checks.py)
+8. Add the schedule:           pipelines/york_county/schedules/
+9. Run pytest locally:         pytest tests/test_<source>_parser.py -v
+10. Test against live site:    dagster asset materialize -a <asset_name>  (local Dagster)
+11. Verify data in Postgres:   psql → SELECT COUNT(*) FROM staging.<table>;
+12. Code review:               Use superpowers:requesting-code-review
+13. Commit and push
+```
+
+> **Why explore first for scrapers:** The Assessment portal (Source #2) is ASP.NET Web Forms with session-based navigation — no RESTful URLs, no stable selectors without inspecting the live DOM. Going in blind wastes hours. The Playwright MCP lets you interactively explore the page, test selectors, and verify the navigation flow before writing any code.
+
+#### Parallelization
+
+Sources that share no code dependencies can be built in parallel using `superpowers:dispatching-parallel-agents`:
+
+- **Parallel batch 1:** PLCB (#22) + FEMA (#3) — both are simple downloads, no shared code
+- **Parallel batch 2:** PA Open Data (#4) + PennDOT (#5, #13) — different API patterns, independent
+- **Sequential:** Assessment (#2) must be built after parcels (#1) since entity resolution needs both
 
 ### Step 3.3: Run Day 1 Backfill
 

@@ -1,12 +1,16 @@
 # Phase 4: API, Frontend & Operations Stack
 
-**Goal:** The public frontend is live. The API serves data. The ops health dashboard works. Slack alerts are flowing.
+**Goal:** The API and frontend are built, tested, and verified **locally**. Everything works end-to-end against Docker Postgres before any AWS deployment.
 
 **Time estimate:** 2-3 days
 
-**Prerequisites:** Phase 3 complete. Database is populated with real data.
+**Prerequisites:** Phase 3 complete. Local Docker Postgres is populated with real data from pipeline runs.
+
+> **Local-first:** The API runs on `localhost:8000` (uvicorn), the frontend on `localhost:5173` (Vite dev server), both hitting Docker Postgres on `localhost:5433`. Slack setup (Step 4.3) is the only step that touches external services. AWS deployment happens in Phase 5.
 
 ### Step 4.1: Build the FastAPI Lambda API
+
+**Before writing API code:** Use Context7 to pull current FastAPI, Mangum, and psycopg2 docs. Verify the Mangum adapter pattern for Lambda integration and FastAPI's current middleware/dependency injection API.
 
 Reference: Infrastructure Plan, Frontend Architecture → Lambda Configuration section.
 
@@ -17,8 +21,9 @@ Reference: Infrastructure Plan, Frontend Architecture → Lambda Configuration s
 | `api/requirements.txt` | Python dependencies |
 | `api/routes/parcels.py` | Parcel search/detail endpoints |
 | `api/routes/properties.py` | Unified property view endpoints |
-| `api/routes/owners.py` | Owner entity endpoints |
+| `api/routes/owners.py` | Owner entity + concentration endpoints |
 | `api/routes/search.py` | Cross-entity search |
+| `api/routes/changes.py` | Change detection feed |
 | `api/routes/ops.py` | Health dashboard endpoint |
 | `api/lib/database.py` | RDS connection (reads DATABASE_* env vars set by Terraform — NOT Parameter Store at runtime; see Infra Plan, VPC networking constraint) |
 
@@ -26,25 +31,40 @@ Reference: Infrastructure Plan, Frontend Architecture → Lambda Configuration s
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/parcels/bbox?west=...&south=...&east=...&north=...` | Parcels within map bounding box |
+| GET | `/api/parcels/bbox?west=...&south=...&east=...&north=...` | Parcels within map bounding box (supports `&layer=delinquent` for heatmap) |
 | GET | `/api/parcels/{pidn}` | Single parcel detail (current record from `public.properties` VIEW) |
+| GET | `/api/parcels/{pidn}/comparables` | Similar nearby properties with percentile ranking |
+| GET | `/api/owners/top?by=parcel_count&limit=50` | Ownership concentration leaderboard |
 | GET | `/api/owners/{owner_id}` | Owner entity with all linked source records |
 | GET | `/api/search?q=...` | Full-text search across owners, addresses, PIDNs |
+| GET | `/api/changes?since=7d` | Recent changes: ownership transfers, delinquencies, value changes |
 | GET | `/api/ops/health` | System health dashboard data |
 
 **Test locally:**
 
 ```bash
 cd api/
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 
 # Test endpoints
-curl http://localhost:8000/api/parcels?bbox=-76.8,39.9,-76.7,40.0
+curl http://localhost:8000/api/parcels/bbox?west=-76.8\&south=39.9\&east=-76.7\&north=40.0
+curl http://localhost:8000/api/parcels/4300006006500/comparables
+curl http://localhost:8000/api/owners/top?by=parcel_count\&limit=10
+curl http://localhost:8000/api/changes?since=7d
 curl http://localhost:8000/api/ops/health
 ```
 
-**Package and deploy to Lambda:**
+**New endpoint implementation notes:**
+
+| Endpoint | SQL approach |
+|---|---|
+| `/api/parcels/{pidn}/comparables` | Window function over `staging.parcels` + `staging.assessment_properties` — filter by same `class` and `municipality`, rank by `aprtotal` difference, return top 10 with `PERCENT_RANK()` for the queried parcel |
+| `/api/owners/top` | `SELECT * FROM public.owners ORDER BY parcel_count DESC LIMIT $limit` with optional `WHERE municipality = $muni`. Already computed by entity resolution. |
+| `/api/changes` | Query SCD2 tables for recent activity: `WHERE valid_to >= NOW() - INTERVAL $since` (expired records = changes) UNION `WHERE valid_from >= NOW() - INTERVAL $since AND valid_to IS NULL` (new records). Categorize as ownership_transfer, value_change, new_delinquency based on which columns changed. |
+| `/api/parcels/bbox` with `layer=delinquent` | Same bbox query but joins `staging.assessment_properties` and includes `delinquent_taxes IS NOT NULL` as a boolean flag for the frontend heatmap layer |
+
+**Package and deploy to Lambda (Phase 5 — after `terraform apply`):**
 
 ```bash
 cd api/
@@ -57,11 +77,15 @@ aws lambda update-function-code \
   --zip-file fileb://lambda.zip
 ```
 
-> **Checkpoint:** Hit the API Gateway URL in a browser. `/api/ops/health` returns JSON with source statuses. `/api/parcels/{pidn}` returns a real parcel record.
+> **Checkpoint:** Hit the API Gateway URL in a browser. `/api/ops/health` returns JSON with source statuses. `/api/parcels/{pidn}` returns a real parcel record. Run `superpowers:requesting-code-review` against the API code before proceeding.
 >
 > **Note on tiles:** Vector tiles are NOT served by Lambda. They're pre-generated by the Dagster tile pipeline and uploaded to S3. CloudFront routes `/tiles/*` directly to the S3 tiles bucket (7-day cache). The API has no tile routes.
 
 ### Step 4.2: Build the React Frontend
+
+**Before writing frontend code:**
+- Use **Context7** to pull current docs for MapLibre GL JS, Deck.gl, and react-map-gl. These libraries have breaking changes between major versions — verify the integration pattern (especially Deck.gl's MapboxOverlay vs. older GoogleMapsOverlay approach) before writing components.
+- Use the **`frontend-design` skill** when building each view/component. It produces distinctive, production-grade UI that avoids generic AI aesthetics — important for a public-facing civic platform.
 
 Reference: Infrastructure Plan, Frontend Architecture section (UI mockup, core views, stack table).
 
@@ -69,17 +93,19 @@ Reference: Infrastructure Plan, Frontend Architecture section (UI mockup, core v
 
 | View | Description |
 |---|---|
-| **Map View** (default) | MapLibre GL JS map with Deck.gl data layers. Parcel boundaries, color-coded by type. Click a parcel → sidebar with details. |
+| **Map View** (default) | MapLibre GL JS map with Deck.gl data layers. Parcel boundaries, color-coded by type. Click a parcel → sidebar with details. Includes delinquent tax heatmap layer (toggle). |
 | **Search** | Search bar that queries `/api/search`. Results show on map and in a list. |
-| **Property Detail** | Sidebar/panel showing parcel info, owner, assessment, history timeline, linked records. |
-| **Owner Detail** | Entity view showing all properties, businesses, permits, court records linked to a resolved entity. |
+| **Property Detail** | Sidebar/panel showing parcel info, owner, assessment, comparables ("Similar Properties" section with percentile ranking), history timeline, linked records. |
+| **Owner Detail** | Entity view showing all properties linked to a resolved entity with assessment data. |
+| **Ownership Dashboard** | Leaderboard of top owners by parcel count/assessed value/acreage. Filter by municipality. Click owner → highlights parcels on map. |
+| **Change Feed** | "What changed this week" — recent ownership transfers, new delinquencies, value changes. Filter by type and municipality. |
 | **Ops Health** | `/ops/health` — the operational dashboard (see Operational Visibility section in Infra Plan). |
 
 ```bash
 cd frontend/
 
 # Initialize React app with Vite
-npm create vite@latest . -- --template react
+npm create vite@latest . -- --template react-ts
 npm install
 npm install maplibre-gl deck.gl @deck.gl/mapbox @deck.gl/layers
 npm install react-router-dom
@@ -88,7 +114,19 @@ npm install react-router-dom
 npm run dev
 ```
 
-**Deploy to S3/CloudFront:**
+**Per-component workflow:**
+
+```
+1. Design:          Use frontend-design skill for the component
+2. Check lib docs:  Use Context7 for MapLibre/Deck.gl/React APIs
+3. Build:           Write the component
+4. Visual verify:   Use Playwright MCP to navigate to localhost:5173,
+                    take a screenshot, confirm the component renders correctly
+5. Iterate:         Fix layout/styling issues caught in the screenshot
+6. Repeat for each view
+```
+
+**Deploy to S3/CloudFront (Phase 5 — after `terraform apply`):**
 
 ```bash
 npm run build
@@ -98,7 +136,7 @@ aws cloudfront create-invalidation \
   --paths "/*"
 ```
 
-> **Checkpoint:** Open the CloudFront URL in a browser. The map loads. Parcels render on the map. Click a parcel and see real data in the sidebar. Search returns results. `/ops/health` page shows green/yellow/red statuses.
+> **Checkpoint:** Use Playwright MCP to navigate to the CloudFront URL and take screenshots of each view. The map loads with parcel boundaries. Click a parcel and see real data in the sidebar. Search returns results. `/ops/health` page shows green/yellow/red statuses. Run `superpowers:requesting-code-review` against the frontend code before proceeding.
 
 ### Step 4.3: Set Up Slack Workspace & Integrations
 

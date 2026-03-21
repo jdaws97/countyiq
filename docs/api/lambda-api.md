@@ -6,10 +6,13 @@
 
 | Endpoint | Method | Purpose | Example |
 |---|---|---|---|
-| `/api/parcels/bbox` | GET | Parcels within a map bounding box | `?west=-76.8&south=39.8&east=-76.6&north=40.0` |
+| `/api/parcels/bbox` | GET | Parcels within a map bounding box | `?west=-76.8&south=39.8&east=-76.6&north=40.0&layer=delinquent` |
 | `/api/parcels/{pidn}` | GET | Single parcel full details | `/api/parcels/4300006006500` |
+| `/api/parcels/{pidn}/comparables` | GET | Similar properties nearby with percentile ranking | `/api/parcels/4300006006500/comparables?radius=5` |
+| `/api/owners/top` | GET | Ownership concentration leaderboard | `?by=parcel_count&municipality=Conewago&limit=50` |
 | `/api/owners/{owner_id}` | GET | Resolved entity with all source links | `/api/owners/12345` |
 | `/api/search` | GET | Fuzzy search across owners, addresses, parcels | `?q=smith+main+st&municipality=Conewago` |
+| `/api/changes` | GET | Recent data changes across all sources | `?since=7d&type=ownership_transfer,new_delinquency` |
 | `/api/ops/health` | GET | System health dashboard data | See `docs/operations/health-dashboard.md` |
 
 ### Vector tiles

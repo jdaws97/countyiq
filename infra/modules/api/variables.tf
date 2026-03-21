@@ -14,15 +14,13 @@ variable "database_host" {
 }
 
 variable "database_name" {
-  description = "Database name"
+  description = "Database name (passed from root — no default, single source of truth)"
   type        = string
-  default     = "york_county_intel"
 }
 
 variable "database_user" {
-  description = "Database username"
+  description = "Database username (passed from root — no default, single source of truth)"
   type        = string
-  default     = "dagster_admin"
 }
 
 variable "database_password" {

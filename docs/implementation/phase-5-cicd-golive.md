@@ -1,10 +1,34 @@
-# Phase 5: CI/CD, Validation & Go-Live
+# Phase 5: AWS Deploy, CI/CD & Go-Live
 
-**Goal:** GitHub Actions deploys automatically on push. Everything is tested end-to-end. The platform is production-ready.
+**Goal:** Terraform is applied, infrastructure is live, application code is deployed, CI/CD is configured, everything is validated end-to-end.
 
 **Time estimate:** 1 day
 
-**Prerequisites:** Phase 4 complete. Frontend, API, and Dagster are all deployed and working.
+**Prerequisites:** Phases 2–4 complete and verified locally. The full stack works against Docker Postgres — pipelines ingest data, API serves it, frontend renders it.
+
+### Step 5.0: Terraform Apply & Initialize
+
+This is the first time AWS resources are created. Everything before this ran locally.
+
+```bash
+cd infra/
+
+# Create the state bucket if not done in Phase 1
+# (Step 1.1 — the one AWS step allowed before Phase 5)
+
+# Initialize and apply
+terraform init
+terraform plan -out=plan.tfplan
+terraform apply plan.tfplan
+```
+
+> This takes ~10-15 minutes. RDS instance creation is the slowest part.
+
+After apply completes, run Steps 1.6 and 1.7 from `docs/implementation/phase-0-1-setup.md`:
+- **Step 1.6:** Verify EC2, RDS, S3, SSM
+- **Step 1.7:** SSM into EC2, run `sudo /opt/york-county/initialize.sh` (init.sql + alembic + start Dagster)
+
+> **Checkpoint:** EC2 running, RDS available, SSM connects, Dagster services started, all tables exist in RDS.
 
 ### Step 5.1: Set Up GitHub Actions Workflows
 
@@ -62,6 +86,8 @@ gh run list --limit 3
 > **Checkpoint:** CI workflow passes on the PR. All three deploy workflows complete successfully after merge. Frontend shows updated content. Lambda serves the new API code. Dagster restarts cleanly (check Slack `#pipeline-runs`).
 
 ### Step 5.4: End-to-End Validation
+
+**Use `superpowers:verification-before-completion` before claiming go-live.** Run every verification command and confirm output before checking items off.
 
 Run through this checklist to verify everything works together:
 
