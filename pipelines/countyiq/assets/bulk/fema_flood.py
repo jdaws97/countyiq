@@ -189,16 +189,19 @@ def _geom_scd2_upsert(cursor, records: list[dict], dfirm_id: str) -> dict:
         cursor.execute(f"CREATE TEMP TABLE _tmp_flood_zones (LIKE {fqn} INCLUDING DEFAULTS)")
 
         # Bulk insert into temp table with geometry — execute_batch for performance
+        # CASE handles null geometry safely across PostGIS versions
         insert_sql = f"""
             INSERT INTO _tmp_flood_zones ({', '.join(all_cols)}, geom)
             VALUES ({', '.join(['%s'] * len(all_cols))},
-                    ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326))
+                    CASE WHEN %s IS NOT NULL
+                         THEN ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326)
+                         ELSE NULL END)
         """
         rows = []
         for rec in records:
             row = [rec.get(c) for c in all_cols]
-            geom = rec.get("geojson")
-            row.append(json.dumps(geom) if geom else None)
+            geom_json = json.dumps(rec["geojson"]) if "geojson" in rec else None
+            row.extend([geom_json, geom_json])  # passed twice: once for NULL check, once for ST_GeomFromGeoJSON
             rows.append(row)
         execute_batch(cursor, insert_sql, rows, page_size=500)
 
@@ -223,7 +226,7 @@ def _geom_scd2_upsert(cursor, records: list[dict], dfirm_id: str) -> dict:
         """, (dfirm_id,))
         expired = cursor.rowcount
 
-        # Insert new/changed
+        # Insert new/changed — also scoped by dfirm_id for multi-county safety
         col_list = ', '.join(all_cols)
         cursor.execute(f"""
             INSERT INTO {fqn} ({col_list}, geom, valid_from)
@@ -231,9 +234,9 @@ def _geom_scd2_upsert(cursor, records: list[dict], dfirm_id: str) -> dict:
             FROM _tmp_flood_zones t
             WHERE NOT EXISTS (
                 SELECT 1 FROM {fqn} c
-                WHERE c.valid_to IS NULL AND {key_join}
+                WHERE c.valid_to IS NULL AND c.dfirm_id = %s AND {key_join}
             )
-        """)
+        """, (dfirm_id,))
         inserted = cursor.rowcount
 
         cursor.execute("DROP TABLE IF EXISTS _tmp_flood_zones")
