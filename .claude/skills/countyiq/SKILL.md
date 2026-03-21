@@ -110,7 +110,7 @@ These are the constraints that have caused bugs in every review round. Internali
 
 ### Schema
 
-- **No `raw` schema in RDS.** Raw data goes to `s3://york-county-raw/<source>/<date>/`. The first RDS schema is `staging`.
+- **No `raw` schema in RDS.** Raw data goes to `s3://countyiq-raw/<source>/<date>/`. The first RDS schema is `staging`.
 - `staging.*` — cleaned, normalized, SCD Type 2 (valid_from/valid_to). All source data lives here after parsing.
 - `public.*` — entity-resolved output and views. `public.properties` is a **VIEW** (not a table) joining `staging.parcels` + `staging.assessment_properties` on PIDN. Both sides filter `valid_to IS NULL` (SCD Type 2 current records).
 - `meta.*` — application metadata (pipeline_status, infra_metrics, data_quality_checks). App-owned, written by Dagster sensors, read by Lambda API. NOT Dagster internals.
@@ -173,7 +173,7 @@ Sources 1–2 in the Phase 2 build order (PA DOS Business Entities, PLCB Liquor 
 
 1. **Read:** `docs/pipelines/code-structure.md` (monorepo layout, asset patterns) → `docs/implementation/expansion-roadmap.md` (13-step checklist)
 
-2. **County config (MANDATORY):** All county-specific values (URLs, filter strings, thresholds) MUST come from `pipelines/york_county/lib/county_config.py`. Never hardcode county names, source URLs, or record count thresholds in assets or parsers.
+2. **County config (MANDATORY):** All county-specific values (URLs, filter strings, thresholds) MUST come from `pipelines/countyiq/lib/county_config.py`. Never hardcode county names, source URLs, or record count thresholds in assets or parsers.
    - Add any new source-specific fields to `CountyConfig` dataclass if needed
    - Asset functions call `get_county_config()` at runtime (not import time)
    - Parsers accept county-specific params (e.g., `county_filter`) with a default for backward compatibility
@@ -188,7 +188,7 @@ Sources 1–2 in the Phase 2 build order (PA DOS Business Entities, PLCB Liquor 
 4. **Schema rules:**
    - Target table is always `staging.<source_name>` (e.g., `staging.liquor_licenses`)
    - Include SCD Type 2 columns: `valid_from TIMESTAMPTZ DEFAULT NOW()`, `valid_to TIMESTAMPTZ` (NULL = current)
-   - Raw response goes to `s3://york-county-raw/<prefix>/<source>/<date>/` before any parsing
+   - Raw response goes to `s3://countyiq-raw/<prefix>/<source>/<date>/` before any parsing
 
 5. **Schedule:** Add to `pipelines/jobs/schedules.py`. Check `docs/pipelines/dagster-config.md` for the assigned time slot and whether it's MVP or Phase 2.
 
@@ -217,8 +217,8 @@ Sources 1–2 in the Phase 2 build order (PA DOS Business Entities, PLCB Liquor 
 
 2. **Rules:**
    - State backend: `countyiq-terraform-state` S3 bucket + `countyiq-terraform-locks` DynamoDB table
-   - All EC2 paths use `/opt/york-county` (not `/opt/dagster`)
-   - S3 bucket names: `york-county-frontend`, `york-county-tiles`, `york-county-raw`
+   - All EC2 paths use `/opt/countyiq` (not `/opt/dagster`)
+   - S3 bucket names: `countyiq-frontend`, `countyiq-tiles`, `countyiq-raw`
    - Lambda env vars for DB creds are set in Terraform (not runtime Parameter Store)
    - OIDC federation for GitHub Actions — no stored AWS credentials
    - Default VPC, no NAT Gateway
@@ -272,8 +272,8 @@ Don't add NAT Gateways (~$32/mo), VPC Endpoints (~$7/mo each), ALBs (~$16/mo), o
 ### Slack Integration
 
 Workspace: `CountyIQ` (countyiq.slack.com). Three channels, three webhooks:
-- `#alerts-critical` → `/york-county/slack-webhook-critical` (phone notifications ON)
-- `#alerts-warning` → `/york-county/slack-webhook-warning`
-- `#pipeline-runs` → `/york-county/slack-webhook-pipeline`
+- `#alerts-critical` → `/countyiq/slack-webhook-critical` (phone notifications ON)
+- `#alerts-warning` → `/countyiq/slack-webhook-warning`
+- `#pipeline-runs` → `/countyiq/slack-webhook-pipeline`
 
 Webhook URLs in Parameter Store, read by EC2/Dagster only (NOT Lambda). Details: `docs/operations/alerting.md`
