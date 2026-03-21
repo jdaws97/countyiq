@@ -10,7 +10,7 @@ from pathlib import Path
 import psycopg2
 import pytest
 
-from countyiq.lib.parsers.parcels import parse_parcels_features
+from countyiq.lib.parsers.arcgis_parcels import parse_parcels_features
 from countyiq.lib.scd import scd2_upsert
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from countyiq.lib.parsers.parcels import parse_parcels_features
+from countyiq.lib.parsers.arcgis_parcels import parse_parcels_features
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

@@ -8,7 +8,7 @@ from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataVal
 
 from countyiq.lib.arcgis_client import query_all_features
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.parsers.parcels import parse_parcels_features
+from countyiq.lib.parsers.arcgis_parcels import parse_parcels_features
 from countyiq.lib.scd import scd2_upsert
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
