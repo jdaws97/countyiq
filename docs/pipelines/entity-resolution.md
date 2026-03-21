@@ -12,22 +12,29 @@ The approach has three stages:
 
 **Stage 1: Normalize.** Before comparing anything, clean and standardize all names and addresses into a consistent format.
 
-Name normalization:
+Name normalization (`public.normalize_name()` — implemented in migration 001):
 - Uppercase everything
 - Strip suffixes: JR, SR, II, III, IV
 - Strip entity types: LLC, INC, CORP, LP, LTD, CO, TRUST, ESTATE
 - Strip punctuation and extra whitespace
-- Handle common abbreviations: WM → WILLIAM, ROBT → ROBERT, CHAS → CHARLES
 - Result: "John A. Smith Jr." → "JOHN A SMITH"
 - Result: "York Properties, LLC" → "YORK PROPERTIES"
 
-Address normalization:
+**Not yet implemented** (add in a future migration if needed):
+- Common name abbreviations: WM → WILLIAM, ROBT → ROBERT, CHAS → CHARLES
+- These cause occasional misses but are rare enough to defer
+
+Address normalization (`public.normalize_address()` — implemented in migration 001):
 - Uppercase everything
-- Standardize street types: STREET/ST → ST, AVENUE/AVE → AVE, ROAD/RD → RD, etc.
-- Standardize directionals: NORTH/N → N, SOUTH/S → S, etc.
-- Strip unit/apt/suite numbers (these vary wildly across sources)
-- Pad zip codes to 5 digits
-- Result: "123 North Main Street, Apt 2" → "123 N MAIN ST"
+- Standardize street types: STREET → ST, AVENUE → AVE, ROAD → RD
+- Strip unit/apt/suite numbers
+- Result: "123 Main Street, Apt 2" → "123 MAIN ST"
+
+**Not yet implemented** (add in a future migration if needed):
+- Directional standardization: NORTH → N, SOUTH → S, etc.
+- Zip code padding to 5 digits
+- Additional street type mappings (BOULEVARD → BLVD, DRIVE → DR, LANE → LN, etc.)
+- These are incremental improvements — the current functions handle the majority of cases
 
 These normalizations live as PostgreSQL functions in the `public` schema so they can be reused everywhere:
 
@@ -129,7 +136,10 @@ geocoded AS (
         'address_geocode' AS match_tier
     FROM unmatched_assessment ua
     JOIN staging.address_points ap
-        ON similarity(normalize_address(ua.address), normalize_address(ap.full_address)) > 0.85
+        ON similarity(
+            normalize_address(ua.address),
+            normalize_address(CONCAT(ap.add_number, ' ', ap.st_pre_dir, ' ', ap.street_name, ' ', ap.st_pos_typ))
+        ) > 0.85
         AND ap.valid_to IS NULL
     JOIN staging.parcels p
         ON ST_Within(ap.geom, p.geom)
@@ -290,14 +300,59 @@ def owners(context: AssetExecutionContext, database: DatabaseResource):
 - Adding a source to resolution = adding it to the deps list and a matching block in the SQL
 - The Dagster asset dynamically detects which tables have data, so it won't break when Phase 2 tables don't exist yet
 
+## Validation (run after each resolution)
+
+A five-record spot check is not sufficient. Run these validation queries after every resolution and check results before go-live:
+
+```sql
+-- 1. Distribution by match tier (are any tiers dominating suspiciously?)
+SELECT match_tier, confidence, COUNT(*)
+FROM public.owner_source_links
+GROUP BY match_tier, confidence
+ORDER BY COUNT(*) DESC;
+
+-- 2. Entities with suspiciously high parcel counts (likely over-merged)
+SELECT canonical_name, entity_type, parcel_count, municipality
+FROM public.owners
+WHERE parcel_count > 100
+ORDER BY parcel_count DESC LIMIT 20;
+-- Sanity check: are these real institutional owners or bad merges?
+-- "YORK COUNTY" owning 500+ parcels = correct. "JOHN SMITH" owning 200 = probably over-merged.
+
+-- 3. Sample low-confidence matches (most likely to be wrong)
+SELECT o.canonical_name, l.source_name, l.source_address, l.match_tier, l.confidence
+FROM public.owner_source_links l
+JOIN public.owners o ON o.owner_id = l.owner_id
+WHERE l.confidence < 0.75
+ORDER BY l.confidence ASC LIMIT 50;
+
+-- 4. Entity type distribution (sanity check classification)
+SELECT entity_type, COUNT(*), ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct
+FROM public.owners GROUP BY entity_type;
+-- Expect: ~80% person, ~15% business, ~3% trust, ~2% government
+
+-- 5. Unmatched records (what fell through?)
+SELECT COUNT(*) AS unmatched_parcels
+FROM staging.parcels p
+WHERE p.valid_to IS NULL
+AND NOT EXISTS (
+    SELECT 1 FROM public.owner_source_links l
+    WHERE l.source_type = 'gis_parcel' AND l.source_id = p.pidn
+);
+-- Some unmatched is expected (parcels with no assessment record). >20% warrants investigation.
+```
+
+**Go-live gate:** All 5 queries return reasonable results. No entity with entity_type='person' has parcel_count > 100. Low-confidence matches are defensible on manual inspection. Unmatched rate < 20%.
+
 ## Known limitations and when to upgrade
 
 | Limitation | Impact | When to upgrade |
 |---|---|---|
-| No ML confidence scoring | Rigid tiers; edge cases fall through | When false positive/negative rate is unacceptable |
+| No ML confidence scoring | Rigid tiers; edge cases fall through | When false positive/negative rate is unacceptable after QA |
 | No incremental matching | Full rebuild on every run | When dataset grows large enough that full rebuild is slow (>30 min) |
 | No human-in-the-loop review | Ambiguous matches auto-resolved by tier | When match accuracy is critical for official use |
-| Name abbreviation handling is limited | Custom abbreviation list needs maintenance | When common abbreviations cause consistent misses |
+| Normalization is basic | Missing directionals (NORTH→N), name abbreviations (WM→WILLIAM), extra street types (BLVD, DR, LN) | When these cause consistent misses in QA validation |
+| Address point bridge depends on concatenation | `CONCAT(add_number, st_pre_dir, street_name, st_pos_typ)` is fragile | Add a `full_address` computed column to address_points migration |
 | No cross-county entity linking | Each county is a separate entity universe | When multi-county product is in scope |
 
 **Upgrade path:** If deterministic matching isn't sufficient, the next step is **Zingg** (open-source, Spark-based ML matching). The schema doesn't change — Zingg would replace the matching logic in Stage 2, outputting to the same `owners` and `owner_source_links` tables. The normalization functions and schema are already designed to be tool-agnostic.
