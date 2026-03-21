@@ -14,7 +14,7 @@
 | EBS root volume | 20 GB gp3 (encrypted, `gp3` baseline: 3000 IOPS, 125 MB/s) |
 | Monitoring | Detailed monitoring disabled (free tier basic is sufficient) |
 | User data | Bootstrap script (see below) |
-| Tags | `Name=york-county-dagster`, `Project=york-county-intel`, `Environment=production` |
+| Tags | `Name=countyiq-dagster`, `Project=countyiq`, `Environment=production` |
 
 ### Elastic IP
 
@@ -32,7 +32,7 @@
 
 | Budget | Type | Threshold | Action |
 |---|---|---|---|
-| `york-county-monthly` | Cost | Actual spend | Email alert at $10, $25, $50, $75 |
+| `countyiq-monthly` | Cost | Actual spend | Email alert at $10, $25, $50, $75 |
 | (same budget) | Cost | Forecasted spend | Email alert if forecast exceeds $50 |
 
 **Alert recipient:** jarod.daws@gmail.com (via SNS)
@@ -41,8 +41,8 @@
 
 | Log Group | Retention | Purpose |
 |---|---|---|
-| `/york-county/dagster` | 7 days | Dagster webserver + daemon + run logs |
-| `/york-county/system` | 7 days | System logs (syslog, cloud-init) |
+| `/countyiq/dagster` | 7 days | Dagster webserver + daemon + run logs |
+| `/countyiq/system` | 7 days | System logs (syslog, cloud-init) |
 
 ### CloudWatch Alarms
 
@@ -60,7 +60,7 @@
 
 | Setting | Value |
 |---|---|
-| Topic name | `york-county-alerts` |
+| Topic name | `countyiq-alerts` |
 | Protocol | Email |
 | Endpoint | jarod.daws@gmail.com |
 

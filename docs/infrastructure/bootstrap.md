@@ -22,12 +22,12 @@ The EC2 user data script runs on first boot and sets up the entire Dagster envir
 ### What it configures
 
 1. Creates a `dagster` system user (non-root)
-2. Sets up a Python virtual environment at `/opt/york-county/venv`
+2. Sets up a Python virtual environment at `/opt/countyiq/venv`
 3. Retrieves RDS credentials from Parameter Store
-4. Clones the `jarod/countyiq` repo to `/opt/york-county/repo` and installs the pipelines package
+4. Clones the `jarod/countyiq` repo to `/opt/countyiq/repo` and installs the pipelines package
 5. Writes Dagster workspace and dagster.yaml configuration
-6. Creates systemd services for `dagster-webserver` and `dagster-daemon` (enabled but **not started** — gated on `/opt/york-county/.initialized`)
-7. Creates `/opt/york-county/initialize.sh` helper script (runs init.sql, then alembic upgrade head, creates gate file, starts Dagster)
+6. Creates systemd services for `dagster-webserver` and `dagster-daemon` (enabled but **not started** — gated on `/opt/countyiq/.initialized`)
+7. Creates `/opt/countyiq/initialize.sh` helper script (runs init.sql, then alembic upgrade head, creates gate file, starts Dagster)
 8. Installs and configures CloudWatch Agent (memory, disk, and procstat metrics)
 
 ### Dagster as systemd services
@@ -37,15 +37,15 @@ The EC2 user data script runs on first boot and sets up the entire Dagster envir
 [Unit]
 Description=Dagster Webserver
 After=network.target
-ConditionPathExists=/opt/york-county/.initialized
+ConditionPathExists=/opt/countyiq/.initialized
 
 [Service]
 Type=simple
 User=dagster
-WorkingDirectory=/opt/york-county
-Environment=DAGSTER_HOME=/opt/york-county
-EnvironmentFile=/opt/york-county/.env
-ExecStart=/opt/york-county/venv/bin/dagster-webserver -h 127.0.0.1 -p 3000
+WorkingDirectory=/opt/countyiq
+Environment=DAGSTER_HOME=/opt/countyiq
+EnvironmentFile=/opt/countyiq/.env
+ExecStart=/opt/countyiq/venv/bin/dagster-webserver -h 127.0.0.1 -p 3000
 Restart=always
 RestartSec=10
 
@@ -58,15 +58,15 @@ WantedBy=multi-user.target
 [Unit]
 Description=Dagster Daemon
 After=network.target
-ConditionPathExists=/opt/york-county/.initialized
+ConditionPathExists=/opt/countyiq/.initialized
 
 [Service]
 Type=simple
 User=dagster
-WorkingDirectory=/opt/york-county
-Environment=DAGSTER_HOME=/opt/york-county
-EnvironmentFile=/opt/york-county/.env
-ExecStart=/opt/york-county/venv/bin/dagster-daemon run
+WorkingDirectory=/opt/countyiq
+Environment=DAGSTER_HOME=/opt/countyiq
+EnvironmentFile=/opt/countyiq/.env
+ExecStart=/opt/countyiq/venv/bin/dagster-daemon run
 Restart=always
 RestartSec=10
 
@@ -78,13 +78,13 @@ WantedBy=multi-user.target
 
 ### Initialization Gate
 
-Both Dagster services have `ConditionPathExists=/opt/york-county/.initialized`. This prevents them from starting until the database has been initialized (extensions, schemas, `dagster` database). On first boot, cloud-init installs everything but Dagster stays stopped.
+Both Dagster services have `ConditionPathExists=/opt/countyiq/.initialized`. This prevents them from starting until the database has been initialized (extensions, schemas, `dagster` database). On first boot, cloud-init installs everything but Dagster stays stopped.
 
 **To complete initialization after `terraform apply`:**
 
 ```bash
 aws ssm start-session --target <instance-id>
-sudo /opt/york-county/initialize.sh
+sudo /opt/countyiq/initialize.sh
 ```
 
 This script runs `init.sql` against RDS, creates the gate file, and starts both Dagster services. On subsequent reboots, the gate file already exists and services start automatically.
@@ -104,7 +104,7 @@ aws ssm start-session \
 
 ### Git Authentication for Deployments
 
-The bootstrap script clones the repo via HTTPS to `/opt/york-county/repo` during first boot. For a **private** repo, you need to set up a deploy key for ongoing `git pull` operations (both manual and CI/CD):
+The bootstrap script clones the repo via HTTPS to `/opt/countyiq/repo` during first boot. For a **private** repo, you need to set up a deploy key for ongoing `git pull` operations (both manual and CI/CD):
 
 1. SSM into the instance: `aws ssm start-session --target <instance-id>`
 2. Generate a key: `sudo -u dagster ssh-keygen -t ed25519 -f /home/dagster/.ssh/countyiq_deploy -N ""`
@@ -115,7 +115,7 @@ The bootstrap script clones the repo via HTTPS to `/opt/york-county/repo` during
    Host github.com
      IdentityFile /home/dagster/.ssh/countyiq_deploy
    ```
-5. Switch the remote to SSH: `cd /opt/york-county/repo && git remote set-url origin git@github.com:jarod/countyiq.git`
+5. Switch the remote to SSH: `cd /opt/countyiq/repo && git remote set-url origin git@github.com:jarod/countyiq.git`
 
 **CI/CD context:** The Dagster deploy workflow (Workflow 3 in `docs/infrastructure/cicd.md`) runs `git pull` on EC2 via SSM `send-command`. The deploy key enables this without storing a PAT or GitHub App credentials. The key lives only on the EC2 instance and grants read-only access to the single repo.
 

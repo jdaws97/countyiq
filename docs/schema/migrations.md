@@ -14,7 +14,7 @@ Alembic is a database migration tool for Python. Every time you need to change t
 ### Project structure
 
 ```
-york-county-pipelines/
+countyiq-pipelines/
 ├── alembic/
 │   ├── alembic.ini              # Alembic configuration
 │   ├── env.py                   # Migration environment (DB connection setup)
@@ -77,7 +77,7 @@ services:
   postgres-test:
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_DB: york_county_intel
+      POSTGRES_DB: countyiq
       POSTGRES_USER: dagster_admin
       POSTGRES_PASSWORD: localtest
     ports:
@@ -103,7 +103,7 @@ docker compose up -d postgres-test
 **Step 2: Bring local database up to current state**
 ```bash
 # Point Alembic at the local database
-export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/york_county_intel"
+export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/countyiq"
 alembic upgrade head
 ```
 
@@ -117,7 +117,7 @@ alembic revision -m "add permit_status column"
 alembic upgrade head
 
 # Verify it worked
-psql -h localhost -p 5433 -U dagster_admin -d york_county_intel \
+psql -h localhost -p 5433 -U dagster_admin -d countyiq \
   -c "\d public.permits"
 
 # Test the rollback too
@@ -137,7 +137,7 @@ aws ssm start-session \
   --parameters '{"host":["<rds-endpoint>"],"portNumber":["5432"],"localPortNumber":["5434"]}'
 
 # In terminal 2:
-export DATABASE_URL="postgresql://dagster_admin:<password>@localhost:5434/york_county_intel"
+export DATABASE_URL="postgresql://dagster_admin:<password>@localhost:5434/countyiq"
 alembic upgrade head
 ```
 
@@ -152,9 +152,9 @@ The `env.py` file reads the database connection from an environment variable, so
 
 | Environment | DATABASE_URL |
 |---|---|
-| Local testing | `postgresql://dagster_admin:localtest@localhost:5433/york_county_intel` |
-| Production (via port forward) | `postgresql://dagster_admin:<password>@localhost:5434/york_county_intel` |
-| On EC2 (direct) | `postgresql://dagster_admin:<password>@<rds-endpoint>:5432/york_county_intel` |
+| Local testing | `postgresql://dagster_admin:localtest@localhost:5433/countyiq` |
+| Production (via port forward) | `postgresql://dagster_admin:<password>@localhost:5434/countyiq` |
+| On EC2 (direct) | `postgresql://dagster_admin:<password>@<rds-endpoint>:5432/countyiq` |
 
 ### Migration naming convention
 
@@ -175,7 +175,7 @@ When you deploy new pipeline code to the EC2 instance, the deployment process sh
 
 ```bash
 # After pulling new code
-cd /opt/york-county/pipelines
+cd /opt/countyiq/pipelines
 git pull origin main
 
 # Run any pending migrations

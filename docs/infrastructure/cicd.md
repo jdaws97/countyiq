@@ -50,7 +50,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Sync to S3
-        run: aws s3 sync frontend/dist/ s3://york-county-frontend --delete
+        run: aws s3 sync frontend/dist/ s3://countyiq-frontend --delete
 
       - name: Invalidate CloudFront cache
         run: |
@@ -105,7 +105,7 @@ jobs:
       - name: Deploy to Lambda
         run: |
           aws lambda update-function-code \
-            --function-name york-county-api \
+            --function-name countyiq-api \
             --zip-file fileb://api/lambda.zip
 ```
 
@@ -144,11 +144,11 @@ jobs:
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
-              "cd /opt/york-county/pipelines",
+              "cd /opt/countyiq/pipelines",
               "git pull origin main",
-              "source /opt/york-county/venv/bin/activate",
+              "source /opt/countyiq/venv/bin/activate",
               "pip install -e .",
-              "cd /opt/york-county/pipelines && alembic upgrade head",
+              "cd /opt/countyiq/pipelines && alembic upgrade head",
               "sudo systemctl restart dagster-webserver dagster-daemon"
             ]' \
             --query "Command.CommandId" \
@@ -168,7 +168,7 @@ Even though OIDC eliminates AWS credentials, you still need a few non-sensitive 
 
 | Secret Name | Value | Sensitive? |
 |---|---|---|
-| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::role/york-county-github-actions` | No (just a resource identifier) |
+| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::role/countyiq-github-actions` | No (just a resource identifier) |
 | `CLOUDFRONT_DISTRIBUTION_ID` | CloudFront distribution ID | No |
 | `EC2_INSTANCE_ID` | `i-xxxxxxxxxxxxxxxxx` | No |
 
@@ -239,7 +239,7 @@ When you deploy new pipeline code to the EC2 instance, the deployment process sh
 
 ```bash
 # After pulling new code
-cd /opt/york-county/pipelines
+cd /opt/countyiq/pipelines
 git pull origin main
 
 # Run any pending migrations

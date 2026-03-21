@@ -2,7 +2,7 @@
 
 ### Schema Strategy
 
-**Raw data goes to S3, not RDS.** Every pipeline run dumps its unmodified response to `s3://york-county-raw/<source>/<date>/`. This is the audit trail and replay source. No `raw` schema exists in RDS.
+**Raw data goes to S3, not RDS.** Every pipeline run dumps its unmodified response to `s3://countyiq-raw/<source>/<date>/`. This is the audit trail and replay source. No `raw` schema exists in RDS.
 
 | Schema | Purpose | Example Tables |
 |---|---|---|
@@ -41,7 +41,7 @@ LEFT JOIN staging.assessment_properties a
 WHERE p.valid_to IS NULL;   -- Current parcel records only (SCD Type 2)
 ```
 
-**Dagster metadata separation:** Dagster's internal database (`dagster` on the same RDS instance) stores run history, event logs, and schedule state. The `meta` schema in `york_county_intel` stores application-level summaries that the API can query — specifically, a Dagster sensor writes summarized pipeline status and infra metrics to `meta` tables. This keeps the API decoupled from Dagster's internal schema (which can change between Dagster versions).
+**Dagster metadata separation:** Dagster's internal database (`dagster` on the same RDS instance) stores run history, event logs, and schedule state. The `meta` schema in `countyiq` stores application-level summaries that the API can query — specifically, a Dagster sensor writes summarized pipeline status and infra metrics to `meta` tables. This keeps the API decoupled from Dagster's internal schema (which can change between Dagster versions).
 
 ### Identifier Strategy
 

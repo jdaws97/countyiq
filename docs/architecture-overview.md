@@ -19,7 +19,7 @@
 │   │  EC2 t3.micro│                              │ RDS Postgres │        │
 │   │  Amazon Linux│                              │ + PostGIS    │        │
 │   │              │                              │              │        │
-│   │  ┌─────────┐ │                              │ york_county  │        │
+│   │  ┌─────────┐ │                              │ countyiq  │        │
 │   │  │ Dagster  │ │─────────────────────────────▶│ _intel (app) │        │
 │   │  │ webserver│ │                              │              │        │
 │   │  │ daemon   │ │                              │ dagster (meta)│       │

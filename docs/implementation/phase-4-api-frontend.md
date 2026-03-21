@@ -73,7 +73,7 @@ cp -r *.py routes/ lib/ package/
 cd package && zip -r ../lambda.zip .
 
 aws lambda update-function-code \
-  --function-name york-county-api \
+  --function-name countyiq-api \
   --zip-file fileb://lambda.zip
 ```
 
@@ -130,7 +130,7 @@ npm run dev
 
 ```bash
 npm run build
-aws s3 sync dist/ s3://york-county-frontend --delete
+aws s3 sync dist/ s3://countyiq-frontend --delete
 aws cloudfront create-invalidation \
   --distribution-id <distribution-id> \
   --paths "/*"
@@ -149,17 +149,17 @@ aws cloudfront create-invalidation \
 
 ```bash
 aws ssm put-parameter \
-  --name "/york-county/slack-webhook-critical" \
+  --name "/countyiq/slack-webhook-critical" \
   --value "https://hooks.slack.com/services/T.../B.../..." \
   --type SecureString
 
 aws ssm put-parameter \
-  --name "/york-county/slack-webhook-warning" \
+  --name "/countyiq/slack-webhook-warning" \
   --value "https://hooks.slack.com/services/T.../B.../..." \
   --type SecureString
 
 aws ssm put-parameter \
-  --name "/york-county/slack-webhook-pipeline" \
+  --name "/countyiq/slack-webhook-pipeline" \
   --value "https://hooks.slack.com/services/T.../B.../..." \
   --type SecureString
 ```

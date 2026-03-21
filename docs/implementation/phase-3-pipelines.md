@@ -12,17 +12,17 @@ Before writing individual source assets, **use Context7 to pull current Dagster 
 
 | File | Purpose | Infra Plan Reference |
 |---|---|---|
-| `pipelines/york_county/definitions.py` | Dagster top-level definitions | Pipeline Code Structure → definitions.py |
-| `pipelines/york_county/resources/database.py` | PostgreSQL connection helper | Pipeline Code Structure → lib/ utilities |
-| `pipelines/york_county/resources/storage.py` | S3 client for raw archival | Pipeline Code Structure → lib/ utilities |
-| `pipelines/york_county/lib/arcgis_client.py` | ArcGIS REST API pagination helper | Pipeline Code Structure → lib/ utilities |
-| `pipelines/york_county/lib/playwright_utils.py` | Playwright browser session manager | Pipeline Code Structure → lib/ utilities |
-| `pipelines/york_county/lib/parsers/` | Per-source parsing functions | Pipeline Code Structure → asset examples |
-| `pipelines/york_county/lib/slack.py` | Slack webhook integration | Error Handling → Dagster Slack Integration Code |
-| `pipelines/york_county/lib/scd.py` | SCD Type 2 upsert helper | Build-time (see docs/open-items.md) |
-| `pipelines/york_county/sensors/alerting.py` | Success/failure Slack sensors | Error Handling → Dagster Sensors |
+| `pipelines/countyiq/definitions.py` | Dagster top-level definitions | Pipeline Code Structure → definitions.py |
+| `pipelines/countyiq/resources/database.py` | PostgreSQL connection helper | Pipeline Code Structure → lib/ utilities |
+| `pipelines/countyiq/resources/storage.py` | S3 client for raw archival | Pipeline Code Structure → lib/ utilities |
+| `pipelines/countyiq/lib/arcgis_client.py` | ArcGIS REST API pagination helper | Pipeline Code Structure → lib/ utilities |
+| `pipelines/countyiq/lib/playwright_utils.py` | Playwright browser session manager | Pipeline Code Structure → lib/ utilities |
+| `pipelines/countyiq/lib/parsers/` | Per-source parsing functions | Pipeline Code Structure → asset examples |
+| `pipelines/countyiq/lib/slack.py` | Slack webhook integration | Error Handling → Dagster Slack Integration Code |
+| `pipelines/countyiq/lib/scd.py` | SCD Type 2 upsert helper | Build-time (see docs/open-items.md) |
+| `pipelines/countyiq/sensors/alerting.py` | Success/failure Slack sensors | Error Handling → Dagster Sensors |
 
-> **Checkpoint:** `python -c "from york_county.definitions import defs; print(len(list(defs.resolve_all_asset_specs())))"` runs without import errors (even though no source assets exist yet).
+> **Checkpoint:** `python -c "from countyiq.definitions import defs; print(len(list(defs.resolve_all_asset_specs())))"` runs without import errors (even though no source assets exist yet).
 
 ### Step 3.2: Implement MVP Source Assets (One at a Time)
 
@@ -45,19 +45,19 @@ Build each source, test it locally, then move to the next. Start with the simple
 
 #### Per-Source Workflow
 
-> **County config rule:** Every new asset MUST use `get_county_config()` for URLs, filter strings, and thresholds. Every parser MUST accept county-specific params (e.g., `county_filter`) rather than hardcoding values. See `pipelines/york_county/lib/county_config.py`. Add any new source-specific config fields to `CountyConfig` if needed (e.g., a new URL for the source). We are building for York County but the code must be county-agnostic.
+> **County config rule:** Every new asset MUST use `get_county_config()` for URLs, filter strings, and thresholds. Every parser MUST accept county-specific params (e.g., `county_filter`) rather than hardcoding values. See `pipelines/countyiq/lib/county_config.py`. Add any new source-specific config fields to `CountyConfig` if needed (e.g., a new URL for the source). We are building for York County but the code must be county-agnostic.
 
 **For API sources (ArcGIS, SODA, CSV downloads):**
 
 ```
 1. Check library docs:         Use Context7 for Dagster asset/resource API
 2. Add config fields:          Add any new source URLs/thresholds to CountyConfig in county_config.py
-3. Write the asset file:       pipelines/york_county/assets/<type>/<source>.py (use get_county_config())
-4. Write the parser:           pipelines/york_county/lib/parsers/<source>.py (accept county params, don't hardcode)
+3. Write the asset file:       pipelines/countyiq/assets/<type>/<source>.py (use get_county_config())
+4. Write the parser:           pipelines/countyiq/lib/parsers/<source>.py (accept county params, don't hardcode)
 5. Write the schema test:      pipelines/tests/test_<source>_parser.py
 6. Save a test fixture:        pipelines/tests/fixtures/<source>_sample.json
 7. Write asset checks:         (in the asset file or lib/checks.py)
-8. Add the schedule:           pipelines/york_county/schedules/
+8. Add the schedule:           pipelines/countyiq/schedules/
 9. Run pytest locally:         pytest tests/test_<source>_parser.py -v
 10. Test against live API:     dagster asset materialize -a <asset_name>  (local Dagster)
 11. Verify data in Postgres:   psql → SELECT COUNT(*) FROM staging.<table>;
@@ -77,12 +77,12 @@ Build each source, test it locally, then move to the next. Start with the simple
    - Check for anti-bot measures (Cloudflare, CAPTCHAs)
 2. Check library docs:         Use Context7 for Playwright + Dagster APIs
 3. Add config fields:          Add source URL/thresholds to CountyConfig in county_config.py
-4. Write the asset file:       pipelines/york_county/assets/scrapers/<source>.py (use get_county_config())
-5. Write the parser:           pipelines/york_county/lib/parsers/<source>.py (accept county params)
+4. Write the asset file:       pipelines/countyiq/assets/scrapers/<source>.py (use get_county_config())
+5. Write the parser:           pipelines/countyiq/lib/parsers/<source>.py (accept county params)
 6. Write the schema test:      pipelines/tests/test_<source>_parser.py
 7. Save a test fixture:        pipelines/tests/fixtures/<source>_sample.html
 8. Write asset checks:         (in the asset file or lib/checks.py)
-9. Add the schedule:           pipelines/york_county/schedules/
+9. Add the schedule:           pipelines/countyiq/schedules/
 10. Run pytest locally:        pytest tests/test_<source>_parser.py -v
 11. Test against live site:    dagster asset materialize -a <asset_name>  (local Dagster)
 12. Verify data in Postgres:   psql → SELECT COUNT(*) FROM staging.<table>;

@@ -48,11 +48,11 @@ aws ec2 describe-instances --instance-ids <instance-id> \
 aws ssm start-session --target <instance-id>
 
 # Pull latest code
-cd /opt/york-county/repo
+cd /opt/countyiq/repo
 git pull origin main
 
 # Install updated package + run any pending database migrations
-source /opt/york-county/venv/bin/activate
+source /opt/countyiq/venv/bin/activate
 pip install -e pipelines/
 cd pipelines && alembic upgrade head
 
@@ -68,7 +68,7 @@ sudo systemctl restart dagster-daemon
 aws cloudwatch get-metric-statistics \
   --namespace AWS/RDS \
   --metric-name FreeStorageSpace \
-  --dimensions Name=DBInstanceIdentifier,Value=york-county-db \
+  --dimensions Name=DBInstanceIdentifier,Value=countyiq-db \
   --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
   --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
   --period 3600 \
@@ -88,7 +88,7 @@ aws ssm start-session \
   --parameters '{"host":["<rds-endpoint>"],"portNumber":["5432"],"localPortNumber":["5433"]}'
 
 # In another terminal, connect with psql or any SQL client
-psql -h localhost -p 5433 -U dagster_admin -d york_county_intel
+psql -h localhost -p 5433 -U dagster_admin -d countyiq
 ```
 
 ### Rollback procedures
@@ -98,7 +98,7 @@ psql -h localhost -p 5433 -U dagster_admin -d york_county_intel
 ```bash
 # Lambda keeps previous versions. Roll back to the last working version:
 aws lambda update-function-code \
-  --function-name york-county-api \
+  --function-name countyiq-api \
   --s3-bucket <if using S3 deploy> \
   # Or re-deploy from git:
 cd api/
@@ -107,7 +107,7 @@ pip install -r requirements.txt -t package/
 cp -r *.py routes/ lib/ package/
 cd package && zip -r ../lambda.zip .
 aws lambda update-function-code \
-  --function-name york-county-api \
+  --function-name countyiq-api \
   --zip-file fileb://lambda.zip
 ```
 
@@ -117,10 +117,10 @@ aws lambda update-function-code \
 # On EC2 via SSM:
 aws ssm start-session --target <instance-id>
 
-cd /opt/york-county/repo
+cd /opt/countyiq/repo
 git log --oneline -5                    # Find the last good commit
 git checkout <last-good-sha>            # Roll back
-source /opt/york-county/venv/bin/activate
+source /opt/countyiq/venv/bin/activate
 pip install -e pipelines/
 sudo systemctl restart dagster-webserver dagster-daemon
 ```
@@ -129,8 +129,8 @@ sudo systemctl restart dagster-webserver dagster-daemon
 
 ```bash
 # Alembic supports reversible migrations:
-cd /opt/york-county/repo/pipelines
-source /opt/york-county/venv/bin/activate
+cd /opt/countyiq/repo/pipelines
+source /opt/countyiq/venv/bin/activate
 
 # See current migration state
 alembic current
@@ -163,6 +163,6 @@ AND valid_to IS NULL;
 cd frontend
 git checkout HEAD~1 -- .
 npm run build
-aws s3 sync dist/ s3://york-county-frontend --delete
+aws s3 sync dist/ s3://countyiq-frontend --delete
 aws cloudfront create-invalidation --distribution-id <dist-id> --paths "/*"
 ```

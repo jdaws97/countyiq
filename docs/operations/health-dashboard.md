@@ -152,9 +152,9 @@ def infra_metrics_sensor(context):
 
     # Fetch key metrics
     metrics = {
-        "ec2_cpu_pct": get_metric(cw, "AWS/EC2", "CPUUtilization", "york-county-dagster"),
-        "rds_free_storage_gb": get_metric(cw, "AWS/RDS", "FreeStorageSpace", "york-county-db") / 1e9,
-        "rds_connections": get_metric(cw, "AWS/RDS", "DatabaseConnections", "york-county-db"),
+        "ec2_cpu_pct": get_metric(cw, "AWS/EC2", "CPUUtilization", "countyiq-dagster"),
+        "rds_free_storage_gb": get_metric(cw, "AWS/RDS", "FreeStorageSpace", "countyiq-db") / 1e9,
+        "rds_connections": get_metric(cw, "AWS/RDS", "DatabaseConnections", "countyiq-db"),
     }
 
     conn.execute("""

@@ -1341,7 +1341,7 @@ The MVP schema is designed so that **no existing tables are altered** when Phase
 | Intermediate | RDS (storage scaled to 40+ GB) | S3 (~50 GB) | EC2 t3.small + Lambda | Cognito or Clerk | **$40-80** |
 | Grand Vision | RDS (100+ GB or Aurora) | S3 (~500 GB incl. imagery) | EC2 + optional ECS for Memgraph | Cognito or Clerk | **$100-200+** |
 
-*ML compute (entity resolution batch jobs, NLP extraction, prediction models) can run on EC2 spot instances as needed — not a constant cost. See `york-county-infrastructure-plan.md` Cost Breakdown section for detailed numbers.*
+*ML compute (entity resolution batch jobs, NLP extraction, prediction models) can run on EC2 spot instances as needed — not a constant cost. See `countyiq-infrastructure-plan.md` Cost Breakdown section for detailed numbers.*
 
 ## Appendix B: Relationship Types Reference
 

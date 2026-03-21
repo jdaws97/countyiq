@@ -38,7 +38,7 @@ countyiq/
 │   │   └── versions/
 │   │       └── 001_initial_schema.py
 │   │
-│   ├── york_county/                        # Main Python package (Dagster code location)
+│   ├── countyiq/                        # Main Python package (Dagster code location)
 │   │   ├── __init__.py
 │   │   ├── definitions.py                  # Dagster top-level definitions
 │   │   │

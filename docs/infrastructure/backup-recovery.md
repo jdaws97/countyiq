@@ -31,7 +31,7 @@ RDS automated backups are enabled in the database Terraform module:
 ```bash
 # Before running a major migration or bulk data operation:
 aws rds create-db-snapshot \
-  --db-instance-identifier york-county-db \
+  --db-instance-identifier countyiq-db \
   --db-snapshot-identifier pre-migration-$(date +%Y%m%d)
 ```
 
@@ -41,7 +41,7 @@ Manual snapshots persist until you delete them (they don't expire with the 7-day
 
 S3 provides 99.999999999% (11 nines) durability. Data loss from S3 is effectively impossible. No additional backup strategy is needed for S3 buckets.
 
-S3 versioning is enabled on the Terraform state bucket (critical — protects against accidental state corruption). S3 versioning is also enabled on `york-county-raw` for defense against accidental deletions:
+S3 versioning is enabled on the Terraform state bucket (critical — protects against accidental state corruption). S3 versioning is also enabled on `countyiq-raw` for defense against accidental deletions:
 
 ```hcl
 # infra/modules/database/s3_raw.tf (or wherever the raw data bucket is defined)

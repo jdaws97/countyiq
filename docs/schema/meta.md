@@ -6,9 +6,9 @@
 
 | Resource | Configuration |
 |---|---|
-| RDS instance: `york-county-db` | db.t3.micro, PostgreSQL 16, 20 GB gp3 |
+| RDS instance: `countyiq-db` | db.t3.micro, PostgreSQL 16, 20 GB gp3 |
 | DB subnet group: `dagster-rds-subnets` | Default VPC subnets (min 2 AZs) |
-| Parameter group: `york-county-pg16` | Custom parameter group for PostgreSQL 16 tuning |
+| Parameter group: `countyiq-pg16` | Custom parameter group for PostgreSQL 16 tuning |
 | (Security group created in networking module) | `dagster-rds-sg` |
 
 ### Parameter Group Customizations
@@ -24,10 +24,10 @@
 
 ### Database Initialization (post-Terraform, one-time)
 
-After `terraform apply`, run `sudo /opt/york-county/initialize.sh` on EC2 via SSM. This runs `init.sql` (extensions + schemas + dagster DB) followed by `alembic upgrade head` (all tables including meta.\*). The SQL below shows what `init.sql` handles — **meta tables are created by Alembic, not init.sql**:
+After `terraform apply`, run `sudo /opt/countyiq/initialize.sh` on EC2 via SSM. This runs `init.sql` (extensions + schemas + dagster DB) followed by `alembic upgrade head` (all tables including meta.\*). The SQL below shows what `init.sql` handles — **meta tables are created by Alembic, not init.sql**:
 
 ```sql
--- Connect to york_county_intel database
+-- Connect to countyiq database
 -- Enable spatial extensions
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS postgis_topology;
@@ -39,7 +39,7 @@ CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 -- This is NOT queried by the application or API — it's Dagster-internal only.
 CREATE DATABASE dagster;
 
--- Create application schemas (all in york_county_intel database)
+-- Create application schemas (all in countyiq database)
 CREATE SCHEMA IF NOT EXISTS staging;   -- Cleaned, normalized, change-tracked data (SCD Type 2)
 CREATE SCHEMA IF NOT EXISTS meta;      -- Application metadata: infra metrics, pipeline status summaries, data quality logs
 ```
@@ -108,7 +108,7 @@ from dagster import sensor, DagsterInstance
 def pipeline_status_sensor(context):
     """Summarize Dagster run history into meta.pipeline_status for the API."""
     instance = DagsterInstance.get()
-    conn = get_connection()  # york_county_intel database
+    conn = get_connection()  # countyiq database
 
     # Get latest run for each asset
     for asset_key in get_all_source_asset_keys():

@@ -74,7 +74,7 @@ cd pipelines/
 docker compose up -d postgres-test
 
 # Run migration against local DB
-export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/york_county_intel"
+export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/countyiq"
 alembic upgrade head
 
 # Verify reversibility
@@ -82,7 +82,7 @@ alembic downgrade base
 alembic upgrade head
 
 # Inspect
-PGPASSWORD=localtest psql -h localhost -p 5433 -U dagster_admin -d york_county_intel \
+PGPASSWORD=localtest psql -h localhost -p 5433 -U dagster_admin -d countyiq \
   -c "\dt staging.*" -c "\dt public.*" -c "\dv public.*" -c "\dt meta.*"
 
 # Clean up
@@ -104,7 +104,7 @@ aws ssm start-session \
 
 # In another terminal:
 cd pipelines/
-DATABASE_URL="postgresql://dagster_admin:<password>@localhost:5433/york_county_intel" \
+DATABASE_URL="postgresql://dagster_admin:<password>@localhost:5433/countyiq" \
   alembic upgrade head
 ```
 

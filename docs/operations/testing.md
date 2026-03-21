@@ -149,9 +149,9 @@ After the Dagster deploy workflow restarts services, verify they came up cleanly
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
-              "source /opt/york-county/venv/bin/activate",
-              "cd /opt/york-county/pipelines",
-              "python -c \"from york_county.definitions import defs; print(f\\\"{len(list(defs.resolve_all_asset_specs()))} assets loaded\\\")\" "
+              "source /opt/countyiq/venv/bin/activate",
+              "cd /opt/countyiq/pipelines",
+              "python -c \"from countyiq.definitions import defs; print(f\\\"{len(list(defs.resolve_all_asset_specs()))} assets loaded\\\")\" "
             ]' \
             --query "Command.CommandId" \
             --output text)

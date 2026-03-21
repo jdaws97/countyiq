@@ -67,7 +67,7 @@ countyiq/
 │   │   ├── env.py
 │   │   └── versions/
 │   │
-│   └── york_county/                    # Main Python package
+│   └── countyiq/                    # Main Python package
 │   │   ├── __init__.py
 │   │   │
 │   │   ├── definitions.py              # Dagster entry point
@@ -192,12 +192,12 @@ This is the single file Dagster reads on startup. It registers all assets, jobs,
 ```python
 from dagster import Definitions, load_assets_from_package_module
 
-from york_county import assets
-from york_county.jobs import arcgis_refresh, scraper_refresh, bulk_refresh, enrichment_refresh
-from york_county.schedules import all_schedules
-from york_county.sensors.alerting import success_reporter, failure_alerter
-from york_county.resources.database import make_database_resource
-from york_county.resources.storage import make_s3_resource
+from countyiq import assets
+from countyiq.jobs import arcgis_refresh, scraper_refresh, bulk_refresh, enrichment_refresh
+from countyiq.schedules import all_schedules
+from countyiq.sensors.alerting import success_reporter, failure_alerter
+from countyiq.resources.database import make_database_resource
+from countyiq.resources.storage import make_s3_resource
 
 defs = Definitions(
     assets=load_assets_from_package_module(assets),
@@ -211,7 +211,7 @@ defs = Definitions(
 )
 ```
 
-`load_assets_from_package_module` auto-discovers all `@asset`-decorated functions under `york_county/assets/`. As new source assets are added, they're picked up automatically without editing `definitions.py`.
+`load_assets_from_package_module` auto-discovers all `@asset`-decorated functions under `countyiq/assets/`. As new source assets are added, they're picked up automatically without editing `definitions.py`.
 
 When Dagster starts, it loads this file and knows about every asset, every dependency, every schedule. The Dagster UI then renders the full graph and lets you monitor everything.
 
@@ -220,7 +220,7 @@ When Dagster starts, it loads this file and knows about every asset, every depen
 **Simple example — ArcGIS parcels (HTTP/JSON, no browser needed):**
 
 ```python
-# pipelines/york_county/assets/arcgis/parcels.py
+# pipelines/countyiq/assets/arcgis/parcels.py
 # Example of an ArcGIS source asset — follows the standard asset pattern.
 
 from dagster import asset, AssetExecutionContext
@@ -233,7 +233,7 @@ def parcels_arcgis(context: AssetExecutionContext, database, s3):
     """Fetch all York County parcels, archive raw to S3, upsert to staging.parcels (SCD2)."""
 
     # 1. Query ArcGIS REST API (uses shared lib for pagination)
-    from york_county.lib.arcgis_client import query_all_features
+    from countyiq.lib.arcgis_client import query_all_features
     features = query_all_features(
         url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/...",
         where="1=1",  # all records
@@ -273,14 +273,14 @@ assets = [parcels_arcgis]
 | `lib/slack.py` | 3-channel Slack webhook helper (critical/warning/pipeline), reads URLs from SSM Parameter Store, caches them | Sensors (`sensors/alerting.py`) |
 | `lib/parsers/` | Per-source parsing functions (e.g. `parcels.py`, `plcb.py`) — extract and normalize fields from raw API responses. Parsers accept county-specific params (e.g. `county_filter`) rather than hardcoding values. | All assets |
 | `resources/database.py` | PostgreSQL connection resource using psycopg2, reads `DATABASE_*` env vars | All assets via Dagster resource injection |
-| `resources/storage.py` | S3 client for archiving raw responses to `s3://york-county-raw/<prefix>/<source>/<date>/` | All assets via Dagster resource injection |
+| `resources/storage.py` | S3 client for archiving raw responses to `s3://countyiq-raw/<prefix>/<source>/<date>/` | All assets via Dagster resource injection |
 
 ## How jobs and schedules connect
 
 A **job** selects which assets to build. A **schedule** triggers that job on a cron timer:
 
 ```python
-# york_county/jobs/__init__.py
+# countyiq/jobs/__init__.py
 
 from dagster import define_asset_job, AssetSelection
 
@@ -310,10 +310,10 @@ enrichment_refresh = define_asset_job(
 ```
 
 ```python
-# york_county/schedules/__init__.py
+# countyiq/schedules/__init__.py
 
 from dagster import ScheduleDefinition
-from york_county.jobs import arcgis_refresh, scraper_refresh, bulk_refresh
+from countyiq.jobs import arcgis_refresh, scraper_refresh, bulk_refresh
 
 all_schedules = [
     ScheduleDefinition(
@@ -340,7 +340,7 @@ all_schedules = [
 
 ```toml
 [project]
-name = "york-county-pipelines"
+name = "countyiq-pipelines"
 version = "0.1.0"
 requires-python = ">=3.11"
 
@@ -403,11 +403,11 @@ playwright install chromium
 docker compose up -d postgres-test
 
 # 5. Run migrations against local DB
-export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/york_county_intel"
+export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/countyiq"
 alembic upgrade head
 
 # 6. Start Dagster UI (local dev mode)
-dagster dev -m york_county.definitions
+dagster dev -m countyiq.definitions
 
 # 7. Open http://localhost:3000 — full Dagster UI with all your assets
 #    You can trigger individual assets, view the dependency graph, etc.

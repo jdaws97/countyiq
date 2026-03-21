@@ -69,7 +69,7 @@ GitHub Actions authenticates to AWS via OIDC federation — no stored credential
 | Resource | Value |
 |---|---|
 | OIDC Provider | `token.actions.githubusercontent.com` |
-| IAM Role | `york-county-github-actions` |
+| IAM Role | `countyiq-github-actions` |
 | Trust Policy | Only `jarod/countyiq` repo, `main` branch |
 
 The role needs permissions for: S3 (frontend + tiles upload), Lambda (update function code), SSM (send-command to EC2 for Dagster deploys). These are scoped to specific resource ARNs — see `docs/infrastructure/cicd.md` for the deploy workflow details.
@@ -87,8 +87,8 @@ This role is created in the `cicd` Terraform module (`infra/modules/cicd/`). It 
     "s3:ListBucket"
   ],
   "Resource": [
-    "arn:aws:s3:::york-county-raw",
-    "arn:aws:s3:::york-county-raw/*"
+    "arn:aws:s3:::countyiq-raw",
+    "arn:aws:s3:::countyiq-raw/*"
   ]
 }
 ```
@@ -102,7 +102,7 @@ This role is created in the `cicd` Terraform module (`infra/modules/cicd/`). It 
     "ssm:GetParameter",
     "ssm:GetParameters"
   ],
-  "Resource": "arn:aws:ssm:us-east-1:*:parameter/york-county/*"
+  "Resource": "arn:aws:ssm:us-east-1:*:parameter/countyiq/*"
 }
 ```
 

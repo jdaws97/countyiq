@@ -183,7 +183,7 @@ These are infrastructure improvements, not data sources. Tackle when the trigger
 
 ### Multi-County Expansion Notes
 
-All pipeline assets read county-specific configuration from `pipelines/york_county/lib/county_config.py`. Expanding to another PA county means:
+All pipeline assets read county-specific configuration from `pipelines/countyiq/lib/county_config.py`. Expanding to another PA county means:
 
 1. **Add a `CountyConfig` entry** in `county_config.py` with the new county's source URLs, filter strings, and thresholds
 2. **Set `COUNTY=<key>`** when running pipelines (env var on EC2 or in `.env`)
@@ -212,9 +212,9 @@ All pipeline assets read county-specific configuration from `pipelines/york_coun
 Then run with `COUNTY=lancaster dagster asset materialize --select plcb_licenses`. The same asset code downloads the statewide CSV, filters to Lancaster County, and upserts to `staging.plcb_licenses`.
 
 **Known limitations:**
-- The Python package is named `york_county` — this works for any county but the name is misleading. Rename to `county_pipelines` if multi-county becomes the primary use case.
+- The Python package is named `countyiq` — this works for any county but the name is misleading. Rename to `county_pipelines` if multi-county becomes the primary use case.
 - S3 archive paths changed from `bulk/plcb/` to `york/bulk/plcb/` with the county prefix. Historical archives from before this change are at the old paths.
-- The S3 bucket is named `york-county-raw` — configurable via the `S3_RAW_BUCKET` env var for a shared bucket, or use a separate bucket per county.
+- The S3 bucket is named `countyiq-raw` — configurable via the `S3_RAW_BUCKET` env var for a shared bucket, or use a separate bucket per county.
 
 The hardest part isn't the code — it's finding and verifying each county's data source URLs and access methods. Budget 1-2 weeks per new county for the research + implementation.
 

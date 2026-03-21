@@ -11,7 +11,7 @@ CountyIQ's value comes from connecting data across time, not just across sources
 Every pipeline run dumps its raw response to S3 with a timestamped path:
 
 ```
-s3://york-county-raw/
+s3://countyiq-raw/
 ├── arcgis/parcels/2026-03-20/response.json
 ├── arcgis/parcels/2026-03-27/response.json
 ├── crimewatch/2026-03-20/page-1.html

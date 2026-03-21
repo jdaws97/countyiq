@@ -26,7 +26,7 @@ terraform apply plan.tfplan
 
 After apply completes, run Steps 1.6 and 1.7 from `docs/implementation/phase-0-1-setup.md`:
 - **Step 1.6:** Verify EC2, RDS, S3, SSM
-- **Step 1.7:** SSM into EC2, run `sudo /opt/york-county/initialize.sh` (init.sql + alembic + start Dagster)
+- **Step 1.7:** SSM into EC2, run `sudo /opt/countyiq/initialize.sh` (init.sql + alembic + start Dagster)
 
 > **Checkpoint:** EC2 running, RDS available, SSM connects, Dagster services started, all tables exist in RDS.
 

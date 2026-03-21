@@ -54,9 +54,9 @@ import boto3
 
 # SSM parameter names for each Slack channel
 SLACK_CHANNELS = {
-    "critical": "/york-county/slack-webhook-critical",
-    "warning": "/york-county/slack-webhook-warning",
-    "pipeline": "/york-county/slack-webhook-pipeline",
+    "critical": "/countyiq/slack-webhook-critical",
+    "warning": "/countyiq/slack-webhook-warning",
+    "pipeline": "/countyiq/slack-webhook-pipeline",
 }
 
 _webhook_cache = {}
@@ -212,6 +212,6 @@ One webhook per channel — Dagster sensors and the CloudWatch forwarder Lambda 
 
 | Parameter | Channel | Used By |
 |---|---|---|
-| `/york-county/slack-webhook-critical` | `#alerts-critical` | CloudWatch forwarder Lambda, Dagster failure sensor (after all retries exhausted) |
-| `/york-county/slack-webhook-warning` | `#alerts-warning` | Dagster failure sensor (single failure, before retries) |
-| `/york-county/slack-webhook-pipeline` | `#pipeline-runs` | Dagster success sensor (all completions) |
+| `/countyiq/slack-webhook-critical` | `#alerts-critical` | CloudWatch forwarder Lambda, Dagster failure sensor (after all retries exhausted) |
+| `/countyiq/slack-webhook-warning` | `#alerts-warning` | Dagster failure sensor (single failure, before retries) |
+| `/countyiq/slack-webhook-pipeline` | `#pipeline-runs` | Dagster success sensor (all completions) |
