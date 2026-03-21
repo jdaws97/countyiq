@@ -1,0 +1,48 @@
+[project]
+name = "york-county-pipelines"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+dependencies = [
+    # Dagster core
+    "dagster",
+    "dagster-webserver",
+    "dagster-postgres",
+
+    # Database
+    "psycopg2-binary",
+    "sqlalchemy>=2.0",
+    "alembic",
+    "geoalchemy2",
+
+    # Scraping
+    "requests",
+    "beautifulsoup4",
+    "lxml",
+    "playwright",
+    "pdfplumber",
+
+    # Data processing
+    "geojson",
+    "shapely",
+    "pyproj",
+
+    # AWS
+    "boto3",
+
+    # Utilities
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["york_county*"]

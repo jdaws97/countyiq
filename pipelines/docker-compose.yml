@@ -1,0 +1,14 @@
+services:
+  postgres-test:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: york_county_intel
+      POSTGRES_USER: dagster_admin
+      POSTGRES_PASSWORD: localtest
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata-test:/var/lib/postgresql/data
+
+volumes:
+  pgdata-test:
