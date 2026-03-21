@@ -42,6 +42,25 @@ class CountyConfig:
     # Assessment portal
     assessment_url: str = ""        # Assessment portal base URL
     assessment_min_records: int = 1000
+    assessment_max_per_run: int = 500         # Tier 2 properties per execution
+    assessment_throttle_seconds: float = 5.0  # Delay between all requests
+    assessment_session_refresh: int = 200     # Re-establish session after N detail pages
+
+    # PA Open Data Portal (SODA API)
+    soda_base_url: str = "https://data.pa.gov/resource"
+    soda_datasets: tuple = ()        # Tuple of (dataset_id, county_filter_field, county_filter_value, record_id_field) tuples
+    soda_min_records: int = 50       # Minimum expected records per dataset (truncation guard)
+
+    # PennDOT Open Data (state road segments — MapServer)
+    penndot_roads_url: str = ""      # MapServer/0 URL for roadway segments
+    penndot_roads_cty_code: str = "" # CTY_CODE filter value
+    penndot_roads_min_records: int = 500
+
+    # PennDOT Projects (PA Projects MapServer)
+    penndot_projects_url: str = ""   # MapServer base URL
+    penndot_projects_layers: tuple = (1, 2, 4, 5)  # Underway, 4yr plan, under dev, under construction
+    penndot_projects_county_filter: str = ""  # COUNTY_NAME filter value
+    penndot_projects_min_records: int = 10
 
     # FEMA National Flood Hazard Layer
     fema_nfhl_url: str = ""          # MapServer base URL
@@ -72,6 +91,18 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         arcgis_address_pts_min_records=100000,
         assessment_url="https://assessmentpublic.yorkcountypa.gov/",
         assessment_min_records=150000,
+        soda_datasets=(
+            # (dataset_id, county_filter_field, county_filter_value, record_id_field)
+            ("xvd7-5r2c", "county", "YORK", ":id"),  # Registered Businesses in PA Current by County
+        ),
+        soda_min_records=100,
+        penndot_roads_url="https://gis.penndot.gov/arcgis/rest/services/opendata/roadwaysegments/MapServer/0",
+        penndot_roads_cty_code="67",
+        penndot_roads_min_records=1000,
+        penndot_projects_url="https://gis.penndot.gov/arcgis/rest/services/paprojects/paprojects/MapServer",
+        penndot_projects_layers=(1, 2, 4, 5),
+        penndot_projects_county_filter="YORK",
+        penndot_projects_min_records=5,
         fema_nfhl_url="https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer",
         fema_flood_layer=28,
         fema_dfirm_id="42133C",
