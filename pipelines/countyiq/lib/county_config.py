@@ -33,6 +33,12 @@ class CountyConfig:
     assessment_url: str = ""        # Assessment portal base URL
     assessment_min_records: int = 1000
 
+    # FEMA National Flood Hazard Layer
+    fema_nfhl_url: str = ""          # MapServer base URL
+    fema_flood_layer: int = 28       # S_Fld_Haz_Ar layer ID
+    fema_dfirm_id: str = ""          # County DFIRM ID for filtering
+    fema_min_records: int = 100      # Minimum expected records (truncation guard)
+
     # S3 archive prefix (raw data goes to s3://york-county-raw/<prefix>/...)
     s3_prefix: str = ""
 
@@ -46,6 +52,10 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         arcgis_base_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA",
         assessment_url="https://assessmentpublic.yorkcountypa.gov/",
         assessment_min_records=150000,
+        fema_nfhl_url="https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer",
+        fema_flood_layer=28,
+        fema_dfirm_id="42133C",
+        fema_min_records=3000,
         s3_prefix="york",
     ),
 }
