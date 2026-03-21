@@ -7,7 +7,7 @@ not cron.
 
 from dagster import ScheduleDefinition
 
-from countyiq.jobs import arcgis_refresh, scraper_refresh, bulk_refresh
+from countyiq.jobs import arcgis_refresh, scraper_refresh, bulk_refresh, fema_refresh
 
 all_schedules = [
     ScheduleDefinition(
@@ -24,5 +24,10 @@ all_schedules = [
         job=bulk_refresh,
         cron_schedule="0 5 1 * *",  # 1st of month 05:00
         name="monthly_bulk",
+    ),
+    ScheduleDefinition(
+        job=fema_refresh,
+        cron_schedule="0 4 * * 0",  # Sunday 04:00
+        name="weekly_fema",
     ),
 ]

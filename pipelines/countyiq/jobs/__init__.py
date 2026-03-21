@@ -25,3 +25,9 @@ enrichment_refresh = define_asset_job(
     selection=AssetSelection.groups("enrichment"),
     description="Run entity resolution and enrichment assets",
 )
+
+fema_refresh = define_asset_job(
+    name="fema_refresh",
+    selection=AssetSelection.assets("fema_flood_zones"),
+    description="Refresh FEMA flood hazard zone data",
+)
