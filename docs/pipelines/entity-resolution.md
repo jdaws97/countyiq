@@ -53,54 +53,129 @@ RETURNS TEXT AS $$
 $$ LANGUAGE SQL IMMUTABLE;
 ```
 
-**Stage 2: Match.** Compare normalized records across sources using a tiered confidence system:
+**Stage 2: Match.** Compare normalized records across sources using a tiered confidence system. All fuzzy matches are scoped to the same municipality to reduce false positives ("JOHN SMITH" in Conewago shouldn't match "JOHN SMITH" in Spring Garden):
 
 | Tier | Rule | Confidence | Example |
 |---|---|---|---|
-| Exact | Normalized name AND normalized address match exactly | 0.95 | "JOHN SMITH" + "123 N MAIN ST" appears in both assessment and deeds |
-| Strong | Normalized name exact match + address similarity > 0.8 (pg_trgm) | 0.80 | "JOHN SMITH" at "123 N MAIN ST" vs "123 NORTH MAIN STREET" |
-| Fuzzy name | Name similarity > 0.85 (pg_trgm) + exact address | 0.70 | "JOHN A SMITH" vs "JOHN SMITH" at same address |
+| Parcel link | Same PIDN across sources | 0.95 | Assessment and GIS both reference parcel 43-000-01-0001. Strongest link — even if owner names differ (trust, LLC, etc.) |
+| Exact | Normalized name AND normalized address match exactly | 0.90 | "JOHN SMITH" + "123 N MAIN ST" appears in both assessment and GIS |
+| Strong | Normalized name exact + address similarity > 0.8 (pg_trgm), same municipality | 0.80 | "JOHN SMITH" at "123 N MAIN ST" vs "123 NORTH MAIN STREET" in Conewago |
+| Fuzzy name | Name similarity > 0.85 (pg_trgm) + same PIDN | 0.70 | "JOHN A SMITH" vs "JOHN SMITH" on same parcel |
 | Business alias | Normalized business name similarity > 0.8 + same municipality | 0.65 | "YORK PROPERTIES" vs "YORK PROPS" in same township |
-| Address only | Same parcel ID across sources (strongest geographic link) | 0.90 | Assessment and deed both reference parcel 43-000-01-0001 |
+| Address point geocode | Owner mailing address matches `staging.address_points`, resolved point falls within a parcel polygon | 0.75 | Assessment mailing address "123 N MAIN STREET" → address point → ST_Within → parcel PIDN. Catches cases where PROPADR formatting prevents direct matching. |
 
-The parcel ID match (last row) is actually the most reliable link you have — if two records reference the same parcel, they're almost certainly related to the same property, even if the owner names differ slightly (could be a trust, an LLC, etc.).
+**Municipality scoping:** The municipality spatial join (from `staging.municipalities`) must run before entity resolution. Fuzzy matches (Strong, Business alias) are restricted to `WHERE p.municipality = a.municipality`, which both reduces false positives and makes the pg_trgm similarity joins faster (smaller candidate set per municipality).
+
+**Address point bridge:** When `staging.address_points` has data, entity resolution gains an extra matching path. For assessment records where the PIDN join misses (e.g., PARID→PIDN conversion failed or PIDN is absent), normalize the assessment address → match against address points → use `ST_Within(addr_point.geom, parcel.geom)` to find the containing parcel → link back to PIDN. This is a second-chance geocoder that comes free from the GIS portal.
 
 ```sql
--- MVP example: Match owners across GIS parcels and assessment records using PIDN
--- This is the core MVP matching query — parcels + assessment only.
+-- MVP matching query: parcels + assessment, scoped by municipality
 WITH matched_pairs AS (
     SELECT
         p.owner_full AS gis_owner,
         a.owner_name AS assessment_owner,
         p.pidn,
+        p.municipality,
         similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) AS name_score,
         CASE
+            -- Tier: parcel_link (0.95) — same PIDN is the strongest link
+            WHEN p.pidn = a.pidn THEN 0.95
+            -- Tier: exact (0.90) — normalized name + address match exactly
             WHEN normalize_name(p.owner_full) = normalize_name(a.owner_name)
-                AND normalize_address(p.propadr) = normalize_address(a.address) THEN 0.95  -- Exact name + exact normalized address
+                AND normalize_address(p.propadr) = normalize_address(a.address) THEN 0.90
+            -- Tier: strong (0.80) — exact name + fuzzy address, same municipality
             WHEN normalize_name(p.owner_full) = normalize_name(a.owner_name)
-                AND similarity(p.propadr, a.address) > 0.8 THEN 0.80  -- Exact name + fuzzy address
+                AND similarity(normalize_address(p.propadr), normalize_address(a.address)) > 0.8
+                AND p.municipality = a.municipality THEN 0.80
+            -- Tier: fuzzy_name (0.70) — fuzzy name + same PIDN
             WHEN similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) > 0.85
-                AND p.pidn = a.pidn THEN 0.70  -- Fuzzy name + same parcel
-            WHEN p.pidn = a.pidn THEN 0.90  -- Address only: same parcel ID (strongest geographic link)
+                AND p.pidn = a.pidn THEN 0.70
             ELSE NULL
-        END AS confidence
+        END AS confidence,
+        CASE
+            WHEN p.pidn = a.pidn THEN 'parcel_link'
+            WHEN normalize_name(p.owner_full) = normalize_name(a.owner_name)
+                AND normalize_address(p.propadr) = normalize_address(a.address) THEN 'exact'
+            WHEN normalize_name(p.owner_full) = normalize_name(a.owner_name) THEN 'strong'
+            WHEN similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) > 0.85 THEN 'fuzzy_name'
+            ELSE NULL
+        END AS match_tier
     FROM staging.parcels p
     JOIN staging.assessment_properties a ON (
         p.pidn = a.pidn  -- PIDN is the primary join key
-        OR (similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) > 0.7
-            AND similarity(p.propadr, a.address) > 0.7)
+        OR (
+            p.municipality = a.municipality  -- Municipality scoping reduces false positives
+            AND similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) > 0.7
+        )
     )
-    WHERE p.valid_to IS NULL  -- Current records only (SCD Type 2)
+    WHERE p.valid_to IS NULL AND a.valid_to IS NULL
 )
-SELECT *
-FROM matched_pairs
-WHERE confidence IS NOT NULL;
+SELECT * FROM matched_pairs WHERE confidence IS NOT NULL;
 
--- Phase 2 example: Add deeds to the matching pool (when deeds pipeline is built)
--- Same pattern — join staging.deeds on PIDN or name+address similarity
+-- Address point bridge: for unmatched assessment records, geocode through address_points
+-- Only runs when staging.address_points has data
+WITH unmatched_assessment AS (
+    SELECT a.* FROM staging.assessment_properties a
+    WHERE a.valid_to IS NULL
+    AND a.pidn NOT IN (SELECT pidn FROM matched_pairs WHERE confidence IS NOT NULL)
+),
+geocoded AS (
+    SELECT
+        ua.owner_name,
+        ua.address,
+        p.pidn,
+        p.municipality,
+        0.75 AS confidence,
+        'address_geocode' AS match_tier
+    FROM unmatched_assessment ua
+    JOIN staging.address_points ap
+        ON similarity(normalize_address(ua.address), normalize_address(ap.full_address)) > 0.85
+        AND ap.valid_to IS NULL
+    JOIN staging.parcels p
+        ON ST_Within(ap.geom, p.geom)
+        AND p.valid_to IS NULL
+)
+SELECT * FROM geocoded;
+
+-- PLCB cross-reference: match licensees to resolved owners
+-- Runs after owners table is populated from parcels + assessment
+INSERT INTO public.owner_source_links (owner_id, source_type, source_id, source_name, source_address, match_tier, confidence)
+SELECT
+    o.owner_id,
+    'plcb_license',
+    l.lid,
+    l.licensee,
+    l.premises_address,
+    'business_alias',
+    GREATEST(0.65, similarity(normalize_name(l.licensee), o.canonical_name)) AS confidence
+FROM staging.plcb_licenses l
+JOIN public.owners o
+    ON similarity(normalize_name(l.licensee), o.canonical_name) > 0.8
+    AND o.municipality = l.municipality
+WHERE l.valid_to IS NULL
+ON CONFLICT (source_type, source_id) DO UPDATE
+    SET confidence = EXCLUDED.confidence, matched_at = NOW();
 ```
 
-**Stage 3: Cluster.** Group matched records into entities. Each entity gets a canonical name (the most frequently occurring normalized form) and a canonical address (from the most authoritative source — assessment data, since it's county-maintained).
+**Stage 3: Cluster and classify.** Group matched records into entities. Each entity gets:
+
+- **Canonical name:** Most frequently occurring normalized form across sources
+- **Canonical address:** From the most authoritative source (assessment data, since it's county-maintained)
+- **Entity type:** Classified by heuristic pattern matching on the canonical name (no LLM needed):
+
+```sql
+CASE
+    WHEN canonical_name ~ '(LLC|INC|CORP|LP|LTD|CO\b|COMPANY|ASSOCIATES|PARTNERS|GROUP|HOLDINGS)'
+        THEN 'business'
+    WHEN canonical_name ~ '(TRUST|ESTATE|REVOCABLE|IRREVOCABLE|LIVING TRUST)'
+        THEN 'trust'
+    WHEN canonical_name ~ '(COUNTY|COMMONWEALTH|SCHOOL DIST|BOROUGH|TOWNSHIP|CITY OF|STATE OF|UNITED STATES)'
+        THEN 'government'
+    ELSE 'person'
+END
+```
+
+This classification powers the frontend — the Top Owners dashboard distinguishes individual owners from institutional owners, and the owner profile page displays entity type.
 
 ## Schema
 
@@ -145,9 +220,11 @@ CREATE INDEX idx_owner_links_source ON public.owner_source_links (source_type, s
 
 Once the `owners` table is populated, the platform can answer questions like:
 
-- **"Who owns the most parcels in Conewago Township?"** — Query `owners` joined to `owner_source_links` where source_type = 'assessment', grouped by owner_id, filtered by municipality.
-- **"Show me everything we know about York Properties LLC"** — Find the owner_id, then pull all source links — every parcel they own, every deed transfer, business filing details, any licenses.
-- **"Which businesses in this area have both a liquor license and recent code violations?"** — Join owners to PLCB source links and permit/violation source links through the same owner_id.
+- **"Who owns the most parcels in Conewago Township?"** — Query `owners` WHERE `municipality = 'Conewago Twp'` ORDER BY `parcel_count DESC`. Already computed during resolution.
+- **"Show me everything we know about York Properties LLC"** — Find the owner_id (entity_type = 'business'), then pull all source links — every parcel they own, assessment data, and whether they hold a liquor license (PLCB cross-reference).
+- **"Which businesses in this area have both a liquor license and property?"** — Join owners WHERE entity_type = 'business' to owner_source_links WHERE source_type IN ('plcb_license', 'assessment'). Group by owner_id HAVING COUNT(DISTINCT source_type) >= 2.
+- **"Top institutional property owners"** — `SELECT * FROM public.owners WHERE entity_type IN ('business', 'trust') ORDER BY parcel_count DESC`. Distinguishes LLCs and trusts from individual owners.
+- **"Flag properties where assessment PIDN lookup failed"** — Address point bridge records (match_tier = 'address_geocode') indicate properties where the PARID→PIDN conversion didn't work and geocoding was needed as a fallback — a data quality signal.
 
 ## Why this design scales to other counties
 
@@ -157,64 +234,61 @@ The scrapers change per county. The entity resolution doesn't.
 
 ## Dagster asset: `enrichment/owners.py`
 
-Entity resolution has two scopes: an MVP contract (parcels + assessment only) and a Phase 2 enriched contract (all sources). The Dagster asset dynamically resolves whichever sources are available.
+Entity resolution dynamically resolves whichever sources are available. It detects loaded staging tables at runtime and includes matching logic for each.
 
-**MVP resolution (parcels + assessment):**
-- Matches owner names from `staging.parcels` (GIS `owner_full` field) against `staging.assessment_properties` owner records
-- Joins on PIDN (strongest link — same parcel across both sources)
-- Falls back to name + address fuzzy matching (pg_trgm) for records without a PIDN match
-- **Future fallback (after AddressPts layer is loaded):** When PROPADR is messy or missing, match owner mailing addresses against `staging.address_points` for geocoded resolution. This is a second-chance geocoder that comes free from the GIS portal.
-- This already provides meaningful value: unified ownership across the two largest datasets
+**MVP resolution (parcels + assessment + PLCB):**
+- **Core match:** GIS `owner_full` against assessment `owner_name` via PIDN join (tier: parcel_link, 0.95)
+- **Fuzzy fallback:** Name + address similarity scoped by municipality (tiers: exact, strong, fuzzy_name)
+- **Address point bridge:** When `staging.address_points` has data, unmatched assessment records are geocoded through address points → `ST_Within` → parcel PIDN
+- **PLCB cross-reference:** Normalized `licensee`/`premises_name` from `staging.plcb_licenses` matched against resolved owners by name + municipality (adds `source_type = 'plcb_license'` to `owner_source_links`)
+- **Entity type classification:** Heuristic regex on canonical name → person/business/trust/government
+- **Municipality scoping:** All fuzzy matches restricted to same municipality (requires municipality spatial join to have run first)
 
-**Phase 2 enriched resolution (+ deeds, business filings, licenses):**
-- Same matching logic, but with additional source tables feeding into the candidate pool
-- Each new source type gets added to the `owner_source_links.source_type` enum as its pipeline is built
-- Adding a source to resolution = adding it to the deps list and the matching query
+**Prerequisites (must run before entity resolution):**
+1. `staging.parcels` loaded with `municipality` populated (requires municipalities pipeline + spatial join enrichment)
+2. `staging.assessment_properties` loaded (when assessment pipeline is built)
+3. `staging.address_points` loaded (optional — enhances matching but not required)
+4. `staging.plcb_licenses` loaded (optional — adds cross-source links)
 
 ```python
-# MVP deps — only parcels + assessment exist at launch
-MVP_DEPS = ["parcels", "assessment_properties"]
-
-# Phase 2 deps — added one at a time as pipelines are built.
-# Dagster won't fail if these don't exist yet; use check_fn or config flag.
-PHASE2_DEPS = ["deeds", "business_filings", "pals_licenses", "plcb_licenses"]
-
 @asset(
     group_name="enrichment",
-    deps=MVP_DEPS,  # Start with MVP; add Phase 2 deps as sources come online
+    deps=["parcels_arcgis", "municipality_join"],  # Minimum deps for MVP
     description="Resolved owner entities across all available data sources",
 )
-def owners(context: AssetExecutionContext, database):
-    """Run entity resolution across all loaded source tables"""
+def owners(context: AssetExecutionContext, database: DatabaseResource):
+    """Run entity resolution across all loaded source tables."""
 
     # Detect which source tables actually have data
     available_sources = database.execute("""
         SELECT table_name FROM information_schema.tables
         WHERE table_schema = 'staging'
-        AND table_name IN ('parcels', 'assessment_properties', 'deeds',
-                           'business_filings', 'pals_licenses', 'plcb_licenses')
-    """).fetchall()
-    source_tables = [row[0] for row in available_sources]
+        AND table_name IN ('parcels', 'assessment_properties',
+                           'address_points', 'plcb_licenses',
+                           'deeds', 'business_filings', 'pals_licenses')
+    """)
+    source_tables = [row[0] for row in available_sources] if available_sources else []
     context.log.info(f"Running entity resolution against: {source_tables}")
 
-    # 1. Normalize all source names/addresses (using SQL functions)
-    # 2. Run tiered matching (exact → strong → fuzzy → parcel-link)
-    # 3. Cluster matches into entities
-    # 4. Write to public.owners + public.owner_source_links
-    # 5. Log stats: total entities, match distribution by tier
-
-    stats = database.execute_entity_resolution(source_tables)
-    context.log.info(
-        f"Resolved {stats['total_entities']} entities "
-        f"from {stats['total_source_records']} source records "
-        f"across {len(source_tables)} sources. "
-        f"Match distribution: {stats['tier_counts']}"
-    )
+    cur = database.cursor()
+    try:
+        # 1. Build candidate pairs via PIDN join + fuzzy matching (municipality-scoped)
+        # 2. If address_points available, run address point bridge for unmatched records
+        # 3. Cluster matches into entities (canonical name = most frequent normalized form)
+        # 4. Classify entity type (person/business/trust/government)
+        # 5. If plcb_licenses available, match licensees to resolved owners
+        # 6. Write to public.owners + public.owner_source_links
+        # 7. Update parcel_count on each owner
+        ...
+    finally:
+        cur.close()
 ```
 
-**MVP:** This asset depends only on `parcels` and `assessment_properties`. Dagster runs it after the weekly GIS + Assessment refresh completes (Sunday). It dynamically detects which staging tables have data, so it won't break when Phase 2 tables don't exist yet.
-
-**Phase 2:** As each new source pipeline is built and its staging table is populated, entity resolution automatically picks it up on the next run. Update the `deps` list to include the new source so Dagster waits for it before running resolution.
+**Phase 2 enriched resolution (+ deeds, business filings, licenses):**
+- Same matching logic, but with additional source tables feeding into the candidate pool
+- Each new source type gets added to `owner_source_links.source_type` as its pipeline is built
+- Adding a source to resolution = adding it to the deps list and a matching block in the SQL
+- The Dagster asset dynamically detects which tables have data, so it won't break when Phase 2 tables don't exist yet
 
 ## Known limitations and when to upgrade
 
