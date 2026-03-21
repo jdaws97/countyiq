@@ -6,6 +6,9 @@ Records: ~1,400 York County licenses (filtered from statewide CSV)
 Schedule: Monthly (1st of month, 05:00)
 """
 
+import csv as csv_mod
+from io import StringIO
+
 import requests
 from dagster import (
     asset,
@@ -58,7 +61,7 @@ def plcb_licenses(
     resp = requests.get(PLCB_CSV_URL, timeout=120)
     resp.raise_for_status()
     csv_text = resp.text
-    context.log.info(f"Downloaded {len(csv_text)} bytes")
+    context.log.info(f"Downloaded {len(resp.content)} bytes")
 
     # 2. Archive raw CSV to S3 (skipped locally if no AWS creds)
     s3.archive("bulk/plcb", csv_text, filename="licenses.csv")
@@ -114,14 +117,11 @@ def plcb_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
 @asset_check(asset=plcb_licenses)
 def plcb_no_schema_drift() -> AssetCheckResult:
     """Verify PLCB CSV headers haven't changed."""
-    import csv as csv_mod
-    from io import StringIO
-
     try:
-        resp = requests.get(PLCB_CSV_URL, timeout=30, stream=True)
-        resp.raise_for_status()
-        # Read just the first line (header), strip BOM if present
-        first_line = next(resp.iter_lines(decode_unicode=True)).lstrip("\ufeff")
+        with requests.get(PLCB_CSV_URL, timeout=30, stream=True) as resp:
+            resp.raise_for_status()
+            # Read just the first line (header), strip BOM if present
+            first_line = next(resp.iter_lines(decode_unicode=True)).lstrip("\ufeff")
         reader = csv_mod.reader(StringIO(first_line))
         actual_headers = {h.strip() for h in next(reader)}
         missing = EXPECTED_HEADERS - actual_headers
@@ -135,9 +135,15 @@ def plcb_no_schema_drift() -> AssetCheckResult:
                 "extra_headers": MetadataValue.text(str(extra) if extra else "none"),
             },
         )
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.WARN,
-            metadata={"error": MetadataValue.text(str(e))},
+            metadata={"error": MetadataValue.text(f"Network error: {e}")},
+        )
+    except StopIteration:
+        return AssetCheckResult(
+            passed=False,
+            severity=AssetCheckSeverity.WARN,
+            metadata={"error": MetadataValue.text("Empty response from PLCB CSV endpoint")},
         )
