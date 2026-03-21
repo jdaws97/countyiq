@@ -6,7 +6,7 @@
 
 | Schema | Purpose | Example Tables |
 |---|---|---|
-| `staging` | Cleaned, normalized, change-tracked data (SCD Type 2). This is where all source data lives after parsing. | `staging.parcels`, `staging.assessment_properties`, `staging.flood_zones`, `staging.crimewatch_incidents` |
+| `staging` | Cleaned, normalized, change-tracked data (SCD Type 2). This is where all source data lives after parsing. | `staging.parcels`, `staging.assessment_properties`, `staging.flood_zones`, `staging.municipalities`, `staging.structures` (BLDG_Footprint), `staging.address_points` (AddressPts), `staging.plcb_licenses` |
 | `public` | Entity-resolved output and cross-source views | `public.owners`, `public.owner_source_links`, `public.properties` (view joining staging.parcels + staging.assessment_properties) |
 | `meta` | Application metadata — NOT Dagster internals (those are in the separate `dagster` database) | `meta.infra_metrics`, `meta.pipeline_status`, `meta.data_quality_checks` |
 

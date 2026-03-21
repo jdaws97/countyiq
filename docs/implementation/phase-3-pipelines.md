@@ -35,9 +35,9 @@ Build each source, test it locally, then move to the next. Start with the simple
 | 1 | PLCB Liquor Licenses | 22 | CSV download | Easy | Bulk CSV; simplest possible pipeline. Good first test. |
 | 2 | FEMA Flood Hazard Layer | 3 | Direct download | Easy | Single file download + PostGIS import |
 | 3 | York County GIS Portal (Parcels) | 1 | ArcGIS REST API | Medium | Pagination, coordinate transform, 176K records. Core dataset. |
-| 4a | GIS: Municipal_Boundary | 1 | ArcGIS REST API | Easy | 72 polygons. **Blocks municipality on parcels** — spatial join enrichment populates `staging.parcels.municipality`. Must run before entity resolution. |
-| 4b | GIS: AddressPts | 1 | ArcGIS REST API | Easy | ~100K+ geocoded points. Entity resolution fallback when PROPADR is messy. Canonical address list for `/api/search`. Clickable map targets at low zoom. |
-| 4c | GIS: BLDG_Footprint | 1 | ArcGIS REST API | Easy | ~213K building polygons. Biggest visual upgrade to the map. Vacancy detection (parcel with no footprint). Assessment discrepancy analysis (footprint sqft vs assessed area). |
+| 4a | GIS: Municipal_Boundary | 1 | ArcGIS REST API | Easy | 72 polygons. **Blocks municipality on parcels** — spatial join enrichment populates `staging.parcels.municipality`. Must run before entity resolution. Table: `staging.municipalities` (migration 001). |
+| 4b | GIS: AddressPts | 1 | ArcGIS REST API | Easy | ~100K+ geocoded points. Backend-only (not a map layer). Entity resolution fallback when PROPADR is messy. Canonical address list for `/api/search`. **Needs new Alembic migration for `staging.address_points`.** |
+| 4c | GIS: BLDG_Footprint | 1 | ArcGIS REST API | Easy | ~213K building polygons. Biggest visual upgrade to the map. Vacancy detection (parcel with no footprint). Assessment discrepancy analysis (footprint sqft vs assessed area). Table: `staging.structures` (migration 004). |
 | 4d | GIS: Other layers (zoning, school districts) | 1 | ArcGIS REST API | Easy | Same pattern as above, different endpoints |
 | 5 | PA Open Data Portal | 4 | SODA API | Medium | Different API pattern (SODA vs ArcGIS) |
 | 6 | PennDOT Open Data | 5 | ArcGIS REST API | Medium | Same ArcGIS pattern as #3. ⚠️ Not live-tested — verify the endpoint responds before building. If it's down, skip and revisit; the other 5 MVP sources are sufficient for launch. |
