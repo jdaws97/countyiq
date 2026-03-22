@@ -14,13 +14,14 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 class TestParidToPidn:
     def test_standard_conversion(self):
-        assert parid_to_pidn("460000001000100000") == "4600001001000"
+        # Real PARID from portal: 46-000-01-0001.00-00000
+        assert parid_to_pidn("460000100010000000") == "4600000100000"
 
     def test_another_district(self):
-        assert parid_to_pidn("010000023004500000") == "0100023045000"
+        assert parid_to_pidn("010002300450000000") == "0100200500000"
 
     def test_parid_with_letters(self):
-        assert parid_to_pidn("24000K0F0012A00000") == "2400KF012A000"
+        assert parid_to_pidn("24000KF0012A000000") == "2400K002A0000"
 
     def test_short_input_returns_empty(self):
         assert parid_to_pidn("123") == ""
@@ -53,7 +54,7 @@ class TestParseSearchResults:
         with open(os.path.join(FIXTURES, "assessment_search_results.html")) as f:
             html = f.read()
         row = parse_search_results_page(html)[0]
-        assert row["parid"] == "460000001000100000"
+        assert row["parid"] == "460000100010000000"
         assert row["owner_name"] == "PABON SOPHIA"
         assert row["address"] == "144 FINDLAY ST N"
         assert row["property_class"] == "R"
