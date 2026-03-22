@@ -6,6 +6,7 @@ import pytest
 from countyiq.lib.parsers.assessment import (
     parid_to_pidn,
     parse_search_results_page,
+    parse_printable_summary,
     get_total_found,
 )
 
@@ -70,3 +71,48 @@ class TestParseSearchResults:
             html = f.read()
         row = parse_search_results_page(html)[1]
         assert row["owner_name"] == "GORDON GREGORY R & TAMMY J"
+
+
+class TestParsePrintableSummary:
+    @pytest.fixture
+    def summary_html(self):
+        with open(os.path.join(FIXTURES, "assessment_printable_summary.html")) as f:
+            return f.read()
+
+    def test_extracts_municipality(self, summary_html):
+        result = parse_printable_summary(summary_html)
+        assert "SPRINGETTSBURY" in result["municipality"]
+
+    def test_extracts_school_district(self, summary_html):
+        result = parse_printable_summary(summary_html)
+        assert "YORK SUBURBAN" in result["school_district"]
+
+    def test_extracts_assessed_values(self, summary_html):
+        result = parse_printable_summary(summary_html)
+        assert result["assessed_land"] == 28530
+        assert result["assessed_building"] == 79670
+        assert result["assessed_total"] == 108200
+
+    def test_extracts_land_use_code(self, summary_html):
+        result = parse_printable_summary(summary_html)
+        assert result["land_use_code"] == "102"
+
+    def test_extracts_sale_info(self, summary_html):
+        result = parse_printable_summary(summary_html)
+        assert result["sale_date"] == "08-08-2018"
+        assert result["sale_price"] == 160000
+
+    def test_permits_is_list(self, summary_html):
+        result = parse_printable_summary(summary_html)
+        assert isinstance(result["permits"], list)
+        assert len(result["permits"]) >= 1
+        assert "permit_date" in result["permits"][0]
+
+    def test_delinquent_taxes_is_list(self, summary_html):
+        result = parse_printable_summary(summary_html)
+        assert isinstance(result["delinquent_taxes"], list)
+
+    def test_value_history_is_list(self, summary_html):
+        result = parse_printable_summary(summary_html)
+        assert isinstance(result["value_history"], list)
+        assert len(result["value_history"]) >= 1
