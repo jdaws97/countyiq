@@ -68,6 +68,10 @@ class CountyConfig:
     fema_dfirm_id: str = ""          # County DFIRM ID for filtering
     fema_min_records: int = 100      # Minimum expected records (truncation guard)
 
+    # Tax Claim Bureau (Delinquent Tax Listing PDF)
+    tax_claims_pdf_url: str = ""       # DocumentCenter PDF URL
+    tax_claims_min_records: int = 5000  # Truncation guard (unique parcels)
+
     # S3 archive prefix (raw data goes to s3://york-county-raw/<prefix>/...)
     s3_prefix: str = ""
 
@@ -93,9 +97,9 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         assessment_min_records=150000,
         soda_datasets=(
             # (dataset_id, county_filter_field, county_filter_value, record_id_field)
-            ("xvd7-5r2c", "county", "YORK", ":id"),  # Registered Businesses in PA Current by County
+            ("xvd7-5r2c", "shortcountyname", "York", ":id"),  # Registered Businesses in PA Current by County
         ),
-        soda_min_records=100,
+        soda_min_records=10000,
         penndot_roads_url="https://gis.penndot.gov/arcgis/rest/services/opendata/roadwaysegments/MapServer/0",
         penndot_roads_cty_code="67",
         penndot_roads_min_records=1000,
@@ -107,6 +111,8 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         fema_flood_layer=28,
         fema_dfirm_id="42133C",
         fema_min_records=3000,
+        tax_claims_pdf_url="https://yorkcountypa.gov/DocumentCenter/View/1911/Delinquent-Tax-Claim-Listing-PDF",
+        tax_claims_min_records=5000,
         s3_prefix="york",
     ),
 }
