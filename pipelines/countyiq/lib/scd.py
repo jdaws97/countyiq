@@ -9,6 +9,7 @@ Implements Slowly Changing Dimension Type 2:
 import json
 
 from dagster import get_dagster_logger
+from psycopg2.extras import execute_batch
 
 
 def scd2_upsert(
@@ -85,7 +86,7 @@ def _scd2_upsert_inner(cursor, fqn, all_columns, key_columns, value_columns, rec
                 val = json.dumps(val)
             row.append(val)
         rows.append(row)
-    cursor.executemany(insert_sql, rows)
+    execute_batch(cursor, insert_sql, rows, page_size=1000)
 
     key_join = " AND ".join(f"c.{k} = t.{k}" for k in key_columns)
     value_diff = " OR ".join(

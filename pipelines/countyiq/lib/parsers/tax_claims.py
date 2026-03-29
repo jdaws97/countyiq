@@ -120,10 +120,15 @@ def parse_tax_claims_text(text: str) -> list[dict]:
                 report_date = datetime.strptime(m.group(1), "%m/%d/%Y").date()
                 continue
 
-        # Skip non-data lines
+        # Skip non-data lines; reset parcel state on district totals
         if _SKIP.match(line):
             owner_line_pending = False
             address_line_pending = False
+            # District totals are followed by orphan COUNTY/SCHOOL/MUNICIPAL
+            # lines that look like authority rows. Clear parcel state so they
+            # don't attach to the last property.
+            if "TOTAL FOR DISTRICT" in line or "TOTAL PARCEL" in line or "GRAND TOTAL" in line:
+                current_parcel_id = ""
             continue
 
         # District header
@@ -212,7 +217,7 @@ def parse_tax_claims_text(text: str) -> list[dict]:
 
         # Year + authority continuation (new year for same property)
         m = _YEAR_AUTH_LINE.match(line)
-        if m:
+        if m and current_parcel_id:
             current_year = int(m.group(1))
             records.append(_make_record(
                 m, 2, current_parcel_id, current_pidn, current_unit,
@@ -223,7 +228,7 @@ def parse_tax_claims_text(text: str) -> list[dict]:
 
         # Authority-only continuation (same year, next authority)
         m = _AUTH_ONLY_LINE.match(line)
-        if m:
+        if m and current_parcel_id:
             records.append(_make_record(
                 m, 1, current_parcel_id, current_pidn, current_unit,
                 current_year, district_code, district_name,
@@ -231,7 +236,19 @@ def parse_tax_claims_text(text: str) -> list[dict]:
             ))
             continue
 
-    return records
+    # Deduplicate by composite key — keep the record with the higher total
+    # (a few parcels appear twice in the report due to page breaks or
+    # cross-district entries; ~0.02% of records)
+    seen: dict[tuple, int] = {}
+    for i, r in enumerate(records):
+        key = (r["pidn"], r["unit_suffix"], r["tax_year"], r["authority_name"])
+        if key in seen:
+            prev_idx = seen[key]
+            if abs(r["total"]) > abs(records[prev_idx]["total"]):
+                seen[key] = i
+        else:
+            seen[key] = i
+    return [records[i] for i in sorted(seen.values())]
 
 
 def _make_record(
