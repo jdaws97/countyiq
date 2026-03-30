@@ -1,7 +1,5 @@
 """County Scout discovery and monitoring assets."""
 
-from __future__ import annotations
-
 import os
 
 from dagster import (
