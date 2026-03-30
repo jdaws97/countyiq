@@ -172,7 +172,7 @@ export default function MunicipalityList() {
                     transition: 'background 0.15s ease',
                     cursor: 'pointer',
                   }}
-                  onClick={() => navigate(`/delinquent?municipality=${encodeURIComponent(muni.name)}`)}
+                  onClick={() => navigate(`/municipalities/${encodeURIComponent(muni.name)}`)}
                   onMouseEnter={(e) => {
                     ;(e.currentTarget as HTMLDivElement).style.background =
                       'var(--bg-card-hover)'
