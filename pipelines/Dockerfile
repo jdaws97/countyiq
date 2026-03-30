@@ -27,4 +27,4 @@ COPY pipelines/dagster.yaml /opt/dagster/home/dagster.yaml
 EXPOSE 3000
 
 # Run Dagster webserver + daemon together
-CMD ["sh", "-c", "dagster-daemon run & dagster-webserver -h 0.0.0.0 -p 3000 -m countyiq.definitions"]
+CMD ["sh", "-c", "dagster-daemon run -m countyiq.definitions & dagster-webserver -h 0.0.0.0 -p 3000 -m countyiq.definitions"]
