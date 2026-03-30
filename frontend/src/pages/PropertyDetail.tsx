@@ -63,7 +63,9 @@ export default function PropertyDetail() {
         {/* Back + Actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <button onClick={() => navigate(-1)} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>&larr; Back</button>
-          <Link to={`/map?lat=39.95&lng=-76.73&zoom=16`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 4 }}>View on Map</Link>
+          {p.lat && p.lng && (
+            <Link to={`/map?lat=${p.lat}&lng=${p.lng}&zoom=18&highlight=${p.pidn}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 4 }}>View on Map</Link>
+          )}
         </div>
 
         {/* Header */}

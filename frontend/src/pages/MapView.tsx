@@ -124,6 +124,18 @@ export default function MapView() {
     }))
   })
 
+  // Highlight a specific parcel (from URL param, auto-clears after 5s)
+  const [highlightPidn, setHighlightPidn] = useState<string | null>(
+    () => searchParams.get('highlight')
+  )
+
+  useEffect(() => {
+    if (highlightPidn) {
+      const timer = setTimeout(() => setHighlightPidn(null), 8000)
+      return () => clearTimeout(timer)
+    }
+  }, [highlightPidn])
+
   const [parcelFilter, setParcelFilter] = useState<'all' | 'delinquent' | 'vacant' | 'vacant_delinquent'>(
     () => {
       const layer = searchParams.get('layer')
@@ -294,13 +306,19 @@ export default function MapView() {
           stroked: true,
           filled: true,
           getFillColor: (f: any) => {
+            // Bright highlight for targeted parcel
+            if (highlightPidn && f.properties?.pidn === highlightPidn) return [255, 215, 0, 200]
             if (parcelFilter === 'vacant') return [61, 189, 111, 120]
             const delinquent = f.properties?.delinquent_total
             if (delinquent && delinquent > 0) return [224, 82, 82, 120]
             return [96, 165, 250, 40]
           },
-          getLineColor: parcelFilter === 'vacant' ? [61, 189, 111, 150] as any : [96, 165, 250, 100] as any,
-          getLineWidth: 1,
+          getLineColor: (f: any) => {
+            if (highlightPidn && f.properties?.pidn === highlightPidn) return [255, 215, 0, 255]
+            if (parcelFilter === 'vacant') return [61, 189, 111, 150]
+            return [96, 165, 250, 100]
+          },
+          getLineWidth: (f: any) => highlightPidn && f.properties?.pidn === highlightPidn ? 3 : 1,
           lineWidthUnits: 'pixels' as const,
           pickable: true,
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
@@ -397,7 +415,7 @@ export default function MapView() {
     }
 
     return result
-  }, [layers, geoData, parcelData, currentZoom, handleParcelClick, parcelFilter])
+  }, [layers, geoData, parcelData, currentZoom, handleParcelClick, parcelFilter, highlightPidn])
 
   const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
   const showZoomMessage = parcelsEnabled && currentZoom < MIN_PARCEL_ZOOM
@@ -1045,17 +1063,25 @@ function formatDate(d: string | null): string {
 function MapTooltip({ properties }: { properties: Record<string, any> }) {
   // Parcel tooltip
   if (properties.pidn) {
+    const schoolName = properties.school_dis ? (SCHOOL_DISTRICTS[properties.school_dis] || properties.school_dis) : ''
+    const className = properties.class ? (CLASS_NAMES[properties.class] || properties.class) : ''
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
         <div style={{ fontWeight: 600, marginBottom: 2 }}>{properties.owner_full || 'Unknown Owner'}</div>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
           {properties.propadr || 'No address'}
         </div>
-        {properties.aprtotal != null && (
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)' }}>
-            {fmtDollar(properties.aprtotal)}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+          {properties.aprtotal != null && <span style={{ color: 'var(--accent-blue)' }}>{fmtDollar(properties.aprtotal)}</span>}
+          {className && <span style={{ color: 'var(--text-muted)' }}>{className}</span>}
+          {schoolName && <span style={{ color: 'var(--text-muted)' }}>{schoolName}</span>}
+        </div>
+        {properties.delinquent_total > 0 && (
+          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent-red)', marginTop: 4 }}>
+            Delinquent: {fmtDollar(properties.delinquent_total)}
           </div>
         )}
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>Click for details</div>
       </div>
     )
   }

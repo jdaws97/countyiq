@@ -92,14 +92,16 @@ def parcels_bbox(
 def parcel_detail(pidn: str) -> dict:
     """Full property report card for a single parcel."""
     with get_cursor() as cur:
-        # Core parcel data
+        # Core parcel data + centroid for map linking
         cur.execute("""
             SELECT pidn, owner_full, own_name1, own_name2, prev_owner,
                    propadr, mail_addr_full, municipality, school_dis,
                    class, luc, acres, style, num_stories, res_living_area,
                    yrblt, heatsys, fuel, clean_green, grade, cdu,
                    aprland, aprbldg, aprtotal, saledt, price, prev_price,
-                   deed_bk, deed_pg, comm_struc, comm_year_built, comm_building_sq_ft
+                   deed_bk, deed_pg, comm_struc, comm_year_built, comm_building_sq_ft,
+                   ST_Y(ST_Centroid(geom)) AS lat,
+                   ST_X(ST_Centroid(geom)) AS lng
             FROM staging.parcels
             WHERE pidn = %(pidn)s AND valid_to IS NULL
         """, {"pidn": pidn})
@@ -158,7 +160,7 @@ def parcel_detail(pidn: str) -> dict:
 
     # Build response
     p = dict(parcel)
-    for key in ("aprland", "aprbldg", "aprtotal", "price", "prev_price", "acres"):
+    for key in ("aprland", "aprbldg", "aprtotal", "price", "prev_price", "acres", "lat", "lng"):
         if p.get(key):
             p[key] = float(p[key])
 

@@ -140,7 +140,8 @@ export default function SearchBar() {
               }}
               onMouseDown={() => {
                 if (r.lat && r.lng) {
-                  navigate(`/map?lat=${r.lat}&lng=${r.lng}&zoom=16`)
+                  const pidn = (r as any).pidn || ''
+                  navigate(`/map?lat=${r.lat}&lng=${r.lng}&zoom=17${pidn ? `&highlight=${pidn}` : ''}`)
                 }
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
