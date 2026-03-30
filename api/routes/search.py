@@ -53,9 +53,9 @@ def search(
         """, {"q": search_term, "limit": limit})
         tax_owners = cur.fetchall()
 
-        # PLCB licensees
+        # PLCB licensees (active only, deduplicated by premises)
         cur.execute("""
-            SELECT
+            SELECT DISTINCT ON (COALESCE(premises_name, licensee))
                 'license' AS result_type,
                 COALESCE(premises_name, licensee) AS title,
                 license_type || ' · ' || municipality AS subtitle,
@@ -63,8 +63,9 @@ def search(
                 similarity(COALESCE(premises_name, licensee), %(q)s) AS score
             FROM staging.plcb_licenses
             WHERE valid_to IS NULL
+              AND UPPER(status) = 'ACTIVE'
               AND (premises_name %% %(q)s OR licensee %% %(q)s)
-            ORDER BY score DESC
+            ORDER BY COALESCE(premises_name, licensee), score DESC
             LIMIT %(limit)s
         """, {"q": search_term, "limit": limit})
         licenses = cur.fetchall()
