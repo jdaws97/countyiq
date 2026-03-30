@@ -128,20 +128,24 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
     """Standard pg_trgm fuzzy matching across all sources."""
     with get_cursor() as cur:
         cur.execute("""
-            SELECT DISTINCT ON (owner_full)
-                'parcel' AS result_type,
-                owner_full AS title,
-                pidn || ' · ' || COALESCE(propadr, '') AS subtitle,
-                NULL::float AS lat, NULL::float AS lng,
-                CASE
-                    WHEN UPPER(owner_full) LIKE '%%' || UPPER(%(q)s) || '%%' THEN 1.0
-                    WHEN UPPER(owner_full) LIKE UPPER(SPLIT_PART(%(q)s, ' ', 2)) || '%%' THEN 0.85
-                    ELSE similarity(owner_full, %(q)s)
-                END AS score,
-                pidn
-            FROM staging.parcels
-            WHERE valid_to IS NULL AND owner_full %% %(q)s
-            ORDER BY owner_full, score DESC
+            SELECT result_type, title, subtitle, lat, lng, score, pidn FROM (
+                SELECT DISTINCT ON (owner_full)
+                    'parcel' AS result_type,
+                    owner_full AS title,
+                    pidn || ' · ' || COALESCE(propadr, '') AS subtitle,
+                    NULL::float AS lat, NULL::float AS lng,
+                    CASE
+                        WHEN UPPER(owner_full) LIKE '%%' || UPPER(%(q)s) || '%%' THEN 1.0
+                        WHEN UPPER(owner_full) LIKE UPPER(SPLIT_PART(%(q)s, ' ', 2)) || '%%' THEN 0.85
+                        ELSE similarity(owner_full, %(q)s)
+                    END AS score,
+                    pidn,
+                    owner_full
+                FROM staging.parcels
+                WHERE valid_to IS NULL AND owner_full %% %(q)s
+                ORDER BY owner_full, score DESC
+            ) sub
+            ORDER BY score DESC
             LIMIT %(limit)s
         """, {"q": search_term, "limit": limit})
         parcel_owners = cur.fetchall()

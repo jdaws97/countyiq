@@ -142,7 +142,14 @@ def parse_query_with_llm(query: str) -> dict | None:
                 print(f"LLM {model}: {resp.status_code}, trying next...", file=sys.stderr)
                 continue
             resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
+            choices = resp.json().get("choices", [])
+            if not choices:
+                continue
+            content = choices[0].get("message", {}).get("content")
+            if not content:
+                import sys
+                print(f"LLM {model}: empty response", file=sys.stderr)
+                continue
 
             content = content.strip()
             if content.startswith("```"):
