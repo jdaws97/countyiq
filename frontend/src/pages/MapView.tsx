@@ -188,6 +188,12 @@ export default function MapView() {
       viewStateRef.current = viewState
       setCurrentZoom(viewState.zoom)
 
+      // Clear hover/selection when zooming out past parcel threshold
+      if (viewState.zoom < MIN_PARCEL_ZOOM) {
+        setHoverInfo(null)
+        setSelectedParcel(null)
+      }
+
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
         const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
