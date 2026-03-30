@@ -54,7 +54,12 @@ NOTE: Only has registration type (LLC, Corp, etc.), NOT industry/business type. 
 - ST_MakeEnvelope(west, south, east, north, 4326) — bounding box
 - Vacant land: NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND ST_Intersects(s.geom, p.geom))
 - Flood zone check: EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, p.geom))
-- NO zip code data available in parcels or address_points. Use municipality names or tax_district_name for area filtering.
+### 10. staging.zipcodes — 51 zip code polygons with geometry
+Key columns: zipcode (VARCHAR, e.g. "17404"), po_name (e.g. "YORK", "ETTERS", "HANOVER")
+York County zip codes: 17301-17408 (plus 17011, 17019, 17055, 17070 on the border)
+Use ST_Intersects to find parcels/licenses within a zip code:
+  pidn IN (SELECT p.pidn FROM staging.parcels p JOIN staging.zipcodes z ON ST_Intersects(p.geom, z.geom) WHERE z.zipcode = '17404')
+For PLCB: premises_address LIKE '%17404%' (zip embedded in address string)
 
 ## York County Geography
 - 72 municipalities: mix of townships (TWP), boroughs (BORO), and York City
@@ -135,4 +140,5 @@ ALLOWED_TABLES = {
     "penndot_projects": "staging.penndot_projects",
     "penndot_roads": "staging.penndot_roads",
     "pa_open_data": "staging.pa_open_data",
+    "zipcodes": "staging.zipcodes",
 }
