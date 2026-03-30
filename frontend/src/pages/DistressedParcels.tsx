@@ -54,7 +54,15 @@ export default function DistressedParcels() {
   const [page, setPage] = useState(0)
   const PAGE_SIZE = 200
 
+  // Cache results to avoid re-fetching on back navigation
+  const cacheKey = `distressed_${classFilter}_${minAcres}`
   const fetchPage = (pageNum: number, append: boolean) => {
+    const cached = (window as any).__distressedCache?.[cacheKey]
+    if (cached && !append) {
+      setParcels(cached)
+      setLoading(false)
+      return
+    }
     append ? setLoadingMore(true) : setLoading(true)
     const params = new URLSearchParams({ limit: String(PAGE_SIZE), min_score: '0.2' })
     if (classFilter) params.set('parcel_class', classFilter)
@@ -68,6 +76,9 @@ export default function DistressedParcels() {
           setParcels(prev => [...prev, ...items])
         } else {
           setParcels(items)
+          // Cache
+          if (!(window as any).__distressedCache) (window as any).__distressedCache = {}
+          ;(window as any).__distressedCache[cacheKey] = items
         }
         setLoading(false)
         setLoadingMore(false)
@@ -130,14 +141,14 @@ export default function DistressedParcels() {
         {!loading && parcels.length > 0 && (
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', animation: 'fadeUp 0.4s ease 0.2s both' }}>
             {/* Header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '55px 1fr 120px 100px 100px 70px 90px', padding: '10px 16px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '55px 1fr 120px 100px 100px 70px 90px', padding: '12px 20px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
               <div>Score</div><div>Owner / Address</div><div>District</div><div style={{ textAlign: 'right' }}>Owed</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div style={{ textAlign: 'right' }}>Class</div>
             </div>
 
             {parcels.map((p, i) => (
               <Link key={p.pidn} to={`/property/${p.pidn}`} style={{
                 display: 'grid', gridTemplateColumns: '55px 1fr 120px 100px 100px 70px 90px',
-                padding: '12px 16px', alignItems: 'center', textDecoration: 'none', color: 'inherit',
+                padding: '14px 20px', alignItems: 'center', textDecoration: 'none', color: 'inherit',
                 background: i % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
                 borderTop: '1px solid var(--border)', transition: 'background 0.15s',
               }}

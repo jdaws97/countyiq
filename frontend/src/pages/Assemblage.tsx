@@ -32,10 +32,23 @@ export default function Assemblage() {
   const [expanded, setExpanded] = useState<string | null>(null)
 
   useEffect(() => {
+    const cacheKey = `assemblage_${minParcels}`
+    const cached = (window as any).__assemblageCache?.[cacheKey]
+    if (cached) {
+      setClusters(cached)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     fetch(`/api/scores/assemblage?min_parcels=${minParcels}&min_acres=0.5&limit=50`)
       .then(r => r.json())
-      .then(d => { setClusters(d.clusters || []); setLoading(false) })
+      .then(d => {
+        const items = d.clusters || []
+        setClusters(items)
+        if (!(window as any).__assemblageCache) (window as any).__assemblageCache = {}
+        ;(window as any).__assemblageCache[cacheKey] = items
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [minParcels])
 
@@ -87,8 +100,8 @@ export default function Assemblage() {
               <div
                 onClick={() => setExpanded(isExpanded ? null : c.seed_pidn)}
                 style={{
-                  display: 'grid', gridTemplateColumns: '1fr 100px 100px 100px 80px 80px',
-                  padding: '16px 20px', alignItems: 'center', cursor: 'pointer',
+                  display: 'grid', gridTemplateColumns: '1fr 90px 90px 90px 80px 100px',
+                  padding: '18px 24px', alignItems: 'center', cursor: 'pointer',
                   background: 'var(--bg-panel)', transition: 'background 0.15s',
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-card-hover)' }}
