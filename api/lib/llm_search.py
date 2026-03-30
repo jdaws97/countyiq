@@ -5,6 +5,12 @@ import os
 
 import requests
 
+# NOTE: This calls OpenRouter over HTTPS. In the Lambda VPC deployment,
+# Lambda can only reach RDS (no internet egress). Options:
+# 1. Move LLM call to a non-VPC Lambda function
+# 2. Add NAT Gateway (~$32/mo)
+# 3. Use VPC endpoint for the LLM service
+# For local dev and pre-deployment, this works as-is.
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Free first, then newest cheap paid models
 MODELS = [
@@ -21,8 +27,8 @@ Your job: given a user query, return a JSON object that tells the system what to
 
 ### 1. staging.parcels — 176,059 property parcels
 Key columns: pidn (VARCHAR PK), owner_full (TEXT — format: "LAST FIRST M", e.g. "DAWS JAROD N & MILLER COURTNEY M"), propadr (TEXT — street address only, no city/zip), class (CHAR: R=Residential 150K, F=Farm 11K, C=Commercial 6K, E=Exempt 5K, I=Industrial 2K, A=Agricultural 1K, U=Utility 135), acres (NUMERIC), aprtotal (TEXT — assessed total value, cast to numeric for sorting/filtering), saledt (TEXT — format "22-NOV-2024"), price (TEXT — sale price, cast to numeric), school_dis (VARCHAR — code like "002", "030"), prev_owner, prev_price
-NOTE: municipality column is NULL for all parcels. Use municipality names from staging.municipalities geometry via spatial join if needed, or use school_dis as a proxy for area.
-NOTE: No zip codes in parcels. No year_built, style, or living_area data.
+NOTE: municipality column is often NULL for parcels. Use school_dis as area proxy, or join staging.zipcodes/staging.municipalities spatially.
+NOTE: year_built, style, living_area are mostly NULL in GIS data (assessment fields not populated).
 
 ### 2. staging.tax_claims — 36,831 delinquent tax records
 Key columns: pidn, owner_name, property_address, tax_district_name (e.g. "YORK CITY 1ST WARD", "CARROLL TOWNSHIP"), tax_year (INT, range 2000-2026), authority_name (COUNTY/SCHOOL/MUNICIPAL), total (NUMERIC — net amount owed), tax_district_code

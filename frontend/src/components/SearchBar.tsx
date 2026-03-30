@@ -36,8 +36,10 @@ export default function SearchBar() {
     debounceRef.current = setTimeout(() => {
       fetch(`/api/search?q=${encodeURIComponent(query.trim())}&limit=10`)
         .then(r => r.json())
-        .then((data: SearchResult[]) => {
-          setResults(data)
+        .then((data: any) => {
+          // API returns {mode, results, ...} — extract the results array
+          const items = Array.isArray(data) ? data : (data.results || [])
+          setResults(items)
           setShowResults(true)
           setLoading(false)
         })

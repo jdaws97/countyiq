@@ -127,6 +127,39 @@ def _trgm_search_with_reversal(search_term: str, limit: int) -> list[dict]:
 def _trgm_search(search_term: str, limit: int) -> list[dict]:
     """Standard pg_trgm fuzzy matching across all sources."""
     with get_cursor() as cur:
+        # Exact PIDN lookup (if search looks like a PIDN)
+        pidn_results: list = []
+        stripped = search_term.replace("-", "").replace(".", "").replace(" ", "")
+        if len(stripped) >= 10 and stripped[:2].isdigit():
+            cur.execute("""
+                SELECT 'parcel' AS result_type,
+                       owner_full AS title,
+                       pidn || ' · ' || COALESCE(propadr, '') AS subtitle,
+                       NULL::float AS lat, NULL::float AS lng,
+                       1.0 AS score, pidn
+                FROM staging.parcels
+                WHERE valid_to IS NULL AND pidn = %(q)s
+                LIMIT 1
+            """, {"q": stripped})
+            pidn_results = cur.fetchall()
+
+        # Parcel address search (if search contains a number — likely an address)
+        address_parcel_results: list = []
+        if any(c.isdigit() for c in search_term) and not pidn_results:
+            cur.execute("""
+                SELECT 'parcel' AS result_type,
+                       owner_full AS title,
+                       pidn || ' · ' || propadr AS subtitle,
+                       NULL::float AS lat, NULL::float AS lng,
+                       similarity(propadr, %(q)s) AS score, pidn
+                FROM staging.parcels
+                WHERE valid_to IS NULL AND propadr %% %(q)s
+                ORDER BY similarity(propadr, %(q)s) DESC
+                LIMIT %(limit)s
+            """, {"q": search_term.upper(), "limit": limit})
+            address_parcel_results = cur.fetchall()
+
+        # Owner name search
         cur.execute("""
             SELECT result_type, title, subtitle, lat, lng, score, pidn FROM (
                 SELECT DISTINCT ON (owner_full)
@@ -149,60 +182,90 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
             LIMIT %(limit)s
         """, {"q": search_term, "limit": limit})
         parcel_owners = cur.fetchall()
+        parcel_owners = [dict(r) for r in pidn_results + address_parcel_results + parcel_owners]
 
-        cur.execute("""
-            SELECT
-                'address' AS result_type,
-                CONCAT_WS(' ', add_number, street_name, st_pos_typ) AS title,
-                inc_muni AS subtitle,
-                lat, long AS lng,
-                similarity(CONCAT_WS(' ', add_number, street_name, st_pos_typ), %(q)s) AS score
-            FROM staging.address_points
-            WHERE valid_to IS NULL
-              AND CONCAT_WS(' ', add_number, street_name, st_pos_typ) %% %(q)s
-            ORDER BY score DESC
-            LIMIT %(limit)s
-        """, {"q": search_term, "limit": limit})
-        addresses = cur.fetchall()
+        # Each source wrapped in try/except — missing tables degrade gracefully
+        addresses: list = []
+        try:
+            cur.execute("""
+                SELECT
+                    'address' AS result_type,
+                    CONCAT_WS(' ', add_number, street_name, st_pos_typ) AS title,
+                    inc_muni AS subtitle,
+                    lat, long AS lng,
+                    similarity(CONCAT_WS(' ', add_number, street_name, st_pos_typ), %(q)s) AS score
+                FROM staging.address_points
+                WHERE valid_to IS NULL
+                  AND CONCAT_WS(' ', add_number, street_name, st_pos_typ) %% %(q)s
+                ORDER BY score DESC
+                LIMIT %(limit)s
+            """, {"q": search_term, "limit": limit})
+            addresses = cur.fetchall()
+        except Exception:
+            cur.execute("ROLLBACK")
 
-        cur.execute("""
-            SELECT
-                'tax_claim' AS result_type,
-                owner_name AS title,
-                tax_district_name || ' · ' || COUNT(DISTINCT pidn) || ' parcels · $' ||
-                    TRIM(TO_CHAR(SUM(CASE WHEN total > 0 THEN total ELSE 0 END), 'FM999,999,999')) AS subtitle,
-                NULL::float AS lat, NULL::float AS lng,
-                similarity(owner_name, %(q)s) AS score
-            FROM staging.tax_claims
-            WHERE valid_to IS NULL AND owner_name %% %(q)s
-            GROUP BY owner_name, tax_district_name
-            ORDER BY score DESC
-            LIMIT %(limit)s
-        """, {"q": search_term, "limit": limit})
-        tax_owners = cur.fetchall()
+        tax_owners: list = []
+        try:
+            cur.execute("""
+                SELECT
+                    'tax_claim' AS result_type,
+                    owner_name AS title,
+                    tax_district_name || ' · ' || COUNT(DISTINCT pidn) || ' parcels · $' ||
+                        TRIM(TO_CHAR(SUM(CASE WHEN total > 0 THEN total ELSE 0 END), 'FM999,999,999')) AS subtitle,
+                    NULL::float AS lat, NULL::float AS lng,
+                    similarity(owner_name, %(q)s) AS score
+                FROM staging.tax_claims
+                WHERE valid_to IS NULL AND owner_name %% %(q)s
+                GROUP BY owner_name, tax_district_name
+                ORDER BY score DESC
+                LIMIT %(limit)s
+            """, {"q": search_term, "limit": limit})
+            tax_owners = cur.fetchall()
+        except Exception:
+            cur.execute("ROLLBACK")
 
-        cur.execute("""
-            SELECT DISTINCT ON (COALESCE(premises_name, licensee))
-                'license' AS result_type,
-                COALESCE(premises_name, licensee) AS title,
-                license_type || ' · ' || municipality AS subtitle,
-                NULL::float AS lat, NULL::float AS lng,
-                similarity(COALESCE(premises_name, licensee), %(q)s) AS score
-            FROM staging.plcb_licenses
-            WHERE valid_to IS NULL AND UPPER(status) = 'ACTIVE'
-              AND (premises_name %% %(q)s OR licensee %% %(q)s)
-            ORDER BY COALESCE(premises_name, licensee), score DESC
-            LIMIT %(limit)s
-        """, {"q": search_term, "limit": limit})
-        licenses = cur.fetchall()
+        licenses: list = []
+        try:
+            cur.execute("""
+                SELECT DISTINCT ON (COALESCE(premises_name, licensee))
+                    'license' AS result_type,
+                    COALESCE(premises_name, licensee) AS title,
+                    license_type || ' · ' || municipality AS subtitle,
+                    NULL::float AS lat, NULL::float AS lng,
+                    similarity(COALESCE(premises_name, licensee), %(q)s) AS score
+                FROM staging.plcb_licenses
+                WHERE valid_to IS NULL AND UPPER(status) = 'ACTIVE'
+                  AND (premises_name %% %(q)s OR licensee %% %(q)s)
+                ORDER BY COALESCE(premises_name, licensee), score DESC
+                LIMIT %(limit)s
+            """, {"q": search_term, "limit": limit})
+            licenses = cur.fetchall()
+        except Exception:
+            cur.execute("ROLLBACK")
 
     all_results = [dict(r) for r in parcel_owners + addresses + tax_owners + licenses]
     all_results.sort(key=lambda r: r["score"], reverse=True)
     return all_results[:limit]
 
 
+_DANGEROUS_PATTERNS = [
+    "DROP ", "DELETE ", "UPDATE ", "INSERT ", "ALTER ", "CREATE ",
+    "TRUNCATE ", "GRANT ", "REVOKE ", "EXECUTE ", "COPY ",
+    "pg_", "information_schema", "--", "/*", "*/", "\\\\",
+    "INTO OUTFILE", "LOAD_FILE", "pg_sleep", "pg_read_file",
+]
+
+
 def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
-    """Execute a structured query from LLM intent parsing."""
+    """Execute a structured query from LLM intent parsing.
+
+    Safety measures:
+    - Table names allowlisted (no arbitrary table access)
+    - SQL fragments scanned for dangerous patterns (DDL, DML, pg_ functions)
+    - Query wrapped in read-only transaction
+    - Statement timeout of 5 seconds prevents expensive scans
+    - Errors logged, never expose SQL details to client
+    """
     table_key = intent.get("table", "")
     fqn = ALLOWED_TABLES.get(table_key)
     if not fqn:
@@ -211,6 +274,15 @@ def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
     sql_where = intent.get("sql_where", "valid_to IS NULL")
     sql_order = intent.get("sql_order", "")
     sql_limit = min(intent.get("sql_limit", limit), limit)
+
+    # Reject dangerous SQL patterns
+    for fragment in (sql_where, sql_order):
+        upper = fragment.upper()
+        for pattern in _DANGEROUS_PATTERNS:
+            if pattern.upper() in upper:
+                import sys
+                print(f"LLM query blocked: dangerous pattern '{pattern}' in: {fragment[:80]}", file=sys.stderr)
+                return None
 
     if "valid_to IS NULL" not in sql_where:
         sql_where = f"valid_to IS NULL AND ({sql_where})"
@@ -222,10 +294,15 @@ def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
 
     try:
         with get_cursor() as cur:
+            # Set statement timeout to prevent expensive scans
+            cur.execute("SET LOCAL statement_timeout = '5s'")
+            cur.execute("SET TRANSACTION READ ONLY")
             cur.execute(query)
             rows = cur.fetchall()
         return [_clean_row(dict(r)) for r in rows]
-    except Exception:
+    except Exception as e:
+        import sys
+        print(f"LLM query error: {e}", file=sys.stderr)
         return None
 
 
