@@ -98,13 +98,22 @@ For PLCB: premises_address LIKE '%17404%' (zip embedded in address string)
 - "properties sold for $1" → {"intent":"query","table":"parcels","description":"Properties with $1 sale price (potentially suspicious transfers)","sql_where":"valid_to IS NULL AND price::numeric = 1","sql_order":"saledt DESC","sql_limit":20}
 - "recent sales over 500000" → {"intent":"query","table":"parcels","description":"Recent property sales over $500,000","sql_where":"valid_to IS NULL AND price::numeric > 500000 AND saledt IS NOT NULL","sql_order":"TO_DATE(saledt, 'DD-MON-YYYY') DESC","sql_limit":20}
 - "commercial properties in dover" → {"intent":"query","table":"parcels","description":"Commercial properties in Dover area","sql_where":"valid_to IS NULL AND class = 'C' AND school_dis = '006'","sql_order":"aprtotal::numeric DESC","sql_limit":20}
+- "average property value" → {"intent":"aggregate","table":"parcels","description":"Average assessed property value in York County","sql_select":"ROUND(AVG(aprtotal::numeric))","sql_where":"valid_to IS NULL AND aprtotal IS NOT NULL","label":"Average Assessed Value","format":"currency"}
+- "how many parcels are delinquent" → {"intent":"aggregate","table":"tax_claims","description":"Number of unique delinquent parcels","sql_select":"COUNT(DISTINCT pidn)","sql_where":"valid_to IS NULL AND total > 0","label":"Delinquent Parcels","format":"number"}
+- "total delinquent taxes in dover township" → {"intent":"aggregate","table":"tax_claims","description":"Total delinquent taxes owed in Dover Township","sql_select":"ROUND(SUM(total)::numeric, 2)","sql_where":"valid_to IS NULL AND total > 0 AND UPPER(tax_district_name) LIKE 'DOVER TOWNSHIP%'","label":"Total Delinquent in Dover Township","format":"currency"}
+- "how many breweries are there" → {"intent":"aggregate","table":"plcb_licenses","description":"Active breweries in York County","sql_select":"COUNT(*)","sql_where":"valid_to IS NULL AND UPPER(status) = 'ACTIVE' AND license_type ILIKE '%brewery%'","label":"Active Breweries","format":"number"}
 
 ## Response Format
 
 Return ONLY valid JSON:
 
-For data queries:
+For data queries (return rows):
 {"intent":"query","table":"parcels","description":"Clear description including data limitations","sql_where":"WHERE clause","sql_order":"ORDER BY clause","sql_limit":20}
+
+For aggregate queries (return a single computed value — COUNT, SUM, AVG, MIN, MAX):
+{"intent":"aggregate","table":"parcels","description":"Average assessed property value in York County","sql_select":"AVG(aprtotal::numeric)","sql_where":"valid_to IS NULL AND aprtotal IS NOT NULL","label":"Average Assessed Value","format":"currency"}
+
+format can be: "currency" ($X,XXX), "number" (X,XXX), "percent" (X.X%)
 
 For name/address lookups (person names, specific addresses):
 {"intent":"lookup","search_term":"cleaned search term for pg_trgm","description":"Looking up property owner Jarod Daws"}

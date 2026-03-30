@@ -37,6 +37,18 @@ def search(
                 "results": [],
             }
 
+        if intent == "aggregate":
+            agg_result = _execute_llm_aggregate(llm_intent)
+            if agg_result is not None:
+                return {
+                    "mode": "aggregate",
+                    "description": description,
+                    "label": llm_intent.get("label", "Result"),
+                    "value": agg_result,
+                    "format": llm_intent.get("format", "number"),
+                    "results": [],
+                }
+
         if intent == "query":
             llm_results = _execute_llm_query(llm_intent, limit)
             if llm_results:
@@ -246,6 +258,53 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
     all_results = [dict(r) for r in parcel_owners + addresses + tax_owners + licenses]
     all_results.sort(key=lambda r: r["score"], reverse=True)
     return all_results[:limit]
+
+
+def _execute_llm_aggregate(intent: dict) -> str | None:
+    """Execute an aggregate query and return a formatted value."""
+    table_key = intent.get("table", "")
+    fqn = ALLOWED_TABLES.get(table_key)
+    if not fqn:
+        return None
+
+    sql_select = intent.get("sql_select", "COUNT(*)")
+    sql_where = intent.get("sql_where", "valid_to IS NULL")
+    fmt = intent.get("format", "number")
+
+    # Safety checks
+    for fragment in (sql_select, sql_where):
+        upper = fragment.upper()
+        for pattern in _DANGEROUS_PATTERNS:
+            if pattern.upper() in upper:
+                return None
+
+    if "valid_to IS NULL" not in sql_where:
+        sql_where = f"valid_to IS NULL AND ({sql_where})"
+
+    query = f"SELECT {sql_select} AS result FROM {fqn} WHERE {sql_where}"
+
+    try:
+        with get_cursor() as cur:
+            cur.execute("SET LOCAL statement_timeout = '5s'")
+            cur.execute("SET TRANSACTION READ ONLY")
+            cur.execute(query)
+            row = cur.fetchone()
+            if not row or row["result"] is None:
+                return "0"
+            val = float(row["result"])
+            if fmt == "currency":
+                if val >= 1e9:
+                    return f"${val / 1e9:.1f}B"
+                if val >= 1e6:
+                    return f"${val / 1e6:.1f}M"
+                return f"${val:,.0f}"
+            if fmt == "percent":
+                return f"{val:.1f}%"
+            return f"{val:,.0f}"
+    except Exception as e:
+        import sys
+        print(f"LLM aggregate error: {e}", file=sys.stderr)
+        return None
 
 
 _DANGEROUS_PATTERNS = [

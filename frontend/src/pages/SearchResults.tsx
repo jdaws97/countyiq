@@ -13,10 +13,13 @@ interface SearchResult {
 }
 
 interface SearchResponse {
-  mode: 'fuzzy' | 'smart' | 'redirect'
+  mode: 'fuzzy' | 'smart' | 'redirect' | 'aggregate'
   description?: string
   redirect_path?: string
   results: SearchResult[]
+  label?: string
+  value?: string
+  format?: string
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -36,6 +39,8 @@ export default function SearchResults() {
   const [results, setResults] = useState<SearchResult[]>([])
   const [mode, setMode] = useState<string>('fuzzy')
   const [description, setDescription] = useState<string>('')
+  const [aggLabel, setAggLabel] = useState<string>('')
+  const [aggValue, setAggValue] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -50,6 +55,8 @@ export default function SearchResults() {
     if (cached) {
       setMode(cached.mode)
       setDescription(cached.description)
+      setAggLabel(cached.label || '')
+      setAggValue(cached.value || '')
       setResults(cached.results)
       setLoading(false)
       return
@@ -65,10 +72,11 @@ export default function SearchResults() {
         }
         setMode(data.mode)
         setDescription(data.description || '')
+        setAggLabel(data.label || '')
+        setAggValue(data.value || '')
         setResults(data.results || [])
         setLoading(false)
-        // Cache the results
-        searchCache[query] = { mode: data.mode, description: data.description || '', results: data.results || [] }
+        searchCache[query] = { mode: data.mode, description: data.description || '', results: data.results || [], label: data.label, value: data.value }
       })
       .catch(() => setLoading(false))
   }, [query])
@@ -95,9 +103,9 @@ export default function SearchResults() {
           <p style={{
             fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-secondary)',
           }}>
-            {loading ? 'Searching...' : `${results.length} results for "${query}"`}
+            {loading ? 'Searching...' : mode === 'aggregate' ? '' : `${results.length} results for "${query}"`}
           </p>
-          {mode === 'smart' && description && (
+          {(mode === 'smart' || mode === 'aggregate') && description && (
             <p style={{
               fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-gold)',
               background: 'rgba(212, 168, 67, 0.1)', border: '1px solid rgba(212, 168, 67, 0.2)',
@@ -111,7 +119,28 @@ export default function SearchResults() {
         </div>
 
         {/* Results */}
-        {!loading && results.length === 0 && (
+        {/* Aggregate result */}
+        {!loading && mode === 'aggregate' && aggValue && (
+          <div style={{
+            animation: 'fadeUp 0.4s ease both', textAlign: 'center', padding: '60px 0',
+          }}>
+            <div style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 2,
+              textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12,
+            }}>
+              {aggLabel}
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-mono)', fontSize: 56, fontWeight: 700,
+              color: aggValue.startsWith('$') ? 'var(--accent-green)' : 'var(--accent-blue)',
+              lineHeight: 1,
+            }}>
+              {aggValue}
+            </div>
+          </div>
+        )}
+
+        {!loading && results.length === 0 && mode !== 'aggregate' && (
           <div style={{
             fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)',
             textAlign: 'center', padding: '60px 0',

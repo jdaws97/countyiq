@@ -12,6 +12,7 @@ from api.routes.layers import router as layers_router
 from api.routes.municipalities import router as municipalities_router
 from api.routes.parcels import router as parcels_router
 from api.routes.search import router as search_router
+from api.routes.owners import router as owners_router
 from api.routes.delinquent import router as delinquent_router
 from api.routes.licenses import router as licenses_router
 from api.routes.projects import router as projects_router
@@ -42,6 +43,7 @@ app.include_router(layers_router, prefix="/api/layers")
 app.include_router(municipalities_router, prefix="/api/municipalities")
 app.include_router(parcels_router, prefix="/api/parcels")
 app.include_router(search_router, prefix="/api/search")
+app.include_router(owners_router, prefix="/api/owners")
 app.include_router(delinquent_router, prefix="/api/delinquent")
 app.include_router(licenses_router, prefix="/api/licenses")
 app.include_router(projects_router, prefix="/api/projects")

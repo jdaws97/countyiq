@@ -7,6 +7,7 @@ import DelinquentOwners from './pages/DelinquentOwners'
 import LicenseBrowser from './pages/LicenseBrowser'
 import ProjectList from './pages/ProjectList'
 import PropertyDetail from './pages/PropertyDetail'
+import OwnerProfile from './pages/OwnerProfile'
 import SearchResults from './pages/SearchResults'
 import OpsHealth from './pages/OpsHealth'
 
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/licenses" element={<LicenseBrowser />} />
         <Route path="/projects" element={<ProjectList />} />
         <Route path="/property/:pidn" element={<PropertyDetail />} />
+        <Route path="/owner/:id" element={<OwnerProfile />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/ops/health" element={<OpsHealth />} />
       </Routes>
