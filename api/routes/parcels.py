@@ -175,6 +175,14 @@ def parcel_detail(pidn: str) -> dict:
 
     delinquent_total = sum(float(r["total"]) for r in tax_claims)
 
+    structure_count = structures["structure_count"] if structures else 0
+    # Multi-signal vacancy: no footprint + not high-value residential
+    likely_vacant = (
+        structure_count == 0
+        and (p.get("class") not in ("R",) or not p.get("aprtotal") or float(p.get("aprtotal") or 0) < 50000)
+        and (not p.get("price") or float(p.get("price") or 0) < 100000)
+    )
+
     return {
         "parcel": p,
         "tax_delinquency": {
@@ -188,8 +196,8 @@ def parcel_detail(pidn: str) -> dict:
             "sfha": flood["sfha_tf"] == "T" if flood else False,
         },
         "structures": {
-            "count": structures["structure_count"] if structures else 0,
-            "likely_vacant": structures["structure_count"] == 0 if structures else True,
+            "count": structure_count,
+            "likely_vacant": likely_vacant,
             "buildings": [
                 {
                     "type": r["building_type"] or "Unknown",

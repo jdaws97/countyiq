@@ -63,7 +63,11 @@ NOTE: Only has registration type (LLC, Corp, etc.), NOT industry/business type. 
 - ST_Intersects(a.geom, b.geom) — test overlap
 - ST_DWithin(a.geom, b.geom, distance) — proximity check. 1 mile ≈ 0.0145 degrees
 - ST_MakeEnvelope(west, south, east, north, 4326) — bounding box
-- Vacant land: NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND ST_Intersects(s.geom, p.geom))
+- Vacant land (MULTI-SIGNAL — always use ALL conditions together):
+  NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND s.geom IS NOT NULL AND ST_Intersects(s.geom, staging.parcels.geom))
+  AND (class NOT IN ('R') OR aprtotal IS NULL OR aprtotal::numeric < 50000)
+  AND (price IS NULL OR price::numeric < 100000)
+  IMPORTANT: building footprint data may be stale. A parcel with no footprint but high assessed value or recent expensive sale is NOT truly vacant.
 - Flood zone check: EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, p.geom))
 - Zip code filter: pidn IN (SELECT p2.pidn FROM staging.parcels p2 JOIN staging.zipcodes z ON ST_Intersects(p2.geom, z.geom) WHERE z.zipcode = '17404')
 
@@ -86,7 +90,7 @@ For PLCB: premises_address LIKE '%17404%' (zip embedded in address string)
 - "most expensive property" → {"intent":"query","table":"parcels","description":"Most expensive property by assessed value","sql_where":"valid_to IS NULL AND aprtotal IS NOT NULL","sql_order":"aprtotal::numeric DESC","sql_limit":5}
 - "breweries in 17404" → {"intent":"query","table":"plcb_licenses","description":"Breweries with liquor licenses in 17404 zip code (note: only covers licensed establishments)","sql_where":"valid_to IS NULL AND UPPER(status) = 'ACTIVE' AND license_type ILIKE '%brewery%' AND premises_address LIKE '%17404%'","sql_order":"licensee","sql_limit":20}
 - "restaurants in york city" → {"intent":"query","table":"plcb_licenses","description":"Restaurants with liquor licenses in York City (note: only covers licensed restaurants)","sql_where":"valid_to IS NULL AND UPPER(status) = 'ACTIVE' AND license_type ILIKE '%restaurant%' AND UPPER(municipality) LIKE '%YORK CITY%'","sql_order":"premises_name","sql_limit":20}
-- "vacant land that is tax delinquent" → {"intent":"query","table":"parcels","description":"Vacant parcels (no building footprint) with outstanding tax delinquency","sql_where":"valid_to IS NULL AND NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND s.geom IS NOT NULL AND ST_Intersects(s.geom, staging.parcels.geom)) AND pidn IN (SELECT tc.pidn FROM staging.tax_claims tc WHERE tc.valid_to IS NULL AND tc.total > 0)","sql_order":"aprtotal::numeric DESC","sql_limit":20}
+- "vacant land that is tax delinquent" → {"intent":"query","table":"parcels","description":"Vacant parcels (no building, not high-value residential) with outstanding tax delinquency","sql_where":"valid_to IS NULL AND NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND s.geom IS NOT NULL AND ST_Intersects(s.geom, staging.parcels.geom)) AND (class NOT IN ('R') OR aprtotal IS NULL OR aprtotal::numeric < 50000) AND (price IS NULL OR price::numeric < 100000) AND pidn IN (SELECT tc.pidn FROM staging.tax_claims tc WHERE tc.valid_to IS NULL AND tc.total > 0)","sql_order":"acres DESC","sql_limit":20}
 - "parcels in flood zone in 17401" → {"intent":"query","table":"parcels","description":"Properties in FEMA flood zones within 17401 zip code","sql_where":"valid_to IS NULL AND EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, staging.parcels.geom)) AND pidn IN (SELECT p2.pidn FROM staging.parcels p2 JOIN staging.zipcodes z ON ST_Intersects(p2.geom, z.geom) WHERE z.zipcode = '17401')","sql_order":"aprtotal::numeric DESC","sql_limit":20}
 - "who owns 123 main st" → {"intent":"query","table":"parcels","description":"Owner of 123 Main St","sql_where":"valid_to IS NULL AND UPPER(propadr) LIKE '%123 MAIN%'","sql_order":"propadr","sql_limit":5}
 - "Jarod Daws" → {"intent":"lookup","search_term":"DAWS JAROD","description":"Looking up property owner Jarod Daws (names stored as LAST FIRST)"}
