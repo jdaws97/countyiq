@@ -47,6 +47,16 @@ Examples:
 - "top delinquent owners" → {"intent":"redirect","redirect_path":"/delinquent","description":"Top delinquent property owners"}
 - "who owns 123 main st" → {"intent":"query","table":"parcels","description":"Owner of 123 Main St","sql_where":"valid_to IS NULL AND UPPER(propadr) LIKE '%123 MAIN%'","sql_order":"propadr","sql_limit":5}
 - "properties in flood zone" → {"intent":"query","table":"parcels","description":"Properties in FEMA flood zones","sql_where":"valid_to IS NULL AND pidn IN (SELECT p.pidn FROM staging.parcels p JOIN staging.flood_zones f ON ST_Intersects(p.geom, f.geom) WHERE f.valid_to IS NULL AND f.sfha_tf = 'T')","sql_order":"aprtotal::numeric DESC","sql_limit":20}
+- "vacant land in 17404 that's delinquent" → {"intent":"query","table":"parcels","description":"Vacant tax-delinquent parcels in 17404 zip code","sql_where":"valid_to IS NULL AND pidn IN (SELECT ap.pidn FROM staging.address_points ap WHERE ap.post_code = '17404' AND ap.valid_to IS NULL) AND NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND ST_Intersects(s.geom, staging.parcels.geom)) AND pidn IN (SELECT tc.pidn FROM staging.tax_claims tc WHERE tc.valid_to IS NULL AND tc.total > 0)","sql_order":"aprtotal::numeric DESC","sql_limit":20}
+
+Spatial capabilities:
+- staging.address_points has: post_code (zip code), lat, long, inc_muni
+- staging.structures has geometry — use NOT EXISTS with ST_Intersects to find vacant parcels (no building footprint)
+- staging.flood_zones has geometry — use ST_Intersects to check flood risk
+- staging.roads has geometry — use ST_DWithin(p.geom, r.geom, distance_in_degrees) for proximity. 1 mile ≈ 0.0145 degrees.
+- staging.penndot_roads has geometry for state highways
+
+You can compose complex queries joining multiple tables. Always use subqueries with pidn to filter parcels.
 
 IMPORTANT: Only use columns that exist. Always include valid_to IS NULL for SCD2 filtering. Return ONLY the JSON object, no markdown."""
 
