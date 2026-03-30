@@ -1,20 +1,53 @@
-import { useState, FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, FormEvent, useEffect, useRef } from 'react'
+
+interface SearchResult {
+  add_number: number
+  street_name: string
+  st_pos_typ: string
+  inc_muni: string
+  full_address: string
+  score: number
+}
 
 export default function SearchBar() {
   const [query, setQuery] = useState('')
-  const navigate = useNavigate()
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [showResults, setShowResults] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setResults([])
+      setShowResults(false)
+      return
+    }
+
+    setLoading(true)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(query.trim())}&limit=10`)
+        .then(r => r.json())
+        .then((data: SearchResult[]) => {
+          setResults(data)
+          setShowResults(true)
+          setLoading(false)
+        })
+        .catch(() => {
+          setResults([])
+          setLoading(false)
+        })
+    }, 300)
+
+    return () => clearTimeout(debounceRef.current)
+  }, [query])
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    const trimmed = query.trim()
-    if (trimmed) {
-      navigate(`/search?q=${encodeURIComponent(trimmed)}`)
-    }
   }
 
   return (
-    <div style={{ marginBottom: 36, animation: 'fadeUp 0.6s ease-out' }}>
+    <div style={{ marginBottom: 36, animation: 'fadeUp 0.6s ease-out', position: 'relative' }}>
       <div
         style={{
           fontFamily: 'var(--font-serif)',
@@ -45,6 +78,8 @@ export default function SearchBar() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => results.length > 0 && setShowResults(true)}
+          onBlur={() => setTimeout(() => setShowResults(false), 200)}
           placeholder="Search by address, owner name, or parcel ID..."
           autoFocus
           style={{
@@ -59,62 +94,100 @@ export default function SearchBar() {
             outline: 'none',
             transition: 'border-color 0.2s, box-shadow 0.2s',
           }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--accent-gold-dim)'
-            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(212, 168, 67, 0.08)'
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = 'var(--border)'
-            e.currentTarget.style.boxShadow = 'none'
-          }}
         />
       </form>
-      <div
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
-          color: 'var(--text-muted)',
-          marginTop: 8,
-          letterSpacing: 0.3,
-        }}
-      >
-        Try:{' '}
-        <kbd
+
+      {/* Live search results dropdown */}
+      {showResults && results.length > 0 && (
+        <div
           style={{
-            background: 'var(--bg-card)',
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: '100%',
+            marginTop: -28,
+            background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
-            borderRadius: 3,
-            padding: '1px 6px',
-            fontSize: 10,
+            borderRadius: 6,
+            overflow: 'hidden',
+            zIndex: 50,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
           }}
         >
-          123 Main St
-        </kbd>{' '}
-        or{' '}
-        <kbd
+          {results.map((r, i) => (
+            <div
+              key={`${r.full_address}-${r.inc_muni}-${i}`}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '10px 16px',
+                borderBottom: i < results.length - 1 ? '1px solid var(--border)' : 'none',
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+            >
+              <div>
+                <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-primary)' }}>
+                  {r.full_address}
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {r.inc_muni}
+                </div>
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                {(r.score * 100).toFixed(0)}%
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showResults && loading && (
+        <div
           style={{
-            background: 'var(--bg-card)',
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: '100%',
+            marginTop: -28,
+            background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
-            borderRadius: 3,
-            padding: '1px 6px',
-            fontSize: 10,
+            borderRadius: 6,
+            padding: '16px',
+            zIndex: 50,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+            color: 'var(--text-muted)',
+            textAlign: 'center',
           }}
         >
-          KEYSTONE REALTY
-        </kbd>{' '}
-        or{' '}
-        <kbd
+          Searching...
+        </div>
+      )}
+
+      {!showResults && (
+        <div
           style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: 3,
-            padding: '1px 6px',
-            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            marginTop: 8,
+            letterSpacing: 0.3,
           }}
         >
-          4300006006500
-        </kbd>
-      </div>
+          Try:{' '}
+          <kbd style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 6px', fontSize: 10 }}>
+            123 Main St
+          </kbd>{' '}
+          or{' '}
+          <kbd style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 6px', fontSize: 10 }}>
+            KEYSTONE REALTY
+          </kbd>
+        </div>
+      )}
     </div>
   )
 }

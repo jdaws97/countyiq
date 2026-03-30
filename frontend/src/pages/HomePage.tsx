@@ -99,7 +99,7 @@ export default function HomePage() {
   const activeTileDescs = [
     'Interactive map view',
     `${floodZoneCount.toLocaleString()} FEMA zones`,
-    `${delinquentParcels.toLocaleString()} parcels \u00B7 ${formatCurrency(totalDelinquent)}`,
+    `${delinquentParcels.toLocaleString()} parcels · ${formatCurrency(totalDelinquent)}`,
     `${municipalityCount} jurisdictions`,
   ]
   const disabledTileDescs = [
@@ -151,7 +151,7 @@ export default function HomePage() {
           <StatCard
             label="Municipalities"
             value={municipalityCount.toLocaleString()}
-            detail="townships \u00B7 boroughs \u00B7 city"
+            detail="townships · boroughs · city"
             color="var(--accent-green)"
           />
         </div>
