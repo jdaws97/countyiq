@@ -6,11 +6,11 @@ import os
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# Primary: cheapest paid model (~$0.0001/query, no rate limits)
-# Fallback: slightly more expensive, then free
+# Primary: Qwen 3.5 9B — newest, cheapest (~$0.0003/query), 256K context
+# Fallback: GPT-5.4-nano (smarter, $0.0014/query), then free
 MODELS = [
-    "mistralai/mistral-nemo",
-    "mistralai/mistral-small-3.1-24b-instruct",
+    "qwen/qwen3.5-9b",
+    "openai/gpt-5.4-nano",
     "google/gemma-3-27b-it:free",
 ]
 
