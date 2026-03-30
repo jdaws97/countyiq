@@ -73,31 +73,52 @@ def tax_claims(
     # 2. Archive raw PDF to S3
     s3.archive(f"{county.s3_prefix}/bulk/tax_claims", pdf_bytes, filename="listing.pdf")
 
-    # 3. Extract text page-by-page into a temp file to avoid holding
-    #    the entire PDF text in memory (200+ pages can exceed 1GB RAM)
-    import tempfile, os as _os
-    context.log.info("Extracting text from PDF pages (streaming to disk)...")
-    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-    try:
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            total_pages = len(pdf.pages)
-            for i, page in enumerate(pdf.pages):
-                tmp.write((page.extract_text() or "") + "\n")
-                if (i + 1) % 100 == 0:
-                    context.log.info(f"  Extracted {i + 1}/{total_pages} pages")
-            context.log.info(f"Extracted text from {total_pages} pages")
-        tmp.close()
-        # Free the PDF from memory before parsing
-        del pdf_bytes
+    # 3. Save PDF to disk and extract text page-by-page.
+    #    pdfplumber.open() loads the entire PDF structure into memory,
+    #    which can exceed available RAM on a 4GB VPS for 200+ page PDFs.
+    #    Instead, use PyPDF2 to split into single-page PDFs on disk,
+    #    then pdfplumber extracts one page at a time.
+    import tempfile, os as _os, gc
+    tmpdir = tempfile.mkdtemp(prefix="taxclaims_")
+    txt_path = _os.path.join(tmpdir, "all_text.txt")
+    pdf_path = _os.path.join(tmpdir, "source.pdf")
 
-        # 4. Parse from the temp file
-        with open(tmp.name, "r") as f:
+    try:
+        # Write PDF to disk and free the bytes
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+        del pdf_bytes
+        gc.collect()
+        context.log.info("Saved PDF to disk, extracting text page-by-page...")
+
+        # Count pages first with minimal memory
+        with pdfplumber.open(pdf_path) as pdf:
+            total_pages = len(pdf.pages)
+        context.log.info(f"PDF has {total_pages} pages")
+
+        # Extract text one page at a time, reopening in chunks
+        # to avoid pdfplumber holding all page objects in memory
+        CHUNK = 20
+        with open(txt_path, "w") as txt_out:
+            for start in range(0, total_pages, CHUNK):
+                end = min(start + CHUNK, total_pages)
+                with pdfplumber.open(pdf_path, pages=list(range(start, end))) as pdf:
+                    for page in pdf.pages:
+                        txt_out.write((page.extract_text() or "") + "\n")
+                gc.collect()
+                if end % 100 == 0 or end == total_pages:
+                    context.log.info(f"  Extracted {end}/{total_pages} pages")
+
+        # 4. Parse from the text file
+        with open(txt_path, "r") as f:
             text = f.read()
         records = parse_tax_claims_text(text)
-        del text  # free the string
+        del text
+        gc.collect()
         context.log.info(f"Parsed {len(records)} tax claim records")
     finally:
-        _os.unlink(tmp.name)
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
     if not records:
         context.log.warning("No tax claim records parsed — skipping upsert")
