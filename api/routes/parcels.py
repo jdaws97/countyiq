@@ -64,7 +64,12 @@ def parcels_bbox(
                       WHERE s.valid_to IS NULL AND s.geom IS NOT NULL
                         AND ST_Intersects(s.geom, p.geom)
                   )
-                  AND (p.price IS NULL OR p.price::numeric < 300000 OR p.class IN ('F', 'A', 'E'))
+                  AND (
+                      p.class NOT IN ('R')
+                      OR p.aprtotal IS NULL
+                      OR p.aprtotal::numeric < 50000
+                  )
+                  AND (p.price IS NULL OR p.price::numeric < 100000)
             """, {"west": west, "south": south, "east": east, "north": north})
         else:
             cur.execute("""
