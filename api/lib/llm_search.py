@@ -6,8 +6,7 @@ import os
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# Use Gemma 3 27B — fast, free, good at structured JSON
-MODEL = "google/gemma-3-27b-it:free"
+MODEL = "openai/gpt-oss-120b:free"
 
 SYSTEM_PROMPT = """You are the search engine for CountyIQ, a civic intelligence platform for York County, Pennsylvania.
 
