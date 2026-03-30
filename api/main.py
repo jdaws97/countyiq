@@ -1,5 +1,8 @@
 """FastAPI application entry point for CountyIQ."""
 
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file (OPENROUTER_API_KEY, etc.)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
