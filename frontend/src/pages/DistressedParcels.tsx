@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+// @ts-ignore — Link already imported
 import Nav from '../components/Nav'
 
 const CLASS_NAMES: Record<string, string> = {
@@ -90,9 +91,11 @@ export default function DistressedParcels() {
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-red)', marginBottom: 8 }}>Intelligence</div>
           <h1 style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Distressed Acquisition Opportunities</h1>
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Parcels ranked by a composite distress score based on tax delinquency, vacancy, acreage, property class, flood risk, and hold time.
-            Higher scores indicate stronger acquisition signals.
+            Parcels ranked by 9 weighted signals: tax delinquency, sheriff sale/foreclosure, tax sale stage, vacancy, traffic proximity, flood risk, acreage, property class, and hold time.
           </p>
+          <Link to="/assemblage" style={{ display: 'inline-block', marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-purple)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
+            View Assemblage Opportunities &rarr;
+          </Link>
         </div>
 
         {/* Filters */}

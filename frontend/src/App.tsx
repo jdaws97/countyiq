@@ -9,6 +9,7 @@ import ProjectList from './pages/ProjectList'
 import PropertyDetail from './pages/PropertyDetail'
 import OwnerProfile from './pages/OwnerProfile'
 import DistressedParcels from './pages/DistressedParcels'
+import Assemblage from './pages/Assemblage'
 import SearchResults from './pages/SearchResults'
 import OpsHealth from './pages/OpsHealth'
 
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/property/:pidn" element={<PropertyDetail />} />
         <Route path="/owner/:id" element={<OwnerProfile />} />
         <Route path="/distressed" element={<DistressedParcels />} />
+        <Route path="/assemblage" element={<Assemblage />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/ops/health" element={<OpsHealth />} />
       </Routes>
