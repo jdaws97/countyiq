@@ -6,7 +6,7 @@ import os
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "openai/gpt-oss-120b:free"
+MODEL = "google/gemma-3-27b-it:free"
 
 SYSTEM_PROMPT = """You are the search engine for CountyIQ, a civic intelligence platform for York County, Pennsylvania.
 
