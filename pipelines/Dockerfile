@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -e "."
 RUN playwright install --with-deps chromium
 
 # Dagster config
-RUN mkdir -p /opt/dagster/home
+RUN rm -rf /opt/dagster/home && mkdir -p /opt/dagster/home
 COPY pipelines/dagster.yaml /opt/dagster/home/dagster.yaml
 
 EXPOSE 3000
