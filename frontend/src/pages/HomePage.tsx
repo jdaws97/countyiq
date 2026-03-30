@@ -57,12 +57,11 @@ const ACTIVE_TILES = [
   { icon: '\u25A5', name: 'PennDOT Projects', desc: '', color: 'var(--accent-cyan)', to: '/projects' },
   { icon: '\u25A4', name: 'Recent Sales', desc: '', color: 'var(--accent-gold)', to: '/map' },
   { icon: '\u25A3', name: 'Liquor Licenses', desc: '', color: 'var(--accent-green)', to: '/licenses' },
+  { icon: '\u25A2', name: 'Vacant Land', desc: '', color: 'var(--accent-purple)', to: '/map' },
 ]
 
 /* Disabled tiles config */
-const DISABLED_TILES = [
-  { icon: '\u25A2', name: 'Vacant Land', desc: 'Coming soon' },
-]
+const DISABLED_TILES: { icon: string; name: string; desc: string }[] = []
 
 function formatCurrency(value: number): string {
   if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`
@@ -114,8 +113,9 @@ export default function HomePage() {
     `${penndotProjectCount} active projects`,
     `${parcelCount.toLocaleString()} parcels tracked`,
     `${(stats?.liquor_license_count ?? 0).toLocaleString()} active licenses`,
+    'Parcels without structures',
   ]
-  const disabledTileDescs = [
+  const disabledTileDescs: string[] = [
     'Coming soon',
   ]
 

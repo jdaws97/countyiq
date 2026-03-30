@@ -1,26 +1,38 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import Nav from '../components/Nav'
 
 interface SearchResult {
-  result_type: 'address' | 'tax_claim' | 'license'
-  title: string
-  subtitle: string
-  lat: number | null
-  lng: number | null
-  score: number
+  result_type?: string
+  title?: string
+  subtitle?: string
+  lat?: number | null
+  lng?: number | null
+  score?: number
+  [key: string]: any
+}
+
+interface SearchResponse {
+  mode: 'fuzzy' | 'smart' | 'redirect'
+  description?: string
+  redirect_path?: string
+  results: SearchResult[]
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   address: { label: 'Address', color: 'var(--accent-blue)' },
   tax_claim: { label: 'Tax Delinquent', color: 'var(--accent-red)' },
   license: { label: 'Liquor License', color: 'var(--accent-green)' },
+  parcel: { label: 'Parcel', color: 'var(--accent-cyan)' },
 }
 
 export default function SearchResults() {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const query = searchParams.get('q') || ''
   const [results, setResults] = useState<SearchResult[]>([])
+  const [mode, setMode] = useState<string>('fuzzy')
+  const [description, setDescription] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -32,8 +44,14 @@ export default function SearchResults() {
     setLoading(true)
     fetch(`/api/search?q=${encodeURIComponent(query)}&limit=50`)
       .then(r => r.json())
-      .then((data: SearchResult[]) => {
-        setResults(data)
+      .then((data: SearchResponse) => {
+        if (data.mode === 'redirect' && data.redirect_path) {
+          navigate(data.redirect_path)
+          return
+        }
+        setMode(data.mode)
+        setDescription(data.description || '')
+        setResults(data.results || [])
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -62,6 +80,17 @@ export default function SearchResults() {
             fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-secondary)',
           }}>
             {loading ? 'Searching...' : `${results.length} results for "${query}"`}
+          </p>
+          {mode === 'smart' && description && (
+            <p style={{
+              fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-gold)',
+              background: 'rgba(212, 168, 67, 0.1)', border: '1px solid rgba(212, 168, 67, 0.2)',
+              borderRadius: 4, padding: '6px 12px', marginTop: 8, display: 'inline-block',
+            }}>
+              AI: {description}
+            </p>
+          )}
+          <p style={{ display: 'none' }}>
           </p>
         </div>
 
