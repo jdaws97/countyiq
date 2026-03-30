@@ -9,11 +9,11 @@ router = APIRouter(tags=["scores"])
 
 @router.get("/distressed")
 def distressed_parcels(
-    min_score: float = Query(default=0.3, ge=0, le=1),
+    min_score: float = Query(default=0.2, ge=0, le=1),
     municipality: str | None = Query(default=None),
     min_acres: float | None = Query(default=None),
     parcel_class: str | None = Query(default=None),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=100, le=500),
 ) -> dict:
     """Rank parcels by distressed acquisition opportunity score.
 

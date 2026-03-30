@@ -63,7 +63,7 @@ export default function SearchResults() {
     }
 
     setLoading(true)
-    fetch(`/api/search?q=${encodeURIComponent(query)}&limit=50`)
+    fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100`)
       .then(r => r.json())
       .then((data: SearchResponse) => {
         if (data.mode === 'redirect' && data.redirect_path) {

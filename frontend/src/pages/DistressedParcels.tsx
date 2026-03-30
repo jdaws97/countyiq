@@ -32,13 +32,13 @@ function scoreColor(s: number): string {
 
 function scoreBar(s: number) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ width: 60, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ width: `${Math.min(s * 100, 100)}%`, height: '100%', background: scoreColor(s), borderRadius: 3 }} />
-      </div>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: scoreColor(s) }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: scoreColor(s) }}>
         {(s * 100).toFixed(0)}
       </span>
+      <div style={{ width: 40, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(s * 100, 100)}%`, height: '100%', background: scoreColor(s), borderRadius: 2 }} />
+      </div>
     </div>
   )
 }
@@ -47,19 +47,36 @@ export default function DistressedParcels() {
   const navigate = useNavigate()
   const [parcels, setParcels] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [classFilter, setClassFilter] = useState('')
   const [minAcres, setMinAcres] = useState('')
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 200
 
-  useEffect(() => {
-    setLoading(true)
-    const params = new URLSearchParams({ limit: '100', min_score: '0.3' })
+  const fetchPage = (pageNum: number, append: boolean) => {
+    append ? setLoadingMore(true) : setLoading(true)
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), min_score: '0.2' })
     if (classFilter) params.set('parcel_class', classFilter)
     if (minAcres) params.set('min_acres', minAcres)
 
     fetch(`/api/scores/distressed?${params}`)
       .then(r => r.json())
-      .then(d => { setParcels(d.parcels || []); setLoading(false) })
-      .catch(() => setLoading(false))
+      .then(d => {
+        const items = d.parcels || []
+        if (append) {
+          setParcels(prev => [...prev, ...items])
+        } else {
+          setParcels(items)
+        }
+        setLoading(false)
+        setLoadingMore(false)
+      })
+      .catch(() => { setLoading(false); setLoadingMore(false) })
+  }
+
+  useEffect(() => {
+    setPage(0)
+    fetchPage(0, false)
   }, [classFilter, minAcres])
 
   return (
@@ -110,13 +127,13 @@ export default function DistressedParcels() {
         {!loading && parcels.length > 0 && (
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', animation: 'fadeUp 0.4s ease 0.2s both' }}>
             {/* Header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 140px 90px 90px 100px 80px', padding: '10px 16px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '55px 1fr 120px 100px 100px 70px 90px', padding: '10px 16px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
               <div>Score</div><div>Owner / Address</div><div>District</div><div style={{ textAlign: 'right' }}>Owed</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div style={{ textAlign: 'right' }}>Class</div>
             </div>
 
             {parcels.map((p, i) => (
               <Link key={p.pidn} to={`/property/${p.pidn}`} style={{
-                display: 'grid', gridTemplateColumns: '70px 1fr 140px 90px 90px 100px 80px',
+                display: 'grid', gridTemplateColumns: '55px 1fr 120px 100px 100px 70px 90px',
                 padding: '12px 16px', alignItems: 'center', textDecoration: 'none', color: 'inherit',
                 background: i % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
                 borderTop: '1px solid var(--border)', transition: 'background 0.15s',
