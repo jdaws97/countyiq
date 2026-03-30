@@ -16,6 +16,23 @@ def search(
     search_term = q.strip()
 
     with get_cursor() as cur:
+        # Parcel owners (with PIDN for direct link)
+        cur.execute("""
+            SELECT DISTINCT ON (owner_full)
+                'parcel' AS result_type,
+                owner_full AS title,
+                pidn || ' · ' || COALESCE(propadr, '') || ' · ' || COALESCE(municipality, '') AS subtitle,
+                NULL::float AS lat, NULL::float AS lng,
+                similarity(owner_full, %(q)s) AS score,
+                pidn
+            FROM staging.parcels
+            WHERE valid_to IS NULL
+              AND owner_full %% %(q)s
+            ORDER BY owner_full, similarity(owner_full, %(q)s) DESC
+            LIMIT %(limit)s
+        """, {"q": search_term, "limit": limit})
+        parcel_owners = cur.fetchall()
+
         # Address points
         cur.execute("""
             SELECT
@@ -71,6 +88,6 @@ def search(
         licenses = cur.fetchall()
 
     # Merge and sort by score
-    all_results = [dict(r) for r in addresses + tax_owners + licenses]
+    all_results = [dict(r) for r in parcel_owners + addresses + tax_owners + licenses]
     all_results.sort(key=lambda r: r["score"], reverse=True)
     return all_results[:limit]
