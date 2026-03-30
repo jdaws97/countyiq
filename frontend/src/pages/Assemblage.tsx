@@ -135,30 +135,43 @@ export default function Assemblage() {
                 </div>
               </div>
 
-              {/* Expanded neighbor details */}
+              {/* View on Map + Expanded details */}
+              {isExpanded && (
+                <div style={{ padding: '10px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border)', display: 'flex', gap: 12 }}>
+                  <Link to={`/property/${c.seed_pidn}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
+                    View Seed Property
+                  </Link>
+                  <Link to={`/map?highlight=${c.seed_pidn}&zoom=17&lat=39.95&lng=-76.73`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-purple)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
+                    View Cluster on Map
+                  </Link>
+                </div>
+              )}
               {isExpanded && (
                 <div style={{ borderTop: '1px solid var(--border)' }}>
-                  <div style={{ padding: '8px 20px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px 80px 60px' }}>
-                    <div>Owner</div><div>Address</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div>Status</div><div></div>
+                  <div style={{ padding: '8px 20px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px' }}>
+                    <div>Owner</div><div>Address</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div>Status</div>
                   </div>
                   {/* Seed parcel */}
-                  <Link to={`/property/${c.seed_pidn}`} style={{ textDecoration: 'none', color: 'inherit', display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px 80px 60px', padding: '8px 20px', background: 'rgba(224,82,82,0.08)', borderBottom: '1px solid var(--border)' }}>
+                  <Link to={`/property/${c.seed_pidn}`} style={{ textDecoration: 'none', color: 'inherit', display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px', padding: '10px 20px', background: 'rgba(224,82,82,0.08)', borderBottom: '1px solid var(--border)' }}>
                     <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{c.seed_owner}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{c.seed_address}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{fmtDollar(c.seed_assessed)}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, textAlign: 'right' }}>{c.seed_acres?.toFixed(1)}</div>
-                    <div><Badge color="var(--accent-red)">Delinquent</Badge></div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent-blue)' }}>Seed</div>
+                    <div style={{ display: 'flex', gap: 4 }}><Badge color="var(--accent-red)">Delinquent</Badge> <Badge color="var(--accent-blue)">Seed</Badge></div>
                   </Link>
                   {/* Neighbors */}
                   {(c.neighbors || []).map((n: any, j: number) => (
                     <Link key={n.pidn} to={`/property/${n.pidn}`} style={{
                       textDecoration: 'none', color: 'inherit',
-                      display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px 80px 60px',
-                      padding: '8px 20px',
+                      display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px',
+                      padding: '10px 20px',
                       background: j % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
                       borderBottom: '1px solid var(--border)',
-                    }}>
+                      transition: 'background 0.15s',
+                    }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-card-hover)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = j % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
+                    >
                       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>{n.owner}</div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{n.address}</div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{fmtDollar(n.assessed)}</div>
@@ -166,8 +179,8 @@ export default function Assemblage() {
                       <div style={{ display: 'flex', gap: 4 }}>
                         {n.delinquent && <Badge color="var(--accent-red)">Delq</Badge>}
                         {n.vacant && <Badge color="var(--accent-gold)">Vacant</Badge>}
+                        {!n.delinquent && !n.vacant && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>Current</span>}
                       </div>
-                      <div></div>
                     </Link>
                   ))}
                 </div>
