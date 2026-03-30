@@ -191,7 +191,8 @@ export default function MapView() {
       // Clear hover/selection when zooming out past parcel threshold
       if (viewState.zoom < MIN_PARCEL_ZOOM) {
         setHoverInfo(null)
-        setSelectedParcel(null)
+        setSelectedPidn(null)
+        setPropertyReport(null)
       }
 
       if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -621,31 +622,49 @@ function PropertyPanel({
 
       <Divider />
 
-      {/* Assessment */}
-      <SectionTitle>Assessment</SectionTitle>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginBottom: 6 }}>
-        <DataField label="Land" value={fmtDollar(p.asmt_land)} />
-        <DataField label="Building" value={fmtDollar(p.asmt_bldg)} />
-        <DataField label="Total" value={fmtDollar(p.aprtotal)} accent />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: 10 }}>
-        <DataField label="Sale Date" value={fmtDate(p.saledt)} />
-        <DataField label="Sale Price" value={fmtDollar(p.price)} />
-      </div>
-
-      <Divider />
-
-      {/* Property Details */}
-      <SectionTitle>Property Details</SectionTitle>
+      {/* Assessment & Sale */}
+      <SectionTitle>Assessment & Sale</SectionTitle>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-        <DataField label="Class" value={p.class || '--'} />
-        <DataField label="LUC" value={p.luc || '--'} />
+        <DataField label="Assessed Total" value={fmtDollar(p.aprtotal)} accent />
         <DataField label="Acres" value={p.acres ? Number(p.acres).toFixed(2) : '--'} />
-        <DataField label="Year Built" value={p.year_built || '--'} />
-        <DataField label="Style" value={p.style || '--'} />
-        <DataField label="Stories" value={p.stories || '--'} />
-        <DataField label="Living Area" value={p.living_area ? `${Number(p.living_area).toLocaleString()} sf` : '--'} />
+        <DataField label="Sale Date" value={p.saledt || '--'} />
+        <DataField label="Sale Price" value={fmtDollar(p.price)} />
+        {p.prev_price && <DataField label="Prev Price" value={fmtDollar(p.prev_price)} />}
+        <DataField label="Class" value={p.class === 'R' ? 'Residential' : p.class === 'C' ? 'Commercial' : p.class === 'I' ? 'Industrial' : p.class || '--'} />
       </div>
+      {(p.aprland || p.aprbldg) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: 8 }}>
+          <DataField label="Land" value={fmtDollar(p.aprland)} />
+          <DataField label="Building" value={fmtDollar(p.aprbldg)} />
+        </div>
+      )}
+
+      {/* Property Details — only show if we have data beyond the basics */}
+      {(p.yrblt || p.style || p.num_stories || p.res_living_area || p.luc) && (
+        <>
+          <Divider />
+          <SectionTitle>Property Details</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+            {p.yrblt && <DataField label="Year Built" value={p.yrblt} />}
+            {p.style && <DataField label="Style" value={p.style} />}
+            {p.num_stories && <DataField label="Stories" value={p.num_stories} />}
+            {p.res_living_area && <DataField label="Living Area" value={`${Number(p.res_living_area).toLocaleString()} sf`} />}
+            {p.luc && <DataField label="LUC" value={p.luc} />}
+            {p.heatsys && <DataField label="Heat" value={p.heatsys} />}
+          </div>
+        </>
+      )}
+
+      {/* School District + Deed */}
+      {(p.school_dis || p.deed_bk) && (
+        <>
+          <Divider />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+            {p.school_dis && <DataField label="School District" value={p.school_dis} />}
+            {p.deed_bk && <DataField label="Deed" value={`${p.deed_bk}/${p.deed_pg}`} />}
+          </div>
+        </>
+      )}
 
       <Divider />
 
