@@ -1,4 +1,4 @@
-"""Unified search — pg_trgm fuzzy match + LLM-powered natural language fallback."""
+"""LLM-first unified search across all data sources."""
 
 from fastapi import APIRouter, Query
 
@@ -13,136 +13,55 @@ def search(
     q: str = Query(..., min_length=2, description="Search query"),
     limit: int = Query(default=20, le=100),
 ) -> dict:
-    """Search across all sources. Uses pg_trgm for name/address matching,
-    falls back to LLM intent parsing for natural language queries."""
+    """LLM-first search. Every query goes to the LLM for intent classification."""
     search_term = q.strip()
 
-    # Detect if this looks like a natural language question vs a name/address
-    is_natural_language = _is_natural_language(search_term)
+    # Step 1: Always try LLM first
+    llm_intent = parse_query_with_llm(search_term)
 
-    # If natural language, try LLM first
-    if is_natural_language:
-        llm_intent = parse_query_with_llm(search_term)
+    if llm_intent:
+        intent = llm_intent.get("intent")
+        description = llm_intent.get("description", "")
 
-        if llm_intent and llm_intent.get("intent") == "redirect":
+        if intent == "redirect":
             return {
                 "mode": "redirect",
                 "redirect_path": llm_intent.get("redirect_path", "/"),
-                "description": llm_intent.get("description", ""),
+                "description": description,
                 "results": [],
             }
 
-        if llm_intent and llm_intent.get("intent") == "query":
+        if intent == "query":
             llm_results = _execute_llm_query(llm_intent, limit)
             if llm_results:
                 return {
                     "mode": "smart",
-                    "description": llm_intent.get("description", ""),
+                    "description": description,
                     "results": llm_results,
                 }
 
-    # For name/address queries (or LLM fallback), use pg_trgm
+        if intent == "lookup":
+            cleaned = llm_intent.get("search_term", search_term)
+            trgm_results = _trgm_search(cleaned, limit)
+            return {
+                "mode": "fuzzy",
+                "description": description,
+                "results": trgm_results,
+            }
+
+    # Step 2: Fallback to pg_trgm if LLM unavailable or failed
     trgm_results = _trgm_search(search_term, limit)
-
-    # If pg_trgm found results, return them
-    if trgm_results:
-        return {"mode": "fuzzy", "results": trgm_results}
-
-    # Last resort: try LLM if we haven't already
-    llm_intent = None
-    if not is_natural_language:
-        llm_intent = parse_query_with_llm(search_term)
-
-    if llm_intent and llm_intent.get("intent") == "redirect":
-        return {
-            "mode": "redirect",
-            "redirect_path": llm_intent.get("redirect_path", "/"),
-            "description": llm_intent.get("description", ""),
-            "results": [],
-        }
-
-    if llm_intent and llm_intent.get("intent") == "query":
-        llm_results = _execute_llm_query(llm_intent, limit)
-        if llm_results is not None:
-            return {
-                "mode": "smart",
-                "description": llm_intent.get("description", ""),
-                "results": llm_results,
-            }
-
-    if llm_intent and llm_intent.get("intent") == "redirect":
-        return {
-            "mode": "redirect",
-            "redirect_path": llm_intent.get("redirect_path", "/"),
-            "description": llm_intent.get("description", ""),
-            "results": [],
-        }
-
-    if llm_intent and llm_intent.get("intent") == "query":
-        llm_results = _execute_llm_query(llm_intent, limit)
-        if llm_results:
-            return {
-                "mode": "smart",
-                "description": llm_intent.get("description", ""),
-                "results": llm_results,
-            }
-
-    return {"mode": "fuzzy", "results": []}
-
-
-NL_KEYWORDS = {
-    "oldest", "newest", "most", "least", "biggest", "smallest", "largest",
-    "cheapest", "expensive", "show", "find", "list", "all", "how many",
-    "where", "which", "what", "who", "near",
-    "breweries", "brewery", "brewpub",
-    "restaurants", "restaurant", "winery", "wineries", "bars", "hotels", "tavern",
-    "delinquent", "vacant", "flood", "commercial", "residential", "industrial",
-    "properties", "parcels", "owners", "sales", "sold", "recently",
-    "top", "total", "average", "count", "zoning", "zoned",
-}
-
-# Patterns that indicate NL even if short (e.g. "restaurants in 17319")
-NL_PATTERNS = [
-    # "<thing> in <place>" pattern
-    lambda words: len(words) >= 3 and "in" in words[1:],
-    # "<thing> near <place>"
-    lambda words: len(words) >= 3 and "near" in words[1:],
-    # Starts with a question/command word
-    lambda words: words[0] in ("show", "find", "list", "what", "who", "where", "which", "how", "get"),
-    # Contains a zip code pattern
-    lambda words: any(w.isdigit() and len(w) == 5 for w in words),
-]
-
-
-def _is_natural_language(query: str) -> bool:
-    """Detect if a query is natural language vs a name/address lookup."""
-    words = query.lower().split()
-    # 4+ words is almost certainly natural language
-    if len(words) >= 4:
-        return True
-    # Check NL keyword matches
-    for word in words:
-        if word in NL_KEYWORDS:
-            return True
-    # Check NL patterns
-    for pattern in NL_PATTERNS:
-        try:
-            if pattern(words):
-                return True
-        except (IndexError, ValueError):
-            pass
-    return False
+    return {"mode": "fuzzy", "results": trgm_results}
 
 
 def _trgm_search(search_term: str, limit: int) -> list[dict]:
     """Standard pg_trgm fuzzy matching across all sources."""
     with get_cursor() as cur:
-        # Parcel owners — boost score when all search words appear in the name
         cur.execute("""
             SELECT DISTINCT ON (owner_full)
                 'parcel' AS result_type,
                 owner_full AS title,
-                pidn || ' · ' || COALESCE(propadr, '') || ' · ' || COALESCE(municipality, '') AS subtitle,
+                pidn || ' · ' || COALESCE(propadr, '') AS subtitle,
                 NULL::float AS lat, NULL::float AS lng,
                 CASE
                     WHEN UPPER(owner_full) LIKE '%%' || UPPER(%(q)s) || '%%' THEN 1.0
@@ -157,7 +76,6 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
         """, {"q": search_term, "limit": limit})
         parcel_owners = cur.fetchall()
 
-        # Address points
         cur.execute("""
             SELECT
                 'address' AS result_type,
@@ -173,7 +91,6 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
         """, {"q": search_term, "limit": limit})
         addresses = cur.fetchall()
 
-        # Tax claim owners
         cur.execute("""
             SELECT
                 'tax_claim' AS result_type,
@@ -190,7 +107,6 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
         """, {"q": search_term, "limit": limit})
         tax_owners = cur.fetchall()
 
-        # PLCB licensees
         cur.execute("""
             SELECT DISTINCT ON (COALESCE(premises_name, licensee))
                 'license' AS result_type,
@@ -222,7 +138,6 @@ def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
     sql_order = intent.get("sql_order", "")
     sql_limit = min(intent.get("sql_limit", limit), limit)
 
-    # Safety: ensure valid_to IS NULL is always present
     if "valid_to IS NULL" not in sql_where:
         sql_where = f"valid_to IS NULL AND ({sql_where})"
 
@@ -242,11 +157,9 @@ def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
 
 def _clean_row(row: dict) -> dict:
     """Clean a database row for JSON serialization."""
-    # Remove geometry and SCD columns
     for key in ("geom", "valid_from", "valid_to"):
         row.pop(key, None)
-    # Convert Decimal to float
     for key, val in row.items():
-        if hasattr(val, "as_tuple"):  # Decimal
+        if hasattr(val, "as_tuple"):
             row[key] = float(val)
     return row

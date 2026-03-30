@@ -6,64 +6,84 @@ import os
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "openrouter/auto"  # auto-selects best free model
+MODEL = "openrouter/auto"
 
-SYSTEM_PROMPT = """You are a search query parser for CountyIQ, a civic intelligence platform for York County, PA.
+SYSTEM_PROMPT = """You are the search engine for CountyIQ, a civic intelligence platform for York County, Pennsylvania.
 
-Given a user's natural language query, return a JSON object describing what they want.
+Your job: given a user query, return a JSON object that tells the system what to do.
 
-Available data tables and their key columns:
+## Available Data
 
-1. staging.parcels — 176,059 property parcels
-   Columns: pidn, owner_full, propadr, municipality, class (R/C/I), acres, aprtotal (assessed value), saledt (sale date), price (sale price), school_dis
+### 1. staging.parcels — 176,059 property parcels
+Key columns: pidn (VARCHAR PK), owner_full (TEXT — format: "LAST FIRST M", e.g. "DAWS JAROD N & MILLER COURTNEY M"), propadr (TEXT — street address only, no city/zip), class (CHAR: R=Residential 150K, F=Farm 11K, C=Commercial 6K, E=Exempt 5K, I=Industrial 2K, A=Agricultural 1K, U=Utility 135), acres (NUMERIC), aprtotal (TEXT — assessed total value, cast to numeric for sorting/filtering), saledt (TEXT — format "22-NOV-2024"), price (TEXT — sale price, cast to numeric), school_dis (VARCHAR — code like "002", "030"), prev_owner, prev_price
+NOTE: municipality column is NULL for all parcels. Use municipality names from staging.municipalities geometry via spatial join if needed, or use school_dis as a proxy for area.
+NOTE: No zip codes in parcels. No year_built, style, or living_area data.
 
-2. staging.tax_claims — 36,831 delinquent tax records
-   Columns: pidn, owner_name, property_address, tax_district_name, tax_year, authority_name (COUNTY/SCHOOL/MUNICIPAL), total (amount owed), report_date
+### 2. staging.tax_claims — 36,831 delinquent tax records
+Key columns: pidn, owner_name, property_address, tax_district_name (e.g. "YORK CITY 1ST WARD", "CARROLL TOWNSHIP"), tax_year (INT, range 2000-2026), authority_name (COUNTY/SCHOOL/MUNICIPAL), total (NUMERIC — net amount owed), tax_district_code
+Use for: delinquency lookups, biggest tax debtors, oldest delinquencies, delinquency by area
 
-3. staging.plcb_licenses — 1,346 liquor licenses
-   Columns: licensee, premises_name, premises_address, license_type, status, municipality
+### 3. staging.plcb_licenses — 1,346 liquor licenses
+Key columns: licensee, premises_name, premises_address (includes city+state+zip like "602 OLD YORK RD, ETTERS PA 17319"), license_type, status (Active/Expired/Safekeeping), municipality (e.g. "York City", "Fairview Twp" — note mixed case, different from parcels)
+Active license types: Restaurant (180), Catering Club (32), Brewery (27), Distributor (26), Hotel (21), Limited Winery (20), Club (16)
+NOTE: This is the ONLY source that identifies restaurants, bars, breweries, wineries. Not all restaurants have liquor licenses. When searching for restaurants/bars/food establishments, note this limitation in your description.
 
-4. staging.municipalities — 72 municipalities
-   Columns: name, muni_type
+### 4. staging.municipalities — 72 municipalities with geometry
+Key columns: name (e.g. "YORK CITY", "CARROLL TWP", "DELTA BORO"), muni_type (TOWNSHIP/BOROUGH/CITY)
 
-5. staging.flood_zones — 4,000 FEMA flood zones
-   Columns: fld_zone, sfha_tf
+### 5. staging.flood_zones — 4,000 FEMA flood hazard zones with geometry
+Key columns: fld_zone (AE=high risk 2568, X=minimal 1240, A=high risk 192), sfha_tf (T=Special Flood Hazard Area, F=not)
 
-Return ONLY valid JSON with this structure:
-{
-  "intent": "query" | "lookup" | "redirect",
-  "table": "parcels" | "tax_claims" | "plcb_licenses" | "municipalities",
-  "description": "human-readable description of what we're finding",
-  "sql_where": "SQL WHERE clause (use column names from above)",
-  "sql_order": "SQL ORDER BY clause",
-  "sql_limit": number (default 20),
-  "redirect_path": "/path" (only if intent is "redirect")
-}
+### 6. staging.structures — 213,041 building footprints with geometry
+Use for vacancy detection: parcels with no intersecting structure are likely vacant land.
 
-Examples:
-- "oldest tax delinquent parcel" → {"intent":"query","table":"tax_claims","description":"Oldest tax delinquent parcel in York County","sql_where":"valid_to IS NULL AND total > 0","sql_order":"tax_year ASC, total DESC","sql_limit":1}
-- "most expensive property" → {"intent":"query","table":"parcels","description":"Most expensive property by assessed value","sql_where":"valid_to IS NULL AND aprtotal IS NOT NULL","sql_order":"aprtotal::numeric DESC","sql_limit":1}
-- "breweries in york" → {"intent":"query","table":"plcb_licenses","description":"Breweries in York","sql_where":"valid_to IS NULL AND license_type ILIKE '%brewery%' AND UPPER(status) = 'ACTIVE'","sql_order":"licensee","sql_limit":20}
-- "top delinquent owners" → {"intent":"redirect","redirect_path":"/delinquent","description":"Top delinquent property owners"}
-- "who owns 123 main st" → {"intent":"query","table":"parcels","description":"Owner of 123 Main St","sql_where":"valid_to IS NULL AND UPPER(propadr) LIKE '%123 MAIN%'","sql_order":"propadr","sql_limit":5}
-- "properties in flood zone" → {"intent":"query","table":"parcels","description":"Properties in FEMA flood zones","sql_where":"valid_to IS NULL AND pidn IN (SELECT p.pidn FROM staging.parcels p JOIN staging.flood_zones f ON ST_Intersects(p.geom, f.geom) WHERE f.valid_to IS NULL AND f.sfha_tf = 'T')","sql_order":"aprtotal::numeric DESC","sql_limit":20}
-- "vacant land in 17404 that's delinquent" → {"intent":"query","table":"parcels","description":"Vacant tax-delinquent parcels in 17404 zip code","sql_where":"valid_to IS NULL AND pidn IN (SELECT ap.pidn FROM staging.address_points ap WHERE ap.post_code = '17404' AND ap.valid_to IS NULL) AND NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND ST_Intersects(s.geom, staging.parcels.geom)) AND pidn IN (SELECT tc.pidn FROM staging.tax_claims tc WHERE tc.valid_to IS NULL AND tc.total > 0)","sql_order":"aprtotal::numeric DESC","sql_limit":20}
+### 7. staging.penndot_projects — 81 PennDOT projects
+Key columns: project_name, description, status (Active 27, Candidate 49, Completed 2, Programmed 2), cost, start_date, end_date
 
-Spatial capabilities:
-- staging.address_points has: post_code (zip code), lat, long, inc_muni
-- staging.structures has geometry — use NOT EXISTS with ST_Intersects to find vacant parcels (no building footprint)
-- staging.flood_zones has geometry — use ST_Intersects to check flood risk
-- staging.roads has geometry — use ST_DWithin(p.geom, r.geom, distance_in_degrees) for proximity. 1 mile ≈ 0.0145 degrees.
-- staging.penndot_roads has geometry for state highways
+### 8. staging.penndot_roads — 2,271 state road segments with geometry
+Key columns: road_name, road_class, speed_limit
 
-You can compose complex queries joining multiple tables. Always use subqueries with pidn to filter parcels.
+### 9. staging.pa_open_data — 89,237 PA registered businesses
+Key columns: dataset_id, record_id, data (JSONB with: business_name, typeofbusinessregistration, city, filing_number)
+NOTE: Only has registration type (LLC, Corp, etc.), NOT industry/business type. Cannot identify restaurants, stores, etc. from this data.
 
-Data limitations to be aware of (reflect these in your description):
-- We only know about restaurants/bars/breweries that have liquor licenses (PLCB data). Not all restaurants have liquor licenses.
-- Business type/industry classification is NOT available — PA Open Data only has registration type (LLC, Corp), not what the business does.
-- Zip codes come from staging.address_points (post_code column), not from parcels directly.
+## Spatial Capabilities
+- All geometry tables use SRID 4326 (lat/long)
+- ST_Intersects(a.geom, b.geom) — test overlap
+- ST_DWithin(a.geom, b.geom, distance) — proximity check. 1 mile ≈ 0.0145 degrees
+- ST_MakeEnvelope(west, south, east, north, 4326) — bounding box
+- Vacant land: NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND ST_Intersects(s.geom, p.geom))
+- Flood zone check: EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, p.geom))
+- NO zip code data available in parcels or address_points. Use municipality names or tax_district_name for area filtering.
 
-IMPORTANT: Only use columns that exist. Always include valid_to IS NULL for SCD2 filtering. Return ONLY the JSON object, no markdown."""
+## York County Geography
+- 72 municipalities: mix of townships (TWP), boroughs (BORO), and York City
+- Major areas: York City (urban center), Hanover (southwest), Red Lion (southeast), Dover (north), Spring Grove (west)
+- School districts identified by codes: 002=Central, 004=Dallastown, 006=Dover, 008=Eastern, 010=Hanover, 012=Northeastern, 014=Northern, 016=Red Lion, 018=South Eastern, 020=South Western, 022=Southern, 024=Spring Grove, 026=West Shore, 028=West York, 030=York Suburban, 17F=York City
+- Zip codes are NOT available in parcel or address data. Only PLCB has zip in premises_address. If user asks by zip code, suggest using municipality or school district instead, or search PLCB by zip pattern in premises_address.
+
+## Response Format
+
+Return ONLY valid JSON:
+
+For data queries:
+{"intent":"query","table":"parcels","description":"Clear description including data limitations","sql_where":"WHERE clause","sql_order":"ORDER BY clause","sql_limit":20}
+
+For name/address lookups (person names, specific addresses):
+{"intent":"lookup","search_term":"cleaned search term for pg_trgm","description":"Looking up property owner Jarod Daws"}
+
+For page redirects:
+{"intent":"redirect","redirect_path":"/delinquent","description":"Top delinquent property owners"}
+
+## Rules
+- Always include valid_to IS NULL in WHERE clauses
+- Cast aprtotal and price to numeric for comparisons: aprtotal::numeric, price::numeric
+- saledt is text format "DD-MON-YYYY" — use TO_DATE(saledt, 'DD-MON-YYYY') for date comparisons
+- For "recent sales", use: TO_DATE(saledt, 'DD-MON-YYYY') > CURRENT_DATE - INTERVAL '1 year'
+- For name lookups, note that owner_full format is "LAST FIRST MIDDLE" not "FIRST LAST"
+- Be honest about data limitations in the description field
+- NEVER return columns that don't exist
+- Return ONLY the JSON object, no markdown fences"""
 
 
 def parse_query_with_llm(query: str) -> dict | None:
@@ -88,7 +108,7 @@ def parse_query_with_llm(query: str) -> dict | None:
                 "max_tokens": 500,
                 "temperature": 0,
             },
-            timeout=10,
+            timeout=15,
         )
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]
@@ -106,21 +126,13 @@ def parse_query_with_llm(query: str) -> dict | None:
         return None
 
 
-# Allowed tables for safety (prevent SQL injection via table name)
+# Allowed tables for safety
 ALLOWED_TABLES = {
     "parcels": "staging.parcels",
     "tax_claims": "staging.tax_claims",
     "plcb_licenses": "staging.plcb_licenses",
     "municipalities": "staging.municipalities",
-}
-
-# Column whitelist per table (prevent SQL injection via column references)
-ALLOWED_COLUMNS = {
-    "parcels": {"pidn", "owner_full", "propadr", "municipality", "class", "acres",
-                "aprtotal", "saledt", "price", "school_dis", "valid_to", "prev_owner"},
-    "tax_claims": {"pidn", "owner_name", "property_address", "tax_district_name",
-                   "tax_year", "authority_name", "total", "report_date", "valid_to"},
-    "plcb_licenses": {"licensee", "premises_name", "premises_address", "license_type",
-                      "status", "municipality", "valid_to"},
-    "municipalities": {"name", "muni_type", "valid_to"},
+    "penndot_projects": "staging.penndot_projects",
+    "penndot_roads": "staging.penndot_roads",
+    "pa_open_data": "staging.pa_open_data",
 }
