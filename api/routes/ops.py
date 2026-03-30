@@ -25,6 +25,9 @@ def health() -> dict:
             "penndot_roads": "staging.penndot_roads",
             "penndot_projects": "staging.penndot_projects",
             "tax_claims": "staging.tax_claims",
+            "sheriff_sales": "staging.sheriff_sales",
+            "traffic_counts": "staging.traffic_counts",
+            "zipcodes": "staging.zipcodes",
         }
         for name, table in tables.items():
             try:

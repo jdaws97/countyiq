@@ -17,7 +17,7 @@ def get_stats() -> dict:
                 (SELECT COUNT(DISTINCT pidn) FROM staging.tax_claims WHERE valid_to IS NULL) AS delinquent_parcels,
                 (SELECT COALESCE(SUM(total), 0) FROM staging.tax_claims WHERE valid_to IS NULL AND total > 0) AS total_delinquent,
                 (SELECT COUNT(*) FROM staging.flood_zones WHERE valid_to IS NULL) AS flood_zone_count,
-                (SELECT COUNT(*) FROM staging.plcb_licenses WHERE valid_to IS NULL) AS liquor_license_count,
+                (SELECT COUNT(*) FROM staging.plcb_licenses WHERE valid_to IS NULL AND UPPER(status) = 'ACTIVE') AS liquor_license_count,
                 (SELECT COUNT(*) FROM staging.address_points WHERE valid_to IS NULL) AS address_point_count,
                 (SELECT COUNT(*) FROM staging.structures WHERE valid_to IS NULL) AS structure_count,
                 (SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL) AS parcel_count,

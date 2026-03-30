@@ -120,8 +120,11 @@ def distressed_parcels(
                         ELSE 0.2
                     END AS sale_stage_score,
 
-                    -- Acreage score (0-1)
-                    LEAST(COALESCE(p.acres::numeric, 0) / 50, 1.0) AS acreage_score,
+                    -- Acreage score (0-1): log scale to differentiate 0.1 vs 1 vs 10 vs 100
+                    LEAST(LN(GREATEST(COALESCE(p.acres::numeric, 0.01), 0.01) + 1) / LN(51), 1.0) AS acreage_score,
+
+                    -- Value score (0-1): assessed value normalized to $500K
+                    LEAST(COALESCE(p.aprtotal::numeric, 0) / 500000, 1.0) AS value_score,
 
                     -- Class score
                     CASE p.class
@@ -144,14 +147,17 @@ def distressed_parcels(
                 LEFT JOIN traffic tr ON p.pidn = tr.pidn
                 WHERE p.valid_to IS NULL
                   AND d.total_owed > 0
+                  AND COALESCE(p.aprtotal::numeric, 0) >= 1000
+                  AND COALESCE(p.acres::numeric, 0) >= 0.05
                   {extra_where}
             )
             SELECT *,
                 ROUND((
-                    delinquency_score * 0.25 +
+                    delinquency_score * 0.20 +
                     COALESCE(sheriff_score, 0) * 0.15 +
                     sale_stage_score * 0.10 +
-                    COALESCE(vacant_score, 0) * 0.15 +
+                    COALESCE(vacant_score, 0) * 0.10 +
+                    value_score * 0.10 +
                     COALESCE(traffic_score, 0) * 0.10 +
                     COALESCE(no_flood_score, 0) * 0.05 +
                     acreage_score * 0.10 +
@@ -160,10 +166,11 @@ def distressed_parcels(
                 )::numeric, 3) AS distress_score
             FROM scored
             WHERE (
-                delinquency_score * 0.25 +
+                delinquency_score * 0.20 +
                 COALESCE(sheriff_score, 0) * 0.15 +
                 sale_stage_score * 0.10 +
-                COALESCE(vacant_score, 0) * 0.15 +
+                COALESCE(vacant_score, 0) * 0.10 +
+                value_score * 0.10 +
                 COALESCE(traffic_score, 0) * 0.10 +
                 COALESCE(no_flood_score, 0) * 0.05 +
                 acreage_score * 0.10 +
@@ -181,7 +188,7 @@ def distressed_parcels(
         for k in ("total_owed", "acres", "aprtotal", "price", "distress_score",
                   "delinquency_score", "acreage_score", "class_score", "hold_score",
                   "vacant_score", "no_flood_score", "sheriff_score", "sheriff_judgment",
-                  "traffic_score", "sale_stage_score"):
+                  "traffic_score", "sale_stage_score", "value_score"):
             if d.get(k) is not None:
                 d[k] = float(d[k])
         results.append(d)

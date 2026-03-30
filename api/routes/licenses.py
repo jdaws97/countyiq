@@ -49,8 +49,12 @@ def list_licenses(
         """)
         type_counts = cur.fetchall()
 
+    # Real total from type_summary (not capped by limit)
+    total_active = sum(r["count"] for r in type_counts)
+
     return {
         "licenses": [dict(r) for r in licenses],
         "type_summary": [dict(r) for r in type_counts],
-        "total": len(licenses),
+        "total": total_active,
+        "showing": len(licenses),
     }

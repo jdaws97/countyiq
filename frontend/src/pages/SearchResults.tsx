@@ -221,15 +221,22 @@ export default function SearchResults() {
             </div>
 
             {/* Result rows */}
-            {results.map((r, idx) => (
+            {results.map((r, idx) => {
+              const pidn = r.pidn as string | undefined
+              const hasLink = pidn || (r.lat && r.lng)
+              const linkTo = pidn ? `/property/${pidn}` : (r.lat && r.lng ? `/map?lat=${r.lat}&lng=${r.lng}&zoom=17` : undefined)
+              const Wrapper = linkTo ? Link : 'div' as any
+              const wrapProps = linkTo ? { to: linkTo, style: { textDecoration: 'none', color: 'inherit' } } : {}
+              return (
+              <Wrapper key={`${r.title}-${r.subtitle}-${idx}`} {...wrapProps}>
               <div
-                key={`${r.title}-${r.subtitle}-${idx}`}
                 style={{
                   display: 'grid', gridTemplateColumns: '100px 1fr 1fr 80px 80px',
                   padding: '14px 24px', alignItems: 'center',
                   background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
                   borderBottom: idx < results.length - 1 ? '1px solid var(--border)' : 'none',
                   transition: 'background 0.15s',
+                  cursor: hasLink ? 'pointer' : 'default',
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
@@ -282,7 +289,9 @@ export default function SearchResults() {
                   )}
                 </div>
               </div>
-            ))}
+              </Wrapper>
+              )
+            })}
           </div>
         )}
       </main>
