@@ -42,6 +42,9 @@ def parcels_bbox(
                   AND p.geom && ST_MakeEnvelope(%(west)s, %(south)s, %(east)s, %(north)s, 4326)
             """, {"west": west, "south": south, "east": east, "north": north})
         elif layer == "vacant":
+            # Multi-signal vacancy: no building footprint + not recently sold at high price
+            # Excludes parcels with high assessed value or recent expensive sales
+            # which indicate development even if footprint data is stale
             cur.execute("""
                 SELECT
                     ST_AsGeoJSON(p.geom)::json AS geometry,
@@ -61,6 +64,7 @@ def parcels_bbox(
                       WHERE s.valid_to IS NULL AND s.geom IS NOT NULL
                         AND ST_Intersects(s.geom, p.geom)
                   )
+                  AND (p.price IS NULL OR p.price::numeric < 300000 OR p.class IN ('F', 'A', 'E'))
             """, {"west": west, "south": south, "east": east, "north": north})
         else:
             cur.execute("""
