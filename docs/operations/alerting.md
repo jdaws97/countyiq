@@ -18,7 +18,7 @@ All pipeline and infrastructure alerts flow into a **free Slack workspace**. Sla
 
 ```
 ┌─────────────────────────────────────┐
-│          DAGSTER (EC2)              │
+│          DAGSTER (Docker)           │
 │                                     │
 │  Run succeeds ──▶ Slack #pipeline-runs  ("✅ parcels: 176,060 records, 4m 12s")
 │  Run fails    ──▶ Retry (up to 3x)
@@ -29,54 +29,46 @@ All pipeline and infrastructure alerts flow into a **free Slack workspace**. Sla
 └─────────────────────────────────────┘
 
 ┌─────────────────────────────────────┐
-│        CLOUDWATCH (AWS)             │
+│    SYSTEM HEALTH MONITOR (cron)     │
+│    Runs every 5 min on VPS host     │
 │                                     │
-│  CPU > 90% 5min  ──▶ SNS ──▶ Slack #alerts-critical
-│  Memory > 85%    ──▶ SNS ──▶ Slack #alerts-critical
-│  Disk > 80%      ──▶ SNS ──▶ Slack #alerts-critical
-│  RDS connections ──▶ SNS ──▶ Slack #alerts-critical
-│  RDS storage     ──▶ SNS ──▶ Slack #alerts-critical
+│  Container down  ──▶ Slack #alerts-critical
+│  Disk > 80%      ──▶ Slack #alerts-critical
+│  Memory > 85%    ──▶ Slack #alerts-critical
+│  Postgres down   ──▶ Slack #alerts-critical
 │                                     │
 └─────────────────────────────────────┘
 ```
 
-**Dagster → Slack:** Direct webhook integration. Dagster failure/success sensors post to Slack via incoming webhook URL (stored in Parameter Store). No intermediate Lambda needed.
+**Dagster -> Slack:** Direct webhook integration. Dagster failure/success sensors post to Slack via incoming webhook URL (stored in `.env` on the VPS). No intermediate service needed.
 
-**CloudWatch → Slack:** CloudWatch Alarm → SNS Topic → Lambda (tiny forwarder) → Slack webhook. The Lambda is a ~20 line Python function that reformats the SNS message and posts to Slack. Runs within the permanent Lambda free tier.
+**System Health Monitor -> Slack:** A cron script on the VPS host checks container health, disk, and memory every 5 minutes. Posts to the Slack webhook on failure.
 
 ### Dagster Slack Integration Code
 
 ```python
 # pipelines/lib/slack.py
+import os
 import requests
 import json
-import boto3
 
-# SSM parameter names for each Slack channel
+# Environment variable names for each Slack channel webhook
 SLACK_CHANNELS = {
-    "critical": "/countyiq/slack-webhook-critical",
-    "warning": "/countyiq/slack-webhook-warning",
-    "pipeline": "/countyiq/slack-webhook-pipeline",
+    "critical": "SLACK_WEBHOOK_CRITICAL",
+    "warning": "SLACK_WEBHOOK_WARNING",
+    "pipeline": "SLACK_WEBHOOK_PIPELINE",
 }
 
-_webhook_cache = {}
-
 def get_slack_webhook_url(channel="pipeline"):
-    """Retrieve Slack webhook URL from Parameter Store.
+    """Retrieve Slack webhook URL from environment variable.
 
     Args:
         channel: One of 'critical', 'warning', 'pipeline'
     """
-    if channel in _webhook_cache:
-        return _webhook_cache[channel]
-
-    ssm = boto3.client("ssm", region_name="us-east-1")
-    response = ssm.get_parameter(
-        Name=SLACK_CHANNELS[channel],
-        WithDecryption=True,
-    )
-    url = response["Parameter"]["Value"]
-    _webhook_cache[channel] = url
+    env_var = SLACK_CHANNELS[channel]
+    url = os.environ.get(env_var)
+    if not url:
+        raise ValueError(f"Missing environment variable: {env_var}")
     return url
 
 def send_slack_message(channel: str, text: str, emoji: str = "🔔"):
@@ -166,52 +158,63 @@ default_retry_policy = RetryPolicy(
 | Consecutive failures | `#alerts-critical` | Custom sensor (3+ days of failures for same source) | "🔴 assessment_properties has failed 3 days in a row" |
 | Zero records returned | `#alerts-warning` | Asset check in Dagster | "⚠️ sheriff_sales returned 0 records (expected 50+)" |
 | Schema change detected | `#alerts-warning` | Asset check comparing field names | "⚠️ parcels API returned unknown field: NEW_COLUMN" |
-| Infra alarm | `#alerts-critical` | CloudWatch → SNS → Lambda → Slack | "🔴 EC2 CPU > 90% for 5 minutes" |
+| Container down | `#alerts-critical` | VPS cron health monitor | "🔴 countyiq-postgres is not running" |
+| Disk usage high | `#alerts-critical` | VPS cron health monitor | "🔴 Disk usage at 83% on /opt/countyiq" |
+| Memory usage high | `#alerts-critical` | VPS cron health monitor | "🔴 Memory usage at 88%" |
 | Successful run | `#pipeline-runs` | Dagster success sensor | "✅ parcels_arcgis: 176,060 records, 4m 12s" |
 
-### CloudWatch → Slack Forwarder Lambda
+### System Health Monitor
 
-```python
-# infra/lambda/cloudwatch_to_slack.py
-import json
-import os
-import urllib.request
+A shell script on the VPS host runs via cron every 5 minutes. It checks container health, disk, memory, and Postgres connectivity, and posts to Slack on any failure.
 
-def handler(event, context):
-    """Forward CloudWatch alarm SNS messages to Slack."""
-    webhook_url = os.environ["SLACK_WEBHOOK_URL"]
+```bash
+#!/usr/bin/env bash
+# /opt/countyiq/scripts/health-check.sh
+# Crontab: */5 * * * * /opt/countyiq/scripts/health-check.sh
 
-    for record in event["Records"]:
-        message = json.loads(record["Sns"]["Message"])
-        alarm_name = message.get("AlarmName", "Unknown")
-        state = message.get("NewStateValue", "Unknown")
-        reason = message.get("NewStateReason", "")[:200]
+set -euo pipefail
+source /opt/countyiq/.env
 
-        slack_msg = {
-            "channel": "#alerts-critical",
-            "username": "CloudWatch",
-            "icon_emoji": "🔴" if state == "ALARM" else "✅",
-            "text": f"{'🔴' if state == 'ALARM' else '✅'} *{alarm_name}*: {state}\n```{reason}```"
-        }
+WEBHOOK_URL="${SLACK_WEBHOOK_CRITICAL}"
 
-        req = urllib.request.Request(
-            webhook_url,
-            data=json.dumps(slack_msg).encode(),
-            headers={"Content-Type": "application/json"}
-        )
-        urllib.request.urlopen(req)
+alert() {
+    local msg="$1"
+    curl -s -X POST "$WEBHOOK_URL" \
+        -H 'Content-Type: application/json' \
+        -d "{\"channel\": \"#alerts-critical\", \"username\": \"VPS Monitor\", \"icon_emoji\": \"🔴\", \"text\": \"$msg\"}"
+}
+
+# 1. Check all Docker containers are running and healthy
+UNHEALTHY=$(docker compose -f /opt/countyiq/docker-compose.yml ps --format json | \
+    jq -r 'select(.State != "running") | .Name' 2>/dev/null)
+if [ -n "$UNHEALTHY" ]; then
+    alert "🔴 Containers not running: $UNHEALTHY"
+fi
+
+# 2. Check disk usage (alert if > 80%)
+DISK_PCT=$(df /opt/countyiq --output=pcent | tail -1 | tr -d ' %')
+if [ "$DISK_PCT" -gt 80 ]; then
+    alert "🔴 Disk usage at ${DISK_PCT}% on /opt/countyiq"
+fi
+
+# 3. Check memory usage (alert if > 85%)
+MEM_PCT=$(free | awk '/Mem:/ {printf "%.0f", $3/$2 * 100}')
+if [ "$MEM_PCT" -gt 85 ]; then
+    alert "🔴 Memory usage at ${MEM_PCT}%"
+fi
+
+# 4. Check Postgres connectivity
+if ! docker exec countyiq-postgres pg_isready -q 2>/dev/null; then
+    alert "🔴 Postgres is not responding (pg_isready failed)"
+fi
 ```
 
-**Note:** The CloudWatch forwarder Lambda runs **outside** the VPC (unlike the API Lambda), so it could call Parameter Store. However, using an environment variable (`SLACK_WEBHOOK_URL`) is simpler for a single-purpose function. Terraform sets this to the `#alerts-critical` webhook URL.
+### Environment Variables (`.env`)
 
-This Lambda is subscribed to the existing SNS topic used by CloudWatch alarms. Add it to the `monitoring` Terraform module.
+One webhook URL per channel. Dagster sensors and the health monitor script read these from `/opt/countyiq/.env`.
 
-### Parameter Store Values (New)
-
-One webhook per channel — Dagster sensors and the CloudWatch forwarder Lambda pick the right URL based on alert severity.
-
-| Parameter | Channel | Used By |
+| Variable | Channel | Used By |
 |---|---|---|
-| `/countyiq/slack-webhook-critical` | `#alerts-critical` | CloudWatch forwarder Lambda, Dagster failure sensor (after all retries exhausted) |
-| `/countyiq/slack-webhook-warning` | `#alerts-warning` | Dagster failure sensor (single failure, before retries) |
-| `/countyiq/slack-webhook-pipeline` | `#pipeline-runs` | Dagster success sensor (all completions) |
+| `SLACK_WEBHOOK_CRITICAL` | `#alerts-critical` | VPS health monitor cron, Dagster failure sensor (after all retries exhausted) |
+| `SLACK_WEBHOOK_WARNING` | `#alerts-warning` | Dagster failure sensor (single failure, before retries) |
+| `SLACK_WEBHOOK_PIPELINE` | `#pipeline-runs` | Dagster success sensor (all completions) |

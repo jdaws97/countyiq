@@ -9,14 +9,13 @@
 | **Phone buzzes** | Slack push notifications | Something needs attention NOW | Automatic — `#alerts-critical` |
 | **Scrollable history** | Slack channels | What happened today/this week | Open Slack, scroll `#pipeline-runs` |
 | **Dashboard** | `/ops/health` page in your frontend | "Is everything healthy?" at a glance | Morning check-in, or whenever curious |
-| **Deep-dive** | Dagster UI (via SSM port forward) | Investigate specific run failures, view logs, re-trigger runs | When debugging a specific issue |
-| **Infra deep-dive** | CloudWatch console | EC2/RDS metrics, log streams | Rarely — only for infra-level investigation |
+| **Deep-dive** | Dagster UI (via SSH tunnel) | Investigate specific run failures, view logs, re-trigger runs | When debugging a specific issue |
 
 ### Health Dashboard (`/ops/health`)
 
-A page built into your React frontend that queries the Lambda API for system health. This is your "single pane of glass" — open it on your phone or laptop and see green/yellow/red for everything.
+A page built into your React frontend that queries the API for system health. This is your "single pane of glass" — open it on your phone or laptop and see green/yellow/red for everything.
 
-**API Endpoint:** `GET /api/ops/health` (CloudFront routes `/api/*` to API Gateway → Lambda)
+**API Endpoint:** `GET /api/ops/health` (Caddy reverse-proxies `/api/*` to the API container)
 
 **Frontend route:** `/ops/health` (React client-side route — the React page fetches `/api/ops/health` and renders the dashboard)
 
@@ -74,11 +73,11 @@ A page built into your React frontend that queries the Lambda API for system hea
     }
   ],
   "infrastructure": {
-    "ec2_cpu_pct": 12.3,
-    "ec2_memory_used_pct": 62,
-    "ec2_disk_used_pct": 38,
-    "rds_free_storage_gb": 15.8,
-    "rds_connections": 8
+    "cpu_pct": 12.3,
+    "memory_used_pct": 62,
+    "disk_used_pct": 38,
+    "postgres_size_gb": 4.2,
+    "postgres_connections": 8
   }
 }
 ```
@@ -92,7 +91,7 @@ A page built into your React frontend that queries the Lambda API for system hea
 | `error` | 🔴 Red | Last run failed after all retries |
 | `unknown` | ⚪ Gray | Never run (new source, or on-demand only) |
 
-**Note:** These display statuses are **derived by the Lambda API handler**, not stored in the database. The `meta.pipeline_status` table stores raw pipeline outcomes (`SUCCESS`, `FAILURE`, `IN_PROGRESS`). The API computes the display status by comparing `last_run_at` and `schedule_type` against the current time:
+**Note:** These display statuses are **derived by the API handler**, not stored in the database. The `meta.pipeline_status` table stores raw pipeline outcomes (`SUCCESS`, `FAILURE`, `IN_PROGRESS`). The API computes the display status by comparing `last_run_at` and `schedule_type` against the current time:
 - `healthy` = status is SUCCESS and last_run_at is within the expected schedule window
 - `late` = status is SUCCESS but next_scheduled_run has passed without a new run
 - `error` = status is FAILURE (after all retries exhausted)
@@ -117,8 +116,8 @@ A page built into your React frontend that queries the Lambda API for system hea
 │  └────────────────────────────────────────────────────────────┘  │
 │                                                                  │
 │  ┌─── INFRASTRUCTURE ─────────────────────────────────────────┐  │
-│  │ EC2: Running    CPU 12%   Memory 58%   Disk 38%           │  │
-│  │ RDS: Available  Storage 4.2 / 20 GB    Connections 3      │  │
+│  │ VPS: Running   CPU 12%   Memory 58%   Disk 38%            │  │
+│  │ Postgres: 4.2 GB                      Connections 3       │  │
 │  └────────────────────────────────────────────────────────────┘  │
 │                                                                  │
 │  ┌─── ENTITY RESOLUTION ──────────────────────────────────────┐  │
@@ -130,31 +129,57 @@ A page built into your React frontend that queries the Lambda API for system hea
 
 ### How the Health Page Gets Its Data
 
-The health data comes from one place: **RDS**. Lambda is in a VPC with no internet access, so it cannot call AWS APIs (CloudWatch, etc.) directly. All data the health page needs is in the database.
+The health data comes from one place: **Postgres**. The API container queries the database directly for both pipeline status and infrastructure metrics.
 
-1. **Dagster run history** — Dagster stores all run metadata (status, timestamps, record counts) in its own database on the same RDS instance. The Lambda API queries a `meta.pipeline_status` table (see below).
+1. **Dagster run history** — Dagster stores all run metadata (status, timestamps, record counts) in its own database on the same Postgres instance. The API queries a `meta.pipeline_status` table (see below).
 
-2. **Infrastructure metrics** — A Dagster sensor on EC2 polls CloudWatch every 5 minutes and writes EC2/RDS metrics to `meta.infra_metrics`. Lambda reads this table instead of calling CloudWatch directly. This avoids the need for a NAT Gateway or VPC Endpoints.
+2. **Infrastructure metrics** — A Dagster sensor running inside the Dagster container collects VPS metrics directly using `psutil` and the Docker SDK, then writes them to `meta.infra_metrics`. The API reads this table.
 
-**Dagster infra metrics sensor (runs on EC2, which HAS internet access):**
+**Dagster infra metrics sensor (collects from VPS directly):**
 
 ```python
 # pipelines/sensors/infra_metrics.py
-import boto3
+import json
+import psutil
+import docker
 from dagster import sensor, RunRequest
 from lib.database import get_connection
 
 @sensor(minimum_interval_seconds=300)  # Every 5 minutes
 def infra_metrics_sensor(context):
-    """Poll CloudWatch and write EC2/RDS metrics to RDS for the health page."""
-    cw = boto3.client("cloudwatch", region_name="us-east-1")
+    """Collect VPS metrics and write to Postgres for the health page."""
     conn = get_connection()
+    client = docker.from_env()
 
-    # Fetch key metrics
+    # Collect system metrics via psutil
+    cpu_pct = psutil.cpu_percent(interval=1)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("/opt/countyiq")
+
+    # Check container status
+    containers = client.containers.list(all=True)
+    container_status = {
+        c.name: c.status for c in containers
+        if c.name.startswith("countyiq-")
+    }
+
+    # Check Postgres connections
+    pg_connections = conn.execute(
+        "SELECT count(*) FROM pg_stat_activity WHERE datname = 'countyiq';"
+    ).scalar()
+
+    # Check Postgres database size
+    pg_size_bytes = conn.execute(
+        "SELECT pg_database_size('countyiq');"
+    ).scalar()
+
     metrics = {
-        "ec2_cpu_pct": get_metric(cw, "AWS/EC2", "CPUUtilization", "countyiq-dagster"),
-        "rds_free_storage_gb": get_metric(cw, "AWS/RDS", "FreeStorageSpace", "countyiq-db") / 1e9,
-        "rds_connections": get_metric(cw, "AWS/RDS", "DatabaseConnections", "countyiq-db"),
+        "cpu_pct": cpu_pct,
+        "memory_used_pct": mem.percent,
+        "disk_used_pct": disk.percent,
+        "postgres_size_gb": round(pg_size_bytes / 1e9, 2),
+        "postgres_connections": pg_connections,
+        "container_status": container_status,
     }
 
     conn.execute("""
@@ -166,7 +191,7 @@ def infra_metrics_sensor(context):
     conn.execute("DELETE FROM meta.infra_metrics WHERE checked_at < NOW() - INTERVAL '24 hours'")
 ```
 
-**Lambda API handler:**
+**API handler:**
 
 ```python
 # api/routes/ops.py
@@ -193,7 +218,7 @@ def health_check():
         ORDER BY source_name
     """).fetchall()
 
-    # Get infra metrics from RDS (written by Dagster sensor, NOT from CloudWatch API)
+    # Get infra metrics from Postgres (written by Dagster sensor)
     infra = conn.execute("""
         SELECT metrics FROM meta.infra_metrics
         ORDER BY checked_at DESC LIMIT 1
@@ -208,8 +233,16 @@ def health_check():
 
 ### Access
 
-The `/ops/health` page is part of the public frontend (no auth for MVP). If you want to restrict it later, you can add a simple API key check or move it behind CloudFront's signed URLs.
+The `/ops/health` page is part of the public frontend (no auth for MVP). If you want to restrict it later, you can add a simple API key check or Cloudflare Access.
 
 **Quick access pattern:**
-- Bookmark `https://your-cloudfront-url.cloudfront.net/ops/health` on your phone (this is the React frontend route; the page calls `/api/ops/health` internally)
+- Bookmark `https://countyiq.dev/ops/health` on your phone (this is the React frontend route; the page calls `/api/ops/health` internally)
 - Morning routine: open bookmark, glance at colors, done
+
+**Dagster UI access (for deep investigation):**
+```bash
+# SSH tunnel to the Dagster webserver container
+ssh -L 3000:localhost:3000 countyiq
+
+# Then open http://localhost:3000 in your browser
+```

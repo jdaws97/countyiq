@@ -1,23 +1,23 @@
 # Phase 4: API, Frontend & Operations Stack
 
-**Goal:** The API and frontend are built, tested, and verified **locally**. Everything works end-to-end against Docker Postgres before any AWS deployment.
+**Goal:** The API and frontend are built, tested, and verified **locally**. Everything works end-to-end against Docker Postgres before any deployment to the VPS.
 
 **Time estimate:** 2-3 days
 
 **Prerequisites:** Phase 3 complete. Local Docker Postgres is populated with real data from pipeline runs.
 
-> **Local-first:** The API runs on `localhost:8000` (uvicorn), the frontend on `localhost:5173` (Vite dev server), both hitting Docker Postgres on `localhost:5433`. Slack setup (Step 4.3) is the only step that touches external services. AWS deployment happens in Phase 5.
+> **Local-first:** The API runs on `localhost:8000` (uvicorn), the frontend on `localhost:5173` (Vite dev server), both hitting Docker Postgres on `localhost:5433`. Slack setup (Step 4.3) is the only step that touches external services. Production deployment happens in Phase 5.
 
-### Step 4.1: Build the FastAPI Lambda API
+### Step 4.1: Build the FastAPI API
 
-**Before writing API code:** Use Context7 to pull current FastAPI, Mangum, and psycopg2 docs. Verify the Mangum adapter pattern for Lambda integration and FastAPI's current middleware/dependency injection API.
+**Before writing API code:** Use Context7 to pull current FastAPI and psycopg2 docs. Verify FastAPI's current middleware/dependency injection API.
 
-Reference: Infrastructure Plan, Frontend Architecture → Lambda Configuration section.
+> **Note:** API runs under Uvicorn in a Docker container. No Lambda wrapper needed. `handler.py` and Mangum are not used.
 
 | File | Purpose |
 |---|---|
 | `api/main.py` | FastAPI app with routes |
-| `api/handler.py` | Mangum adapter for Lambda |
+| `api/Dockerfile` | Container image for production deployment |
 | `api/requirements.txt` | Python dependencies |
 | `api/routes/parcels.py` | Parcel search/detail/comparables/adjacent endpoints |
 | `api/routes/owners.py` | Owner entity + concentration endpoints |
@@ -26,7 +26,7 @@ Reference: Infrastructure Plan, Frontend Architecture → Lambda Configuration s
 | `api/routes/municipalities.py` | Municipality profiles and listing |
 | `api/routes/stats.py` | Homepage stats (total parcels, changes this week, total assessed) |
 | `api/routes/ops.py` | Health dashboard endpoint |
-| `api/lib/database.py` | RDS connection (reads DATABASE_* env vars set by Terraform — NOT Parameter Store at runtime; see Infra Plan, VPC networking constraint) |
+| `api/lib/database.py` | Postgres connection (reads DATABASE_* env vars from container environment) |
 
 **API endpoints to implement:**
 
@@ -78,26 +78,22 @@ curl http://localhost:8000/api/ops/health
 **Implementation notes:**
 
 - **`saledt` is a string, not a date.** The "recently sold" filter needs `CAST(saledt AS DATE)` or a regex parse. Consider adding a `sale_date DATE` computed column in a future migration for index-friendly date filtering.
-- **Export strategy:** CSV export is client-side — the frontend converts JSON API responses to CSV/downloadable files using a library like `papaparse`. PDF export for the property report card uses client-side `html2pdf.js` or `jspdf` — avoids adding heavy PDF libraries to the Lambda package (which has a 250MB limit). No server-side export endpoints needed.
+- **Export strategy:** CSV export is client-side — the frontend converts JSON API responses to CSV/downloadable files using a library like `papaparse`. PDF export for the property report card uses client-side `html2pdf.js` or `jspdf`. No server-side export endpoints needed.
 - **Owner profile depends on entity resolution.** Until the entity resolution pipeline runs, `/api/owners/{owner_id}` returns empty results and the "Also owns X other parcels" field in the property report card will be absent. The frontend should handle this gracefully (hide the section rather than show "0 other parcels").
 - **`public.properties` VIEW is too narrow for the property report card.** The VIEW only includes a subset of parcel columns. The `/api/parcels/{pidn}` endpoint should query `staging.parcels` directly to get all fields (year built, living area, deed book/page, previous owner, previous price). Consider widening the VIEW in a future migration.
 
-**Package and deploy to Lambda (Phase 5 — after `terraform apply`):**
+**Build Docker image (Phase 5 — after VPS is provisioned):**
 
 ```bash
-cd api/
-pip install -r requirements.txt -t package/
-cp -r *.py routes/ lib/ package/
-cd package && zip -r ../lambda.zip .
+docker build -t countyiq-api -f api/Dockerfile .
 
-aws lambda update-function-code \
-  --function-name countyiq-api \
-  --zip-file fileb://lambda.zip
+# Test locally with Docker
+docker run -p 8000:8000 --env-file .env countyiq-api
 ```
 
-> **Checkpoint:** Hit the API Gateway URL in a browser. `/api/ops/health` returns JSON with source statuses. `/api/parcels/{pidn}` returns a real parcel record. Run `superpowers:requesting-code-review` against the API code before proceeding.
+> **Checkpoint:** Hit the API at your domain (via Cloudflare). `/api/ops/health` returns JSON with source statuses. `/api/parcels/{pidn}` returns a real parcel record. Run `superpowers:requesting-code-review` against the API code before proceeding.
 >
-> **Note on tiles:** Vector tiles are NOT served by Lambda. They're pre-generated by the Dagster tile pipeline and uploaded to S3. CloudFront routes `/tiles/*` directly to the S3 tiles bucket (7-day cache). The API has no tile routes.
+> **Note on tiles:** Vector tiles are NOT served by the API. They're pre-generated by the Dagster tile pipeline and uploaded to R2. Caddy routes `/tiles/*` to the R2 tiles bucket (7-day cache). The API has no tile routes.
 
 ### Step 4.2: Build the React Frontend
 
@@ -146,17 +142,11 @@ npm run dev
 6. Repeat for each view
 ```
 
-**Deploy to S3/CloudFront (Phase 5 — after `terraform apply`):**
+**Deploy via Cloudflare Pages (Phase 5 — after initial setup):**
 
-```bash
-npm run build
-aws s3 sync dist/ s3://countyiq-frontend --delete
-aws cloudfront create-invalidation \
-  --distribution-id <distribution-id> \
-  --paths "/*"
-```
+Frontend deploys automatically via Cloudflare Pages on push to `main`. No manual deployment commands needed. For preview deployments, Cloudflare Pages creates a unique URL for each PR.
 
-> **Checkpoint:** Use Playwright MCP to navigate to the CloudFront URL and take screenshots of each view. The map loads with parcel boundaries. Click a parcel and see real data in the sidebar. Search returns results. `/ops/health` page shows green/yellow/red statuses. Run `superpowers:requesting-code-review` against the frontend code before proceeding.
+> **Checkpoint:** Use Playwright MCP to navigate to your domain (via Cloudflare) and take screenshots of each view. The map loads with parcel boundaries. Click a parcel and see real data in the sidebar. Search returns results. `/ops/health` page shows green/yellow/red statuses. Run `superpowers:requesting-code-review` against the frontend code before proceeding.
 
 ### Step 4.3: Set Up Slack Workspace & Integrations
 
@@ -165,13 +155,13 @@ aws cloudfront create-invalidation \
 3. Turn ON phone notifications for `#alerts-critical` (this is the only channel that should buzz your phone)
 4. Create a Slack App at [api.slack.com/apps](https://api.slack.com/apps) → "Create New App" → "From scratch" → name it `CountyIQ`
 5. Enable Incoming Webhooks in the app settings, then "Add New Webhook to Workspace" **three times** — once per channel. Each gives a separate URL.
-6. Store all three webhook URLs in Parameter Store:
+6. Store all three webhook URLs in the `.env` file on the VPS:
 
 ```bash
-aws ssm put-parameter \
-  --name "/countyiq/slack-webhook-critical" \
-  --value "https://hooks.slack.com/services/T.../B.../..." \
-  --type SecureString
+# Add to /opt/countyiq/.env
+SLACK_WEBHOOK_CRITICAL=https://hooks.slack.com/services/T.../B.../...
+SLACK_WEBHOOK_WARNING=https://hooks.slack.com/services/T.../B.../...
+SLACK_WEBHOOK_PIPELINE=https://hooks.slack.com/services/T.../B.../...
 
 aws ssm put-parameter \
   --name "/countyiq/slack-webhook-warning" \
@@ -185,8 +175,8 @@ aws ssm put-parameter \
 ```
 
 7. Test each webhook: `curl -X POST -H 'Content-type: application/json' --data '{"text":"Test from CountyIQ"}' YOUR_WEBHOOK_URL`
-8. Deploy the CloudWatch → Slack forwarder Lambda (see Infrastructure Plan, Error Handling section)
-9. Subscribe the Lambda to the SNS topic used by CloudWatch alarms
+8. Configure Dagster sensors to send alerts to the appropriate webhook URLs (see `countyiq/lib/slack.py`)
+9. Verify alert routing: critical failures go to `#alerts-critical`, warnings to `#alerts-warning`, run completions to `#pipeline-runs`
 
 > **Checkpoint:** Manually trigger a test message to each Slack channel. Verify phone push notifications work for `#alerts-critical`. Stop and restart Dagster to trigger the success sensor — verify `#pipeline-runs` gets a message.
 

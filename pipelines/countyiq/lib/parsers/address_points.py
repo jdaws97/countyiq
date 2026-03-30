@@ -29,6 +29,25 @@ FIELD_MAP = {
 NUMERIC_FIELDS = {"add_number", "long", "lat"}
 
 
+def parse_address_point_feature(raw_feature: dict) -> dict | None:
+    """Parse one ArcGIS Address Point feature into a staging record."""
+    attrs = raw_feature.get("attributes", {})
+    site_nguid = attrs.get("Site_NGUID")
+    if not site_nguid:
+        return None
+
+    record = {}
+    for src, dest in FIELD_MAP.items():
+        val = attrs.get(src)
+        if val is None or val == "":
+            record[dest] = None
+        elif dest in NUMERIC_FIELDS:
+            record[dest] = val
+        else:
+            record[dest] = str(val)
+    return record
+
+
 def parse_address_points_features(raw_features: list[dict]) -> list[dict]:
     """Parse ArcGIS Address Point features into staging.address_points records.
 
@@ -40,21 +59,8 @@ def parse_address_points_features(raw_features: list[dict]) -> list[dict]:
     """
     records = []
     for feat in raw_features:
-        attrs = feat.get("attributes", {})
-        site_nguid = attrs.get("Site_NGUID")
-        if not site_nguid:
-            continue
-
-        record = {}
-        for src, dest in FIELD_MAP.items():
-            val = attrs.get(src)
-            if val is None or val == "":
-                record[dest] = None
-            elif dest in NUMERIC_FIELDS:
-                record[dest] = val
-            else:
-                record[dest] = str(val)
-
-        records.append(record)
+        record = parse_address_point_feature(feat)
+        if record is not None:
+            records.append(record)
 
     return records

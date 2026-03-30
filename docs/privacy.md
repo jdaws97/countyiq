@@ -6,7 +6,7 @@
 
 All data ingested in the MVP phase is **already publicly available** — GIS portal data, FEMA flood maps, PennDOT road data, PA Open Data Portal datasets, and assessment records are all published by government agencies for public consumption. CountyIQ aggregates and cross-references this data but does not create new privacy exposure because anyone can already access every individual record through the source agencies' own websites.
 
-There is no authentication layer in the MVP. The frontend is publicly accessible via CloudFront, and the Lambda API serves data without requiring login.
+There is no authentication layer in the MVP. The frontend is publicly accessible via Cloudflare Pages, and the API serves data without requiring login.
 
 ### When Access Controls Become Necessary
 
@@ -25,11 +25,11 @@ Access controls should be introduced **before or alongside Phase 2 sources** tha
 
 **Phase 2 (when court/inmate data arrives):**
 
-- Add Cognito or Clerk authentication (see Future Enhancements: ALB + Cognito)
+- Add Clerk authentication
 - Implement role-based tiers: `citizen` (default, rate-limited), `professional` (real estate, legal), `government` (municipal staff)
 - Add query auditing: log all API requests with user identity, query parameters, and timestamp to `meta.query_audit_log`
 
-*Note: `meta.query_audit_log` does not exist at MVP. It will be added as part of the Phase 2 auth gate implementation. The DDL will be defined when Cognito/Clerk integration is built.*
+*Note: `meta.query_audit_log` does not exist at MVP. It will be added as part of the Phase 2 auth gate implementation. The DDL will be defined when Clerk integration is built.*
 
 - Rate-limit person-specific lookups (e.g., owner name search limited to 50/hour for citizen tier)
 
@@ -47,10 +47,10 @@ The feasibility report (`docs/data-source-feasibility.md`, Privacy & Legal Consi
 
 Adding authentication does not require architectural changes — it's an additive layer:
 
-- **API:** FastAPI middleware for JWT verification (Cognito/Clerk tokens)
+- **API:** FastAPI middleware for JWT verification (Clerk tokens)
 - **Frontend:** React auth wrapper (redirect to login for protected routes)
-- **CloudFront:** No change needed (auth happens at API layer, not CDN)
-- **Cost:** Cognito free tier covers 50,000 MAU (more than sufficient)
+- **Cloudflare:** No change needed (auth happens at API layer, not CDN)
+- **Cost:** Clerk free tier covers 10,000 MAU (sufficient for initial launch)
 
 The API's flat package structure (`api/routes/`, `api/lib/`) makes it straightforward to add auth middleware without restructuring.
 

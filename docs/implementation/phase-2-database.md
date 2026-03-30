@@ -4,7 +4,7 @@
 
 **Time estimate:** 1-2 hours
 
-**Prerequisites:** Phase 1 complete (Terraform written and validated, NOT applied). Docker Postgres running locally (`docker compose up -d postgres-test`).
+**Prerequisites:** Phase 1 complete (VPS provisioned, Docker Compose ready). Docker Postgres running locally (`docker compose up -d postgres-test`).
 
 ### Schema Ownership
 
@@ -42,7 +42,7 @@ pip install -e ".[dev]"
 
 The baseline migration (`001_initial_schema_mvp_sources.py`) is already written. It creates:
 
-**`staging` schema:** (Cleaned, normalized, change-tracked — NO `raw` schema; raw data goes to S3 only)
+**`staging` schema:** (Cleaned, normalized, change-tracked — NO `raw` schema; raw data goes to R2 only)
 - `parcels` — GIS parcel data with SCD Type 2 (valid_from/valid_to)
 - `assessment_properties` — Assessment database records (SCD Type 2)
 - `flood_zones` — FEMA flood hazard boundaries
@@ -60,7 +60,7 @@ The baseline migration (`001_initial_schema_mvp_sources.py`) is already written.
 
 **`meta` schema:** (Application metadata — NOT Dagster internals. Dagster has its own `dagster` database.)
 - `pipeline_status` — One row per source, updated by Dagster sensor after each run
-- `infra_metrics` — EC2/RDS CloudWatch metrics, written by Dagster sensor every 5 min
+- `infra_metrics` — VPS/Postgres system metrics, written by Dagster sensor every 5 min
 - `data_quality_checks` — Pass/fail results from Dagster asset checks
 
 **Functions:** `staging.parid_to_pidn()`, `public.normalize_name()`, `public.normalize_address()`
@@ -89,25 +89,24 @@ PGPASSWORD=localtest psql -h localhost -p 5433 -U dagster_admin -d countyiq \
 docker compose down -v
 ```
 
-### Step 2.3: Apply Migration to RDS
+### Step 2.3: Apply Migration to Production
 
-On RDS, `initialize.sh` handles this automatically — it runs `init.sql` then `alembic upgrade head` in sequence. No manual step needed.
+On the VPS, the init script handles this automatically — it runs `init.sql` then `alembic upgrade head` in sequence. No manual step needed.
 
-For subsequent migrations (after initial setup), apply via SSM port forward:
+For subsequent migrations (after initial setup), apply via SSH:
 
 ```bash
-# Set up SSM port forwarding to RDS
-aws ssm start-session \
-  --target <instance-id> \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["<rds-endpoint>"],"portNumber":["5432"],"localPortNumber":["5433"]}'
+# Option 1: Run directly on the VPS
+ssh countyiq 'docker exec countyiq-dagster alembic upgrade head'
 
+# Option 2: Via SSH tunnel + local alembic
+ssh -L 5433:localhost:5432 countyiq
 # In another terminal:
 cd pipelines/
 DATABASE_URL="postgresql://dagster_admin:<password>@localhost:5433/countyiq" \
   alembic upgrade head
 ```
 
-> **Checkpoint:** Connect to RDS. `\dt staging.*` shows 9 staging tables. `\dt public.*` shows owners, owner_source_links. `\dv public.*` shows the properties view. `\dt meta.*` shows 3 meta tables. All tables have the expected columns including `valid_from`/`valid_to` on SCD Type 2 tables.
+> **Checkpoint:** Connect to Postgres. `\dt staging.*` shows 9 staging tables. `\dt public.*` shows owners, owner_source_links. `\dv public.*` shows the properties view. `\dt meta.*` shows 3 meta tables. All tables have the expected columns including `valid_from`/`valid_to` on SCD Type 2 tables.
 
 ---

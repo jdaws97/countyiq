@@ -7,7 +7,7 @@
 | Concept | What it is | Your example |
 |---|---|---|
 | **Asset** | A thing that exists (a database table, a file). You write a Python function that produces it, and Dagster tracks whether it's fresh or stale. | The `parcels` table, the `assessment` table |
-| **Resource** | A shared connection that assets use. Configured once, shared everywhere. | Your RDS database connection, your S3 bucket |
+| **Resource** | A shared connection that assets use. Configured once, shared everywhere. | Your Postgres database connection, your R2 storage bucket |
 | **Job** | A group of assets to build together. | "Build all ArcGIS source assets" |
 | **Schedule** | A cron timer that triggers a job. | "Run the ArcGIS job every Monday at 2am" |
 | **Sensor** | A trigger that watches for a condition, then kicks off a job. Optional — schedules work fine alone. | "When parcels_raw finishes, start the enrichment job" |
@@ -39,23 +39,18 @@ Each box is one or more Dagster assets. Arrows show dependencies. Dagster sees t
 
 ## Monorepo layout
 
-Since infrastructure (Terraform) and pipeline code (Dagster) live in the same repo:
+Since infrastructure (Docker Compose) and pipeline code (Dagster) live in the same repo:
 
 ```
 countyiq/
 │
-├── infra/                              # Terraform (already designed)
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── terraform.tfvars                # GITIGNORED
-│   ├── outputs.tf
-│   ├── backend.tf
-│   └── modules/
-│       ├── networking/
-│       ├── iam/
-│       ├── database/
-│       ├── compute/
-│       └── monitoring/
+├── docker/                             # Docker Compose infrastructure
+│   ├── docker-compose.yml              # All services: postgres, dagster, api, caddy, watchtower
+│   ├── docker-compose.dev.yml          # Local dev overrides (port mappings, volumes)
+│   ├── Caddyfile                       # Reverse proxy configuration
+│   ├── .env.example                    # Template for secrets
+│   ├── backup.sh                       # pg_dump → R2 backup script
+│   └── setup.sh                        # Initial VPS provisioning script
 │
 ├── pipelines/                          # Dagster project
 │   ├── pyproject.toml                  # Python dependencies
@@ -74,8 +69,8 @@ countyiq/
 │   │   │
 │   │   ├── resources/                  # Shared connections
 │   │   │   ├── __init__.py
-│   │   │   ├── database.py             # RDS connection (psycopg2)
-│   │   │   └── storage.py              # S3 client for raw archival
+│   │   │   ├── database.py             # PostgreSQL connection (Docker network)
+│   │   │   └── storage.py              # R2 client (S3-compatible) for raw archival
 │   │   │
 │   │   ├── assets/                     # Data assets by source type
 │   │   │   ├── __init__.py
@@ -165,9 +160,8 @@ countyiq/
 │       └── types/
 │           └── index.ts               # TypeScript interfaces
 │
-├── api/                                # FastAPI Lambda backend
+├── api/                                # FastAPI backend (Docker)
 │   ├── requirements.txt
-│   ├── handler.py                      # Lambda entry point (Mangum adapter)
 │   ├── main.py                         # FastAPI app definition
 │   ├── routes/
 │   │   ├── __init__.py
@@ -175,7 +169,7 @@ countyiq/
 │   │   ├── owners.py                  # /api/owners endpoints
 │   │   ├── search.py                  # /api/search endpoints
 │   ├── lib/
-│   │   ├── database.py                # RDS connection pool
+│   │   ├── database.py                # PostgreSQL connection pool
 │   │   └── schemas.py                 # Pydantic response models
 │   └── tests/
 │       └── test_routes.py
@@ -240,7 +234,8 @@ def parcels_arcgis(context: AssetExecutionContext, database, s3):
     )
     context.log.info(f"Fetched {len(features)} parcels")
 
-    # 2. Archive raw response to S3 (audit trail / replay source)
+    # 2. Archive raw response to R2 (audit trail / replay source)
+    # s3 is the Dagster resource name — it uses boto3 with R2 endpoint override. Same API, different backend.
     s3.archive("arcgis/parcels", features)
 
     # 3. SCD Type 2 upsert to staging.parcels
@@ -256,9 +251,9 @@ assets = [parcels_arcgis]
 ```
 
 **Key things to notice:**
-- Single asset per source — fetches, archives to S3, and upserts to staging in one step
+- Single asset per source — fetches, archives to R2, and upserts to staging in one step
 - `database.scd2_upsert()` handles SCD Type 2 logic (expire changed records, insert new)
-- Raw response archived to S3 first (audit trail), then parsed into `staging.*`
+- Raw response archived to R2 first (audit trail), then parsed into `staging.*`
 - The `context.log` calls show up in the Dagster UI so you can see what happened
 - `load_assets_from_package_module` auto-discovers `@asset` functions, so no manual `assets` list export needed
 
@@ -270,10 +265,10 @@ assets = [parcels_arcgis]
 | `lib/arcgis_client.py` | Handles ArcGIS REST API pagination (queries return max 1000–2000 records at a time, so it loops until all records are fetched) and GeoJSON conversion | All `arcgis/` assets |
 | `lib/playwright_utils.py` | Launches Playwright Chromium with consistent settings (headless, timeout, viewport), captures screenshots for debugging | All `scrapers/` assets that need Playwright |
 | `lib/scd.py` | SCD Type 2 upsert helper — expire changed records, insert new/changed, skip unchanged, detect deletes. Runs inside an explicit transaction for crash safety. | All assets that write to `staging.*` |
-| `lib/slack.py` | 3-channel Slack webhook helper (critical/warning/pipeline), reads URLs from SSM Parameter Store, caches them | Sensors (`sensors/alerting.py`) |
+| `lib/slack.py` | 3-channel Slack webhook helper (critical/warning/pipeline), reads URLs from environment variables | Sensors (`sensors/alerting.py`) |
 | `lib/parsers/` | Per-source parsing functions (e.g. `parcels.py`, `plcb.py`) — extract and normalize fields from raw API responses. Parsers accept county-specific params (e.g. `county_filter`) rather than hardcoding values. | All assets |
-| `resources/database.py` | PostgreSQL connection resource using psycopg2, reads `DATABASE_*` env vars | All assets via Dagster resource injection |
-| `resources/storage.py` | S3 client for archiving raw responses to `s3://countyiq-raw/<prefix>/<source>/<date>/` | All assets via Dagster resource injection |
+| `resources/database.py` | PostgreSQL connection (Docker network) using psycopg2, reads `DATABASE_*` env vars | All assets via Dagster resource injection |
+| `resources/storage.py` | R2 client (S3-compatible) for archiving raw responses to `countyiq-raw/<prefix>/<source>/<date>/` | All assets via Dagster resource injection |
 
 ## How jobs and schedules connect
 
@@ -348,7 +343,7 @@ dependencies = [
     # Dagster core
     "dagster",
     "dagster-webserver",
-    "dagster-postgres",          # For Dagster storage on RDS
+    "dagster-postgres",          # For Dagster storage on PostgreSQL
 
     # Database
     "psycopg2-binary",
@@ -369,7 +364,7 @@ dependencies = [
     "pyproj",                    # Coordinate system transforms
 
     # AWS
-    "boto3",                     # S3 + Parameter Store access
+    "boto3",                     # R2 object storage (S3-compatible)
 
     # Utilities
     "python-dotenv",             # .env file loading for local dev
@@ -413,4 +408,4 @@ dagster dev -m countyiq.definitions
 #    You can trigger individual assets, view the dependency graph, etc.
 ```
 
-This gives you the full Dagster experience locally — same UI, same asset graph, same everything — just pointed at a local database instead of RDS. When you're happy with changes, commit, push, deploy to EC2.
+This gives you the full Dagster experience locally — same UI, same asset graph, same everything — just pointed at a local database instead of production. When you're happy with changes, commit and push — Watchtower on the VPS auto-pulls the updated image.

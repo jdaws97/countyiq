@@ -1,12 +1,12 @@
 ---
 name: countyiq
 description: |
-  CountyIQ development skill for building and extending the CountyIQ civic intelligence platform (York County, PA). Use this skill whenever the task involves: writing Dagster pipeline assets or sensors, creating or modifying FastAPI Lambda API routes, editing Terraform infrastructure modules, working with the PostgreSQL schema (staging/public/meta), building React frontend components, configuring GitHub Actions CI/CD workflows, or adding new data sources to the platform. Also trigger when the user references the CountyIQ monorepo, any of its architecture docs, York County data sources, entity resolution, vector tiles, or the /ops/health dashboard. If the user says "build the pipeline for X" or "add source Y" or "write the API route for Z" — this skill applies.
+  CountyIQ development skill for building and extending the CountyIQ civic intelligence platform (York County, PA). Use this skill whenever the task involves: writing Dagster pipeline assets or sensors, creating or modifying FastAPI API routes, working with Docker Compose infrastructure, working with the PostgreSQL schema (staging/public/meta), building React frontend components, configuring GitHub Actions CI/CD workflows, or adding new data sources to the platform. Also trigger when the user references the CountyIQ monorepo, any of its architecture docs, York County data sources, entity resolution, vector tiles, or the /ops/health dashboard. If the user says "build the pipeline for X" or "add source Y" or "write the API route for Z" — this skill applies.
 ---
 
 # CountyIQ Development Skill
 
-You're working on **CountyIQ**, a civic intelligence platform that aggregates public data for York County, PA. It's a solo-dev project (Jarod) with a monorepo (`jarod/countyiq` on GitHub) containing Terraform infrastructure, Dagster pipelines, a FastAPI Lambda API, and a React frontend.
+You're working on **CountyIQ**, a civic intelligence platform that aggregates public data for York County, PA. It's a solo-dev project (Jarod) with a monorepo (`jarod/countyiq` on GitHub) containing Docker Compose infrastructure, Dagster pipelines, a FastAPI API, and a React frontend. Infrastructure runs on a Hetzner VPS with Cloudflare for CDN/DNS/frontend hosting and Cloudflare R2 for object storage.
 
 This skill exists because the architecture has a lot of cross-cutting constraints that are easy to violate. Rather than reading thousands of lines of docs every time, use this as your routing layer — it tells you the rules that matter for each task type and points you to the right doc file when you need detail.
 
@@ -20,7 +20,7 @@ All architecture docs live in `docs/`. Read individual files on-demand — never
 |---|---|---|
 | `docs/architecture-overview.md` | System diagram, high-level flow | Starting any task — orient yourself |
 | `docs/decisions.md` | Decision log + acknowledged tradeoffs | Before proposing architectural changes — check if it was already decided |
-| `docs/cost.md` | Year 1/2 cost breakdown, cost traps | Before adding any AWS service |
+| `docs/cost.md` | Hetzner + Cloudflare cost breakdown, cost traps | Before adding any service |
 | `docs/privacy.md` | Auth gate, Phase 2 sensitivity, PA HB 1822 | Before exposing person-level data |
 | `docs/open-items.md` | Remaining TODOs | When looking for what to work on next |
 
@@ -28,15 +28,7 @@ All architecture docs live in `docs/`. Read individual files on-demand — never
 
 | File | What it covers |
 |---|---|
-| `docs/infrastructure/services.md` | AWS services used (summary table) |
-| `docs/infrastructure/database.md` | RDS config, free tier, storage, backups, local access |
-| `docs/infrastructure/networking.md` | VPC, security groups, IAM roles/policies |
-| `docs/infrastructure/compute.md` | EC2 instance, Elastic IP, CloudWatch alarms |
-| `docs/infrastructure/terraform.md` | Terraform project structure, state backend |
-| `docs/infrastructure/cicd.md` | GitHub Actions workflows, OIDC federation, deploy flows |
-| `docs/infrastructure/waf.md` | WAF rate limiting config and tuning |
-| `docs/infrastructure/backup-recovery.md` | RDS backups, S3 durability, EC2 recovery, DR drills |
-| `docs/infrastructure/bootstrap.md` | EC2 user data script, systemd services |
+| `docs/infrastructure.md` | VPS spec, Docker Compose services, Caddy config, Cloudflare setup, firewall, secrets, backups, CI/CD, monitoring, upgrade path |
 
 ### Schema
 
@@ -53,14 +45,14 @@ All architecture docs live in `docs/`. Read individual files on-demand — never
 | `docs/pipelines/dagster-config.md` | Dagster components, memory budget, schedules |
 | `docs/pipelines/code-structure.md` | Monorepo layout, asset patterns, definitions.py, shared lib, jobs/schedules, pyproject.toml |
 | `docs/pipelines/entity-resolution.md` | Matching logic, normalization, schema, Dagster asset, MVP vs Phase 2 scope |
-| `docs/pipelines/data-retention.md` | S3 raw snapshots, SCD2 in RDS, log pruning, storage projections |
+| `docs/pipelines/data-retention.md` | R2 raw snapshots, SCD2 in Postgres, log pruning, storage projections |
 | `docs/pipelines/backfill.md` | Day 1 backfill strategy, source categories, execution order |
 
 ### API
 
 | File | What it covers |
 |---|---|
-| `docs/api/lambda-api.md` | Lambda config, FastAPI app, CloudFront routing, connection pooling, cold start, deployment |
+| `docs/api/api.md` | FastAPI app, Caddy routing, Docker config, connection pooling, deployment |
 
 ### Frontend
 
@@ -72,7 +64,7 @@ All architecture docs live in `docs/`. Read individual files on-demand — never
 
 | File | What it covers |
 |---|---|
-| `docs/operations/alerting.md` | Slack integration, Dagster sensors, retry policy, CloudWatch→Slack forwarder |
+| `docs/operations/alerting.md` | Slack integration, Dagster sensors, retry policy, VPS health monitor |
 | `docs/operations/health-dashboard.md` | /ops/health page, status logic, API response structure, infra metrics sensor |
 | `docs/operations/testing.md` | 3-layer testing strategy, schema validation, asset checks |
 | `docs/operations/runbook.md` | Daily ops, restart procedures, emergency stop, rollback procedures |
@@ -82,11 +74,11 @@ All architecture docs live in `docs/`. Read individual files on-demand — never
 | File | What it covers |
 |---|---|
 | `docs/implementation/README.md` | How to use the implementation guide |
-| `docs/implementation/phase-0-1-setup.md` | Local env setup, AWS bootstrap, Terraform apply |
+| `docs/implementation/phase-0-1-setup.md` | Local env setup, Hetzner VPS provisioning, Docker Compose deploy |
 | `docs/implementation/phase-2-database.md` | Alembic setup, initial migration |
 | `docs/implementation/phase-3-pipelines.md` | Dagster framework, MVP source assets, Day 1 backfill |
-| `docs/implementation/phase-4-api-frontend.md` | FastAPI Lambda, React frontend, Slack setup |
-| `docs/implementation/phase-5-cicd-golive.md` | GitHub Actions, validation, go-live |
+| `docs/implementation/phase-4-api-frontend.md` | FastAPI API, React frontend, Slack setup |
+| `docs/implementation/phase-5-cicd-golive.md` | GHCR + Watchtower, Cloudflare Pages, validation, go-live |
 | `docs/implementation/expansion-roadmap.md` | Phase 2/3 sources, platform upgrades, multi-county |
 | `docs/implementation/file-inventory.md` | Quick reference of all repo files |
 
@@ -95,8 +87,8 @@ All architecture docs live in `docs/`. Read individual files on-demand — never
 | File | What it covers |
 |---|---|
 | `docs/data-source-feasibility.md` | All 22 data sources: URLs, formats, feasibility ratings |
-| `docs/data-model-phase2-appendix.md` | **Phase 2/3 only** — future entity types, UUIDs, Cognito. Do NOT use for MVP decisions. |
-| `docs/future-enhancements.md` | Potential upgrades (kill switch, NAIP, t3.small, NAT, Dagster Cloud, ALB+Cognito) |
+| `docs/data-model-phase2-appendix.md` | **Phase 2/3 only** — future entity types, UUIDs, Clerk. Do NOT use for MVP decisions. |
+| `docs/future-enhancements.md` | Potential upgrades (VPS resize, NAIP, Dagster Cloud, Cloudflare Workers, cost monitoring) |
 
 ## Hard Rules
 
@@ -110,38 +102,35 @@ These are the constraints that have caused bugs in every review round. Internali
 
 ### Schema
 
-- **No `raw` schema in RDS.** Raw data goes to `s3://countyiq-raw/<source>/<date>/`. The first RDS schema is `staging`.
+- **No `raw` schema in Postgres.** Raw data goes to `r2:countyiq-raw/<source>/<date>/`. The first Postgres schema is `staging`.
 - `staging.*` — cleaned, normalized, SCD Type 2 (valid_from/valid_to). All source data lives here after parsing.
 - `public.*` — entity-resolved output and views. `public.properties` is a **VIEW** (not a table) joining `staging.parcels` + `staging.assessment_properties` on PIDN. Both sides filter `valid_to IS NULL` (SCD Type 2 current records).
-- `meta.*` — application metadata (pipeline_status, infra_metrics, data_quality_checks). App-owned, written by Dagster sensors, read by Lambda API. NOT Dagster internals.
-- Dagster's internal tables live in a separate `dagster` database on the same RDS instance.
+- `meta.*` — application metadata (pipeline_status, infra_metrics, data_quality_checks). App-owned, written by Dagster sensors, read by the API. NOT Dagster internals.
+- Dagster's internal tables live in a separate `dagster` database on the same Postgres instance.
 - CHECK constraints enforce valid values on meta columns. See `docs/schema/meta.md` for the DDL.
 
-### Lambda Networking
+### Networking
 
-Lambda runs in a VPC and can ONLY reach RDS on port 5432. It cannot call:
-- Parameter Store / SSM
-- CloudWatch API
-- Any AWS service endpoint
+All services run in Docker containers on the same VPS, connected via a Docker bridge network. The API container can reach:
+- PostgreSQL at `postgres:5432` (Docker DNS)
+- Any external service (OpenRouter, Cloudflare R2, etc.) — no VPC restrictions
+- Slack webhooks for alerting
 
-This means:
-- **DB credentials** come from Terraform-set encrypted environment variables, not runtime Parameter Store calls.
-- **Infrastructure metrics** come from `meta.infra_metrics` (written by a Dagster sensor on EC2, which has internet access), not from CloudWatch API calls.
-- The `api/lib/database.py` reads `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` from `os.environ`. That's it.
+DB credentials come from environment variables loaded via Docker Compose `env_file`. The `api/lib/database.py` reads `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` from `os.environ`.
 
 ### Routing
 
-All Lambda API routes live under `/api/*` because CloudFront only sends `/api/*` to API Gateway.
+All API routes live under `/api/*`. Caddy reverse proxies `/api/*` to the FastAPI container.
 
-| CloudFront path | Origin | What serves it |
+| Path | Served by | What handles it |
 |---|---|---|
-| `/api/*` | API Gateway → Lambda | FastAPI (dynamic queries) |
-| `/tiles/*` | S3 tiles bucket | Pre-generated .pbf files (7-day cache) |
-| `/*` (default) | S3 frontend bucket | React app (1-hour cache) |
+| `/api/*` | Hetzner VPS (via Cloudflare proxy) | Caddy → FastAPI (dynamic queries) |
+| `/tiles/*` | Cloudflare R2 | Pre-generated .pbf files (7-day cache) |
+| `/*` (default) | Cloudflare Pages | React app |
 
 Consequences:
 - The ops health endpoint is `GET /api/ops/health`, not `/ops/health`. The React page at `/ops/health` is a client-side route that calls `/api/ops/health`.
-- **Tiles are NOT served by Lambda.** They're pre-generated by the Dagster tile pipeline and uploaded to S3. The API has no tile routes.
+- **Tiles are NOT served by the API.** They're pre-generated by the Dagster tile pipeline and uploaded to R2. The API has no tile routes.
 - FastAPI's `main.py` mounts routers at `/api/parcels`, `/api/owners`, `/api/search`, `/api/ops`. No `/api/tiles` router.
 
 ### Entity Resolution
@@ -160,7 +149,7 @@ Consequences:
 ### Phase 2 Auth Gate
 
 Before exposing person-level or sensitive data (CRIMEWATCH, Sheriff Sales, Tax Claim, Inmate Records, UJS Court Records), implement:
-- Cognito/Clerk authentication
+- Clerk authentication
 - Role-based tiers (citizen, professional, government)
 - Query audit logging (`meta.query_audit_log`)
 - Rate-limited person lookups
@@ -177,7 +166,7 @@ Sources 1–2 in the Phase 2 build order (PA DOS Business Entities, PLCB Liquor 
    - Add any new source-specific fields to `CountyConfig` dataclass if needed
    - Asset functions call `get_county_config()` at runtime (not import time)
    - Parsers accept county-specific params (e.g., `county_filter`) with a default for backward compatibility
-   - S3 archive paths use `county.s3_prefix` (e.g., `york/bulk/plcb/`)
+   - Storage archive paths use `county.storage_prefix` (e.g., `york/bulk/plcb/`)
 
 3. **File placement:**
    - Asset: `pipelines/assets/<type>/<source>.py` (type = `arcgis/`, `scrapers/`, `bulk/`, `pdf/`, `enrichment/`)
@@ -188,7 +177,7 @@ Sources 1–2 in the Phase 2 build order (PA DOS Business Entities, PLCB Liquor 
 4. **Schema rules:**
    - Target table is always `staging.<source_name>` (e.g., `staging.liquor_licenses`)
    - Include SCD Type 2 columns: `valid_from TIMESTAMPTZ DEFAULT NOW()`, `valid_to TIMESTAMPTZ` (NULL = current)
-   - Raw response goes to `s3://countyiq-raw/<prefix>/<source>/<date>/` before any parsing
+   - Raw response goes to `r2:countyiq-raw/<prefix>/<source>/<date>/` before any parsing
 
 5. **Schedule:** Add to `pipelines/jobs/schedules.py`. Check `docs/pipelines/dagster-config.md` for the assigned time slot and whether it's MVP or Phase 2.
 
@@ -198,32 +187,32 @@ Sources 1–2 in the Phase 2 build order (PA DOS Business Entities, PLCB Liquor 
 
 ### Building an API Route
 
-1. **Read:** `docs/api/lambda-api.md` → `docs/implementation/phase-4-api-frontend.md` (Step 4.1)
+1. **Read:** `docs/api/api.md` → `docs/implementation/phase-4-api-frontend.md` (Step 4.1)
 
 2. **Rules:**
-   - All routes under `/api/*` (CloudFront constraint)
+   - All routes under `/api/*` (Caddy routing)
    - Router file goes in `api/routes/<name>.py`
    - Mount in `api/main.py` with `app.include_router(router, prefix="/api/<name>")`
    - Query `public.properties` (the VIEW) for property data, not `staging.parcels` directly
    - Use `pidn` as the parcel identifier in all endpoints, not `parcel_id`
    - Column names from the view: `pidn`, `owner_full`, `propadr`, `aprtotal`, `municipality`, `school_dis`, `acres`, `class`, `geom` (from parcels) + `permits`, `delinquent_taxes`, `value_history` (from assessment)
-   - Database connection via `os.environ` (DATABASE_HOST, etc.) — no Parameter Store, no CloudWatch calls
+   - Database connection via `os.environ` (DATABASE_HOST, etc.)
 
 3. **Health endpoint pattern:** See `docs/operations/health-dashboard.md`. Queries `meta.pipeline_status` and `meta.infra_metrics` only.
 
-### Modifying Terraform Infrastructure
+### Modifying Infrastructure
 
-1. **Read:** `docs/infrastructure/terraform.md` + the specific `docs/infrastructure/<module>.md` for what you're changing.
+1. **Read:** `docs/infrastructure.md`
 
 2. **Rules:**
-   - State backend: `countyiq-terraform-state` S3 bucket + `countyiq-terraform-locks` DynamoDB table
-   - All EC2 paths use `/opt/countyiq` (not `/opt/dagster`)
-   - S3 bucket names: `countyiq-frontend`, `countyiq-tiles`, `countyiq-raw`
-   - Lambda env vars for DB creds are set in Terraform (not runtime Parameter Store)
-   - OIDC federation for GitHub Actions — no stored AWS credentials
-   - Default VPC, no NAT Gateway
+   - All services defined in `docker/docker-compose.yml`
+   - Caddy config in `docker/Caddyfile`
+   - Secrets in `.env` file (never committed to git)
+   - R2 bucket names: `countyiq-raw`, `countyiq-tiles`, `countyiq-backups`
+   - Hetzner Cloud Firewall: ports 22, 80, 443 only
+   - Deployments via Watchtower (pull from GHCR)
 
-3. **CI/CD context:** See `docs/infrastructure/cicd.md` for the three deployment workflows and the OIDC trust policy.
+3. **CI/CD context:** See `docs/infrastructure.md` CI/CD section for the GHCR + Watchtower flow.
 
 ### Working with Entity Resolution
 
@@ -239,9 +228,9 @@ Sources 1–2 in the Phase 2 build order (PA DOS Business Entities, PLCB Liquor 
 
 1. **Read:** `docs/frontend/architecture.md` for the stack, UI mockup, and core views.
 
-2. **Stack:** React + MapLibre GL JS + Deck.gl. Static site hosted on S3, served via CloudFront.
+2. **Stack:** React + MapLibre GL JS + Deck.gl. Static site hosted on Cloudflare Pages.
 
-3. **API calls:** All fetch to `/api/*` (same CloudFront domain, no CORS issues). Tiles loaded from `/tiles/parcels/{z}/{x}/{y}.pbf` (MapLibre vector tile source pointing at CloudFront).
+3. **API calls:** All fetch to `/api/*` (same domain via Cloudflare, no CORS issues). Tiles loaded from `/tiles/parcels/{z}/{x}/{y}.pbf` (MapLibre vector tile source pointing at Cloudflare CDN).
 
 4. **Ops Health page:** React route at `/ops/health`, fetches `GET /api/ops/health`, renders green/yellow/red status grid.
 
@@ -257,17 +246,17 @@ DDL with CHECK constraints: `docs/schema/meta.md`
 
 ### Connection Pooling
 
-Lambda reuses a module-level connection (`_conn`) across warm invocations. Reserved concurrency capped at 10. Connection budget: Lambda 10, Dagster 3–5, sensors 2–3, migrations 1, psql 1–2 = ~20 of 50 max. Details: `docs/api/lambda-api.md`
+Uvicorn workers maintain persistent connections to Postgres. All services are localhost (Docker network), so connection overhead is minimal. Postgres max_connections ~100. Budget: API ~4, Dagster ~5-8, sensors ~2-3, migrations ~1, psql ~1-2 = ~15. Details: `docs/api/api.md`
 
 ### Rollback Procedures
 
-Five scenarios in `docs/operations/runbook.md`: bad Lambda deploy (alias swap), bad Dagster deploy (git revert + restart), bad migration (reverse SQL), corrupted pipeline data (SCD2 valid_to expiry + re-run), broken frontend (S3 previous version restore).
+Five scenarios in `docs/operations/runbook.md`: bad API deploy (docker compose pull + restart), bad Dagster deploy (same), bad migration (alembic downgrade), corrupted pipeline data (SCD2 valid_to expiry + re-run), broken frontend (Cloudflare Pages rollback).
 
 ### Cost Awareness
 
-Year 1: ~$6.60/month (WAF only; RDS + EC2 on free tier). Year 2+: ~$32–36/month.
+~$5/month (Hetzner CX23 + Cloudflare free tier + R2 free tier).
 
-Don't add NAT Gateways (~$32/mo), VPC Endpoints (~$7/mo each), ALBs (~$16/mo), or multi-AZ RDS unless there's a strong reason. See `docs/cost.md` and `docs/decisions.md` (Acknowledged Tradeoffs).
+Don't add services without checking `docs/cost.md`. The main cost risk is Hetzner snapshots ($0.012/GB/mo) and R2 Class A operations at scale.
 
 ### Slack Integration
 
@@ -276,4 +265,4 @@ Workspace: `CountyIQ` (countyiq.slack.com). Three channels, three webhooks:
 - `#alerts-warning` → `/countyiq/slack-webhook-warning`
 - `#pipeline-runs` → `/countyiq/slack-webhook-pipeline`
 
-Webhook URLs in Parameter Store, read by EC2/Dagster only (NOT Lambda). Details: `docs/operations/alerting.md`
+Webhook URLs in `.env` file, read by all containers via Docker Compose `env_file`. Details: `docs/operations/alerting.md`

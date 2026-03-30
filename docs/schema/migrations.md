@@ -68,7 +68,7 @@ You don't need to write this yourself. You describe what you want ("add a permit
 
 ### Testing migrations locally with Docker Postgres
 
-Since RDS doesn't have a "branching" feature like Neon, you test migrations on a throwaway local Postgres database before applying them to production. This is the equivalent of Neon's branching — you get a fresh copy of the schema, test your migration, and throw it away if it breaks.
+You test migrations on a throwaway local Postgres database before applying them to production. You get a fresh copy of the schema, test your migration, and throw it away if it breaks.
 
 **`docker-compose.yml` (in your project root):**
 
@@ -89,7 +89,7 @@ volumes:
   pgdata-test:
 ```
 
-This spins up a PostGIS-enabled Postgres 16 instance on your machine — identical to RDS in every way that matters for migrations.
+This spins up a PostGIS-enabled Postgres 16 instance on your machine — identical to the production Postgres container in every way that matters for migrations.
 
 ### Migration testing workflow
 
@@ -127,14 +127,11 @@ alembic downgrade -1
 alembic upgrade head
 ```
 
-**Step 4: Apply to production (RDS)**
+**Step 4: Apply to production (Postgres)**
 ```bash
-# Point Alembic at production (via Session Manager port forward)
+# Point Alembic at production (via SSH tunnel)
 # In terminal 1:
-aws ssm start-session \
-  --target <instance-id> \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["<rds-endpoint>"],"portNumber":["5432"],"localPortNumber":["5434"]}'
+ssh -L 5434:localhost:5432 countyiq
 
 # In terminal 2:
 export DATABASE_URL="postgresql://dagster_admin:<password>@localhost:5434/countyiq"
@@ -148,13 +145,13 @@ docker compose down -v    # -v removes the volume (fresh start next time)
 
 ### Alembic environment configuration (`env.py`)
 
-The `env.py` file reads the database connection from an environment variable, so the same Alembic configuration works against both local Docker Postgres and production RDS — you just change the `DATABASE_URL`:
+The `env.py` file reads the database connection from an environment variable, so the same Alembic configuration works against both local Docker Postgres and production Postgres — you just change the `DATABASE_URL`:
 
 | Environment | DATABASE_URL |
 |---|---|
 | Local testing | `postgresql://dagster_admin:localtest@localhost:5433/countyiq` |
-| Production (via port forward) | `postgresql://dagster_admin:<password>@localhost:5434/countyiq` |
-| On EC2 (direct) | `postgresql://dagster_admin:<password>@<rds-endpoint>:5432/countyiq` |
+| Production (via SSH tunnel) | `postgresql://dagster_admin:<password>@localhost:5434/countyiq` |
+| On VPS (direct) | `postgresql://dagster_admin:<password>@localhost:5432/countyiq` |
 
 ### Migration naming convention
 
@@ -171,7 +168,7 @@ Migrations are auto-numbered by Alembic using revision IDs (hex hashes). For rea
 
 ### Integration with deployment
 
-When you deploy new pipeline code to the EC2 instance, the deployment process should include:
+When you deploy new pipeline code to the VPS, the deployment process should include:
 
 ```bash
 # After pulling new code

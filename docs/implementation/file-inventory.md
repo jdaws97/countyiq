@@ -7,25 +7,15 @@ countyiq/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                          # PR checks (lint, type check, tests)
-│       ├── deploy-frontend.yml             # Frontend → S3/CloudFront
-│       ├── deploy-api.yml                  # API → Lambda
-│       └── deploy-dagster.yml              # Pipelines → EC2 via SSM
+│       └── deploy.yml                      # Build Docker images, push to GHCR (Watchtower auto-pulls on VPS)
 │
-├── infra/
-│   ├── main.tf                             # Root module
-│   ├── variables.tf                        # Input variables
-│   ├── outputs.tf                          # Outputs (instance IDs, endpoints, ARNs)
-│   ├── backend.tf                          # S3 state backend config
-│   ├── terraform.tfvars                    # Variable values (gitignored)
-│   └── modules/
-│       ├── networking/                     # Security groups
-│       ├── iam/                            # Roles, policies, instance profile
-│       ├── compute/                        # EC2 instance, user data script
-│       ├── database/                       # RDS, parameter group, init.sql
-│       ├── monitoring/                     # Budgets, alarms, SNS, log groups
-│       ├── frontend/                       # S3 bucket, CloudFront, OAC
-│       ├── api/                            # Lambda, API Gateway
-│       └── cicd/                           # OIDC provider, GitHub Actions role
+├── docker/
+│   ├── docker-compose.yml                  # Production services: postgres, dagster, api, caddy, watchtower
+│   ├── docker-compose.dev.yml              # Local dev overrides
+│   ├── Caddyfile                           # Reverse proxy config
+│   ├── .env.example                        # Environment variable template
+│   ├── backup.sh                           # pg_dump → R2 backup script
+│   └── setup.sh                            # Initial VPS provisioning
 │
 ├── pipelines/
 │   ├── pyproject.toml                      # Dependencies (dagster, playwright, etc.)
@@ -43,8 +33,8 @@ countyiq/
 │   │   ├── definitions.py                  # Dagster top-level definitions
 │   │   │
 │   │   ├── resources/                      # Shared connections
-│   │   │   ├── database.py                 # RDS connection (psycopg2)
-│   │   │   └── storage.py                  # S3 client for raw archival
+│   │   │   ├── database.py                 # Postgres connection (psycopg2)
+│   │   │   └── storage.py                  # R2/S3-compatible client for raw archival
 │   │   │
 │   │   ├── assets/                         # Data assets by source type
 │   │   │   ├── arcgis/                     # Sources 1, 5, 13
@@ -71,7 +61,7 @@ countyiq/
 │
 ├── api/
 │   ├── main.py                             # FastAPI app
-│   ├── handler.py                          # Mangum Lambda adapter
+│   ├── Dockerfile                          # Container image for production
 │   ├── requirements.txt                    # Python dependencies
 │   ├── routes/
 │   │   ├── parcels.py                     # /api/parcels endpoints
@@ -79,7 +69,7 @@ countyiq/
 │   │   ├── search.py                      # /api/search endpoints
 │   │   └── ops.py                         # /api/ops/health endpoint
 │   └── lib/
-│       ├── database.py                    # RDS connection (env var pattern)
+│       ├── database.py                    # Postgres connection (env var pattern)
 │       └── schemas.py                     # Pydantic response models
 │
 ├── frontend/

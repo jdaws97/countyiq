@@ -46,7 +46,7 @@ County Scout stores state in the existing `meta` schema:
 - `meta.source_observations`
   append-only probe history
 
-This keeps discovery state queryable from Lambda without giving the API any direct dependency on external services.
+This keeps discovery state queryable from the API without giving it any direct dependency on external services.
 
 ## API
 

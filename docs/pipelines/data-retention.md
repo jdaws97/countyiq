@@ -6,12 +6,12 @@ CountyIQ's value comes from connecting data across time, not just across sources
 
 **Policy: Keep everything. No deletions. No archival tiers.**
 
-## Layer 1: Raw Snapshots (S3 Standard) — Keep Forever
+## Layer 1: Raw Snapshots (Cloudflare R2) — Keep Forever
 
-Every pipeline run dumps its raw response to S3 with a timestamped path:
+Every pipeline run dumps its raw response to R2 with a timestamped path:
 
 ```
-s3://countyiq-raw/
+r2:countyiq-raw/
 ├── arcgis/parcels/2026-03-20/response.json
 ├── arcgis/parcels/2026-03-27/response.json
 ├── crimewatch/2026-03-20/page-1.html
@@ -29,15 +29,15 @@ s3://countyiq-raw/
 
 **Storage cost estimate:**
 
-| Timeframe | Estimated Raw Data | S3 Standard Cost |
+| Timeframe | Estimated Raw Data | Cloudflare R2 Cost |
 |---|---|---|
-| Year 1 | ~10 GB | $0.23/month |
-| Year 3 | ~30 GB | $0.69/month |
-| Year 5 | ~50 GB | $1.15/month |
+| Year 1 | ~10 GB | $0.00/month (10 GB free tier) |
+| Year 3 | ~30 GB | $0.30/month ($0.015/GB/mo, first 10 GB free) |
+| Year 5 | ~50 GB | $0.60/month ($0.015/GB/mo, first 10 GB free) |
 
-At these volumes, tiered storage (Glacier, etc.) saves cents while adding retrieval complexity and cost risk. Not worth it. S3 Standard forever.
+At these volumes, R2 Infrequent Access (if available) saves cents while adding retrieval complexity. Not worth it. R2 Standard forever.
 
-## Layer 2: Processed Records (RDS) — Change-Tracked, Keep All Versions
+## Layer 2: Processed Records (Postgres) — Change-Tracked, Keep All Versions
 
 Tables that represent entities with mutable attributes use **Slowly Changing Dimensions (Type 2)** — every row has `valid_from` and `valid_to` timestamps. When data changes, the old row gets closed and a new row opens.
 
@@ -70,7 +70,7 @@ CREATE TABLE staging.parcels (
     valid_from      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     valid_to        TIMESTAMPTZ,            -- NULL = current record
     source_run_id   TEXT,                   -- Dagster run ID that created this row
-    raw_snapshot    TEXT,                   -- S3 key to the raw data
+    raw_snapshot    TEXT,                   -- R2 key to the raw data
 
     -- Indexes for common queries
     CONSTRAINT current_record UNIQUE (pidn) WHERE (valid_to IS NULL)
@@ -93,28 +93,28 @@ CREATE TABLE staging.parcels (
 | `court_records` | New filings are added; existing records don't change | Naturally grows over time |
 | `crimewatch_incidents` | Incidents are posted once | Deduplication on insert |
 | `sheriff_sales` | Each sale is a distinct event | Historical sales are valuable context |
-| `meeting_minutes` | Published once per meeting | PDF reference stored in S3 |
+| `meeting_minutes` | Published once per meeting | PDF reference stored in R2 |
 | `bids_rfps` | Posted once, may close but don't change | Track status if needed |
 
 ## Layer 3: Operational Logs — Pruned
 
 | Log Type | Retention | Rationale |
 |---|---|---|
-| Dagster run history (RDS `dagster` database) | Kept indefinitely | Dagster's internal schema is small footprint; stored separately from business data |
-| App-owned pipeline status (RDS `meta.pipeline_status`) | Current state only | One row per source, overwritten each run (not historical) |
-| CloudWatch logs | 7 days | Already configured; infra logs are transient |
+| Dagster run history (`dagster` database) | Kept indefinitely | Dagster's internal schema is small footprint; stored separately from business data |
+| App-owned pipeline status (`meta.pipeline_status`) | Current state only | One row per source, overwritten each run (not historical) |
+| Docker container logs | 7 days (logrotate) | Infra logs are transient |
 | Slack message history | 90 days (free tier limit) | Sufficient for operational troubleshooting |
 
-## Storage Growth Projections (RDS)
+## Storage Growth Projections (Postgres)
 
-| Timeframe | Estimated RDS Size | Notes |
+| Timeframe | Estimated DB Size | Notes |
 |---|---|---|
 | Initial load | ~2 GB | 176K parcels + geometry, initial scraper data |
 | Year 1 | ~4-6 GB | Change tracking adds rows gradually; most records don't change every pull |
 | Year 3 | ~8-12 GB | Court records and incidents are the main growth drivers |
-| Year 5 | ~15-18 GB | Still within 20 GB allocation |
+| Year 5 | ~15-18 GB | Well within VPS disk allocation |
 
-If RDS approaches 20 GB, the first lever is increasing storage (scales to 64 TB, costs $0.115/GB/month). The second lever is partitioning historical data by year. But at these growth rates, 20 GB should last 5+ years.
+VPS disk is included in the Hetzner plan. If more space is needed, additional volumes cost ~EUR 0.052/GB/mo. The second lever is partitioning historical data by year. But at these growth rates, the base VPS disk should last 5+ years.
 
 ## What This Enables
 

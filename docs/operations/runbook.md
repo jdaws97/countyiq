@@ -9,83 +9,79 @@ Dagster daemon evaluates schedules and sensors every 30 seconds. No manual inter
 ### Checking Dagster status
 
 ```bash
-# Connect to instance
-aws ssm start-session --target <instance-id>
+# Connect to VPS
+ssh countyiq
 
 # Check services
-sudo systemctl status dagster-webserver
-sudo systemctl status dagster-daemon
-
-# View recent logs
-journalctl -u dagster-webserver --since "1 hour ago"
-journalctl -u dagster-daemon --since "1 hour ago"
+cd /opt/countyiq
+docker compose ps
+docker compose logs dagster --tail=100
 ```
 
 ### Restarting Dagster
 
 ```bash
-sudo systemctl restart dagster-webserver
-sudo systemctl restart dagster-daemon
+ssh countyiq
+cd /opt/countyiq
+docker compose restart dagster
 ```
 
-### Emergency stop (manual cost control)
+### Emergency stop (all services)
 
 ```bash
-# Stop the EC2 instance from your local machine
-aws ec2 stop-instances --instance-ids <instance-id>
-
-# Verify it stopped
-aws ec2 describe-instances --instance-ids <instance-id> \
-  --query 'Reservations[].Instances[].State.Name'
+# SSH to VPS and stop all containers
+ssh countyiq
+cd /opt/countyiq
+docker compose down
 ```
 
-**Note:** Stopping the instance stops all Dagster jobs, scrapers, and scheduled runs. No data is lost — EBS volume persists. Restart with `aws ec2 start-instances`.
+**Note:** Stopping all containers stops Dagster jobs, scrapers, and scheduled runs. No data is lost — Postgres data is on a Docker volume. Restart with `cd /opt/countyiq && docker compose up -d`.
 
 ### Updating pipeline code
 
 ```bash
-# Connect to instance
-aws ssm start-session --target <instance-id>
+# Connect to VPS
+ssh countyiq
 
 # Pull latest code
-cd /opt/countyiq/repo
+cd /opt/countyiq
 git pull origin main
 
-# Install updated package + run any pending database migrations
-source /opt/countyiq/venv/bin/activate
-pip install -e pipelines/
-cd pipelines && alembic upgrade head
+# Rebuild and restart containers (picks up code + dependency changes)
+docker compose build
+docker compose up -d
 
-# Restart Dagster to pick up changes
-sudo systemctl restart dagster-webserver
-sudo systemctl restart dagster-daemon
+# Run any pending database migrations
+docker compose exec dagster alembic -c /opt/countyiq/pipelines/alembic.ini upgrade head
 ```
 
-### Monitoring RDS storage usage
+### Monitoring Postgres storage usage
 
 ```bash
-# Check RDS storage from your local machine
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/RDS \
-  --metric-name FreeStorageSpace \
-  --dimensions Name=DBInstanceIdentifier,Value=countyiq-db \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 3600 \
-  --statistics Average \
-  --query 'Datapoints[0].Average'
+# Check database size from VPS
+ssh countyiq
+docker exec countyiq-postgres psql -U dagster_admin -d countyiq -c "SELECT pg_size_pretty(pg_database_size('countyiq'));"
 ```
 
-Or check the RDS console in AWS. Plan to increase storage (online, no downtime) when usage exceeds 15 GB of 20 GB allocated.
+### Monitoring system resources
+
+```bash
+# Quick overview of container resource usage
+ssh countyiq
+docker stats --no-stream
+
+# Disk usage
+df -h
+
+# Memory usage
+free -m
+```
 
 ### Connecting to the database
 
 ```bash
-# Port-forward RDS through EC2 via Session Manager
-aws ssm start-session \
-  --target <instance-id> \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["<rds-endpoint>"],"portNumber":["5432"],"localPortNumber":["5433"]}'
+# SSH tunnel from your local machine to Postgres on the VPS
+ssh -L 5433:localhost:5432 countyiq
 
 # In another terminal, connect with psql or any SQL client
 psql -h localhost -p 5433 -U dagster_admin -d countyiq
@@ -93,53 +89,56 @@ psql -h localhost -p 5433 -U dagster_admin -d countyiq
 
 ### Rollback procedures
 
-**Bad Lambda deploy (API broken):**
+**Bad API deploy (API broken):**
 
 ```bash
-# Lambda keeps previous versions. Roll back to the last working version:
-aws lambda update-function-code \
-  --function-name countyiq-api \
-  --s3-bucket <if using S3 deploy> \
-  # Or re-deploy from git:
-cd api/
-git checkout HEAD~1 -- .
-pip install -r requirements.txt -t package/
-cp -r *.py routes/ lib/ package/
-cd package && zip -r ../lambda.zip .
-aws lambda update-function-code \
-  --function-name countyiq-api \
-  --zip-file fileb://lambda.zip
+# Roll back API container to the previous image:
+ssh countyiq
+cd /opt/countyiq
+docker compose pull api
+docker compose up -d api
+```
+
+If the latest image is the broken one, check out the previous commit and rebuild:
+
+```bash
+ssh countyiq
+cd /opt/countyiq
+git log --oneline -5                    # Find the last good commit
+git checkout <last-good-sha>
+docker compose build api
+docker compose up -d api
 ```
 
 **Bad Dagster deploy (pipelines broken):**
 
 ```bash
-# On EC2 via SSM:
-aws ssm start-session --target <instance-id>
+# On VPS via SSH:
+ssh countyiq
 
-cd /opt/countyiq/repo
+cd /opt/countyiq
 git log --oneline -5                    # Find the last good commit
 git checkout <last-good-sha>            # Roll back
-source /opt/countyiq/venv/bin/activate
-pip install -e pipelines/
-sudo systemctl restart dagster-webserver dagster-daemon
+docker compose build dagster
+docker compose up -d dagster
 ```
 
 **Bad migration (schema broken):**
 
 ```bash
 # Alembic supports reversible migrations:
-cd /opt/countyiq/repo/pipelines
-source /opt/countyiq/venv/bin/activate
+ssh countyiq
+cd /opt/countyiq
 
 # See current migration state
-alembic current
+docker compose exec dagster alembic -c /opt/countyiq/pipelines/alembic.ini current
 
 # Roll back one migration
-alembic downgrade -1
+docker compose exec dagster alembic -c /opt/countyiq/pipelines/alembic.ini downgrade -1
 
-# If the downgrade itself fails, restore from RDS point-in-time recovery:
-# AWS Console → RDS → Restore to point in time → pick a timestamp before the migration
+# If the downgrade itself fails, restore from backup:
+rclone copy r2:countyiq-backups/postgres/countyiq-YYYY-MM-DD.dump /tmp/
+docker exec -i countyiq-postgres pg_restore -c -d countyiq /tmp/countyiq-YYYY-MM-DD.dump
 ```
 
 **Corrupted pipeline data (bad scrape wrote garbage):**
@@ -158,11 +157,6 @@ AND valid_to IS NULL;
 
 **Frontend broken (bad React build):**
 
-```bash
-# Re-deploy from the previous commit:
-cd frontend
-git checkout HEAD~1 -- .
-npm run build
-aws s3 sync dist/ s3://countyiq-frontend --delete
-aws cloudfront create-invalidation --distribution-id <dist-id> --paths "/*"
-```
+Cloudflare Pages keeps all previous deployments. Roll back via the Cloudflare dashboard:
+
+Cloudflare Pages -> Deployments -> select previous deployment -> Rollback

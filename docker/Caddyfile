@@ -1,0 +1,11 @@
+{$DOMAIN:localhost} {
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Default: return 404 for non-API requests
+	# Frontend is served by Cloudflare Pages, not this VPS
+	handle {
+		respond "CountyIQ API server. Frontend at Cloudflare Pages." 200
+	}
+}

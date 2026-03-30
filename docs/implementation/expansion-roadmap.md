@@ -18,7 +18,7 @@ Every new source follows the same pattern established in Phase 3. Use this check
 □ 2. Create Alembic migration for new staging table(s)
        - Include valid_from/valid_to if change-tracked
        - Test locally with Docker Postgres
-       - Apply to RDS via SSM tunnel
+       - Apply to production via `docker exec`
 
 □ 3. Write the parser
        - pipelines/lib/parsers/<source>.py
@@ -72,7 +72,7 @@ Recommended order based on value-add and difficulty. Tackle the highest-value, e
 |---|---|---|---|---|---|
 | 1 | PA DOS Business Entities | 8 | data.pa.gov API | Easy | Links businesses to owners via entity resolution |
 | 2 | PLCB Liquor Licenses | 22 | CSV download | Easy | Already have CSV pattern from MVP; adds license data layer |
-| — | **🔒 AUTH & GOVERNANCE GATE** | — | — | Medium | **Before adding person-level or sensitive data (sources 3–5, 13–15 below), implement: Cognito/Clerk auth, role-based tiers, query audit logging (`meta.query_audit_log` — new table, add DDL during this phase), rate-limited person lookups. See Infra Plan: Privacy & Access Control section.** |
+| — | **🔒 AUTH & GOVERNANCE GATE** | — | — | Medium | **Before adding person-level or sensitive data (sources 3–5, 13–15 below), implement: Clerk authentication, role-based tiers, query audit logging (`meta.query_audit_log` — new table, add DDL during this phase), rate-limited person lookups. See Infra Plan: Privacy & Access Control section.** |
 | 3 | CRIMEWATCH (Police Blotters) | 19 | Playwright + pagination | Medium | High-demand data; incident mapping on frontend |
 | 4 | Sheriff Sales / Tax Claim | 9 | Scraper + PDF | Medium | Financial distress indicators; property investment intel |
 | 5 | Tax Claim Bureau | 14 | HTML + PDF | Medium | Delinquent property identification |
@@ -87,7 +87,7 @@ Recommended order based on value-add and difficulty. Tackle the highest-value, e
 | 14 | Recorder of Deeds | 7 | RTK request | N/A | Depends on RTK response format/timeline |
 | 15 | Inmate Records | 20 | TBD | TBD | Pending URL verification |
 
-> **🔒 HARD STOP: Do not proceed past Priority 2 without implementing authentication.** Sources 3–5 expose person-level data (crime incidents, financial distress, tax delinquency). Deploying these without auth creates privacy liability. Implement Cognito/Clerk auth, role-based tiers, `meta.query_audit_log`, and rate-limited person lookups before building any source marked with 🔒 above. See `docs/privacy.md` for the full requirements.
+> **🔒 HARD STOP: Do not proceed past Priority 2 without implementing authentication.** Sources 3–5 expose person-level data (crime incidents, financial distress, tax delinquency). Deploying these without auth creates privacy liability. Implement Clerk authentication, role-based tiers, `meta.query_audit_log`, and rate-limited person lookups before building any source marked with 🔒 above. See `docs/privacy.md` for the full requirements.
 
 ### Source-Specific Notes
 
@@ -285,12 +285,11 @@ These are infrastructure improvements, not data sources. Tackle when the trigger
 |---|---|---|---|
 | Automated Cost Kill Switch | After free tier expires, if costs become unpredictable | 2-3 hours | Future Enhancements → #1 |
 | NAIP Imagery Pipeline | When aerial imagery analysis becomes a priority | 1-2 days | Future Enhancements → #2 |
-| Upgrade to t3.small | CloudWatch shows memory > 80% consistently | 30 min (Terraform variable change) | Future Enhancements → #3 |
-| Private VPC + NAT Gateway | Security audit requires no public IP on EC2 | 2-3 hours | Future Enhancements → #4 |
+| VPS resize (CX23 → CX33) | Monitoring shows memory > 80% consistently | 30 min (Hetzner console resize) | Future Enhancements → #3 |
 | Dagster Cloud Hybrid | Multiple users need Dagster UI access | 1-2 days | Future Enhancements → #5 |
-| ALB + Cognito for Dagster UI | Browser-based multi-user Dagster access | 1 day | Future Enhancements → #6 |
-| Custom domain | When you want `countyiq.com` instead of CloudFront URL | 1-2 hours | Frontend Architecture → Custom Domain |
-| Authentication on frontend | When you want to restrict access or add user accounts | 1-2 days | Not yet designed — consider Cognito or Clerk |
+| Clerk + proxy for Dagster UI | Browser-based multi-user Dagster access | 1 day | Future Enhancements → #6 |
+| Custom domain | Already set up via Cloudflare Pages | Done | Frontend Architecture → Custom Domain |
+| Authentication on frontend | When you want to restrict access or add user accounts | 1-2 days | Not yet designed — use Clerk |
 | Zingg entity resolution | pg_trgm matching produces too many false positives/negatives | 2-3 days | Entity Resolution → Zingg Upgrade Path |
 | Multi-county expansion | When you want to add Lancaster, Adams, or other counties | 1-2 weeks | Entity Resolution → Why It Scales |
 
@@ -299,8 +298,8 @@ These are infrastructure improvements, not data sources. Tackle when the trigger
 All pipeline assets read county-specific configuration from `pipelines/countyiq/lib/county_config.py`. Expanding to another PA county means:
 
 1. **Add a `CountyConfig` entry** in `county_config.py` with the new county's source URLs, filter strings, and thresholds
-2. **Set `COUNTY=<key>`** when running pipelines (env var on EC2 or in `.env`)
-3. **Create a new RDS database** (or schema per county within the same instance)
+2. **Set `COUNTY=<key>`** when running pipelines (env var in Docker Compose or `.env`)
+3. **Create a new Postgres database** (or schema per county within the same instance)
 4. **Run Alembic migrations** — the staging schema is source-type based, not county-specific, so the same tables work
 5. **Verify source URLs** — most PA state sources (PLCB, PA Open Data, PennDOT) work identically across counties. ArcGIS endpoints vary per county's GIS portal.
 6. **County-specific scrapers** (assessment portals, sheriff sales) need new implementations per county — different websites, different DOM structures
@@ -318,7 +317,7 @@ All pipeline assets read county-specific configuration from `pipelines/countyiq/
     arcgis_base_url="https://<lancaster-gis-server>/...",
     assessment_url="https://<lancaster-assessment-portal>/",
     assessment_min_records=100000,
-    s3_prefix="lancaster",
+    storage_prefix="lancaster",
 ),
 ```
 
@@ -326,8 +325,8 @@ Then run with `COUNTY=lancaster dagster asset materialize --select plcb_licenses
 
 **Known limitations:**
 - The Python package is named `countyiq` — this works for any county but the name is misleading. Rename to `county_pipelines` if multi-county becomes the primary use case.
-- S3 archive paths changed from `bulk/plcb/` to `york/bulk/plcb/` with the county prefix. Historical archives from before this change are at the old paths.
-- The S3 bucket is named `countyiq-raw` — configurable via the `S3_RAW_BUCKET` env var for a shared bucket, or use a separate bucket per county.
+- R2 archive paths changed from `bulk/plcb/` to `york/bulk/plcb/` with the county prefix. Historical archives from before this change are at the old paths.
+- The R2 bucket is named `countyiq-raw` — configurable via the `R2_BUCKET_URL` env var for a shared bucket, or use a separate bucket per county.
 
 The hardest part isn't the code — it's finding and verifying each county's data source URLs and access methods. Budget 1-2 weeks per new county for the research + implementation.
 

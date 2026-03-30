@@ -139,28 +139,18 @@ def test_parcels_parser_handles_null_values():
 After the Dagster deploy workflow restarts services, verify they came up cleanly. Added as a final step in the `deploy-dagster.yml` workflow:
 
 ```yaml
+      # After Watchtower pulls new image, verify via API health endpoint
       - name: Smoke test
         run: |
-          # Wait for Dagster to start
-          sleep 30
+          sleep 60  # Wait for Watchtower to pull
+          curl -f https://countyiq.com/api/health
+```
 
-          # Verify Dagster can load all definitions
-          SMOKE_RESULT=$(aws ssm send-command \
-            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
-            --document-name "AWS-RunShellScript" \
-            --parameters 'commands=[
-              "source /opt/countyiq/venv/bin/activate",
-              "cd /opt/countyiq/pipelines",
-              "python -c \"from countyiq.definitions import defs; print(f\\\"{len(list(defs.resolve_all_asset_specs()))} assets loaded\\\")\" "
-            ]' \
-            --query "Command.CommandId" \
-            --output text)
+You can also verify Dagster definitions loaded correctly by SSHing into the VPS:
 
-          aws ssm wait command-executed \
-            --command-id $SMOKE_RESULT \
-            --instance-id ${{ secrets.EC2_INSTANCE_ID }}
-
-          echo "✅ Dagster smoke test passed"
+```bash
+# Smoke test: verify Dagster loaded all definitions
+ssh countyiq 'docker exec countyiq-dagster dagster definitions list'
 ```
 
 **What this catches:** Missing imports, broken config files, dependency issues that only surface when Dagster tries to load the full asset graph. These don't show up in unit tests because unit tests don't import the full Dagster definitions.

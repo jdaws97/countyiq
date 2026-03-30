@@ -1,43 +1,38 @@
 # Dagster Configuration
 
-## Components (all on single EC2 instance)
+## Components (all in Docker containers on Hetzner VPS)
 
-| Component | Purpose | Resource Profile |
+| Component | Purpose | Runs as |
 |---|---|---|
-| `dagster-webserver` | UI + GraphQL API | ~100–150 MB RAM |
-| `dagster-daemon` | Scheduler + sensor evaluation | ~100–150 MB RAM |
-| Run workers | Execute pipeline code in-process | ~50–400 MB per run (varies) |
+| `dagster-webserver` | UI + GraphQL API | Docker container |
+| `dagster-daemon` | Scheduler + sensor evaluation | Docker container (same image, different entrypoint) |
+| Run workers | Execute pipeline code in-process | Execute within the Dagster container |
 
-## Memory Budget (1 GB total on t3.micro)
+## Memory Budget (4 GB total on Hetzner VPS — CX23)
 
-| Consumer | Estimated Usage |
+| Component | Memory |
 |---|---|
-| OS + system processes | ~150 MB |
-| Dagster webserver | ~150 MB |
-| Dagster daemon | ~150 MB |
-| **Available for jobs** | **~550 MB** |
-| Typical requests/BS4 scraper | ~50–100 MB |
-| Typical Playwright scraper | ~200–400 MB |
+| OS + Docker engine | ~200 MB |
+| PostgreSQL container | ~500 MB |
+| Dagster containers | ~500 MB |
+| FastAPI + Uvicorn | ~100 MB |
+| Caddy + Watchtower | ~50 MB |
+| **Available for pipeline jobs** | **~2.5 GB** |
 
-**Key constraint:** Only run one Playwright job at a time. Stagger all schedules so Playwright-based scrapers never overlap.
-
-**⚠️ OOM risk with Playwright:** Headless Chromium can consume 500 MB+ per instance. With Dagster webserver (~150 MB) + daemon (~150 MB) + OS (~150 MB), a single Playwright scraper pushes the t3.micro to its 1 GB limit. Mitigations: (1) never run two Playwright scrapers concurrently (already enforced by staggered schedules), (2) close the browser after each scrape (don't persist sessions), (3) if OOM kills occur in practice, upgrade to t3.small ($7.60/month post-free-tier) — see `docs/future-enhancements.md`. This is an acknowledged risk in `docs/decisions.md` (Acknowledged Tradeoffs).
+With 2.5 GB available for jobs, multiple Playwright browsers can run simultaneously. Staggered scheduling is still good practice (avoids CPU contention and keeps logs clean) but is no longer a hard memory constraint.
 
 ## Dagster Storage
 
-Dagster needs a storage backend for run history, event logs, and schedule state. Two options:
+Dagster needs a storage backend for run history, event logs, and schedule state.
 
-1. **SQLite (default)** — stored on the EBS volume. Simplest, no additional config. Fine for a solo developer.
-2. **RDS PostgreSQL** — use a separate database (`dagster`) on the same RDS instance. Better durability, no extra cost since RDS has 20 GB to spare.
-
-**Recommendation:** Use RDS PostgreSQL. Since you're already running a 24/7 RDS instance with plenty of storage headroom, there's no reason to use SQLite. Dagster's metadata is small (a few MB), and having it in Postgres means run history survives if the EC2 EBS volume is ever rebuilt. Create a second database named `dagster` on the same RDS instance — keeps it isolated from your application data.
+**Configuration:** Use a separate database (`dagster`) on the same PostgreSQL container that serves application data. Same Docker Compose network, zero latency. Dagster's metadata is small (a few MB), and having it in Postgres means run history is durable and backed up alongside application data. Create a second database named `dagster` on the same Postgres instance — keeps it isolated from your application data.
 
 ## Log Levels
 
 - **Production:** `WARNING` for Dagster internals, `INFO` for pipeline code
 - **Debug sessions:** Temporarily set to `DEBUG` via environment variable, revert after
 
-## Schedules (staggered to avoid memory contention)
+## Schedules (staggered to avoid CPU contention)
 
 ```
 02:00  ArcGIS REST sources (parcels, municipalities, address_points, structures, zoning, PennDOT)

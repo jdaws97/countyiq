@@ -84,7 +84,7 @@ Phase 1: Full snapshot sources (parallel where memory allows)
   ├── PLCB Licenses (CSV)             ~1 min
   └── PALS Licenses                   ~15 min
 
-Phase 2: Scraper sources (sequential — memory constraints)
+Phase 2: Scraper sources (sequential — respect source rate limits)
   ├── Assessment Database             ~2-4 hours (176K properties, throttled)
   ├── CRIMEWATCH                      ~10 min
   ├── DEP eFACTS                      ~20 min

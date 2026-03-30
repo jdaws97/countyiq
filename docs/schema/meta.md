@@ -1,30 +1,8 @@
 # Meta Schema & Database Initialization
 
-## Module: Database
+### Database Initialization (one-time)
 
-### What it creates
-
-| Resource | Configuration |
-|---|---|
-| RDS instance: `countyiq-db` | db.t3.micro, PostgreSQL 16, 20 GB gp3 |
-| DB subnet group: `dagster-rds-subnets` | Default VPC subnets (min 2 AZs) |
-| Parameter group: `countyiq-pg16` | Custom parameter group for PostgreSQL 16 tuning |
-| (Security group created in networking module) | `dagster-rds-sg` |
-
-### Parameter Group Customizations
-
-| Parameter | Value | Rationale |
-|---|---|---|
-| `shared_preload_libraries` | `pg_stat_statements` | Query performance monitoring |
-| `log_min_duration_statement` | `1000` (ms) | Log slow queries > 1 second |
-| `max_connections` | `50` | Sufficient for Dagster + scrapers; reduces memory overhead |
-| `work_mem` | `4MB` | Conservative for 1 GB instance |
-| `maintenance_work_mem` | `64MB` | For VACUUM, index builds |
-| `effective_cache_size` | `512MB` | ~50% of instance memory |
-
-### Database Initialization (post-Terraform, one-time)
-
-After `terraform apply`, run `sudo /opt/countyiq/initialize.sh` on EC2 via SSM. This runs `init.sql` (extensions + schemas + dagster DB) followed by `alembic upgrade head` (all tables including meta.\*). The SQL below shows what `init.sql` handles — **meta tables are created by Alembic, not init.sql**:
+Initialize by running `docker exec -i countyiq-postgres psql -U dagster_admin -d countyiq < init.sql` followed by `docker exec countyiq-dagster alembic upgrade head`. The SQL below shows what `init.sql` handles — **meta tables are created by Alembic, not init.sql**:
 
 ```sql
 -- Connect to countyiq database
@@ -46,7 +24,7 @@ CREATE SCHEMA IF NOT EXISTS meta;      -- Application metadata: infra metrics, p
 
 ### Meta Schema DDL
 
-The `meta` schema stores application-level summaries that the Lambda API can query. These tables are written by Dagster sensors running on EC2 (which has internet access) and read by the Lambda API (which only has RDS access). This is the bridge that lets the `/api/ops/health` endpoint show pipeline and infrastructure status without Lambda needing to call CloudWatch or Dagster APIs.
+The `meta` schema stores application-level summaries that the API can query. These tables are written by Dagster sensors and read by the API. This is the bridge that lets the `/api/ops/health` endpoint show pipeline and infrastructure status without the API needing to call Dagster APIs directly.
 
 ```sql
 -- meta.pipeline_status: Written by a Dagster sensor that summarizes run history.
@@ -70,12 +48,11 @@ CREATE TABLE meta.pipeline_status (
 );
 
 -- meta.infra_metrics: Written by the infra_metrics_sensor every 5 minutes.
--- Stores a JSON blob of EC2/RDS CloudWatch metrics so Lambda can read them from RDS
--- instead of calling the CloudWatch API (which it can't reach from a VPC).
+-- Stores a JSON blob of VPS/Postgres metrics so the API can read them from Postgres.
 CREATE TABLE meta.infra_metrics (
     id                  SERIAL PRIMARY KEY,
     checked_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    metrics             JSONB NOT NULL          -- {"ec2_cpu_pct": 12.3, "rds_free_storage_gb": 15.8, "rds_connections": 3}
+    metrics             JSONB NOT NULL          -- {"vps_cpu_pct": 12.3, "pg_free_storage_gb": 15.8, "pg_connections": 3}
 );
 
 -- Prune old metrics (sensor deletes rows > 24 hours old on each write)

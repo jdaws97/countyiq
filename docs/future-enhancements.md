@@ -4,55 +4,70 @@
 
 These are documented for future reference. None are needed for the MVP.
 
-### 1. Automated Cost Kill Switch
+### 1. VPS Resize
 
-**Concept:** A Lambda function triggered by a Budget Action (via SNS) that automatically stops the EC2 instance when spend exceeds a threshold (e.g., $80). This provides a hard stop beyond email alerts.
+**Trigger:** Sustained memory usage > 80% (check via `docker stats` or monitoring cron).
 
-**Implementation outline:**
-- Budget Action triggers SNS topic at $80 threshold
-- SNS triggers Lambda function
-- Lambda calls `ec2:StopInstances` on the Dagster instance
-- Optional: Lambda also attaches a deny-all IAM policy to freeze all resource access
-- CloudWatch alarm detects instance stopped → sends notification email
-
-**Why deferred:** Email alerts at $10/$25/$50/$75 provide adequate early warning. The $100 account credit and free tier make runaway costs unlikely in Year 1. Revisit if costs become less predictable.
+**Action:** Hetzner console -> resize CX23 to CX33 (4 vCPU, 8GB RAM). Cost: EUR6/mo. Downtime: ~2 minutes. No architecture changes — same Docker Compose, same containers, just more headroom.
 
 ### 2. NAIP Imagery Pipeline (Phase 2)
 
-**Concept:** Download NAIP orthophotos for York County, store in S3, and serve as a tile layer for change detection analysis.
+**Concept:** Download USDA NAIP orthophotos for York County, store in R2, and serve as a tile layer for change detection analysis. Dagster asset processes raw imagery and generates difference tiles.
 
-**Estimated storage:** 10–20 GB per year of coverage, 30–60 GB for multi-year comparison.
+**Estimated storage:** 10-20 GB per year of coverage stored in R2. Multi-year comparison: 30-60 GB.
 
-### 3. Upgrade to t3.small
+### 3. Dagster Cloud Hybrid
 
-**Trigger:** Consistent memory usage > 80% as reported by CloudWatch alarms, especially during concurrent Playwright jobs.
+**Trigger:** Need for multi-user Dagster UI access without SSH tunnels.
 
-**Cost impact:** $14.98/month (vs $7.49 for t3.micro) post free tier.
-
-### 4. Private VPC with NAT Gateway
-
-**Trigger:** Security requirements demand the EC2 instance has no public IP at all.
-
-**Cost impact:** NAT Gateway costs ~$32/month. Not justified for current scale.
-
-### 5. Dagster Cloud Hybrid
-
-**Trigger:** Need for multi-user access to Dagster UI, or desire to offload webserver/daemon hosting.
+**Concept:** Dagster Cloud free tier handles orchestration UI (hosted by Dagster). The VPS runs the actual compute via a Dagster agent container. Eliminates the need for `ssh -L 3000:localhost:3000 countyiq` to access Dagster.
 
 **Cost:** Free tier available (limited concurrent runs).
 
-### 6. ALB + Cognito for Dagster UI
+### 4. Cloudflare Workers
 
-**Trigger:** Multiple users need browser access to Dagster UI without SSH/Session Manager.
+**Trigger:** Need for edge compute beyond what Cloudflare's free WAF provides.
 
-**Cost:** ALB ~$16/month minimum + Cognito (free tier: 50,000 MAU).
+**Use cases:**
+- API response caching — cache GET `/api/parcels/bbox` responses for 5 minutes at the edge
+- Geo-blocking — restrict to US IPs if needed
+- Custom rate limiting rules beyond free WAF tier
+- Request transformation or header injection
 
-### 7. WAF Rate Limiting on CloudFront
+**Cost:** Workers free tier includes 100K requests/day. Paid plan ($5/mo) for higher limits.
 
-**Trigger:** Platform goes public and needs protection against API abuse, scraping, or DDoS.
+### 5. Automated Cost Monitoring
 
-**Cost:** ~$6.60/month (1 Web ACL + 1 rate-based rule + request inspection at ~1M req/month).
+**Concept:** Simple Python script run via cron that polls Hetzner API for usage/billing and Cloudflare API for R2 storage usage. Posts to Slack if costs exceed a threshold.
 
-**Implementation:** Terraform is documented in `docs/infrastructure/waf.md`. Add `infra/modules/frontend/waf.tf` and set `web_acl_id` on the CloudFront distribution. Rate limit: 2,000 requests per 5 minutes per IP.
+**Implementation outline:**
+- Hetzner API: check current invoice amount
+- Cloudflare API: check R2 storage and operations usage
+- Compare against thresholds (e.g., Hetzner > 10 EUR, R2 > 5GB)
+- Post to `#alerts-warning` Slack channel on threshold breach
 
-**Why deferred:** No public users at MVP. Lambda concurrency cap (10) and CloudFront itself already provide basic protection. Add WAF when the platform is publicly advertised.
+**Why deferred:** Hetzner is fixed monthly pricing and Cloudflare is free tier. Costs are predictable. Revisit when R2 usage grows beyond free tier.
+
+### 6. Multi-VPS Split
+
+**Trigger:** API and pipeline workloads conflict on the same VPS (e.g., Dagster Playwright jobs starving API of memory during peak hours).
+
+**Concept:** Separate VPS for Dagster (pipeline-heavy) and VPS for API + Postgres (latency-sensitive). Postgres stays on the API VPS. Dagster connects over private network (Hetzner vSwitch).
+
+**Cost:** Second CX23 adds EUR3.49/mo.
+
+**Why deferred:** Unlikely needed at county scale. 4GB RAM with staggered schedules should be sufficient. The monitoring cron will surface memory pressure before it becomes a problem.
+
+### 7. Automated Backup Verification
+
+**Concept:** Monthly cron job that restores the latest pg_dump to a temporary Docker Postgres container, runs schema validation queries, and posts results to Slack. Ensures backups are actually restorable without manual testing.
+
+**Implementation outline:**
+- Pull latest backup from R2
+- Start temporary Postgres container with the backup
+- Run `SELECT count(*) FROM public.properties` and other validation queries
+- Compare row counts against expected ranges
+- Post pass/fail results to `#alerts-warning` Slack channel
+- Remove temporary container
+
+**Why deferred:** Manual monthly restore test is sufficient for MVP. Automate when backup volume or complexity increases.

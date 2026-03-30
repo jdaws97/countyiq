@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 import boto3
 from dagster import ConfigurableResource, get_dagster_logger
@@ -41,6 +42,21 @@ class S3StorageResource(ConfigurableResource):
             log.info(f"Archived to s3://{self.bucket}/{key} ({len(body)} bytes)")
         except Exception as e:
             log.warning(f"S3 archive skipped ({e}). Data not persisted to S3.")
+
+    def archive_file(self, source_path: str, local_path: str, filename: str | None = None):
+        """Archive a local file to S3 without loading it fully into memory."""
+        log = get_dagster_logger()
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        resolved_name = filename or Path(local_path).name
+        key = f"{source_path}/{date_str}/{resolved_name}"
+
+        try:
+            client = boto3.client("s3", region_name=self.region)
+            client.upload_file(local_path, self.bucket, key)
+            size = os.path.getsize(local_path)
+            log.info(f"Archived to s3://{self.bucket}/{key} ({size} bytes)")
+        except Exception as e:
+            log.warning(f"S3 archive skipped ({e}). File not persisted to S3.")
 
 
 def make_s3_resource() -> S3StorageResource:

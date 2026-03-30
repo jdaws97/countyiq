@@ -1,8 +1,8 @@
-# Phase 0–1: Environment Setup & Terraform Infrastructure
+# Phase 0-1: Local Environment Setup & Production Infrastructure
 
 ## Phase 0: Local Environment Setup
 
-**Goal:** Your local machine has everything needed to develop, test, and deploy CountyIQ.
+**Goal:** Your local machine has everything needed to develop and test CountyIQ.
 
 **Time estimate:** 30 minutes
 
@@ -10,257 +10,235 @@
 
 | Tool | Version | Purpose |
 |---|---|---|
-| **Terraform** | >= 1.7 | Infrastructure as Code |
-| **AWS CLI v2** | Latest | AWS account interaction |
-| **Python** | 3.11 | Dagster pipelines, API (matches Lambda runtime) |
-| **Node.js** | 20 LTS | React frontend |
-| **Docker Desktop** | Latest | Local Postgres for migration testing |
 | **Git** | Latest | Version control |
-| **psql** (PostgreSQL client) | Latest | Database inspection via SSM tunnel |
+| **Docker + Docker Compose** | v2 | Local Postgres, container builds |
+| **Python** | 3.11 (via `uv`) | Dagster pipelines, API |
+| **Node.js** | 20 LTS (via `nvm` or system package) | React frontend |
+| **psql** (PostgreSQL client) | Latest | Database inspection |
+| **rclone** | Latest | R2 backups |
+| **SSH client** | Standard | VPS access (built-in on Linux/Mac) |
 
 ```bash
 # Verify all tools are installed
-terraform --version
-aws --version
+git --version
+docker --version
+docker compose version
 python3 --version
 node --version
-docker --version
-git --version
 psql --version
+rclone --version
+ssh -V
 ```
 
-### Step 0.2: Configure AWS CLI
+### Step 0.2: Local Development Setup
 
 ```bash
-aws configure
-# AWS Access Key ID: <your-key>
-# AWS Secret Access Key: <your-secret>
-# Default region: us-east-1
-# Default output format: json
+# Clone the repository
+git clone https://github.com/jarod/countyiq.git
+cd countyiq
+
+# Python environment (pipelines)
+cd pipelines
+uv venv .venv --python 3.11
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+cd ..
+
+# Start local Postgres
+cd pipelines && docker compose up -d postgres-test && cd ..
+
+# API development
+cd api && uvicorn main:app --reload --port 8000
+
+# Frontend development (separate terminal)
+cd frontend && npm ci && npm run dev
+
+# Dagster UI (separate terminal)
+cd pipelines && source .venv/bin/activate && dagster dev -m countyiq.definitions
 ```
 
-> **Note:** This is the only time long-lived AWS credentials are used. GitHub Actions will use OIDC (no stored credentials). Your local CLI is for Terraform and SSM access.
-
-### Step 0.3: Create the GitHub Repository
+### Step 0.3: Environment Variables for Local Dev
 
 ```bash
-mkdir countyiq && cd countyiq
-git init
-
-# Create the monorepo structure
-mkdir -p infra/modules/{networking,iam,compute,database,frontend,api,monitoring,cicd}
-mkdir -p pipelines/countyiq/{assets/{arcgis,scrapers,bulk,pdf,enrichment},lib/parsers,sensors,jobs,schedules,resources}
-mkdir -p pipelines/{alembic/versions,tests/fixtures}
-mkdir -p api/{routes,lib}
-mkdir -p frontend
-mkdir -p .github/workflows
-
-# Create placeholder files
-touch infra/main.tf infra/variables.tf infra/outputs.tf infra/terraform.tfvars
-touch pipelines/pyproject.toml pipelines/setup.py pipelines/docker-compose.yml
-touch pipelines/countyiq/__init__.py pipelines/countyiq/definitions.py
-touch pipelines/alembic/alembic.ini pipelines/alembic/env.py
-touch api/main.py api/handler.py api/requirements.txt
-touch frontend/package.json
-touch .gitignore README.md
-
-# Initial commit
-git add -A
-git commit -m "Initial monorepo scaffold"
+export DATABASE_HOST=localhost
+export DATABASE_PORT=5433
+export DATABASE_NAME=countyiq
+export DATABASE_USER=dagster_admin
+export DATABASE_PASSWORD=localtest
+export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/countyiq"
 ```
 
-**`.gitignore` contents:**
-
-```
-# Terraform
-*.tfstate
-*.tfstate.backup
-.terraform/
-*.tfvars
-!terraform.tfvars.example
-
-# Python
-__pycache__/
-*.pyc
-.venv/
-*.egg-info/
-dist/
-
-# Node
-node_modules/
-frontend/dist/
-
-# IDE
-.vscode/
-.idea/
-
-# Environment
-.env
-.env.local
-
-# OS
-.DS_Store
-```
-
-### Step 0.4: Push to GitHub
-
-```bash
-gh repo create countyiq --private --source=. --push
-```
-
-> **Checkpoint:** `gh repo view` shows your repository. All directories exist. AWS CLI returns your account ID with `aws sts get-caller-identity`.
+> **Checkpoint:** `docker compose ps` shows postgres-test running. `psql $DATABASE_URL -c "SELECT 1"` returns 1. `curl http://localhost:8000/api/health` returns OK. Frontend loads at `http://localhost:5173`.
 
 ---
 
-## Phase 1: Terraform Infrastructure (Write & Validate Only)
+## Phase 1: Production Infrastructure Setup
 
-**Goal:** All Terraform modules are written, validated, and ready to apply. **Do NOT run `terraform apply` yet** — that happens in Phase 5 after the full stack is verified locally against Docker Postgres.
+**Goal:** A Hetzner VPS is running all CountyIQ services via Docker Compose, with Cloudflare for CDN/DNS and R2 for object storage.
 
-**Time estimate:** 2-3 hours
+**Time estimate:** 1-2 hours
 
-**Prerequisites:** Phase 0 complete.
+**Prerequisites:** Phase 0 complete. The full stack works locally against Docker Postgres.
 
-> **Local-first strategy:** Phases 2–4 run entirely against local Docker Postgres. The only AWS resource created before Phase 5 is the Terraform state bucket (Step 1.1). This means zero AWS cost during development and no risk of broken infrastructure while iterating on code.
+### Step 1.1: Provision Hetzner VPS
 
-### Step 1.1: Create Terraform State Backend (Manual — One Time)
+1. Create a Hetzner Cloud account at https://console.hetzner.cloud
+2. Create a new project: "CountyIQ"
+3. Add your SSH public key: Settings -> SSH Keys
+4. Create a server:
+   - **Type:** CX23 (x86, 2 vCPU, 4GB RAM, 40GB SSD)
+   - **Image:** Ubuntu 24.04
+   - **Location:** Falkenstein
+   - **SSH key:** Select the key you added
+   - **Name:** `countyiq`
+5. Note the public IP address
 
-This is the one thing that can't be Terraformed because it's where Terraform stores its own state.
+### Step 1.2: Configure Firewall
 
-```bash
-# Create S3 bucket for Terraform state
-aws s3api create-bucket \
-  --bucket countyiq-terraform-state \
-  --region us-east-1
+1. Hetzner Console -> Firewalls -> Create
+2. Add inbound rules:
+   - TCP 22 (SSH)
+   - TCP 80 (HTTP)
+   - TCP 443 (HTTPS)
+3. Deny all other inbound traffic. All outbound allowed.
+4. Attach the firewall to the `countyiq` server.
 
-# Enable versioning (so you can recover from bad state)
-aws s3api put-bucket-versioning \
-  --bucket countyiq-terraform-state \
-  --versioning-configuration Status=Enabled
-```
-
-> **Note:** No DynamoDB table needed. Terraform >= 1.10 supports S3 native locking via `use_lockfile = true`, which uses S3 conditional writes instead.
-
-> **Checkpoint:** `aws s3 ls | grep countyiq` shows the bucket.
-
-### Step 1.2: Write Terraform Backend Configuration
-
-```hcl
-# infra/backend.tf
-terraform {
-  backend "s3" {
-    bucket       = "countyiq-terraform-state"
-    key          = "prod/terraform.tfstate"
-    region       = "us-east-1"
-    use_lockfile = true
-    encrypt      = true
-  }
-}
-```
-
-### Step 1.3: Write Terraform Modules
-
-Implement each module using the code and specifications in the Infrastructure Plan. Build them in this order (each may reference outputs from previous modules):
-
-| Order | Module | Infra Plan Reference Section | Key Resources |
-|---|---|---|---|
-| 1 | `networking` | Module: Networking | Security groups (dagster-ec2-sg, api-lambda-sg, dagster-rds-sg) |
-| 2 | `iam` | Module: IAM | EC2 instance profile, managed policies (SSM, CloudWatch), inline policies (S3, Parameter Store) |
-| 3 | `database` | Module: Database | RDS instance (db.t3.micro, PostgreSQL 16), parameter group, init.sql |
-| 4 | `compute` | Module: Compute | EC2 instance (t3.micro), EBS volume, user data script |
-| 5 | `monitoring` | Module: Monitoring | Budgets, CloudWatch log groups, 5 alarms, SNS topic |
-| 6 | `frontend` | Frontend Architecture (S3/CloudFront section) | S3 bucket (static site), CloudFront distribution, OAC |
-| 7 | `api` | Frontend Architecture (Lambda section) | Lambda function, API Gateway, CloudFront route |
-| 8 | `cicd` | CI/CD (OIDC section) | IAM OIDC provider, GitHub Actions role, scoped deploy policy |
-
-**Root module (`infra/main.tf`)** wires them together, passing outputs from one module as inputs to the next.
-
-### Step 1.4: SSM Parameters (Automated by Terraform)
-
-All 4 SSM parameters are created automatically by `terraform apply`:
-
-| Parameter | Source |
-|---|---|
-| `/countyiq/rds-password` | Auto-generated by `random_password` resource (24 chars, no special chars) |
-| `/countyiq/rds-host` | RDS endpoint from `aws_db_instance` output |
-| `/countyiq/rds-dbname` | `countyiq` |
-| `/countyiq/rds-username` | `dagster_admin` |
-
-**No manual steps needed.** The password is generated at `terraform apply` time, passed to RDS and Lambda as variables, and stored in SSM Parameter Store for EC2 bootstrap — all in a single apply.
+### Step 1.3: Initial VPS Setup
 
 ```bash
-# Verify after terraform apply
-aws ssm get-parameters \
-  --names "/countyiq/rds-host" "/countyiq/rds-password" \
-         "/countyiq/rds-dbname" "/countyiq/rds-username" \
-  --query 'Parameters[].Name'
+# SSH into VPS
+ssh root@<VPS_IP>
+
+# Update system
+apt update && apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+systemctl enable docker
+
+# Install rclone (for R2 backups)
+curl https://rclone.org/install.sh | bash
+
+# Create app directory
+mkdir -p /opt/countyiq
+cd /opt/countyiq
+
+# Clone repository
+git clone https://github.com/jarod/countyiq.git .
+# Or set up a deploy key for a private repo
 ```
 
-> **Note:** Lambda gets DB credentials as Terraform-set encrypted environment variables (NOT from SSM at runtime — see Infrastructure Plan, VPC networking constraint). EC2 reads from SSM at boot time via the IAM instance profile.
-
-### Step 1.5: Terraform Init & Validate (No Apply Yet)
+### Step 1.4: Configure Secrets
 
 ```bash
-cd infra/
+# Create .env file (NOT in git)
+cat > /opt/countyiq/.env << 'EOF'
+DATABASE_HOST=postgres
+DATABASE_PORT=5432
+DATABASE_NAME=countyiq
+DATABASE_USER=dagster_admin
+DATABASE_PASSWORD=<generate-strong-password>
+DATABASE_URL=postgresql://dagster_admin:<password>@postgres:5432/countyiq
 
-# Initialize with the S3 backend (or use -backend=false for local-only validation)
-terraform init
+SLACK_WEBHOOK_CRITICAL=<webhook-url>
+SLACK_WEBHOOK_WARNING=<webhook-url>
+SLACK_WEBHOOK_PIPELINE=<webhook-url>
 
-# Validate all modules
-terraform validate
+OPENROUTER_API_KEY=<api-key>
 
-# Preview what will be created (optional — useful for reviewing the resource graph)
-terraform plan -out=plan.tfplan
+R2_ACCESS_KEY_ID=<r2-key>
+R2_SECRET_ACCESS_KEY=<r2-secret>
+R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+EOF
+
+chmod 600 /opt/countyiq/.env
 ```
 
-> **Stop here.** Do NOT run `terraform apply`. Proceed to Phase 2 and build everything locally against Docker Postgres. Come back to apply in Phase 5 after the full stack is verified.
+### Step 1.5: Configure Cloudflare
 
-### Steps 1.6–1.7: Deferred to Phase 5
-
-Steps 1.6 (Verify Infrastructure) and 1.7 (Initialize Database and Start Dagster) run **after `terraform apply`**, which happens in Phase 5 after local verification is complete. They are documented here for reference but should not be executed until Phase 5.
-
-### Step 1.6: Verify Infrastructure (Phase 5)
+1. Create a Cloudflare account (or log in)
+2. Add your domain (or configure later when domain is purchased)
+3. Create R2 buckets:
+   - `countyiq-raw` (raw pipeline data)
+   - `countyiq-tiles` (vector tiles)
+   - `countyiq-backups` (Postgres backups)
+4. Generate an R2 API token with Object Read & Write permissions
+5. Configure rclone on the VPS:
 
 ```bash
-# EC2 instance is running
-aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=countyiq-dagster" \
-  --query 'Reservations[].Instances[].{ID:InstanceId,State:State.Name,IP:PublicIpAddress}'
-
-# RDS is available
-aws rds describe-db-instances \
-  --db-instance-identifier countyiq-db \
-  --query 'DBInstances[].{Status:DBInstanceStatus,Endpoint:Endpoint.Address}'
-
-# SSM can reach the instance
-aws ssm start-session --target <instance-id>
-# (type 'exit' to disconnect)
-
-# S3 buckets exist
-aws s3 ls | grep countyiq
+rclone config
+# Name: r2
+# Type: s3
+# Provider: Cloudflare
+# Access key: <R2_ACCESS_KEY_ID>
+# Secret key: <R2_SECRET_ACCESS_KEY>
+# Endpoint: https://<account-id>.r2.cloudflarestorage.com
 ```
 
-> **Checkpoint:** EC2 state is "running". RDS state is "available". SSM session connects successfully. S3 buckets for frontend, raw data, and vector tiles exist.
-
-### Step 1.7: Initialize Database and Start Dagster
-
-After `terraform apply`, EC2 is running but Dagster is **not started** — the services are gated on `/opt/countyiq/.initialized` (see `docs/infrastructure/bootstrap.md`). Run the initialization script:
+### Step 1.6: Deploy Services
 
 ```bash
-# SSM into the EC2 instance
-aws ssm start-session --target <instance-id>
+cd /opt/countyiq
+docker compose up -d
 
-# Run the initialization script (runs init.sql + starts Dagster)
-sudo /opt/countyiq/initialize.sh
+# Verify all containers are running
+docker compose ps
+
+# Check logs
+docker compose logs --tail=50
 ```
 
-The script does three things in sequence:
+### Step 1.7: Initialize Database
 
-1. **Runs `init.sql`** — extensions (postgis, pg_trgm, pg_stat_statements), schemas (staging, meta), and the separate `dagster` database
-2. **Runs `alembic upgrade head`** — all table-level objects (staging.\*, public.\*, meta.\*, views, functions, indexes)
-3. **Creates the gate file and starts Dagster services**
+```bash
+# Run database init script (extensions, schemas)
+docker exec -i countyiq-postgres psql -U dagster_admin -d countyiq < infra/modules/database/init.sql
 
-> **Note:** `init.sql` handles only what Alembic can't (extensions, cross-database DDL). All tables are owned by Alembic. See `docs/implementation/phase-2-database.md` for the schema ownership split.
+# Run Alembic migrations
+docker exec countyiq-dagster alembic upgrade head
 
-> **Checkpoint:** Connect to RDS and verify: `\dx` shows postgis and pg_trgm. `\dn` shows staging and meta. `\l` shows both `countyiq` and `dagster` databases. `systemctl status dagster-webserver dagster-daemon` shows both services running.
+# Create Dagster database
+docker exec countyiq-postgres createdb -U dagster_admin dagster
+```
+
+> **Note:** `init.sql` handles extensions (postgis, pg_trgm, pg_stat_statements) and schemas (staging, meta). All tables are owned by Alembic. See `docs/implementation/phase-2-database.md` for the schema ownership split.
+
+### Step 1.8: Configure Backups
+
+```bash
+# Add backup cron job
+crontab -e
+# Add: 0 4 * * * /opt/countyiq/docker/backup.sh >> /var/log/countyiq-backup.log 2>&1
+
+# Test backup manually
+/opt/countyiq/docker/backup.sh
+
+# Verify backup exists in R2
+rclone ls r2:countyiq-backups/postgres/
+```
+
+### Step 1.9: Verify Infrastructure
+
+```bash
+# Check API is responding
+curl -s http://localhost:8000/api/health | jq .
+
+# Check Postgres is accessible
+docker exec countyiq-postgres psql -U dagster_admin -d countyiq -c "SELECT version();"
+
+# Verify database initialized
+docker exec countyiq-postgres psql -U dagster_admin -d countyiq -c "\dx"
+# Should show: postgis, pg_trgm, pg_stat_statements
+
+docker exec countyiq-postgres psql -U dagster_admin -d countyiq -c "\dn"
+# Should show: staging, meta, public
+
+# Check Dagster UI (via SSH tunnel from local machine)
+# On your local machine:
+ssh -L 3000:localhost:3000 root@<VPS_IP>
+# Then open http://localhost:3000 in browser
+```
+
+> **Checkpoint:** All containers healthy (`docker compose ps` shows "Up" + "healthy"). Postgres has extensions and schemas. API returns health OK. Dagster UI accessible via SSH tunnel. Backup exists in R2.
 
 ---
