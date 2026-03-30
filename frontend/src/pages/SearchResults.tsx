@@ -110,25 +110,36 @@ export default function SearchResults() {
             animation: 'fadeUp 0.5s ease both', animationDelay: '0.1s', opacity: 0,
           }}>
             {results.map((r, idx) => {
-              // Smart results are raw DB rows — render key-value pairs
-              const keys = Object.keys(r).filter(k => r[k] !== null && r[k] !== '')
-              const title = r.owner_full || r.owner_name || r.premises_name || r.licensee || r.name || r.pidn || 'Result'
-              const subtitle = r.propadr || r.property_address || r.premises_address || r.tax_district_name || ''
+              const entries = Object.entries(r).filter(([, v]) => v !== null && v !== '')
+              // First entry with a name-like value is the title
+              const titleKey = entries.find(([k]) => k === 'Parcel ID')?.[1] || entries[0]?.[1] || 'Result'
               return (
                 <div key={idx} style={{
-                  padding: '16px 24px',
+                  padding: '20px 24px',
                   background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
                   borderBottom: idx < results.length - 1 ? '1px solid var(--border)' : 'none',
-                }}>
-                  <div style={{ fontFamily: 'var(--font-sans)', fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                    {String(title)}
-                  </div>
-                  {subtitle && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{String(subtitle)}</div>}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
-                    {keys.filter(k => !['owner_full','owner_name','premises_name','licensee','propadr','property_address','premises_address','name'].includes(k)).map(k => (
-                      <div key={k} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>{k.replace(/_/g,' ')}: </span>
-                        <span style={{ color: 'var(--text-secondary)' }}>{typeof r[k] === 'number' ? r[k].toLocaleString() : String(r[k])}</span>
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
+                >
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                    gap: '10px 24px',
+                  }}>
+                    {entries.map(([k, v]) => (
+                      <div key={k}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: 'var(--text-muted)', marginBottom: 2 }}>
+                          {k}
+                        </div>
+                        <div style={{
+                          fontFamily: String(v).startsWith('$') || /^\d/.test(String(v)) ? 'var(--font-mono)' : 'var(--font-sans)',
+                          fontSize: 14,
+                          fontWeight: String(v).startsWith('$') ? 600 : 400,
+                          color: String(v).startsWith('$') ? 'var(--accent-green)' : 'var(--text-primary)',
+                        }}>
+                          {String(v)}
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -591,6 +591,20 @@ export default function MapView() {
 
 // ---------- Property Report Card Panel ----------
 
+const SCHOOL_DISTRICTS: Record<string, string> = {
+  '002': 'Central York', '004': 'Dallastown', '006': 'Dover',
+  '008': 'Eastern York', '010': 'Hanover', '012': 'Northeastern',
+  '014': 'Northern York', '016': 'Red Lion', '018': 'South Eastern',
+  '020': 'South Western', '022': 'Southern York', '024': 'Spring Grove',
+  '026': 'West Shore', '028': 'West York', '030': 'York Suburban',
+  '17F': 'York City', '17G': 'York City', '17L': 'York City', '17N': 'York City',
+}
+
+const CLASS_NAMES: Record<string, string> = {
+  'R': 'Residential', 'C': 'Commercial', 'I': 'Industrial',
+  'F': 'Farm', 'E': 'Exempt', 'A': 'Agricultural', 'U': 'Utility',
+}
+
 function PropertyPanel({
   report,
   loading,
@@ -705,7 +719,7 @@ function PropertyPanel({
         <DataField label="Sale Date" value={p.saledt || '--'} />
         <DataField label="Sale Price" value={fmtDollar(p.price)} />
         {p.prev_price && <DataField label="Prev Price" value={fmtDollar(p.prev_price)} />}
-        <DataField label="Class" value={p.class === 'R' ? 'Residential' : p.class === 'C' ? 'Commercial' : p.class === 'I' ? 'Industrial' : p.class || '--'} />
+        <DataField label="Class" value={CLASS_NAMES[p.class] || p.class || '--'} />
       </div>
       {(p.aprland || p.aprbldg) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: 8 }}>
@@ -735,7 +749,7 @@ function PropertyPanel({
         <>
           <Divider />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-            {p.school_dis && <DataField label="School District" value={p.school_dis} />}
+            {p.school_dis && <DataField label="School District" value={SCHOOL_DISTRICTS[p.school_dis] || p.school_dis} />}
             {p.deed_bk && <DataField label="Deed" value={`${p.deed_bk}/${p.deed_pg}`} />}
           </div>
         </>

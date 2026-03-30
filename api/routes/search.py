@@ -229,11 +229,88 @@ def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
         return None
 
 
+SCHOOL_DISTRICTS = {
+    "002": "Central York", "004": "Dallastown", "006": "Dover",
+    "008": "Eastern York", "010": "Hanover", "012": "Northeastern",
+    "014": "Northern York", "016": "Red Lion", "018": "South Eastern",
+    "020": "South Western", "022": "Southern York", "024": "Spring Grove",
+    "026": "West Shore", "028": "West York", "030": "York Suburban",
+    "17F": "York City", "17G": "York City", "17L": "York City", "17N": "York City",
+}
+
+CLASS_NAMES = {
+    "R": "Residential", "C": "Commercial", "I": "Industrial",
+    "F": "Farm", "E": "Exempt", "A": "Agricultural", "U": "Utility",
+}
+
+FRIENDLY_NAMES = {
+    "pidn": "Parcel ID",
+    "owner_full": None,  # used as title, hide from details
+    "owner_name": None,
+    "propadr": None,  # used as subtitle
+    "property_address": None,
+    "premises_name": None,
+    "premises_address": None,
+    "licensee": None,
+    "aprtotal": "Assessed Value",
+    "aprland": "Land Value",
+    "aprbldg": "Building Value",
+    "saledt": "Sale Date",
+    "price": "Sale Price",
+    "prev_price": "Previous Price",
+    "acres": "Acres",
+    "class": "Class",
+    "school_dis": "School District",
+    "municipality": "Municipality",
+    "tax_district_name": "Tax District",
+    "tax_year": "Tax Year",
+    "authority_name": "Authority",
+    "total": "Amount Owed",
+    "tax_owed": "Tax Owed",
+    "penalty_owed": "Penalty",
+    "interest_owed": "Interest",
+    "fees_owed": "Fees",
+    "license_type": "License Type",
+    "status": "Status",
+    "parcel_id_raw": "Parcel ID (Raw)",
+    "unit_suffix": None,
+    "tax_district_code": None,
+    "report_date": None,
+    "dataset_id": None,
+    "record_id": None,
+}
+
+
 def _clean_row(row: dict) -> dict:
-    """Clean a database row for JSON serialization."""
+    """Clean a database row for JSON serialization with friendly names."""
     for key in ("geom", "valid_from", "valid_to"):
         row.pop(key, None)
+
+    cleaned = {}
     for key, val in row.items():
+        # Skip hidden fields
+        if FRIENDLY_NAMES.get(key) is None and key in FRIENDLY_NAMES:
+            continue
+
+        # Convert Decimal
         if hasattr(val, "as_tuple"):
-            row[key] = float(val)
-    return row
+            val = float(val)
+
+        # Map school district codes to names
+        if key == "school_dis" and val:
+            val = SCHOOL_DISTRICTS.get(str(val), str(val))
+
+        # Map class codes to names
+        if key == "class" and val:
+            val = CLASS_NAMES.get(str(val), str(val))
+
+        # Format currency fields
+        if key in ("aprtotal", "price", "prev_price", "aprland", "aprbldg", "total", "tax_owed", "penalty_owed", "interest_owed", "fees_owed") and val:
+            val = f"${float(val):,.0f}"
+
+        # Use friendly name
+        friendly = FRIENDLY_NAMES.get(key, key.replace("_", " ").title())
+        if val is not None and str(val).strip():
+            cleaned[friendly] = val
+
+    return cleaned
