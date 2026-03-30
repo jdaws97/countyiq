@@ -13,10 +13,16 @@ def search(
     q: str = Query(..., min_length=2, description="Search query"),
     limit: int = Query(default=20, le=100),
 ) -> dict:
-    """LLM-first search. Every query goes to the LLM for intent classification."""
+    """Smart search — fast-path for name/address lookups, LLM for natural language."""
     search_term = q.strip()
 
-    # Step 1: Always try LLM first
+    # Fast path: if it looks like a name (2-3 short words, no special keywords),
+    # skip the LLM entirely and go straight to pg_trgm
+    if _is_name_lookup(search_term):
+        trgm_results = _trgm_search_with_reversal(search_term, limit)
+        return {"mode": "fuzzy", "results": trgm_results}
+
+    # Otherwise, use LLM for intent classification
     llm_intent = parse_query_with_llm(search_term)
 
     if llm_intent:
@@ -52,6 +58,49 @@ def search(
     # Step 2: Fallback to pg_trgm if LLM unavailable or failed
     trgm_results = _trgm_search_with_reversal(search_term, limit)
     return {"mode": "fuzzy", "results": trgm_results}
+
+
+NL_WORDS = {
+    "show", "find", "list", "what", "who", "where", "which", "how",
+    "oldest", "newest", "most", "least", "biggest", "cheapest", "expensive",
+    "vacant", "delinquent", "flood", "commercial", "residential", "industrial",
+    "restaurants", "restaurant", "breweries", "brewery", "wineries", "bars",
+    "properties", "parcels", "owners", "sales", "sold", "near", "recent",
+    "top", "total", "average", "all", "zoning", "zoned",
+}
+
+
+def _is_name_lookup(query: str) -> bool:
+    """Fast check: is this a person/business name vs a natural language query?
+
+    Name lookups: "Brian Daws", "KEYSTONE REALTY", "123 Main St"
+    NOT name lookups: "breweries in york", "vacant delinquent parcels", "oldest tax"
+    """
+    words = query.lower().split()
+
+    # Single word — could be a name or a keyword
+    if len(words) == 1:
+        return words[0] not in NL_WORDS
+
+    # 5+ words is almost certainly natural language
+    if len(words) >= 5:
+        return False
+
+    # Contains a zip code (5 digits)
+    if any(w.isdigit() and len(w) == 5 for w in words):
+        return False
+
+    # Any NL keyword present → not a name
+    for w in words:
+        if w in NL_WORDS:
+            return False
+
+    # "X in Y" pattern → natural language
+    if "in" in words[1:]:
+        return False
+
+    # 2-3 words with no keywords → probably a name
+    return True
 
 
 def _trgm_search_with_reversal(search_term: str, limit: int) -> list[dict]:
