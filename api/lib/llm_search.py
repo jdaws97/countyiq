@@ -6,12 +6,12 @@ import os
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# Primary: cheap paid model (no rate limits, ~$0.0002/query)
-# Fallback: free models if paid fails
+# Primary: cheapest paid model (~$0.0001/query, no rate limits)
+# Fallback: slightly more expensive, then free
 MODELS = [
+    "mistralai/mistral-nemo",
     "mistralai/mistral-small-3.1-24b-instruct",
     "google/gemma-3-27b-it:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
 ]
 
 SYSTEM_PROMPT = """You are the search engine for CountyIQ, a civic intelligence platform for York County, Pennsylvania.
