@@ -272,21 +272,52 @@ export default function MapView() {
   )
 }
 
+function formatCost(cost: number | null): string {
+  if (!cost) return ''
+  if (cost >= 1_000_000) return `$${(cost / 1_000_000).toFixed(1)}M`
+  if (cost >= 1_000) return `$${(cost / 1_000).toFixed(0)}K`
+  return `$${cost.toLocaleString()}`
+}
+
+function formatDate(d: string | null): string {
+  if (!d) return ''
+  try {
+    return new Date(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  } catch { return d }
+}
+
 function MapTooltip({ properties }: { properties: Record<string, any> }) {
   // PennDOT project
   if (properties.project_name) {
+    const statusColor = properties.under_construction === 'Y' ? 'var(--accent-gold)' : 'var(--accent-green)'
+    const statusLabel = properties.act89_status || properties.status || ''
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>{properties.project_name}</div>
-        {properties.description && (
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4, lineHeight: 1.4 }}>
-            {properties.description.length > 150 ? properties.description.slice(0, 150) + '...' : properties.description}
+        {properties.location_desc && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.4 }}>
+            {properties.location_desc}
           </div>
         )}
-        <div style={{ display: 'flex', gap: 12, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-          {properties.status && <span style={{ color: 'var(--accent-green)' }}>{properties.status}</span>}
-          {properties.municipality && <span>{properties.municipality}</span>}
+        {!properties.location_desc && properties.description && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.4 }}>
+            {properties.description}
+          </div>
+        )}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginBottom: 4 }}>
+          <span style={{ color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
+          {properties.project_type && <span>{properties.project_type}</span>}
         </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+          {properties.start_date && <span>Start: {formatDate(properties.start_date)}</span>}
+          {properties.end_date && <span>End: {formatDate(properties.end_date)}</span>}
+          {properties.cost && <span style={{ color: 'var(--accent-blue)' }}>{formatCost(properties.cost)}</span>}
+        </div>
+        {properties.project_manager && (
+          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginTop: 6, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+            PM: {properties.project_manager}
+          </div>
+        )}
       </div>
     )
   }

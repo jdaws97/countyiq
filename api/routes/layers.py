@@ -21,7 +21,15 @@ LAYER_CONFIG = {
     },
     "penndot_projects": {
         "table": "staging.penndot_projects",
-        "properties": ["project_id", "project_name", "description", "status", "municipality"],
+        "properties": ["project_id", "project_name", "description", "status",
+                        "start_date", "end_date", "cost", "project_type"],
+        "extra_sql": (
+            "t.data->>'PRJCT_GRPHY_DC' AS location_desc, "
+            "t.data->>'PRJCT_MNGR_CONTACT_NM' AS project_manager, "
+            "t.data->>'PRJCT_MNGR_EMAIL' AS manager_email, "
+            "t.data->>'UNDER_CONSTRUCTION' AS under_construction, "
+            "t.data->>'ACT_89_BREAKDOWN' AS act89_status"
+        ),
     },
 }
 
@@ -39,6 +47,9 @@ def get_layer(layer_name: str) -> dict:
     table = config["table"]
     props = config["properties"]
     prop_select = ", ".join(f"t.{p}" for p in props)
+    extra = config.get("extra_sql")
+    if extra:
+        prop_select += ", " + extra
 
     with get_cursor() as cur:
         cur.execute(f"""
