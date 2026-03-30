@@ -3,6 +3,7 @@ services:
     image: postgis/postgis:16-3.4
     container_name: countyiq-postgres
     restart: unless-stopped
+    env_file: ../.env
     environment:
       POSTGRES_DB: countyiq
       POSTGRES_USER: ${DATABASE_USER}
