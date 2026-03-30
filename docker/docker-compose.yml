@@ -29,6 +29,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -42,6 +44,8 @@ services:
     container_name: countyiq-dagster
     restart: unless-stopped
     env_file: ../.env
+    environment:
+      DAGSTER_HOME: /opt/dagster/home
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,11 +53,13 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - dagster-storage:/opt/dagster/storage
+      - ../pipelines/dagster.yaml:/opt/dagster/home/dagster.yaml:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/server_info"]
       interval: 30s
-      timeout: 5s
-      retries: 3
+      timeout: 10s
+      retries: 5
+      start_period: 120s
 
   caddy:
     image: caddy:2-alpine
