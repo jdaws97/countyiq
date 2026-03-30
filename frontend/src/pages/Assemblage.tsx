@@ -145,11 +145,14 @@ export default function Assemblage() {
                   <Link to={`/property/${c.seed_pidn}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
                     View Seed Property
                   </Link>
-                  {c.lat && c.lng && (
-                    <Link to={`/map?highlight=${c.seed_pidn}&zoom=18&lat=${c.lat}&lng=${c.lng}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-purple)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
-                      View Cluster on Map
-                    </Link>
-                  )}
+                  {c.lat && c.lng && (() => {
+                    const allPidns = [c.seed_pidn, ...(c.neighbors || []).map((n: any) => n.pidn)].join(',')
+                    return (
+                      <Link to={`/map?cluster=${allPidns}&seed=${c.seed_pidn}&zoom=18&lat=${c.lat}&lng=${c.lng}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-purple)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
+                        View Cluster on Map ({(c.neighbors || []).length + 1} parcels)
+                      </Link>
+                    )
+                  })()}
                 </div>
               )}
               {isExpanded && (() => {

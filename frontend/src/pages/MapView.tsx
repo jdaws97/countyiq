@@ -124,17 +124,24 @@ export default function MapView() {
     }))
   })
 
-  // Highlight a specific parcel (from URL param, auto-clears after 5s)
+  // Highlight parcels from URL params
   const [highlightPidn, setHighlightPidn] = useState<string | null>(
     () => searchParams.get('highlight')
   )
+  const [clusterPidns, setClusterPidns] = useState<Set<string>>(
+    () => new Set((searchParams.get('cluster') || '').split(',').filter(Boolean))
+  )
+  const [seedPidn, setSeedPidn] = useState<string | null>(
+    () => searchParams.get('seed')
+  )
+  const isClusterMode = clusterPidns.size > 0
 
   useEffect(() => {
-    if (highlightPidn) {
+    if (highlightPidn && !isClusterMode) {
       const timer = setTimeout(() => setHighlightPidn(null), 8000)
       return () => clearTimeout(timer)
     }
-  }, [highlightPidn])
+  }, [highlightPidn, isClusterMode])
 
   const [parcelFilter, setParcelFilter] = useState<'all' | 'delinquent' | 'vacant' | 'vacant_delinquent'>(
     () => {
@@ -306,19 +313,37 @@ export default function MapView() {
           stroked: true,
           filled: true,
           getFillColor: (f: any) => {
-            // Bright highlight for targeted parcel
-            if (highlightPidn && f.properties?.pidn === highlightPidn) return [255, 215, 0, 200]
+            const pidn = f.properties?.pidn
+            // Cluster mode: seed = gold, adjacent = purple, others dimmed
+            if (isClusterMode) {
+              if (pidn === seedPidn) return [255, 215, 0, 220]
+              if (clusterPidns.has(pidn)) return [124, 92, 191, 160]
+              return [40, 40, 60, 30]
+            }
+            // Single highlight
+            if (highlightPidn && pidn === highlightPidn) return [255, 215, 0, 200]
             if (parcelFilter === 'vacant') return [61, 189, 111, 120]
             const delinquent = f.properties?.delinquent_total
             if (delinquent && delinquent > 0) return [224, 82, 82, 120]
             return [96, 165, 250, 40]
           },
           getLineColor: (f: any) => {
-            if (highlightPidn && f.properties?.pidn === highlightPidn) return [255, 215, 0, 255]
+            const pidn = f.properties?.pidn
+            if (isClusterMode) {
+              if (pidn === seedPidn) return [255, 215, 0, 255]
+              if (clusterPidns.has(pidn)) return [124, 92, 191, 255]
+              return [40, 40, 60, 50]
+            }
+            if (highlightPidn && pidn === highlightPidn) return [255, 215, 0, 255]
             if (parcelFilter === 'vacant') return [61, 189, 111, 150]
             return [96, 165, 250, 100]
           },
-          getLineWidth: (f: any) => highlightPidn && f.properties?.pidn === highlightPidn ? 3 : 1,
+          getLineWidth: (f: any) => {
+            const pidn = f.properties?.pidn
+            if (isClusterMode && (pidn === seedPidn || clusterPidns.has(pidn))) return 3
+            if (highlightPidn && pidn === highlightPidn) return 3
+            return 1
+          },
           lineWidthUnits: 'pixels' as const,
           pickable: true,
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
@@ -415,7 +440,7 @@ export default function MapView() {
     }
 
     return result
-  }, [layers, geoData, parcelData, currentZoom, handleParcelClick, parcelFilter, highlightPidn])
+  }, [layers, geoData, parcelData, currentZoom, handleParcelClick, parcelFilter, highlightPidn, isClusterMode, clusterPidns, seedPidn])
 
   const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
   const showZoomMessage = parcelsEnabled && currentZoom < MIN_PARCEL_ZOOM
@@ -481,7 +506,7 @@ export default function MapView() {
               { key: 'vacant', label: 'Vacant', color: 'var(--accent-green)' },
               { key: 'vacant_delinquent', label: 'Vacant + Delinquent', color: 'var(--accent-gold)' },
             ] as const).map(f => (
-              <button key={f.key} onClick={() => { setParcelFilter(f.key); setParcelData(null) }} style={{
+              <button key={f.key} onClick={() => { if (parcelFilter !== f.key) { setParcelFilter(f.key); setParcelData(null) } }} style={{
                 padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 0.5,
                 background: parcelFilter === f.key ? f.color : 'transparent',
@@ -500,21 +525,48 @@ export default function MapView() {
           <div style={{
             position: 'absolute', bottom: 24, left: 16, zIndex: 10,
             background: 'var(--bg-panel)', border: '1px solid var(--border)',
-            borderRadius: 6, padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            borderRadius: 6, padding: '10px 14px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(96,165,250,0.5)' }} />
-              Normal Parcel
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(224,82,82,0.7)' }} />
-              Tax Delinquent
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(61,189,111,0.7)' }} />
-              Vacant Land
-            </div>
+            {isClusterMode ? (
+              <>
+                <div style={{ fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' as const, marginBottom: 6, color: 'var(--accent-purple)' }}>Assemblage Cluster</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(255,215,0,0.85)', border: '1px solid rgba(255,215,0,1)' }} />
+                  Seed Parcel (Delinquent)
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(124,92,191,0.6)', border: '1px solid rgba(124,92,191,1)' }} />
+                  Adjacent Parcel
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(40,40,60,0.3)' }} />
+                  Other
+                </div>
+                <button onClick={() => { setClusterPidns(new Set()); setSeedPidn(null) }} style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)',
+                  background: 'none', border: '1px solid var(--border)', borderRadius: 3,
+                  padding: '2px 8px', cursor: 'pointer',
+                }}>
+                  Clear Cluster View
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(96,165,250,0.5)' }} />
+                  Normal Parcel
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(224,82,82,0.7)' }} />
+                  Tax Delinquent
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(61,189,111,0.7)' }} />
+                  Vacant Land
+                </div>
+              </>
+            )}
           </div>
         )}
 
