@@ -31,3 +31,15 @@ fema_refresh = define_asset_job(
     selection=AssetSelection.assets("fema_flood_zones"),
     description="Refresh FEMA flood hazard zone data",
 )
+
+scout_discovery_refresh = define_asset_job(
+    name="scout_discovery_refresh",
+    selection=AssetSelection.assets("county_scout_discovery"),
+    description="Discover and classify new County Scout source candidates",
+)
+
+scout_monitor_refresh = define_asset_job(
+    name="scout_monitor_refresh",
+    selection=AssetSelection.assets("county_scout_monitor"),
+    description="Monitor promoted County Scout sources for changes and outages",
+)

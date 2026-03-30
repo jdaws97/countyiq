@@ -42,8 +42,8 @@ Build each source, test it locally, then move to the next. Start with the simple
 | 5 | PA Open Data Portal | 4 | SODA API | Medium | Different API pattern (SODA vs ArcGIS) |
 | 6 | PennDOT Open Data | 5 | ArcGIS REST API | Medium | Same ArcGIS pattern as #3. ⚠️ Not live-tested — verify the endpoint responds before building. If it's down, skip and revisit; the other 5 MVP sources are sufficient for launch. |
 | 7 | PennDOT Projects | 13 | ArcGIS MapServer | Medium | MapServer (slightly different from FeatureServer) |
-| 8 | Assessment Database | 2 | Playwright scraper | Hard | ASP.NET Web Forms, session-based, 176K properties, throttling needed |
-| 9 | Entity Resolution (MVP scope) | — | SQL enrichment | Medium | MVP: parcels + assessment only. Matches GIS owner_full against assessment owner_name using PIDN join + pg_trgm fallback. Phase 2 sources added incrementally. |
+| 8 | ~~Assessment Database~~ | 2 | Playwright scraper | Hard | **DEFERRED** — code exists but not wired in. Portal "cannot be sold" disclaimer; GIS Parcels already provides all core fields. See `docs/data-source-feasibility.md` Source 2. |
+| 9 | Entity Resolution (MVP scope) | — | SQL enrichment | Medium | MVP: parcels only (assessment deferred). GIS `owner_full` is the sole owner source. Phase 2 sources added incrementally. |
 | 10 | Vector Tile Generation | — | PostGIS → S3 | Medium | ST_AsMVT, upload to S3 |
 
 #### Per-Source Workflow

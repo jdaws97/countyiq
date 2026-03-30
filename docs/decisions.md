@@ -44,7 +44,8 @@
 | API route prefix | All Lambda routes under `/api/*` | CloudFront only forwards `/api/*` to API Gateway; ops health at `/api/ops/health`; tiles served from S3 via `/tiles/*` (not Lambda) |
 | API Gateway access control | Origin-verify header (CloudFront → Lambda) | CloudFront adds `x-origin-verify` secret header; FastAPI middleware rejects direct API Gateway calls. $0 cost. No WAF needed for API lockdown. |
 | Meta schema ownership | App-owned DDL; Dagster sensors write; Lambda reads | Separate from Dagster's internal `dagster` database; authoritative DDL in docs/schema/meta.md |
-| MVP entity resolution | Parcels + assessment only (2 sources) | Dynamically detects available staging tables; Phase 2 sources added incrementally as pipelines are built |
+| Assessment scraper deferred | Code exists but not wired into jobs/schedules/VIEW | Portal "cannot be sold" disclaimer creates commercial-use ambiguity; GIS Parcels already provides owner, values, sale history, class, LUC, municipality, school district. Only loses value_history, permits (eFACTS #17 Phase 2), delinquent_taxes (Tax Claim #14 Phase 2). Scraper/parser/tests preserved for reactivation. |
+| MVP entity resolution | Parcels only (assessment deferred) | Dynamically detects available staging tables; Phase 2 sources added incrementally as pipelines are built |
 | Schema authority | Infra plan is single source of truth; data model doc is Phase 2/3 appendix | all MVP schema defined in docs/schema/; data model doc reclassified to docs/data-model-phase2-appendix.md |
 | Connection pooling | Module-level connection reuse + reserved concurrency = 10 | Warm Lambda invocations reuse `_conn`; 10 cap keeps RDS within 50-connection limit alongside Dagster/sensors/admin |
 | Rollback strategy | 5 documented procedures (Lambda, Dagster, migration, pipeline data, frontend) | Each scenario has specific steps; SCD2 enables data-level rollback by expiring bad records and re-running |

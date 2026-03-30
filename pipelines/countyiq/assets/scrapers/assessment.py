@@ -126,8 +126,8 @@ def assessment_scrape(
 def _accept_disclaimer(page, base_url: str):
     """Navigate to search page, accepting disclaimer if shown."""
     page.goto(f"{base_url}search/commonsearch.aspx?mode=realprop")
-    if "Disclaimer" in page.title():
-        page.click("button:has-text('Agree')")
+    if "Disclaimer" in page.url:
+        page.get_by_role("button", name="Agree", exact=True).click()
         page.wait_for_load_state("networkidle")
 
 
@@ -213,9 +213,9 @@ def _refine_prefix(page, prefix: str, county, max_depth: int = 6) -> list[str]:
 def _search_and_count(page, prefix: str, county) -> int:
     """Perform a search and return the total found count."""
     _navigate_to_search(page, county.assessment_url)
-    page.fill('input[name*="Parcel"], [aria-label="Parcel:"]', prefix)
-    page.select_option('select[name*="PageSize"], [aria-label="Results/page:"]', "50")
-    page.click('button:has-text("Search"), input[value="Search"]')
+    page.get_by_role("textbox", name="Parcel:").fill(prefix)
+    page.get_by_label("Results/page:").select_option("50")
+    page.get_by_role("button", name="Search").click()
     page.wait_for_load_state("networkidle")
     time.sleep(county.assessment_throttle_seconds)
     return get_total_found(page.content())
@@ -224,9 +224,9 @@ def _search_and_count(page, prefix: str, county) -> int:
 def _search_all_pages(page, prefix: str, county) -> list[dict]:
     """Search a prefix and page through all results (max 500 = 10 pages of 50)."""
     _navigate_to_search(page, county.assessment_url)
-    page.fill('input[name*="Parcel"], [aria-label="Parcel:"]', prefix)
-    page.select_option('select[name*="PageSize"], [aria-label="Results/page:"]', "50")
-    page.click('button:has-text("Search"), input[value="Search"]')
+    page.get_by_role("textbox", name="Parcel:").fill(prefix)
+    page.get_by_label("Results/page:").select_option("50")
+    page.get_by_role("button", name="Search").click()
     page.wait_for_load_state("networkidle")
     time.sleep(county.assessment_throttle_seconds)
 
@@ -239,8 +239,8 @@ def _search_all_pages(page, prefix: str, county) -> list[dict]:
         all_rows.extend(rows)
 
         # Check for next page link
-        next_link = page.query_selector('a:has-text("Next >>")')
-        if not next_link:
+        next_link = page.get_by_text("Next >>")
+        if not next_link.count():
             break
         next_link.click()
         page.wait_for_load_state("networkidle")
@@ -252,8 +252,8 @@ def _search_all_pages(page, prefix: str, county) -> list[dict]:
 def _navigate_to_search(page, base_url: str):
     """Navigate to search page, handle disclaimer if it reappears."""
     page.goto(f"{base_url}search/commonsearch.aspx?mode=realprop")
-    if "Disclaimer" in page.title():
-        page.click("button:has-text('Agree')")
+    if "Disclaimer" in page.url:
+        page.get_by_role("button", name="Agree", exact=True).click()
         page.wait_for_load_state("networkidle")
 
 
@@ -368,35 +368,28 @@ def _run_tier2(page, context, database, s3, county, tier1_results, tier2_state, 
 def _scrape_property_detail(page, parid: str, county) -> dict | None:
     """Search for exact PARID, navigate to Printable Summary, parse."""
     _navigate_to_search(page, county.assessment_url)
-    page.fill('input[name*="Parcel"], [aria-label="Parcel:"]', parid)
-    page.click('button:has-text("Search"), input[value="Search"]')
+    page.get_by_role("textbox", name="Parcel:").fill(parid)
+    page.get_by_role("button", name="Search").click()
     page.wait_for_load_state("networkidle")
     time.sleep(county.assessment_throttle_seconds)
 
-    # Click first result row
-    result_rows = page.query_selector_all("tr.SearchResults, tr[onclick]")
-    if not result_rows:
-        return None
-    result_rows[0].click()
-    page.wait_for_load_state("networkidle")
-    time.sleep(county.assessment_throttle_seconds)
-
-    # Click Printable Summary
-    summary_link = page.query_selector('a:has-text("Printable Summary")')
-    if summary_link:
-        # May open popup -- handle both cases
-        with page.expect_popup() as popup_info:
-            summary_link.click()
-        popup = popup_info.value
-        popup.wait_for_load_state("networkidle")
-        html = popup.content()
-        popup.close()
-    else:
-        # Try evaluating the JavaScript directly
-        page.evaluate("PrintDatalet('all')")
+    # If exact match, portal goes straight to detail page (1 of 1)
+    # If multiple results, we land on search results — click first row
+    if "Datalet" not in page.url:
+        result_rows = page.query_selector_all("tr[onclick]")
+        if not result_rows:
+            return None
+        result_rows[0].click()
         page.wait_for_load_state("networkidle")
-        time.sleep(2)
-        html = page.content()
+        time.sleep(county.assessment_throttle_seconds)
+
+    # Click Printable Summary (opens popup)
+    with page.expect_popup() as popup_info:
+        page.get_by_text("Printable Summary").click()
+    popup = popup_info.value
+    popup.wait_for_load_state("networkidle")
+    html = popup.content()
+    popup.close()
 
     time.sleep(county.assessment_throttle_seconds)
     return parse_printable_summary(html)

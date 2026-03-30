@@ -225,7 +225,18 @@ The assessment portal provides these detail tabs per property (verified by navig
 ### Legal Basis
 **Low risk.** Assessment records are public records under PA law. The "cannot be sold" disclaimer is a website ToU, not law. RTK request path is unambiguously legal. Web scraping is defensible under hiQ/Van Buren precedent since no authentication is required.
 
-### Verdict: ✅ GO — RTK request preferred, Playwright scraping as fallback
+### Status: DEFERRED — Not wired into MVP pipeline
+
+**Decision (2026-03-29):** The assessment scraper code exists (`pipelines/countyiq/assets/scrapers/assessment.py`) but is **not connected** to any job, schedule, or the `public.properties` VIEW. Reason: the portal's "cannot be sold" disclaimer creates commercial-use ambiguity, and the GIS Parcels layer (#1) already provides the same core fields — owner name, assessed values, sale history, property class, LUC, municipality, school district — with *more* detail (year built, living area, acres, deed references, previous owner, building style).
+
+**What's lost by deferring:**
+- `value_history` (historical assessment values by tax year) — nice-to-have, no other free source
+- `permits` (building permits) — may be available via eFACTS (#17) in Phase 2
+- `delinquent_taxes` — available from Tax Claim Bureau (#14), a free legally-required public notice
+
+**To reactivate:** Wire `assessment_scrape` into the `scraper_refresh` job, add it to `weekly_scrapers` schedule, and restore the assessment join in `public.properties` VIEW. The scraper, parser, tests, and fixtures are all intact.
+
+### Original Verdict: ✅ GO — RTK request preferred, Playwright scraping as fallback
 
 ---
 

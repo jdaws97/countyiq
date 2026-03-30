@@ -1,0 +1,66 @@
+{
+    "objectIdFieldName": "OBJECTID",
+    "globalIdFieldName": "",
+    "geometryType": "esriGeometryPolyline",
+    "spatialReference": {"wkid": 4326, "latestWkid": 4326},
+    "fields": [
+        {"name": "OBJECTID", "type": "esriFieldTypeOID"},
+        {"name": "ST_RT_NO", "type": "esriFieldTypeString"},
+        {"name": "SEG_NO", "type": "esriFieldTypeString"},
+        {"name": "STREET_NAME", "type": "esriFieldTypeString"},
+        {"name": "FAC_TYPE", "type": "esriFieldTypeString"},
+        {"name": "SURF_TYPE", "type": "esriFieldTypeString"},
+        {"name": "CTY_CODE", "type": "esriFieldTypeString"},
+        {"name": "CUR_AADT", "type": "esriFieldTypeInteger"},
+        {"name": "LANE_CNT", "type": "esriFieldTypeDouble"},
+        {"name": "TOTAL_WIDTH", "type": "esriFieldTypeDouble"}
+    ],
+    "features": [
+        {
+            "attributes": {
+                "OBJECTID": 117758,
+                "ST_RT_NO": "0001",
+                "SEG_NO": "0010",
+                "STREET_NAME": "CITY AV",
+                "FAC_TYPE": "1",
+                "SURF_TYPE": "62",
+                "CTY_CODE": "67",
+                "CUR_AADT": 14954,
+                "LANE_CNT": 3,
+                "TOTAL_WIDTH": 30
+            },
+            "geometry": {
+                "paths": [[[-76.73, 39.96], [-76.74, 39.97]]]
+            }
+        },
+        {
+            "attributes": {
+                "OBJECTID": 117759,
+                "ST_RT_NO": "0030",
+                "SEG_NO": "0220",
+                "STREET_NAME": "MARKET ST",
+                "FAC_TYPE": "2",
+                "SURF_TYPE": "61",
+                "CTY_CODE": "67",
+                "CUR_AADT": 8500,
+                "LANE_CNT": 2,
+                "TOTAL_WIDTH": 24
+            },
+            "geometry": {
+                "paths": [[[-76.72, 39.95], [-76.71, 39.94]]]
+            }
+        },
+        {
+            "attributes": {
+                "OBJECTID": 117760,
+                "ST_RT_NO": null,
+                "SEG_NO": null,
+                "STREET_NAME": "UNNAMED",
+                "FAC_TYPE": "3",
+                "SURF_TYPE": "11",
+                "CTY_CODE": "67"
+            },
+            "geometry": null
+        }
+    ]
+}

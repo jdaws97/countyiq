@@ -1,0 +1,14 @@
+[     219ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://assessmentpublic.yorkcountypa.gov/images/cur_template/hl_500x1.gif:0
+[     222ms] [ERROR] Refused to apply style from 'https://assessmentpublic.yorkcountypa.gov/images/cur_template/styles.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled. @ https://assessmentpublic.yorkcountypa.gov/search/advancedsearch.aspx?mode=advanced:0
+[     298ms] [ERROR] Refused to apply style from 'https://assessmentpublic.yorkcountypa.gov/images/cur_template/styles.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled. @ https://assessmentpublic.yorkcountypa.gov/search/advancedsearch.aspx?mode=advanced:695
+[     349ms] [ERROR] Refused to apply style from 'https://assessmentpublic.yorkcountypa.gov/images/cur_template/styles.css' because its MIME type ('text/html') is not a supported stylesheet MIME type, and strict MIME checking is enabled. @ https://assessmentpublic.yorkcountypa.gov/search/advancedsearch.aspx?mode=advanced:772
+[     673ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[     925ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[ 1192465ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[ 1192700ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[ 2383544ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[ 2383771ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[ 3577592ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[ 3577854ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[ 4772212ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0
+[ 4772472ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://assessmentpublic.yorkcountypa.govfavicon.ico/:0

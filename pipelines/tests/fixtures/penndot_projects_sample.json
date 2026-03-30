@@ -1,0 +1,66 @@
+{
+    "objectIdFieldName": "OBJECTID",
+    "geometryType": "esriGeometryPoint",
+    "spatialReference": {"wkid": 4326, "latestWkid": 4326},
+    "features": [
+        {
+            "attributes": {
+                "OBJECTID": 1,
+                "PROJ_ID": 98765,
+                "PROJECT_TITLE": "Forrest Ave Resurface",
+                "IMPROVEMENT_CODE_DESC": "Resurface",
+                "PROJ_STATUS_DESC": "Underway",
+                "PROJ_CLASS": "Highway",
+                "PHS_EST_COST_AM": 3080000.0,
+                "NTP_DATE": "03/17/2025",
+                "COMPLETION_DATE": "12/31/2025",
+                "PROJ_MANAGER": "John Smith",
+                "COUNTY_NAME": "YORK",
+                "MUNICIPAL_CODE": "YORK CITY",
+                "DISTRICT_NO": "08",
+                "LET_DATE": "01/15/2025",
+                "HOUSE_LEGISLATOR_NAME": "Rep. Example"
+            },
+            "geometry": {"x": -76.73, "y": 39.96}
+        },
+        {
+            "attributes": {
+                "OBJECTID": 2,
+                "PROJ_ID": 87654,
+                "PROJECT_TITLE": "Wago Road Bridge Rehabilitation",
+                "IMPROVEMENT_CODE_DESC": "Bridge Rehabilitation",
+                "PROJ_STATUS_DESC": "Under Construction",
+                "PROJ_CLASS": "Bridge",
+                "PHS_EST_COST_AM": 4140000.0,
+                "NTP_DATE": "06/01/2024",
+                "COMPLETION_DATE": "",
+                "PROJ_MANAGER": "Jane Doe",
+                "COUNTY_NAME": "YORK",
+                "MUNICIPAL_CODE": "LOWER WINDSOR TWP",
+                "DISTRICT_NO": "08"
+            },
+            "geometry": {"x": -76.58, "y": 39.92}
+        },
+        {
+            "attributes": {
+                "OBJECTID": 3,
+                "PROJ_ID": null,
+                "PROJECT_TITLE": "Unknown Project",
+                "PROJ_STATUS_DESC": "Underway",
+                "COUNTY_NAME": "YORK"
+            },
+            "geometry": null
+        },
+        {
+            "attributes": {
+                "OBJECTID": 4,
+                "PROJ_ID": 98765,
+                "PROJECT_TITLE": "Forrest Ave Resurface",
+                "PROJ_STATUS_DESC": "Underway",
+                "COUNTY_NAME": "YORK",
+                "PHS_EST_COST_AM": 3080000.0
+            },
+            "geometry": {"x": -76.73, "y": 39.96}
+        }
+    ]
+}

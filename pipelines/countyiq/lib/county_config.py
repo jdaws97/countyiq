@@ -72,6 +72,18 @@ class CountyConfig:
     tax_claims_pdf_url: str = ""       # DocumentCenter PDF URL
     tax_claims_min_records: int = 5000  # Truncation guard (unique parcels)
 
+    # Zip codes (GIS layer)
+    arcgis_zipcodes_url: str = ""      # FeatureServer URL for zip code polygons
+
+    # Traffic counts (PennDOT)
+    traffic_counts_url: str = ""       # MapServer URL for traffic segments
+    traffic_counts_cty_code: str = ""  # County code filter
+    traffic_counts_min_records: int = 500
+
+    # Sheriff sales
+    sheriff_sales_url: str = ""        # Sheriff sale listing URL
+    sheriff_sales_min_records: int = 10
+
     # S3 archive prefix (raw data goes to s3://york-county-raw/<prefix>/...)
     s3_prefix: str = ""
 
@@ -113,6 +125,12 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         fema_min_records=3000,
         tax_claims_pdf_url="https://yorkcountypa.gov/DocumentCenter/View/1911/Delinquent-Tax-Claim-Listing-PDF",
         tax_claims_min_records=5000,
+        arcgis_zipcodes_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Zipcodes/FeatureServer/0",
+        traffic_counts_url="https://gis.penndot.gov/arcgis/rest/services/opendata/roadwaytraffic/MapServer/0",
+        traffic_counts_cty_code="67",
+        traffic_counts_min_records=1000,
+        sheriff_sales_url="https://attorneyportal.yorkcountypa.gov/sheriff.salelisting/",
+        sheriff_sales_min_records=10,
         s3_prefix="york",
     ),
 }

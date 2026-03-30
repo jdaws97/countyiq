@@ -1,0 +1,71 @@
+[
+  {
+    ":id": "row-abc1-2345-6789",
+    "business_name": "Acme Widgets Llc",
+    "filing_number": "0001234567",
+    "address_line1": "123 Main St",
+    "city": "York",
+    "state": "PA",
+    "zip": "17401",
+    "typeofbusinessregistration": "Domestic Limited Liability Company",
+    "creationdate": "2020-01-15T00:00:00.000",
+    "party_type": "Governor",
+    "last_name": "SMITH",
+    "first_name": "JOHN",
+    "shortcountyname": "York",
+    "county_code": "67"
+  },
+  {
+    ":id": "row-def2-3456-7890",
+    "business_name": "York County Bakery Inc",
+    "filing_number": "0002345678",
+    "address_line1": "456 Market St",
+    "city": "Hanover",
+    "state": "PA",
+    "zip": "17331",
+    "typeofbusinessregistration": "Domestic Business Corporation",
+    "creationdate": "2018-06-20T00:00:00.000",
+    "party_type": "President",
+    "last_name": "DOE",
+    "first_name": "JANE",
+    "shortcountyname": "York",
+    "county_code": "67"
+  },
+  {
+    ":id": "row-ghi3-4567-8901",
+    "business_name": "Lancaster Farms Inc",
+    "filing_number": "0003456789",
+    "address_line1": "789 Farm Rd",
+    "city": "Lancaster",
+    "state": "PA",
+    "zip": "17601",
+    "typeofbusinessregistration": "Domestic Business Corporation",
+    "creationdate": "2015-03-10T00:00:00.000",
+    "party_type": "President",
+    "last_name": "GREEN",
+    "first_name": "BOB",
+    "shortcountyname": "Lancaster",
+    "county_code": "36"
+  },
+  {
+    ":id": "row-jkl4-5678-9012",
+    "business_name": "Susquehanna Services Llc",
+    "filing_number": "0004567890",
+    "address_line1": "321 River Rd",
+    "city": "Wrightsville",
+    "state": "PA",
+    "zip": "17368",
+    "typeofbusinessregistration": "Domestic Limited Liability Company",
+    "creationdate": "2012-09-01T00:00:00.000",
+    "party_type": "Governor",
+    "shortcountyname": "York",
+    "county_code": "67"
+  },
+  {
+    "business_name": "No Id Business Llc",
+    "filing_number": "0005555555",
+    "typeofbusinessregistration": "Domestic Limited Liability Company",
+    "shortcountyname": "York",
+    "county_code": "67"
+  }
+]
