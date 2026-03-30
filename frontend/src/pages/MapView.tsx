@@ -3,8 +3,24 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { Map } from 'react-map-gl/maplibre'
 import { DeckGL } from '@deck.gl/react'
 import { GeoJsonLayer } from '@deck.gl/layers'
+import type { PickingInfo } from '@deck.gl/core'
 import Nav from '../components/Nav'
 import LayerToggle, { type LayerConfig } from '../components/LayerToggle'
+
+// Zoning color map by gen_zcode
+const ZONING_COLORS: Record<string, [number, number, number, number]> = {
+  'LDR':   [72, 187, 120, 100],   // green — low density residential
+  'MDR':   [129, 178, 210, 100],   // light blue — medium density
+  'HDR':   [66, 135, 245, 100],    // blue — high density
+  'R':     [104, 159, 56, 100],    // olive — rural
+  'RP':    [56, 142, 60, 100],     // dark green — resource protection
+  'Cv/OS': [27, 94, 32, 100],      // forest green — conservation
+  'I':     [158, 118, 66, 120],    // brown — industrial
+  'HC':    [255, 152, 0, 100],     // orange — highway commercial
+  'NC':    [255, 193, 7, 100],     // yellow — neighborhood commercial
+  'MU':    [171, 71, 188, 100],    // purple — mixed use
+}
+const ZONING_DEFAULT: [number, number, number, number] = [124, 92, 191, 50]
 
 const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
@@ -60,6 +76,8 @@ export default function MapView() {
     })
   }, [])
 
+  const [hoverInfo, setHoverInfo] = useState<PickingInfo | null>(null)
+
   const handleToggle = useCallback((id: string) => {
     setLayers((prev) =>
       prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l))
@@ -80,8 +98,11 @@ export default function MapView() {
           getFillColor: [61, 189, 111, 30],
           getLineColor: [61, 189, 111, 200],
           getLineWidth: 2,
-          lineWidthUnits: 'pixels',
+          lineWidthUnits: 'pixels' as const,
           pickable: true,
+          onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
+          autoHighlight: true,
+          highlightColor: [61, 189, 111, 60],
         })
       )
     }
@@ -96,6 +117,9 @@ export default function MapView() {
           filled: true,
           getFillColor: [74, 127, 255, 80],
           pickable: true,
+          onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
+          autoHighlight: true,
+          highlightColor: [74, 127, 255, 120],
         })
       )
     }
@@ -106,10 +130,19 @@ export default function MapView() {
         new GeoJsonLayer({
           id: 'zoning',
           data: geoData.zoning,
-          stroked: false,
+          stroked: true,
           filled: true,
-          getFillColor: [124, 92, 191, 50],
+          getFillColor: (f: any) => {
+            const code = f.properties?.gen_zcode ?? ''
+            return ZONING_COLORS[code] ?? ZONING_DEFAULT
+          },
+          getLineColor: [255, 255, 255, 30],
+          getLineWidth: 1,
+          lineWidthUnits: 'pixels' as const,
           pickable: true,
+          onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 40],
         })
       )
     }
@@ -120,12 +153,18 @@ export default function MapView() {
         new GeoJsonLayer({
           id: 'penndot_projects',
           data: geoData.penndot_projects,
-          stroked: false,
+          stroked: true,
           filled: true,
           getFillColor: [255, 165, 0, 200],
-          getPointRadius: 6,
-          pointRadiusUnits: 'pixels',
+          getLineColor: [255, 165, 0, 255],
+          getLineWidth: 3,
+          lineWidthUnits: 'pixels' as const,
+          getPointRadius: 8,
+          pointRadiusUnits: 'pixels' as const,
           pickable: true,
+          onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
+          autoHighlight: true,
+          highlightColor: [255, 200, 50, 100],
         })
       )
     }
@@ -191,7 +230,86 @@ export default function MapView() {
             style={{ width: '100%', height: '100%' }}
           />
         </DeckGL>
+
+        {/* Hover tooltip */}
+        {hoverInfo?.object && hoverInfo.x != null && hoverInfo.y != null && (
+          <div
+            style={{
+              position: 'absolute',
+              left: hoverInfo.x + 12,
+              top: hoverInfo.y + 12,
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              padding: '10px 14px',
+              pointerEvents: 'none',
+              zIndex: 20,
+              maxWidth: 320,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            }}
+          >
+            <MapTooltip properties={hoverInfo.object.properties} />
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+function MapTooltip({ properties }: { properties: Record<string, any> }) {
+  // PennDOT project
+  if (properties.project_name) {
+    return (
+      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>{properties.project_name}</div>
+        {properties.description && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4, lineHeight: 1.4 }}>
+            {properties.description.length > 150 ? properties.description.slice(0, 150) + '...' : properties.description}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 12, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+          {properties.status && <span style={{ color: 'var(--accent-green)' }}>{properties.status}</span>}
+          {properties.municipality && <span>{properties.municipality}</span>}
+        </div>
+      </div>
+    )
+  }
+
+  // Zoning
+  if (properties.gen_zname || properties.zname) {
+    return (
+      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{properties.zname || properties.gen_zname}</div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+          {properties.gen_zcode && <span style={{ marginRight: 8 }}>{properties.gen_zcode}</span>}
+          {properties.muni_name && <span>{properties.muni_name}</span>}
+        </div>
+      </div>
+    )
+  }
+
+  // Municipality
+  if (properties.muni_type) {
+    return (
+      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
+        <div style={{ fontWeight: 600 }}>{properties.name}</div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{properties.muni_type}</div>
+      </div>
+    )
+  }
+
+  // Flood zone
+  if (properties.fld_zone) {
+    return (
+      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
+        <div style={{ fontWeight: 600 }}>Zone {properties.fld_zone}</div>
+        {properties.zone_subty && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{properties.zone_subty}</div>}
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+          SFHA: {properties.sfha_tf === 'T' ? 'Yes' : 'No'}
+        </div>
+      </div>
+    )
+  }
+
+  return null
 }
