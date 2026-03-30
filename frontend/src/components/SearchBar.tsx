@@ -48,6 +48,10 @@ export default function SearchBar() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (query.trim().length >= 2) {
+      setShowResults(false)
+      navigate(`/search?q=${encodeURIComponent(query.trim())}`)
+    }
   }
 
   return (

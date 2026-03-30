@@ -53,6 +53,7 @@ const ACTIVE_TILES = [
   { icon: '\u25C8', name: 'Flood Risk', desc: '', color: 'var(--accent-purple)', to: '/map?layer=flood' },
   { icon: '\u25C6', name: 'Delinquent Taxes', desc: '', color: 'var(--accent-red)', to: '/map?layer=delinquent' },
   { icon: '\u25C7', name: 'Municipalities', desc: '', color: 'var(--accent-green)', to: '/municipalities' },
+  { icon: '\u25A5', name: 'PennDOT Projects', desc: '', color: 'var(--accent-cyan)', to: '/map?layer=penndot' },
 ]
 
 /* Disabled tiles config */
@@ -60,7 +61,6 @@ const DISABLED_TILES = [
   { icon: '\u25A2', name: 'Vacant Land', desc: 'Requires parcel data' },
   { icon: '\u25A3', name: 'Top Owners', desc: 'Requires parcel data' },
   { icon: '\u25A4', name: 'Recent Sales', desc: 'Requires parcel data' },
-  { icon: '\u25A5', name: 'PennDOT Projects', desc: '' },
 ]
 
 function formatCurrency(cents: number): string {
@@ -106,6 +106,7 @@ export default function HomePage() {
     `${floodZoneCount.toLocaleString()} FEMA zones`,
     `${delinquentParcels.toLocaleString()} parcels · ${formatCurrency(totalDelinquent)}`,
     `${municipalityCount} jurisdictions`,
+    `${penndotProjectCount} active projects`,
   ]
   const disabledTileDescs = [
     'Requires parcel data',

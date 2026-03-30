@@ -41,6 +41,7 @@ const LAYER_DEFS: { id: string; name: string; color: string; defaultOn: boolean 
 
 const URL_LAYER_MAP: Record<string, string> = {
   flood: 'flood_zones',
+  penndot: 'penndot_projects',
 }
 
 export default function MapView() {
