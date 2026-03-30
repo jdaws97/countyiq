@@ -51,13 +51,14 @@ const SOURCE_DISPLAY: Record<string, string> = {
 /* Active tiles config */
 const ACTIVE_TILES = [
   { icon: '\u25CE', name: 'Explore Map', desc: 'Interactive map view', color: 'var(--accent-blue)', to: '/map' },
+  { icon: '\u25C6', name: 'Distressed Parcels', desc: 'Acquisition opportunities', color: 'var(--accent-red)', to: '/distressed' },
   { icon: '\u25C8', name: 'Flood Risk', desc: '', color: 'var(--accent-purple)', to: '/map?layer=flood' },
-  { icon: '\u25C6', name: 'Delinquent Taxes', desc: '', color: 'var(--accent-red)', to: '/delinquent' },
   { icon: '\u25C7', name: 'Municipalities', desc: '', color: 'var(--accent-green)', to: '/municipalities' },
   { icon: '\u25A5', name: 'PennDOT Projects', desc: '', color: 'var(--accent-cyan)', to: '/projects' },
   { icon: '\u25A4', name: 'Recent Sales', desc: '', color: 'var(--accent-gold)', to: '/search?q=recent+sales+over+100000' },
   { icon: '\u25A3', name: 'Liquor Licenses', desc: '', color: 'var(--accent-green)', to: '/licenses' },
   { icon: '\u25A2', name: 'Vacant Land', desc: '', color: 'var(--accent-purple)', to: '/map?layer=vacant' },
+  { icon: '\u25C6', name: 'Delinquent Taxes', desc: '', color: 'var(--accent-gold)', to: '/delinquent' },
 ]
 
 /* Disabled tiles config */
@@ -107,17 +108,16 @@ export default function HomePage() {
   /* Dynamic tile descriptions */
   const activeTileDescs = [
     `${parcelCount.toLocaleString()} parcels`,
+    'Ranked by distress score',
     `${floodZoneCount.toLocaleString()} FEMA zones`,
-    `${delinquentParcels.toLocaleString()} parcels · ${formatCurrency(totalDelinquent)}`,
     `${municipalityCount} jurisdictions`,
     `${penndotProjectCount} active projects`,
     `${parcelCount.toLocaleString()} parcels tracked`,
     `${(stats?.liquor_license_count ?? 0).toLocaleString()} active licenses`,
     'Parcels without structures',
+    `${delinquentParcels.toLocaleString()} parcels · ${formatCurrency(totalDelinquent)}`,
   ]
-  const disabledTileDescs: string[] = [
-    'Coming soon',
-  ]
+  const disabledTileDescs: string[] = []
 
   /* Sort sources: green first, then red; by record count descending within each group */
   const sortedSources = health
