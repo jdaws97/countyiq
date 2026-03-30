@@ -73,19 +73,31 @@ def tax_claims(
     # 2. Archive raw PDF to S3
     s3.archive(f"{county.s3_prefix}/bulk/tax_claims", pdf_bytes, filename="listing.pdf")
 
-    # 3. Extract text from all pages
-    context.log.info("Extracting text from PDF pages...")
-    all_text = ""
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        for i, page in enumerate(pdf.pages):
-            all_text += (page.extract_text() or "") + "\n"
-            if (i + 1) % 200 == 0:
-                context.log.info(f"  Extracted {i + 1}/{len(pdf.pages)} pages")
-        context.log.info(f"Extracted text from {len(pdf.pages)} pages")
+    # 3. Extract text page-by-page into a temp file to avoid holding
+    #    the entire PDF text in memory (200+ pages can exceed 1GB RAM)
+    import tempfile, os as _os
+    context.log.info("Extracting text from PDF pages (streaming to disk)...")
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            total_pages = len(pdf.pages)
+            for i, page in enumerate(pdf.pages):
+                tmp.write((page.extract_text() or "") + "\n")
+                if (i + 1) % 100 == 0:
+                    context.log.info(f"  Extracted {i + 1}/{total_pages} pages")
+            context.log.info(f"Extracted text from {total_pages} pages")
+        tmp.close()
+        # Free the PDF from memory before parsing
+        del pdf_bytes
 
-    # 4. Parse
-    records = parse_tax_claims_text(all_text)
-    context.log.info(f"Parsed {len(records)} tax claim records")
+        # 4. Parse from the temp file
+        with open(tmp.name, "r") as f:
+            text = f.read()
+        records = parse_tax_claims_text(text)
+        del text  # free the string
+        context.log.info(f"Parsed {len(records)} tax claim records")
+    finally:
+        _os.unlink(tmp.name)
 
     if not records:
         context.log.warning("No tax claim records parsed — skipping upsert")
