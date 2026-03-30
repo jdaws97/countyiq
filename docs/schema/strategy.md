@@ -6,16 +6,40 @@
 
 | Schema | Purpose | Example Tables |
 |---|---|---|
-| `staging` | Cleaned, normalized, change-tracked data (SCD Type 2). This is where all source data lives after parsing. | `staging.parcels`, `staging.assessment_properties`, `staging.flood_zones`, `staging.municipalities`, `staging.structures` (BLDG_Footprint), `staging.address_points` (AddressPts), `staging.plcb_licenses` |
-| `public` | Entity-resolved output and cross-source views | `public.owners`, `public.owner_source_links`, `public.properties` (view joining staging.parcels + staging.assessment_properties) |
+| `staging` | Cleaned, normalized, change-tracked data (SCD Type 2). This is where all source data lives after parsing. | `staging.parcels`, `staging.assessment_properties`, `staging.flood_zones`, `staging.municipalities`, `staging.structures` (BLDG_Footprint), `staging.address_points` (AddressPts), `staging.plcb_licenses`, `staging.tax_claims`, `staging.zipcodes` |
+| `public` | Entity-resolved output and cross-source views | `public.owners`, `public.owner_source_links`, `public.properties` (view on staging.parcels; assessment join deferred — see Source 2 in data-source-feasibility.md) |
 | `meta` | Application metadata — NOT Dagster internals (those are in the separate `dagster` database) | `meta.infra_metrics`, `meta.pipeline_status`, `meta.data_quality_checks` |
 
 **Where are the staging DDLs?** Individual staging table DDLs (e.g., `staging.parcels`, `staging.assessment_properties`) are created via Alembic migrations at build time — they're not pre-defined in documentation because their exact columns depend on what each data source actually returns. The `meta` schema DDL is pre-defined in `docs/schema/meta.md` because it's application-owned. Staging tables follow the SCD Type 2 pattern: source-specific columns + `valid_from TIMESTAMPTZ DEFAULT NOW()` + `valid_to TIMESTAMPTZ` (NULL = current). See `docs/schema/migrations.md` for the Alembic workflow.
 
-**Note:** `public.properties` is a **PostgreSQL view**, not a table. It joins `staging.parcels` (geometry, ownership, sale history) with `staging.assessment_properties` (detailed assessment data, permits, delinquent taxes) on the canonical parcel identifier (PIDN). This avoids data duplication while providing a unified query target for the API.
+**Note:** `public.properties` is a **PostgreSQL view**, not a table. At MVP it queries `staging.parcels` only — the GIS layer provides owner, assessed values, sale history, and all core property attributes. The assessment portal scraper is built but deferred due to commercial-use ambiguity (see `docs/data-source-feasibility.md`, Source 2). When assessment is reactivated, the VIEW should be updated to join `staging.assessment_properties` for permits, delinquent taxes, and value history.
 
 ```sql
 -- public.properties is a VIEW, not a table
+-- MVP: parcels only (assessment deferred — see data-source-feasibility.md Source 2)
+CREATE VIEW public.properties AS
+SELECT
+    p.pidn,
+    p.geom,
+    p.owner_full,
+    p.propadr,
+    p.aprtotal,
+    p.saledt,
+    p.price,
+    p.municipality,
+    p.school_dis,
+    p.acres,
+    p."class",
+    p.valid_from,
+    p.valid_to
+FROM staging.parcels p
+WHERE p.valid_to IS NULL;   -- Current parcel records only (SCD Type 2)
+```
+
+<details>
+<summary>Future: VIEW with assessment join (when reactivated)</summary>
+
+```sql
 CREATE VIEW public.properties AS
 SELECT
     p.pidn,
@@ -37,9 +61,10 @@ SELECT
 FROM staging.parcels p
 LEFT JOIN staging.assessment_properties a
     ON p.pidn = a.pidn
-    AND a.valid_to IS NULL  -- Current assessment records only (SCD Type 2)
-WHERE p.valid_to IS NULL;   -- Current parcel records only (SCD Type 2)
+    AND a.valid_to IS NULL
+WHERE p.valid_to IS NULL;
 ```
+</details>
 
 **Dagster metadata separation:** Dagster's internal database (`dagster` on the same RDS instance) stores run history, event logs, and schedule state. The `meta` schema in `countyiq` stores application-level summaries that the API can query — specifically, a Dagster sensor writes summarized pipeline status and infra metrics to `meta` tables. This keeps the API decoupled from Dagster's internal schema (which can change between Dagster versions).
 
