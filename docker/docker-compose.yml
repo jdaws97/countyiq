@@ -6,7 +6,7 @@ services:
     env_file: ../.env
     environment:
       POSTGRES_DB: countyiq
-      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_USER: dagster_admin
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -14,7 +14,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d countyiq"]
+      test: ["CMD-SHELL", "pg_isready -U dagster_admin -d countyiq"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,6 +45,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
     volumes:
       - dagster-storage:/opt/dagster/storage
     healthcheck:
