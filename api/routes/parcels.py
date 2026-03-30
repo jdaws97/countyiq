@@ -183,7 +183,7 @@ def parcel_detail(pidn: str) -> dict:
                 {
                     "type": r["building_type"] or "Unknown",
                     "sqm": int(r["sqm"]) if r["sqm"] else 0,
-                    "sqft": int(r["sqm"] * 10.764) if r["sqm"] else 0,
+                    "sqft": int(float(r["sqm"]) * 10.764) if r["sqm"] else 0,
                 }
                 for r in structure_rows
             ],
