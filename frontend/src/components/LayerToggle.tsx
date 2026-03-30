@@ -12,7 +12,21 @@ interface LayerToggleProps {
 
 export type { LayerConfig }
 
+const ZONING_LEGEND = [
+  { code: 'LDR', name: 'Low Density Residential', color: '#48bb78' },
+  { code: 'MDR', name: 'Medium Density Residential', color: '#81b2d2' },
+  { code: 'HDR', name: 'High Density Residential', color: '#4287f5' },
+  { code: 'R', name: 'Rural', color: '#689f38' },
+  { code: 'RP', name: 'Resource Protection', color: '#388e3c' },
+  { code: 'Cv/OS', name: 'Conservation/Open Space', color: '#1b5e20' },
+  { code: 'I', name: 'Industrial', color: '#9e7642' },
+  { code: 'HC', name: 'Highway Commercial', color: '#ff9800' },
+  { code: 'NC', name: 'Neighborhood Commercial', color: '#ffc107' },
+  { code: 'MU', name: 'Mixed Use', color: '#ab47bc' },
+]
+
 export default function LayerToggle({ layers, onToggle }: LayerToggleProps) {
+  const zoningEnabled = layers.find(l => l.id === 'zoning')?.enabled ?? false
   return (
     <div
       style={{
@@ -102,6 +116,31 @@ export default function LayerToggle({ layers, onToggle }: LayerToggleProps) {
           {layer.name}
         </label>
       ))}
+
+      {/* Zoning legend */}
+      {zoningEnabled && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase' as const, color: 'var(--text-muted)', marginBottom: 6,
+          }}>
+            Zoning Legend
+          </div>
+          {ZONING_LEGEND.map(z => (
+            <div key={z.code} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0',
+              fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)',
+            }}>
+              <span style={{
+                width: 10, height: 10, borderRadius: 2, flexShrink: 0,
+                background: z.color, opacity: 0.7,
+              }} />
+              <span style={{ color: 'var(--text-muted)', width: 36 }}>{z.code}</span>
+              <span>{z.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -3,14 +3,18 @@ import { useSearchParams, Link } from 'react-router-dom'
 import Nav from '../components/Nav'
 
 interface SearchResult {
-  add_number: number
-  street_name: string
-  st_pos_typ: string
-  inc_muni: string
-  full_address: string
+  result_type: 'address' | 'tax_claim' | 'license'
+  title: string
+  subtitle: string
   lat: number | null
   lng: number | null
   score: number
+}
+
+const TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  address: { label: 'Address', color: 'var(--accent-blue)' },
+  tax_claim: { label: 'Tax Delinquent', color: 'var(--accent-red)' },
+  license: { label: 'Liquor License', color: 'var(--accent-green)' },
 }
 
 export default function SearchResults() {
@@ -78,11 +82,11 @@ export default function SearchResults() {
           }}>
             {/* Header row */}
             <div style={{
-              display: 'grid', gridTemplateColumns: '1fr 200px 100px 80px',
+              display: 'grid', gridTemplateColumns: '100px 1fr 1fr 80px 80px',
               padding: '12px 24px', background: 'var(--bg-panel)',
               borderBottom: '1px solid var(--border)',
             }}>
-              {['Address', 'Municipality', 'Match', ''].map((col, i) => (
+              {['Type', 'Result', 'Details', 'Match', ''].map((col, i) => (
                 <div key={col} style={{
                   fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
                   letterSpacing: 2, textTransform: 'uppercase' as const,
@@ -96,9 +100,9 @@ export default function SearchResults() {
             {/* Result rows */}
             {results.map((r, idx) => (
               <div
-                key={`${r.full_address}-${r.inc_muni}-${idx}`}
+                key={`${r.title}-${r.subtitle}-${idx}`}
                 style={{
-                  display: 'grid', gridTemplateColumns: '1fr 200px 100px 80px',
+                  display: 'grid', gridTemplateColumns: '100px 1fr 1fr 80px 80px',
                   padding: '14px 24px', alignItems: 'center',
                   background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
                   borderBottom: idx < results.length - 1 ? '1px solid var(--border)' : 'none',
@@ -107,24 +111,31 @@ export default function SearchResults() {
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
               >
+                <div>
+                  {(() => {
+                    const t = TYPE_LABELS[r.result_type] || { label: r.result_type, color: 'var(--text-muted)' }
+                    return (
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 3, fontSize: 9,
+                        letterSpacing: 1, textTransform: 'uppercase' as const,
+                        fontFamily: 'var(--font-mono)',
+                        color: t.color, background: `${t.color}15`, border: `1px solid ${t.color}30`,
+                      }}>
+                        {t.label}
+                      </span>
+                    )
+                  })()}
+                </div>
                 <div style={{
                   fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 500,
                   color: 'var(--text-primary)',
                 }}>
-                  {r.full_address}
+                  {r.title}
                 </div>
                 <div style={{
                   fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)',
                 }}>
-                  <span style={{
-                    padding: '2px 8px', borderRadius: 3,
-                    background: 'rgba(74, 127, 255, 0.08)',
-                    border: '1px solid rgba(74, 127, 255, 0.15)',
-                    color: 'var(--accent-blue)', fontSize: 10,
-                    letterSpacing: 1, textTransform: 'uppercase' as const,
-                  }}>
-                    {r.inc_muni}
-                  </span>
+                  {r.subtitle}
                 </div>
                 <div style={{
                   fontFamily: 'var(--font-mono)', fontSize: 12,

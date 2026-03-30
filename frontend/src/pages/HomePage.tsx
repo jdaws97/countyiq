@@ -51,9 +51,9 @@ const SOURCE_DISPLAY: Record<string, string> = {
 const ACTIVE_TILES = [
   { icon: '\u25CE', name: 'Explore Map', desc: 'Interactive map view', color: 'var(--accent-blue)', to: '/map' },
   { icon: '\u25C8', name: 'Flood Risk', desc: '', color: 'var(--accent-purple)', to: '/map?layer=flood' },
-  { icon: '\u25C6', name: 'Delinquent Taxes', desc: '', color: 'var(--accent-red)', to: '/map?layer=delinquent' },
+  { icon: '\u25C6', name: 'Delinquent Taxes', desc: '', color: 'var(--accent-red)', to: '/delinquent' },
   { icon: '\u25C7', name: 'Municipalities', desc: '', color: 'var(--accent-green)', to: '/municipalities' },
-  { icon: '\u25A5', name: 'PennDOT Projects', desc: '', color: 'var(--accent-cyan)', to: '/map?layer=penndot' },
+  { icon: '\u25A5', name: 'PennDOT Projects', desc: '', color: 'var(--accent-cyan)', to: '/projects' },
 ]
 
 /* Disabled tiles config */

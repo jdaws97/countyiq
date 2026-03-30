@@ -8,6 +8,9 @@ from api.routes.stats import router as stats_router
 from api.routes.layers import router as layers_router
 from api.routes.municipalities import router as municipalities_router
 from api.routes.search import router as search_router
+from api.routes.delinquent import router as delinquent_router
+from api.routes.licenses import router as licenses_router
+from api.routes.projects import router as projects_router
 from api.routes.ops import router as ops_router
 
 app = FastAPI(
@@ -34,4 +37,7 @@ app.include_router(stats_router, prefix="/api/stats")
 app.include_router(layers_router, prefix="/api/layers")
 app.include_router(municipalities_router, prefix="/api/municipalities")
 app.include_router(search_router, prefix="/api/search")
+app.include_router(delinquent_router, prefix="/api/delinquent")
+app.include_router(licenses_router, prefix="/api/licenses")
+app.include_router(projects_router, prefix="/api/projects")
 app.include_router(ops_router, prefix="/api/ops")

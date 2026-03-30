@@ -2,14 +2,18 @@ import { useState, FormEvent, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 interface SearchResult {
-  add_number: number
-  street_name: string
-  st_pos_typ: string
-  inc_muni: string
-  full_address: string
+  result_type: string
+  title: string
+  subtitle: string
   lat: number | null
   lng: number | null
   score: number
+}
+
+const TYPE_ICONS: Record<string, string> = {
+  address: '📍',
+  tax_claim: '💰',
+  license: '🍺',
 }
 
 export default function SearchBar() {
@@ -124,7 +128,7 @@ export default function SearchBar() {
         >
           {results.map((r, i) => (
             <div
-              key={`${r.full_address}-${r.inc_muni}-${i}`}
+              key={`${r.title}-${r.subtitle}-${i}`}
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -142,12 +146,15 @@ export default function SearchBar() {
               onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
             >
-              <div>
-                <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-primary)' }}>
-                  {r.full_address}
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {r.inc_muni}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14 }}>{TYPE_ICONS[r.result_type] || '📄'}</span>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-primary)' }}>
+                    {r.title}
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {r.subtitle}
+                  </div>
                 </div>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>

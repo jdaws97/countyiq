@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Nav from '../components/Nav'
 
 interface Municipality {
@@ -12,6 +13,7 @@ export default function MunicipalityList() {
   const [municipalities, setMunicipalities] = useState<Municipality[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetch('/api/municipalities')
@@ -168,8 +170,9 @@ export default function MunicipalityList() {
                     borderBottom:
                       idx < municipalities.length - 1 ? '1px solid var(--border)' : 'none',
                     transition: 'background 0.15s ease',
-                    cursor: 'default',
+                    cursor: 'pointer',
                   }}
+                  onClick={() => navigate(`/delinquent?municipality=${encodeURIComponent(muni.name)}`)}
                   onMouseEnter={(e) => {
                     ;(e.currentTarget as HTMLDivElement).style.background =
                       'var(--bg-card-hover)'
