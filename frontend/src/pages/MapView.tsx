@@ -96,6 +96,7 @@ export default function MapView() {
     const lat = searchParams.get('lat')
     const lng = searchParams.get('lng')
     const zoom = searchParams.get('zoom')
+    const layer = searchParams.get('layer')
     if (lat && lng) {
       return {
         ...DEFAULT_VIEW,
@@ -103,6 +104,10 @@ export default function MapView() {
         longitude: parseFloat(lng),
         zoom: zoom ? parseFloat(zoom) : 16,
       }
+    }
+    // Auto-zoom in for parcel-dependent layers
+    if (layer === 'vacant' || layer === 'delinquent') {
+      return { ...DEFAULT_VIEW, zoom: 14 }
     }
     return DEFAULT_VIEW
   }, [searchParams])
@@ -170,7 +175,9 @@ export default function MapView() {
     const south = vs.latitude - halfH
     const north = vs.latitude + halfH
 
-    const url = `/api/parcels/bbox?west=${west.toFixed(6)}&south=${south.toFixed(6)}&east=${east.toFixed(6)}&north=${north.toFixed(6)}&layer=delinquent`
+    const urlLayerParam = searchParams.get('layer') || 'delinquent'
+    const bboxLayer = urlLayerParam === 'vacant' ? 'vacant' : 'delinquent'
+    const url = `/api/parcels/bbox?west=${west.toFixed(6)}&south=${south.toFixed(6)}&east=${east.toFixed(6)}&north=${north.toFixed(6)}&layer=${bboxLayer}`
 
     fetch(url)
       .then((r) => {
@@ -273,11 +280,13 @@ export default function MapView() {
           stroked: true,
           filled: true,
           getFillColor: (f: any) => {
+            const isVacantMode = searchParams.get('layer') === 'vacant'
+            if (isVacantMode) return [61, 189, 111, 120] // green for vacant
             const delinquent = f.properties?.delinquent_total
             if (delinquent && delinquent > 0) return [224, 82, 82, 120]
             return [96, 165, 250, 40]
           },
-          getLineColor: [96, 165, 250, 100],
+          getLineColor: searchParams.get('layer') === 'vacant' ? [61, 189, 111, 150] as any : [96, 165, 250, 100] as any,
           getLineWidth: 1,
           lineWidthUnits: 'pixels' as const,
           pickable: true,
