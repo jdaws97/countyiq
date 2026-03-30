@@ -1,4 +1,5 @@
 import { useState, FormEvent, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 interface SearchResult {
   add_number: number
@@ -6,6 +7,8 @@ interface SearchResult {
   st_pos_typ: string
   inc_muni: string
   full_address: string
+  lat: number | null
+  lng: number | null
   score: number
 }
 
@@ -15,6 +18,7 @@ export default function SearchBar() {
   const [loading, setLoading] = useState(false)
   const [showResults, setShowResults] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -105,7 +109,7 @@ export default function SearchBar() {
             left: 0,
             right: 0,
             top: '100%',
-            marginTop: -28,
+            marginTop: 4,
             background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
             borderRadius: 6,
@@ -125,6 +129,11 @@ export default function SearchBar() {
                 borderBottom: i < results.length - 1 ? '1px solid var(--border)' : 'none',
                 cursor: 'pointer',
                 transition: 'background 0.15s',
+              }}
+              onMouseDown={() => {
+                if (r.lat && r.lng) {
+                  navigate(`/map?lat=${r.lat}&lng=${r.lng}&zoom=16`)
+                }
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
@@ -152,7 +161,7 @@ export default function SearchBar() {
             left: 0,
             right: 0,
             top: '100%',
-            marginTop: -28,
+            marginTop: 4,
             background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
             borderRadius: 6,

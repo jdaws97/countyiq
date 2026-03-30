@@ -23,6 +23,8 @@ def search(
                 st_pos_typ,
                 inc_muni,
                 CONCAT_WS(' ', add_number, street_name, st_pos_typ) AS full_address,
+                lat,
+                long AS lng,
                 similarity(
                     CONCAT_WS(' ', add_number, street_name, st_pos_typ),
                     %(q)s

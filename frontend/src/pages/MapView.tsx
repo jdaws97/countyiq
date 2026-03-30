@@ -24,7 +24,7 @@ const ZONING_DEFAULT: [number, number, number, number] = [124, 92, 191, 50]
 
 const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
-const INITIAL_VIEW_STATE = {
+const DEFAULT_VIEW = {
   longitude: -76.73,
   latitude: 39.92,
   zoom: 10,
@@ -45,6 +45,21 @@ const URL_LAYER_MAP: Record<string, string> = {
 
 export default function MapView() {
   const [searchParams] = useSearchParams()
+
+  const initialViewState = useMemo(() => {
+    const lat = searchParams.get('lat')
+    const lng = searchParams.get('lng')
+    const zoom = searchParams.get('zoom')
+    if (lat && lng) {
+      return {
+        ...DEFAULT_VIEW,
+        latitude: parseFloat(lat),
+        longitude: parseFloat(lng),
+        zoom: zoom ? parseFloat(zoom) : 16,
+      }
+    }
+    return DEFAULT_VIEW
+  }, [searchParams])
 
   const [layers, setLayers] = useState<LayerConfig[]>(() => {
     const urlLayer = searchParams.get('layer')
@@ -220,7 +235,7 @@ export default function MapView() {
         <LayerToggle layers={layers} onToggle={handleToggle} />
 
         <DeckGL
-          initialViewState={INITIAL_VIEW_STATE}
+          initialViewState={initialViewState}
           controller={true}
           layers={deckLayers}
           style={{ position: 'absolute', inset: 0 }}
