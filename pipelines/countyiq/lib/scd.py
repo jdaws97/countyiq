@@ -97,7 +97,10 @@ def _scd2_upsert_inner(cursor, fqn, all_columns, key_columns, value_columns, rec
         cursor.connection.commit()
         return {"inserted": 0, "expired": 0, "unchanged": 0}
 
-    log.info(f"Staged {total_staged} records into temp table")
+    # Index temp table on key columns for fast expire query
+    key_idx_cols = ", ".join(key_columns)
+    cursor.execute(f"CREATE INDEX ON {temp_table} ({key_idx_cols})")
+    log.info(f"Staged {total_staged} records into temp table (indexed)")
 
     # Expire + insert (same as before)
     key_join = " AND ".join(f"c.{k} = t.{k}" for k in key_columns)

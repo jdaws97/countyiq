@@ -116,6 +116,10 @@ def parcels_arcgis(
 
         context.log.info(f"Total staged: {total_staged}")
 
+        # Index temp table for fast SCD2 expire query
+        cur.execute("CREATE INDEX ON _tmp_parcels (pidn)")
+        context.log.info("Temp table indexed")
+
         if total_staged == 0:
             cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
             conn.commit()
