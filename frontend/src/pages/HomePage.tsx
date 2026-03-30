@@ -64,9 +64,11 @@ const DISABLED_TILES = [
   { icon: '\u25A2', name: 'Vacant Land', desc: 'Coming soon' },
 ]
 
-function formatCurrency(cents: number): string {
-  const millions = cents / 1_000_000
-  return `$${millions.toFixed(1)}M`
+function formatCurrency(value: number): string {
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`
+  return `$${value.toLocaleString()}`
 }
 
 export default function HomePage() {
