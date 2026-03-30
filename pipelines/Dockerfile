@@ -5,8 +5,10 @@ WORKDIR /opt/pipelines
 # System deps for PostGIS, Playwright, pdfplumber
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
     libpq-dev \
     libgdal-dev \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pipelines/pyproject.toml pipelines/setup.py* ./
