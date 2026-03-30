@@ -6,12 +6,10 @@ import os
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# Primary: Qwen 3.5 9B — newest, cheapest (~$0.0003/query), 256K context
-# Fallback: GPT-5.4-nano (smarter, $0.0014/query), then free
+# Try free first, fall back to cheap paid if rate limited
 MODELS = [
-    "qwen/qwen3.5-9b",
-    "openai/gpt-5.4-nano",
     "google/gemma-3-27b-it:free",
+    "qwen/qwen3.5-9b",
 ]
 
 SYSTEM_PROMPT = """You are the search engine for CountyIQ, a civic intelligence platform for York County, Pennsylvania.
