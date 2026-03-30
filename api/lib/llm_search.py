@@ -58,6 +58,11 @@ Spatial capabilities:
 
 You can compose complex queries joining multiple tables. Always use subqueries with pidn to filter parcels.
 
+Data limitations to be aware of (reflect these in your description):
+- We only know about restaurants/bars/breweries that have liquor licenses (PLCB data). Not all restaurants have liquor licenses.
+- Business type/industry classification is NOT available — PA Open Data only has registration type (LLC, Corp), not what the business does.
+- Zip codes come from staging.address_points (post_code column), not from parcels directly.
+
 IMPORTANT: Only use columns that exist. Always include valid_to IS NULL for SCD2 filtering. Return ONLY the JSON object, no markdown."""
 
 

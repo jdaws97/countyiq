@@ -93,12 +93,25 @@ def search(
 NL_KEYWORDS = {
     "oldest", "newest", "most", "least", "biggest", "smallest", "largest",
     "cheapest", "expensive", "show", "find", "list", "all", "how many",
-    "where", "which", "what", "who", "near", "in", "breweries", "brewery",
-    "restaurants", "restaurant", "winery", "wineries", "bars", "hotels",
+    "where", "which", "what", "who", "near",
+    "breweries", "brewery", "brewpub",
+    "restaurants", "restaurant", "winery", "wineries", "bars", "hotels", "tavern",
     "delinquent", "vacant", "flood", "commercial", "residential", "industrial",
     "properties", "parcels", "owners", "sales", "sold", "recently",
-    "top", "total", "average", "count",
+    "top", "total", "average", "count", "zoning", "zoned",
 }
+
+# Patterns that indicate NL even if short (e.g. "restaurants in 17319")
+NL_PATTERNS = [
+    # "<thing> in <place>" pattern
+    lambda words: len(words) >= 3 and "in" in words[1:],
+    # "<thing> near <place>"
+    lambda words: len(words) >= 3 and "near" in words[1:],
+    # Starts with a question/command word
+    lambda words: words[0] in ("show", "find", "list", "what", "who", "where", "which", "how", "get"),
+    # Contains a zip code pattern
+    lambda words: any(w.isdigit() and len(w) == 5 for w in words),
+]
 
 
 def _is_natural_language(query: str) -> bool:
@@ -107,13 +120,17 @@ def _is_natural_language(query: str) -> bool:
     # 4+ words is almost certainly natural language
     if len(words) >= 4:
         return True
-    # Check for NL keywords
+    # Check NL keyword matches
     for word in words:
         if word in NL_KEYWORDS:
             return True
-    # Starts with a question word
-    if words and words[0] in ("show", "find", "list", "what", "who", "where", "which", "how"):
-        return True
+    # Check NL patterns
+    for pattern in NL_PATTERNS:
+        try:
+            if pattern(words):
+                return True
+        except (IndexError, ValueError):
+            pass
     return False
 
 
