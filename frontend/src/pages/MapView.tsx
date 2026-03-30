@@ -124,6 +124,15 @@ export default function MapView() {
     }))
   })
 
+  const [parcelFilter, setParcelFilter] = useState<'all' | 'delinquent' | 'vacant' | 'vacant_delinquent'>(
+    () => {
+      const layer = searchParams.get('layer')
+      if (layer === 'vacant') return 'vacant'
+      if (layer === 'delinquent') return 'delinquent'
+      return 'all'
+    }
+  )
+
   const [geoData, setGeoData] = useState<Record<string, GeoJSON.FeatureCollection>>({})
   const [parcelData, setParcelData] = useState<GeoJSON.FeatureCollection | null>(null)
   const [currentZoom, setCurrentZoom] = useState(initialViewState.zoom)
@@ -175,8 +184,7 @@ export default function MapView() {
     const south = vs.latitude - halfH
     const north = vs.latitude + halfH
 
-    const urlLayerParam = searchParams.get('layer') || 'delinquent'
-    const bboxLayer = urlLayerParam === 'vacant' ? 'vacant' : 'delinquent'
+    const bboxLayer = (parcelFilter === 'vacant' || parcelFilter === 'vacant_delinquent') ? 'vacant' : 'delinquent'
     const url = `/api/parcels/bbox?west=${west.toFixed(6)}&south=${south.toFixed(6)}&east=${east.toFixed(6)}&north=${north.toFixed(6)}&layer=${bboxLayer}`
 
     fetch(url)
@@ -185,12 +193,17 @@ export default function MapView() {
         return r.json()
       })
       .then((data: GeoJSON.FeatureCollection) => {
+        if (parcelFilter === 'vacant_delinquent') {
+          data.features = data.features.filter(
+            (f: any) => f.properties?.delinquent_total && parseFloat(f.properties.delinquent_total) > 0
+          )
+        }
         setParcelData(data)
       })
       .catch(() => {
         // Parcel data unavailable
       })
-  }, [])
+  }, [parcelFilter])
 
   const onViewStateChange = useCallback(
     ({ viewState }: { viewState: MapViewState }) => {
@@ -215,13 +228,14 @@ export default function MapView() {
     [fetchParcels, layers]
   )
 
-  // Trigger initial parcel fetch after mount if zoom is high enough
+  // Fetch parcels on mount and when filter changes
   useEffect(() => {
     const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
-    if (parcelsEnabled && initialViewState.zoom >= MIN_PARCEL_ZOOM) {
-      fetchParcels(initialViewState as MapViewState)
+    const vs = viewStateRef.current || initialViewState
+    if (parcelsEnabled && (vs.zoom ?? 0) >= MIN_PARCEL_ZOOM) {
+      fetchParcels(vs as MapViewState)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parcelFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch property report when a parcel is clicked
   useEffect(() => {
@@ -280,13 +294,12 @@ export default function MapView() {
           stroked: true,
           filled: true,
           getFillColor: (f: any) => {
-            const isVacantMode = searchParams.get('layer') === 'vacant'
-            if (isVacantMode) return [61, 189, 111, 120] // green for vacant
+            if (parcelFilter === 'vacant') return [61, 189, 111, 120]
             const delinquent = f.properties?.delinquent_total
             if (delinquent && delinquent > 0) return [224, 82, 82, 120]
             return [96, 165, 250, 40]
           },
-          getLineColor: searchParams.get('layer') === 'vacant' ? [61, 189, 111, 150] as any : [96, 165, 250, 100] as any,
+          getLineColor: parcelFilter === 'vacant' ? [61, 189, 111, 150] as any : [96, 165, 250, 100] as any,
           getLineWidth: 1,
           lineWidthUnits: 'pixels' as const,
           pickable: true,
@@ -435,6 +448,57 @@ export default function MapView() {
         </Link>
 
         <LayerToggle layers={layers} onToggle={handleToggle} />
+
+        {/* Parcel Filter Bar */}
+        {currentZoom >= MIN_PARCEL_ZOOM && (
+          <div style={{
+            position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 10, display: 'flex', gap: 2,
+            background: 'var(--bg-panel)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+          }}>
+            {([
+              { key: 'all', label: 'All Parcels', color: 'var(--accent-blue)' },
+              { key: 'delinquent', label: 'Delinquent', color: 'var(--accent-red)' },
+              { key: 'vacant', label: 'Vacant', color: 'var(--accent-green)' },
+              { key: 'vacant_delinquent', label: 'Vacant + Delinquent', color: 'var(--accent-gold)' },
+            ] as const).map(f => (
+              <button key={f.key} onClick={() => { setParcelFilter(f.key); setParcelData(null) }} style={{
+                padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 0.5,
+                background: parcelFilter === f.key ? f.color : 'transparent',
+                color: parcelFilter === f.key ? '#0a0e1a' : 'var(--text-secondary)',
+                fontWeight: parcelFilter === f.key ? 700 : 400,
+                transition: 'all 0.15s',
+              }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Legend */}
+        {currentZoom >= MIN_PARCEL_ZOOM && (
+          <div style={{
+            position: 'absolute', bottom: 24, left: 16, zIndex: 10,
+            background: 'var(--bg-panel)', border: '1px solid var(--border)',
+            borderRadius: 6, padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(96,165,250,0.5)' }} />
+              Normal Parcel
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(224,82,82,0.7)' }} />
+              Tax Delinquent
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(61,189,111,0.7)' }} />
+              Vacant Land
+            </div>
+          </div>
+        )}
 
         {/* Zoom-in message */}
         {showZoomMessage && (

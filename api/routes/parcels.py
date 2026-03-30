@@ -46,8 +46,13 @@ def parcels_bbox(
                 SELECT
                     ST_AsGeoJSON(p.geom)::json AS geometry,
                     p.pidn, p.owner_full, p.propadr, p.aprtotal, p.municipality,
-                    p.class, p.saledt, p.price
+                    p.class, p.saledt, p.price,
+                    COALESCE(tc.total_owed, 0) AS delinquent_total
                 FROM staging.parcels p
+                LEFT JOIN (
+                    SELECT pidn, SUM(CASE WHEN total > 0 THEN total ELSE 0 END) AS total_owed
+                    FROM staging.tax_claims WHERE valid_to IS NULL GROUP BY pidn
+                ) tc ON p.pidn = tc.pidn
                 WHERE p.valid_to IS NULL
                   AND p.geom IS NOT NULL
                   AND p.geom && ST_MakeEnvelope(%(west)s, %(south)s, %(east)s, %(north)s, 4326)
