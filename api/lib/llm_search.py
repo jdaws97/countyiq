@@ -6,7 +6,14 @@ import os
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemma-3-27b-it:free"
+# Fallback chain — try each until one works
+MODELS = [
+    "google/gemma-3-27b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "openai/gpt-oss-120b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+]
 
 SYSTEM_PROMPT = """You are the search engine for CountyIQ, a civic intelligence platform for York County, Pennsylvania.
 
@@ -114,43 +121,50 @@ def parse_query_with_llm(query: str) -> dict | None:
     if not api_key:
         return None
 
-    try:
-        resp = requests.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": MODEL,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": query},
-                ],
-                "max_tokens": 500,
-                "temperature": 0,
-                "provider": {
-                    "sort": "latency",
+    for model in MODELS:
+        try:
+            resp = requests.post(
+                OPENROUTER_URL,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
                 },
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": query},
+                    ],
+                    "max_tokens": 500,
+                    "temperature": 0,
+                },
+                timeout=15,
+            )
+            if resp.status_code == 429 or resp.status_code == 404:
+                import sys
+                print(f"LLM {model}: {resp.status_code}, trying next...", file=sys.stderr)
+                continue
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
 
-        # Strip markdown code fences if present
-        content = content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1]
-        if content.endswith("```"):
-            content = content.rsplit("```", 1)[0]
-        content = content.strip()
+            content = content.strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1]
+            if content.endswith("```"):
+                content = content.rsplit("```", 1)[0]
+            content = content.strip()
 
-        return json.loads(content)
-    except Exception as e:
-        import sys
-        print(f"LLM search error: {e}", file=sys.stderr)
-        return None
+            return json.loads(content)
+        except json.JSONDecodeError:
+            import sys
+            print(f"LLM {model}: bad JSON response", file=sys.stderr)
+            continue
+        except Exception as e:
+            import sys
+            print(f"LLM {model} error: {e}", file=sys.stderr)
+            continue
+
+    return None
 
 
 # Allowed tables for safety
