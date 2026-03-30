@@ -16,6 +16,7 @@ from api.routes.owners import router as owners_router
 from api.routes.delinquent import router as delinquent_router
 from api.routes.licenses import router as licenses_router
 from api.routes.projects import router as projects_router
+from api.routes.scores import router as scores_router
 from api.routes.ops import router as ops_router
 
 app = FastAPI(
@@ -47,4 +48,5 @@ app.include_router(owners_router, prefix="/api/owners")
 app.include_router(delinquent_router, prefix="/api/delinquent")
 app.include_router(licenses_router, prefix="/api/licenses")
 app.include_router(projects_router, prefix="/api/projects")
+app.include_router(scores_router, prefix="/api/scores")
 app.include_router(ops_router, prefix="/api/ops")
