@@ -21,8 +21,8 @@ RUN pip install --no-cache-dir -e "."
 RUN playwright install --with-deps chromium
 
 # Dagster config
-RUN rm -rf /opt/dagster/home && mkdir -p /opt/dagster/home
-COPY pipelines/dagster.yaml /opt/dagster/home/dagster.yaml
+RUN rm -rf /opt/dagster/home && mkdir -p /opt/dagster/home \
+    && printf 'code_servers:\n  local_startup_timeout: 180\n\ntelemetry:\n  enabled: false\n' > /opt/dagster/home/dagster.yaml
 
 EXPOSE 3000
 

@@ -1,0 +1,5 @@
+code_servers:
+  local_startup_timeout: 180
+
+telemetry:
+  enabled: false
