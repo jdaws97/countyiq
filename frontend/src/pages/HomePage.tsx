@@ -13,6 +13,7 @@ interface StatsData {
   liquor_license_count: number
   address_point_count: number
   structure_count: number
+  total_assessed: number
   county_tax_owed: number
   school_tax_owed: number
   municipal_tax_owed: number
@@ -54,13 +55,13 @@ const ACTIVE_TILES = [
   { icon: '\u25C6', name: 'Delinquent Taxes', desc: '', color: 'var(--accent-red)', to: '/delinquent' },
   { icon: '\u25C7', name: 'Municipalities', desc: '', color: 'var(--accent-green)', to: '/municipalities' },
   { icon: '\u25A5', name: 'PennDOT Projects', desc: '', color: 'var(--accent-cyan)', to: '/projects' },
+  { icon: '\u25A4', name: 'Recent Sales', desc: '', color: 'var(--accent-gold)', to: '/map' },
+  { icon: '\u25A3', name: 'Liquor Licenses', desc: '', color: 'var(--accent-green)', to: '/licenses' },
 ]
 
 /* Disabled tiles config */
 const DISABLED_TILES = [
-  { icon: '\u25A2', name: 'Vacant Land', desc: 'Requires parcel data' },
-  { icon: '\u25A3', name: 'Top Owners', desc: 'Requires parcel data' },
-  { icon: '\u25A4', name: 'Recent Sales', desc: 'Requires parcel data' },
+  { icon: '\u25A2', name: 'Vacant Land', desc: 'Coming soon' },
 ]
 
 function formatCurrency(cents: number): string {
@@ -100,19 +101,20 @@ export default function HomePage() {
     ? Object.values(health.sources).filter((s) => s.status === 'red').length
     : 0
 
+  const parcelCount = stats?.parcel_count ?? 0
+
   /* Dynamic tile descriptions */
   const activeTileDescs = [
-    'Interactive map view',
+    `${parcelCount.toLocaleString()} parcels`,
     `${floodZoneCount.toLocaleString()} FEMA zones`,
     `${delinquentParcels.toLocaleString()} parcels · ${formatCurrency(totalDelinquent)}`,
     `${municipalityCount} jurisdictions`,
     `${penndotProjectCount} active projects`,
+    `${parcelCount.toLocaleString()} parcels tracked`,
+    `${(stats?.liquor_license_count ?? 0).toLocaleString()} active licenses`,
   ]
   const disabledTileDescs = [
-    'Requires parcel data',
-    'Requires parcel data',
-    'Requires parcel data',
-    `${penndotProjectCount} active projects`,
+    'Coming soon',
   ]
 
   /* Sort sources: green first, then red; by record count descending within each group */
@@ -143,21 +145,21 @@ export default function HomePage() {
           }}
         >
           <StatCard
-            label="Records Tracked"
-            value={totalRecords.toLocaleString()}
+            label="Parcels Tracked"
+            value={parcelCount.toLocaleString()}
             detail={`across ${greenSources} data sources`}
             color="var(--accent-blue)"
           />
           <StatCard
-            label="Tax Delinquent Parcels"
+            label="Tax Delinquent"
             value={delinquentParcels.toLocaleString()}
             detail={`${formatCurrency(totalDelinquent)} outstanding`}
             color="var(--accent-gold)"
           />
           <StatCard
-            label="Municipalities"
-            value={municipalityCount.toLocaleString()}
-            detail="townships · boroughs · city"
+            label="Total Assessed"
+            value={formatCurrency(stats?.total_assessed ?? 0)}
+            detail={`${municipalityCount} municipalities`}
             color="var(--accent-green)"
           />
         </div>

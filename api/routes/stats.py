@@ -20,7 +20,8 @@ def get_stats() -> dict:
                 (SELECT COUNT(*) FROM staging.plcb_licenses WHERE valid_to IS NULL) AS liquor_license_count,
                 (SELECT COUNT(*) FROM staging.address_points WHERE valid_to IS NULL) AS address_point_count,
                 (SELECT COUNT(*) FROM staging.structures WHERE valid_to IS NULL) AS structure_count,
-                (SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL) AS parcel_count
+                (SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL) AS parcel_count,
+                (SELECT COALESCE(SUM(aprtotal::numeric), 0) FROM staging.parcels WHERE valid_to IS NULL AND aprtotal IS NOT NULL) AS total_assessed
         """)
         row = cur.fetchone()
 
@@ -49,6 +50,7 @@ def get_stats() -> dict:
         "liquor_license_count": row["liquor_license_count"],
         "address_point_count": row["address_point_count"],
         "structure_count": row["structure_count"],
+        "total_assessed": float(row["total_assessed"]),
         "county_tax_owed": float(tax_breakdown["county_tax_owed"]),
         "school_tax_owed": float(tax_breakdown["school_tax_owed"]),
         "municipal_tax_owed": float(tax_breakdown["municipal_tax_owed"]),
