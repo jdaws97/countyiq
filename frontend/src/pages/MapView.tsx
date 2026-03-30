@@ -543,7 +543,7 @@ export default function MapView() {
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(40,40,60,0.3)' }} />
                   Other
                 </div>
-                <button onClick={() => { setClusterPidns(new Set()); setSeedPidn(null) }} style={{
+                <button onClick={() => { setClusterPidns(new Set()); setSeedPidn(null); setParcelData(null); if (viewStateRef.current) fetchParcels(viewStateRef.current as any) }} style={{
                   fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)',
                   background: 'none', border: '1px solid var(--border)', borderRadius: 3,
                   padding: '2px 8px', cursor: 'pointer',
