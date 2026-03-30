@@ -130,7 +130,21 @@ def parcel_detail(pidn: str) -> dict:
         """, {"pidn": pidn})
         flood = cur.fetchone()
 
-        # Building footprint check (vacancy indicator)
+        # Building footprints with detail
+        cur.execute("""
+            SELECT s.building_type,
+                   ROUND(ST_Area(ST_Transform(s.geom, 32617))::numeric) AS sqm
+            FROM staging.structures s
+            WHERE s.valid_to IS NULL
+              AND s.geom IS NOT NULL
+              AND ST_Intersects(s.geom, (
+                  SELECT geom FROM staging.parcels WHERE pidn = %(pidn)s AND valid_to IS NULL
+              ))
+            ORDER BY ST_Area(s.geom) DESC
+        """, {"pidn": pidn})
+        structure_rows = cur.fetchall()
+
+        # Backward compat
         cur.execute("""
             SELECT COUNT(*) AS structure_count
             FROM staging.structures
@@ -165,5 +179,13 @@ def parcel_detail(pidn: str) -> dict:
         "structures": {
             "count": structures["structure_count"] if structures else 0,
             "likely_vacant": structures["structure_count"] == 0 if structures else True,
+            "buildings": [
+                {
+                    "type": r["building_type"] or "Unknown",
+                    "sqm": int(r["sqm"]) if r["sqm"] else 0,
+                    "sqft": int(r["sqm"] * 10.764) if r["sqm"] else 0,
+                }
+                for r in structure_rows
+            ],
         },
     }

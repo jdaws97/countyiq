@@ -26,6 +26,9 @@ const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   parcel: { label: 'Parcel', color: 'var(--accent-cyan)' },
 }
 
+// Simple cache to avoid re-querying on back navigation
+const searchCache: Record<string, { mode: string; description: string; results: SearchResult[] }> = {}
+
 export default function SearchResults() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -41,6 +44,17 @@ export default function SearchResults() {
       setLoading(false)
       return
     }
+
+    // Check cache first
+    const cached = searchCache[query]
+    if (cached) {
+      setMode(cached.mode)
+      setDescription(cached.description)
+      setResults(cached.results)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     fetch(`/api/search?q=${encodeURIComponent(query)}&limit=50`)
       .then(r => r.json())
@@ -53,6 +67,8 @@ export default function SearchResults() {
         setDescription(data.description || '')
         setResults(data.results || [])
         setLoading(false)
+        // Cache the results
+        searchCache[query] = { mode: data.mode, description: data.description || '', results: data.results || [] }
       })
       .catch(() => setLoading(false))
   }, [query])

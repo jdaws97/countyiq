@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import Nav from '../components/Nav'
 
 interface PropertyReport {
@@ -32,6 +32,7 @@ function fmtDollar(v: any): string {
 
 export default function PropertyDetail() {
   const { pidn } = useParams<{ pidn: string }>()
+  const navigate = useNavigate()
   const [report, setReport] = useState<PropertyReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +62,7 @@ export default function PropertyDetail() {
 
         {/* Back + Actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <Link to="/" style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', textDecoration: 'none' }}>&larr; Back to Home</Link>
+          <button onClick={() => navigate(-1)} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>&larr; Back</button>
           <Link to={`/map?lat=39.95&lng=-76.73&zoom=16`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 4 }}>View on Map</Link>
         </div>
 
@@ -150,10 +151,28 @@ export default function PropertyDetail() {
 
         {/* Structures */}
         <Section title="Structures">
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)', marginBottom: structures.buildings?.length ? 12 : 0 }}>
             {structures.count} building footprint{structures.count !== 1 ? 's' : ''} detected
             {structures.likely_vacant && <span style={{ color: 'var(--accent-gold)', marginLeft: 12 }}>— Likely vacant land</span>}
           </div>
+          {structures.buildings?.length > 0 && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+              {structures.buildings.map((b: any, i: number) => (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '10px 16px', borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                  background: i % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
+                }}>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
+                    {b.type}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    {b.sqft > 0 ? `${b.sqft.toLocaleString()} sf` : '--'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </Section>
 
       </main>
