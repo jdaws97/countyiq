@@ -43,6 +43,18 @@ def search(
         if intent == "lookup":
             cleaned = llm_intent.get("search_term", search_term)
             trgm_results = _trgm_search(cleaned, limit)
+            # Also try reversed name (FIRST LAST → LAST FIRST) if results are weak
+            parts = cleaned.split()
+            if len(parts) >= 2:
+                reversed_name = parts[-1] + " " + " ".join(parts[:-1])
+                reversed_results = _trgm_search(reversed_name, limit)
+                # Merge, deduplicate by title, keep highest score
+                seen = {}
+                for r in trgm_results + reversed_results:
+                    key = r.get("title", "")
+                    if key not in seen or r.get("score", 0) > seen[key].get("score", 0):
+                        seen[key] = r
+                trgm_results = sorted(seen.values(), key=lambda x: x.get("score", 0), reverse=True)[:limit]
             return {
                 "mode": "fuzzy",
                 "description": description,
