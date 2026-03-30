@@ -397,7 +397,7 @@ export default function MapView() {
     }
 
     return result
-  }, [layers, geoData, parcelData, currentZoom, handleParcelClick])
+  }, [layers, geoData, parcelData, currentZoom, handleParcelClick, parcelFilter])
 
   const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
   const showZoomMessage = parcelsEnabled && currentZoom < MIN_PARCEL_ZOOM

@@ -55,7 +55,7 @@ const ACTIVE_TILES = [
   { icon: '\u25C6', name: 'Delinquent Taxes', desc: '', color: 'var(--accent-red)', to: '/delinquent' },
   { icon: '\u25C7', name: 'Municipalities', desc: '', color: 'var(--accent-green)', to: '/municipalities' },
   { icon: '\u25A5', name: 'PennDOT Projects', desc: '', color: 'var(--accent-cyan)', to: '/projects' },
-  { icon: '\u25A4', name: 'Recent Sales', desc: '', color: 'var(--accent-gold)', to: '/map' },
+  { icon: '\u25A4', name: 'Recent Sales', desc: '', color: 'var(--accent-gold)', to: '/search?q=recent+sales+over+100000' },
   { icon: '\u25A3', name: 'Liquor Licenses', desc: '', color: 'var(--accent-green)', to: '/licenses' },
   { icon: '\u25A2', name: 'Vacant Land', desc: '', color: 'var(--accent-purple)', to: '/map?layer=vacant' },
 ]
