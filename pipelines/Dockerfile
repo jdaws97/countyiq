@@ -20,6 +20,10 @@ RUN pip install --no-cache-dir -e "."
 # Install Playwright browsers
 RUN playwright install --with-deps chromium
 
+# Dagster config
+RUN mkdir -p /opt/dagster/home
+COPY pipelines/dagster.yaml /opt/dagster/home/dagster.yaml
+
 EXPOSE 3000
 
 # Run Dagster webserver + daemon together

@@ -53,7 +53,6 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - dagster-storage:/opt/dagster/storage
-      - ../pipelines/dagster.yaml:/opt/dagster/home/dagster.yaml:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/server_info"]
       interval: 30s
