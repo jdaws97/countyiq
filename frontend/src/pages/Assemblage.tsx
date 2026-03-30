@@ -100,7 +100,7 @@ export default function Assemblage() {
               <div
                 onClick={() => setExpanded(isExpanded ? null : c.seed_pidn)}
                 style={{
-                  display: 'grid', gridTemplateColumns: '1fr 90px 90px 90px 80px 100px',
+                  display: 'grid', gridTemplateColumns: '1fr 80px 80px 80px 80px 70px 90px',
                   padding: '18px 24px', alignItems: 'center', cursor: 'pointer',
                   background: 'var(--bg-panel)', transition: 'background 0.15s',
                 }}
@@ -127,10 +127,14 @@ export default function Assemblage() {
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--accent-green)' }}>{c.vacant_neighbors}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>Vacant</div>
                 </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', textAlign: 'right' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--accent-cyan)' }}>{c.unique_owners || '?'}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>Owners</div>
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
                   {c.total_acres?.toFixed(1)} ac
                 </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-green)', textAlign: 'right' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-green)', textAlign: 'right' }}>
                   {fmtDollar(c.total_assessed)}
                 </div>
               </div>
@@ -141,14 +145,41 @@ export default function Assemblage() {
                   <Link to={`/property/${c.seed_pidn}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
                     View Seed Property
                   </Link>
-                  <Link to={`/map?highlight=${c.seed_pidn}&zoom=17&lat=39.95&lng=-76.73`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-purple)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
-                    View Cluster on Map
-                  </Link>
+                  {c.lat && c.lng && (
+                    <Link to={`/map?highlight=${c.seed_pidn}&zoom=18&lat=${c.lat}&lng=${c.lng}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-purple)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
+                      View Cluster on Map
+                    </Link>
+                  )}
                 </div>
               )}
-              {isExpanded && (
+              {isExpanded && (() => {
+                // Compute ownership breakdown
+                const allParcels = [{ owner: c.seed_owner, pidn: c.seed_pidn }, ...(c.neighbors || []).map((n: any) => ({ owner: n.owner, pidn: n.pidn }))]
+                const ownerCounts: Record<string, number> = {}
+                allParcels.forEach(p => { ownerCounts[p.owner] = (ownerCounts[p.owner] || 0) + 1 })
+                const totalInCluster = allParcels.length
+                const sortedOwners = Object.entries(ownerCounts).sort((a, b) => b[1] - a[1])
+
+                return (
                 <div style={{ borderTop: '1px solid var(--border)' }}>
-                  <div style={{ padding: '8px 20px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px' }}>
+                  {/* Ownership breakdown */}
+                  <div style={{ padding: '12px 24px', background: 'rgba(74,127,255,0.05)', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>Ownership Concentration</div>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      {sortedOwners.slice(0, 4).map(([owner, count]) => (
+                        <div key={owner} style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                          <span style={{ color: count > 1 ? 'var(--accent-blue)' : 'var(--text-muted)', fontWeight: count > 1 ? 600 : 400 }}>
+                            {owner.substring(0, 25)}{owner.length > 25 ? '...' : ''}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                            {count}/{totalInCluster} ({Math.round(count / totalInCluster * 100)}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '10px 24px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px' }}>
                     <div>Owner</div><div>Address</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div>Status</div>
                   </div>
                   {/* Seed parcel */}
@@ -184,7 +215,8 @@ export default function Assemblage() {
                     </Link>
                   ))}
                 </div>
-              )}
+                )
+              })()}
             </div>
           )
         })}

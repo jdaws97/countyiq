@@ -268,6 +268,9 @@ def assemblage_opportunities(
                 school_dis,
                 COALESCE(seed_acres::numeric, 0) AS seed_acres,
                 COALESCE(seed_assessed::numeric, 0) AS seed_assessed,
+                -- Centroid for map linking (from seed parcel geometry)
+                (SELECT ST_Y(ST_Centroid(p2.geom)) FROM staging.parcels p2 WHERE p2.pidn = seed_pidn AND p2.valid_to IS NULL) AS lat,
+                (SELECT ST_X(ST_Centroid(p2.geom)) FROM staging.parcels p2 WHERE p2.pidn = seed_pidn AND p2.valid_to IS NULL) AS lng,
                 COUNT(*) AS adjacent_count,
                 SUM(CASE WHEN neighbor_delinquent THEN 1 ELSE 0 END) AS delinquent_neighbors,
                 SUM(CASE WHEN neighbor_vacant THEN 1 ELSE 0 END) AS vacant_neighbors,
@@ -276,6 +279,8 @@ def assemblage_opportunities(
                 COALESCE(SUM(neighbor_assessed::numeric), 0) AS total_neighbor_assessed,
                 COALESCE(seed_acres::numeric, 0) + COALESCE(SUM(neighbor_acres::numeric), 0) AS total_acres,
                 COALESCE(seed_assessed::numeric, 0) + COALESCE(SUM(neighbor_assessed::numeric), 0) AS total_assessed,
+                -- Count unique owners (lower = easier assemblage)
+                COUNT(DISTINCT neighbor_owner) + 1 AS unique_owners,
                 json_agg(json_build_object(
                     'pidn', neighbor_pidn,
                     'owner', neighbor_owner,
@@ -302,7 +307,8 @@ def assemblage_opportunities(
     for r in rows:
         d = dict(r)
         for k in ("seed_acres", "seed_assessed", "total_neighbor_acres",
-                  "total_neighbor_assessed", "total_acres", "total_assessed"):
+                  "total_neighbor_assessed", "total_acres", "total_assessed",
+                  "lat", "lng"):
             if d.get(k) is not None:
                 d[k] = float(d[k])
         results.append(d)
