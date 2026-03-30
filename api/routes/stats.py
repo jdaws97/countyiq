@@ -24,6 +24,19 @@ def get_stats() -> dict:
         """)
         row = cur.fetchone()
 
+        # Tax delinquency breakdown by authority
+        cur.execute("""
+            SELECT
+                COALESCE(SUM(CASE WHEN authority_name = 'COUNTY' AND total > 0 THEN total ELSE 0 END), 0) AS county_tax_owed,
+                COALESCE(SUM(CASE WHEN authority_name = 'SCHOOL' AND total > 0 THEN total ELSE 0 END), 0) AS school_tax_owed,
+                COALESCE(SUM(CASE WHEN authority_name = 'MUNICIPAL' AND total > 0 THEN total ELSE 0 END), 0) AS municipal_tax_owed,
+                MIN(tax_year) AS oldest_delinquent_year,
+                COUNT(DISTINCT tax_district_code) AS districts_affected
+            FROM staging.tax_claims
+            WHERE valid_to IS NULL
+        """)
+        tax_breakdown = cur.fetchone()
+
     total_records = sum(v for v in row.values() if isinstance(v, (int, float)))
 
     return {
@@ -36,4 +49,9 @@ def get_stats() -> dict:
         "liquor_license_count": row["liquor_license_count"],
         "address_point_count": row["address_point_count"],
         "structure_count": row["structure_count"],
+        "county_tax_owed": float(tax_breakdown["county_tax_owed"]),
+        "school_tax_owed": float(tax_breakdown["school_tax_owed"]),
+        "municipal_tax_owed": float(tax_breakdown["municipal_tax_owed"]),
+        "oldest_delinquent_year": tax_breakdown["oldest_delinquent_year"],
+        "districts_affected": tax_breakdown["districts_affected"],
     }

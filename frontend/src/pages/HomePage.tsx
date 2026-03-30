@@ -13,6 +13,11 @@ interface StatsData {
   liquor_license_count: number
   address_point_count: number
   structure_count: number
+  county_tax_owed: number
+  school_tax_owed: number
+  municipal_tax_owed: number
+  oldest_delinquent_year: number | null
+  districts_affected: number
 }
 
 interface SourceInfo {
@@ -211,11 +216,11 @@ export default function HomePage() {
           >
             <IntelRow label="Delinquent parcels" value={delinquentParcels.toLocaleString()} valueClass="gold" />
             <IntelRow label="Total outstanding" value={formatCurrency(totalDelinquent)} valueClass="red" />
-            <IntelRow label="County tax owed" value="--" valueClass="default" />
-            <IntelRow label="School tax owed" value="--" valueClass="default" />
-            <IntelRow label="Municipal tax owed" value="--" valueClass="default" />
-            <IntelRow label="Oldest delinquency" value="--" valueClass="gold" />
-            <IntelRow label="Districts affected" value="--" valueClass="default" />
+            <IntelRow label="County tax owed" value={stats?.county_tax_owed ? formatCurrency(stats.county_tax_owed) : '--'} valueClass="default" />
+            <IntelRow label="School tax owed" value={stats?.school_tax_owed ? formatCurrency(stats.school_tax_owed) : '--'} valueClass="default" />
+            <IntelRow label="Municipal tax owed" value={stats?.municipal_tax_owed ? formatCurrency(stats.municipal_tax_owed) : '--'} valueClass="default" />
+            <IntelRow label="Oldest delinquency" value={stats?.oldest_delinquent_year?.toString() ?? '--'} valueClass="gold" />
+            <IntelRow label="Districts affected" value={stats?.districts_affected?.toString() ?? '--'} valueClass="default" />
           </IntelPanel>
 
           {/* Data Sources Panel */}
