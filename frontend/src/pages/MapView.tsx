@@ -900,6 +900,15 @@ function PropertyPanel({
       >
         PIDN: {report.parcel.pidn}
       </div>
+      <Link to={`/property/${report.parcel.pidn}`} style={{
+        display: 'block', textAlign: 'center', marginTop: 12,
+        padding: '8px', borderRadius: 4,
+        fontFamily: 'var(--font-mono)', fontSize: 11,
+        color: 'var(--accent-blue)', border: '1px solid var(--border)',
+        textDecoration: 'none',
+      }}>
+        View Full Property Report &rarr;
+      </Link>
     </div>
   )
 }

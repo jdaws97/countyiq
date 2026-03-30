@@ -313,4 +313,10 @@ def _clean_row(row: dict) -> dict:
         if val is not None and str(val).strip():
             cleaned[friendly] = val
 
+    # Add link for parcels
+    if "pidn" in row:
+        cleaned["_link"] = f"/property/{row['pidn']}"
+    elif "Parcel ID" in cleaned:
+        cleaned["_link"] = f"/property/{cleaned['Parcel ID']}"
+
     return cleaned

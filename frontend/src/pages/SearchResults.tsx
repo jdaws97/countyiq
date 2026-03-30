@@ -110,15 +110,18 @@ export default function SearchResults() {
             animation: 'fadeUp 0.5s ease both', animationDelay: '0.1s', opacity: 0,
           }}>
             {results.map((r, idx) => {
-              const entries = Object.entries(r).filter(([, v]) => v !== null && v !== '')
-              // First entry with a name-like value is the title
-              const titleKey = entries.find(([k]) => k === 'Parcel ID')?.[1] || entries[0]?.[1] || 'Result'
+              const link = r._link as string | undefined
+              const entries = Object.entries(r).filter(([k, v]) => v !== null && v !== '' && !k.startsWith('_'))
+              const Wrapper = link ? Link : 'div' as any
+              const wrapperProps = link ? { to: link, style: { textDecoration: 'none', color: 'inherit', display: 'block' } } : {}
               return (
-                <div key={idx} style={{
+                <Wrapper key={idx} {...wrapperProps}>
+                <div style={{
                   padding: '20px 24px',
                   background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
                   borderBottom: idx < results.length - 1 ? '1px solid var(--border)' : 'none',
                   transition: 'background 0.15s',
+                  cursor: link ? 'pointer' : 'default',
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
@@ -144,6 +147,7 @@ export default function SearchResults() {
                     ))}
                   </div>
                 </div>
+                </Wrapper>
               )
             })}
           </div>
