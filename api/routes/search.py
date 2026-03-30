@@ -17,15 +17,41 @@ def search(
     falls back to LLM intent parsing for natural language queries."""
     search_term = q.strip()
 
-    # Step 1: Try pg_trgm fuzzy matching
+    # Detect if this looks like a natural language question vs a name/address
+    is_natural_language = _is_natural_language(search_term)
+
+    # If natural language, try LLM first
+    if is_natural_language:
+        llm_intent = parse_query_with_llm(search_term)
+
+        if llm_intent and llm_intent.get("intent") == "redirect":
+            return {
+                "mode": "redirect",
+                "redirect_path": llm_intent.get("redirect_path", "/"),
+                "description": llm_intent.get("description", ""),
+                "results": [],
+            }
+
+        if llm_intent and llm_intent.get("intent") == "query":
+            llm_results = _execute_llm_query(llm_intent, limit)
+            if llm_results:
+                return {
+                    "mode": "smart",
+                    "description": llm_intent.get("description", ""),
+                    "results": llm_results,
+                }
+
+    # For name/address queries (or LLM fallback), use pg_trgm
     trgm_results = _trgm_search(search_term, limit)
 
-    # Step 2: If pg_trgm found good results (score > 0.3), return them
-    if trgm_results and trgm_results[0].get("score", 0) > 0.3:
+    # If pg_trgm found results, return them
+    if trgm_results:
         return {"mode": "fuzzy", "results": trgm_results}
 
-    # Step 3: Try LLM intent parsing for natural language queries
-    llm_intent = parse_query_with_llm(search_term)
+    # Last resort: try LLM if we haven't already
+    llm_intent = None
+    if not is_natural_language:
+        llm_intent = parse_query_with_llm(search_term)
 
     if llm_intent and llm_intent.get("intent") == "redirect":
         return {
@@ -44,25 +70,72 @@ def search(
                 "results": llm_results,
             }
 
-    # Step 4: Return whatever pg_trgm found (even if low quality)
-    return {"mode": "fuzzy", "results": trgm_results}
+    if llm_intent and llm_intent.get("intent") == "redirect":
+        return {
+            "mode": "redirect",
+            "redirect_path": llm_intent.get("redirect_path", "/"),
+            "description": llm_intent.get("description", ""),
+            "results": [],
+        }
+
+    if llm_intent and llm_intent.get("intent") == "query":
+        llm_results = _execute_llm_query(llm_intent, limit)
+        if llm_results:
+            return {
+                "mode": "smart",
+                "description": llm_intent.get("description", ""),
+                "results": llm_results,
+            }
+
+    return {"mode": "fuzzy", "results": []}
+
+
+NL_KEYWORDS = {
+    "oldest", "newest", "most", "least", "biggest", "smallest", "largest",
+    "cheapest", "expensive", "show", "find", "list", "all", "how many",
+    "where", "which", "what", "who", "near", "in", "breweries", "brewery",
+    "restaurants", "restaurant", "winery", "wineries", "bars", "hotels",
+    "delinquent", "vacant", "flood", "commercial", "residential", "industrial",
+    "properties", "parcels", "owners", "sales", "sold", "recently",
+    "top", "total", "average", "count",
+}
+
+
+def _is_natural_language(query: str) -> bool:
+    """Detect if a query is natural language vs a name/address lookup."""
+    words = query.lower().split()
+    # 4+ words is almost certainly natural language
+    if len(words) >= 4:
+        return True
+    # Check for NL keywords
+    for word in words:
+        if word in NL_KEYWORDS:
+            return True
+    # Starts with a question word
+    if words and words[0] in ("show", "find", "list", "what", "who", "where", "which", "how"):
+        return True
+    return False
 
 
 def _trgm_search(search_term: str, limit: int) -> list[dict]:
     """Standard pg_trgm fuzzy matching across all sources."""
     with get_cursor() as cur:
-        # Parcel owners
+        # Parcel owners — boost score when all search words appear in the name
         cur.execute("""
             SELECT DISTINCT ON (owner_full)
                 'parcel' AS result_type,
                 owner_full AS title,
                 pidn || ' · ' || COALESCE(propadr, '') || ' · ' || COALESCE(municipality, '') AS subtitle,
                 NULL::float AS lat, NULL::float AS lng,
-                similarity(owner_full, %(q)s) AS score,
+                CASE
+                    WHEN UPPER(owner_full) LIKE '%%' || UPPER(%(q)s) || '%%' THEN 1.0
+                    WHEN UPPER(owner_full) LIKE UPPER(SPLIT_PART(%(q)s, ' ', 2)) || '%%' THEN 0.85
+                    ELSE similarity(owner_full, %(q)s)
+                END AS score,
                 pidn
             FROM staging.parcels
             WHERE valid_to IS NULL AND owner_full %% %(q)s
-            ORDER BY owner_full, similarity(owner_full, %(q)s) DESC
+            ORDER BY owner_full, score DESC
             LIMIT %(limit)s
         """, {"q": search_term, "limit": limit})
         parcel_owners = cur.fetchall()

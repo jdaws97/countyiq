@@ -41,6 +41,22 @@ def parcels_bbox(
                   AND p.geom IS NOT NULL
                   AND p.geom && ST_MakeEnvelope(%(west)s, %(south)s, %(east)s, %(north)s, 4326)
             """, {"west": west, "south": south, "east": east, "north": north})
+        elif layer == "vacant":
+            cur.execute("""
+                SELECT
+                    ST_AsGeoJSON(p.geom)::json AS geometry,
+                    p.pidn, p.owner_full, p.propadr, p.aprtotal, p.municipality,
+                    p.class, p.saledt, p.price
+                FROM staging.parcels p
+                WHERE p.valid_to IS NULL
+                  AND p.geom IS NOT NULL
+                  AND p.geom && ST_MakeEnvelope(%(west)s, %(south)s, %(east)s, %(north)s, 4326)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM staging.structures s
+                      WHERE s.valid_to IS NULL AND s.geom IS NOT NULL
+                        AND ST_Intersects(s.geom, p.geom)
+                  )
+            """, {"west": west, "south": south, "east": east, "north": north})
         else:
             cur.execute("""
                 SELECT

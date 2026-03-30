@@ -104,7 +104,41 @@ export default function SearchResults() {
           </div>
         )}
 
-        {!loading && results.length > 0 && (
+        {!loading && results.length > 0 && mode === 'smart' && (
+          <div style={{
+            border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden',
+            animation: 'fadeUp 0.5s ease both', animationDelay: '0.1s', opacity: 0,
+          }}>
+            {results.map((r, idx) => {
+              // Smart results are raw DB rows — render key-value pairs
+              const keys = Object.keys(r).filter(k => r[k] !== null && r[k] !== '')
+              const title = r.owner_full || r.owner_name || r.premises_name || r.licensee || r.name || r.pidn || 'Result'
+              const subtitle = r.propadr || r.property_address || r.premises_address || r.tax_district_name || ''
+              return (
+                <div key={idx} style={{
+                  padding: '16px 24px',
+                  background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
+                  borderBottom: idx < results.length - 1 ? '1px solid var(--border)' : 'none',
+                }}>
+                  <div style={{ fontFamily: 'var(--font-sans)', fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                    {String(title)}
+                  </div>
+                  {subtitle && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{String(subtitle)}</div>}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                    {keys.filter(k => !['owner_full','owner_name','premises_name','licensee','propadr','property_address','premises_address','name'].includes(k)).map(k => (
+                      <div key={k} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>{k.replace(/_/g,' ')}: </span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{typeof r[k] === 'number' ? r[k].toLocaleString() : String(r[k])}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {!loading && results.length > 0 && mode === 'fuzzy' && (
           <div style={{
             border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden',
             animation: 'fadeUp 0.5s ease both', animationDelay: '0.1s', opacity: 0,
@@ -142,7 +176,7 @@ export default function SearchResults() {
               >
                 <div>
                   {(() => {
-                    const t = TYPE_LABELS[r.result_type] || { label: r.result_type, color: 'var(--text-muted)' }
+                    const t = TYPE_LABELS[r.result_type || ''] || { label: r.result_type || 'result', color: 'var(--text-muted)' }
                     return (
                       <span style={{
                         padding: '2px 8px', borderRadius: 3, fontSize: 9,

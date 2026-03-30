@@ -83,6 +83,8 @@ const STATIC_LAYER_IDS = ['municipalities', 'flood_zones', 'zoning', 'penndot_pr
 const URL_LAYER_MAP: Record<string, string> = {
   flood: 'flood_zones',
   penndot: 'penndot_projects',
+  vacant: 'parcels',
+  delinquent: 'parcels',
 }
 
 // ---------- Component ----------
