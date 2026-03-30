@@ -2,7 +2,12 @@
 
 Records: ~176,000 parcels with geometry + 40+ attribute fields
 Schedule: Weekly (Monday 02:00)
+
+Memory-optimized: streams ArcGIS pages directly into the DB temp table
+instead of materializing all 176K features in Python memory.
 """
+
+import json
 
 import requests
 from psycopg2.extras import execute_batch
@@ -16,30 +21,21 @@ from dagster import (
     MetadataValue,
 )
 
-from countyiq.lib.arcgis_client import query_all_features
+from countyiq.lib.arcgis_client import iterate_feature_pages
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.parsers.arcgis_parcels import parse_parcels_features
-from countyiq.lib.scd import scd2_upsert
+from countyiq.lib.parsers.arcgis_parcels import parse_parcels_features, FIELD_MAP
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
-# Columns that identify a unique parcel record
 KEY_COLUMNS = ["pidn"]
 
-# Columns compared for SCD2 change detection (subset — not all 40+ fields)
 VALUE_COLUMNS = [
-    "owner_full",
-    "propadr",
-    "aprtotal",
-    "saledt",
-    "price",
-    "municipality",
-    "school_dis",
-    "acres",
-    "class",
+    "owner_full", "propadr", "aprtotal", "saledt", "price",
+    "municipality", "school_dis", "acres", "class",
 ]
 
-# Expected fields from ArcGIS FeatureServer (for schema drift check)
+ALL_COLUMNS = KEY_COLUMNS + VALUE_COLUMNS
+
 EXPECTED_FIELDS = {
     "PIDN", "OWNER_FULL", "PROPADR", "APRTOTAL", "SALEDT", "PRICE",
     "MUNICIPALITY", "SCHOOL_DIS", "ACRES", "CLASS", "DISTRICT", "BLOCK",
@@ -59,122 +55,159 @@ def parcels_arcgis(
     database: DatabaseResource,
     s3: S3StorageResource,
 ) -> MaterializeResult:
-    """Fetch all parcels, archive raw to S3, upsert to staging.parcels (SCD2)."""
-
-    # 1. Fetch all features with pagination
+    """Stream parcel pages from ArcGIS directly into DB. Memory-efficient."""
     county = get_county_config()
     context.log.info(f"Querying ArcGIS parcels for {county.name}: {county.arcgis_parcels_url}")
-    raw_features = query_all_features(
-        url=county.arcgis_parcels_url,
-        where="1=1",
-        out_fields="*",
-        out_sr=4326,
-        batch_size=2000,
-    )
-    context.log.info(f"Fetched {len(raw_features)} raw features")
 
-    # 2. Archive raw response to S3
-    s3.archive(f"{county.s3_prefix}/arcgis/parcels", raw_features)
-
-    # 3. Parse features into flat records
-    records = parse_parcels_features(raw_features)
-    context.log.info(f"Parsed {len(records)} parcel records")
-
-    if not records:
-        context.log.warning("No records parsed — skipping upsert")
-        return MaterializeResult(
-            metadata={"record_count": MetadataValue.int(0)}
-        )
-
-    # 4. SCD2 upsert to staging.parcels
     cur = database.cursor()
+    conn = cur.connection
+    was_autocommit = conn.autocommit
+    if was_autocommit:
+        conn.autocommit = False
+
     try:
-        stats = scd2_upsert(
-            cursor=cur,
-            schema="staging",
-            table="parcels",
-            records=records,
-            key_columns=KEY_COLUMNS,
-            value_columns=VALUE_COLUMNS,
-        )
+        # Create temp table
+        cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
+        cur.execute("CREATE TEMP TABLE _tmp_parcels (LIKE staging.parcels INCLUDING DEFAULTS)")
 
-        # 5. Update geometry separately (SCD2 helper uses TEXT temp table)
-        # Geometry is handled as WKT → PostGIS conversion
-        _update_geometries(cur, raw_features)
+        # Stream pages directly into temp table
+        total_staged = 0
+        insert_sql = f"INSERT INTO _tmp_parcels ({', '.join(ALL_COLUMNS)}) VALUES ({', '.join(['%s'] * len(ALL_COLUMNS))})"
+        geom_updates = []
 
+        for page_features in iterate_feature_pages(
+            url=county.arcgis_parcels_url,
+            where="1=1",
+            out_fields="*",
+            out_sr=4326,
+            batch_size=2000,
+        ):
+            # Parse this page's features
+            records = parse_parcels_features(page_features)
+
+            # Insert records into temp table (no geometry yet)
+            rows = []
+            for rec in records:
+                row = [rec.get(col) for col in ALL_COLUMNS]
+                rows.append(row)
+            execute_batch(cur, insert_sql, rows, page_size=1000)
+            total_staged += len(rows)
+
+            # Collect geometry updates for this page
+            for feat in page_features:
+                geom = feat.get("geometry")
+                attrs = feat.get("attributes", {})
+                pidn = attrs.get("PIDN")
+                if geom and pidn and geom.get("rings"):
+                    geojson = _arcgis_rings_to_geojson(geom["rings"])
+                    geom_updates.append((json.dumps(geojson), pidn))
+
+            # Flush geometry in batches to avoid accumulating
+            if len(geom_updates) >= 5000:
+                _flush_geometries(cur, geom_updates)
+                geom_updates = []
+
+            context.log.info(f"  Staged {total_staged} records")
+
+        # Flush remaining geometries
+        if geom_updates:
+            _flush_geometries(cur, geom_updates)
+            geom_updates = []
+
+        context.log.info(f"Total staged: {total_staged}")
+
+        if total_staged == 0:
+            cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
+            conn.commit()
+            return MaterializeResult(metadata={"record_count": MetadataValue.int(0)})
+
+        # SCD2 expire + insert (using temp table directly)
+        key_join = "c.pidn = t.pidn"
+        value_diff = " OR ".join(f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS)
+
+        # Expire changed/deleted
+        cur.execute(f"""
+            UPDATE staging.parcels c SET valid_to = NOW()
+            WHERE c.valid_to IS NULL
+            AND (
+                EXISTS (SELECT 1 FROM _tmp_parcels t WHERE {key_join} AND ({value_diff}))
+                OR NOT EXISTS (SELECT 1 FROM _tmp_parcels t WHERE {key_join})
+            )
+        """)
+        expired = cur.rowcount
+        context.log.info(f"Expired {expired} records")
+
+        # Insert new/changed
+        col_list = ", ".join(ALL_COLUMNS)
+        cur.execute(f"""
+            INSERT INTO staging.parcels ({col_list}, valid_from)
+            SELECT {', '.join(f't.{c}' for c in ALL_COLUMNS)}, NOW()
+            FROM _tmp_parcels t
+            WHERE NOT EXISTS (
+                SELECT 1 FROM staging.parcels c WHERE c.valid_to IS NULL AND {key_join}
+            )
+        """)
+        inserted = cur.rowcount
+        context.log.info(f"Inserted {inserted} records")
+
+        # Update geometry on newly inserted records
+        cur.execute("""
+            UPDATE staging.parcels p SET geom = t.geom
+            FROM _tmp_parcels t
+            WHERE p.pidn = t.pidn AND p.valid_to IS NULL AND p.geom IS NULL AND t.geom IS NOT NULL
+        """)
+        geom_updated = cur.rowcount
+        context.log.info(f"Updated {geom_updated} geometries")
+
+        cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
     finally:
+        if was_autocommit:
+            conn.autocommit = True
         cur.close()
 
     return MaterializeResult(
         metadata={
-            "record_count": MetadataValue.int(len(records)),
-            "inserted": MetadataValue.int(stats["inserted"]),
-            "expired": MetadataValue.int(stats["expired"]),
-            "unchanged": MetadataValue.int(stats["unchanged"]),
+            "record_count": MetadataValue.int(total_staged),
+            "inserted": MetadataValue.int(inserted),
+            "expired": MetadataValue.int(expired),
+            "unchanged": MetadataValue.int(total_staged - inserted),
         }
     )
 
 
-def _update_geometries(cursor, raw_features: list[dict]):
-    """Set geometry on newly inserted records (valid_to IS NULL, geom IS NULL).
-
-    Uses execute_batch for performance with 176K+ records.
-    """
-    import json
-
+def _flush_geometries(cursor, geom_updates: list[tuple]):
+    """Batch-update geometries on temp table rows."""
     update_sql = """
-        UPDATE staging.parcels
+        UPDATE _tmp_parcels
         SET geom = ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326)
-        WHERE pidn = %s AND valid_to IS NULL AND geom IS NULL
+        WHERE pidn = %s
     """
-    batch = []
-    for feat in raw_features:
-        geom = feat.get("geometry")
-        attrs = feat.get("attributes", {})
-        pidn = attrs.get("PIDN")
-        if geom and pidn:
-            geojson = _arcgis_geom_to_geojson(geom)
-            if geojson:
-                batch.append((json.dumps(geojson), pidn))
-
-    if batch:
-        execute_batch(cursor, update_sql, batch, page_size=500)
+    execute_batch(cursor, update_sql, geom_updates, page_size=500)
 
 
-def _arcgis_geom_to_geojson(geom: dict) -> dict | None:
-    """Convert ArcGIS JSON geometry to GeoJSON geometry."""
-    rings = geom.get("rings")
-    if not rings:
-        return None
-
-    # ArcGIS rings → GeoJSON MultiPolygon
-    # Each ring is a list of [x, y] coordinates
-    # First ring is exterior, subsequent rings are holes
+def _arcgis_rings_to_geojson(rings: list) -> dict:
+    """Convert ArcGIS rings to GeoJSON MultiPolygon."""
     polygons = []
     current_polygon = []
-
     for ring in rings:
-        # In ArcGIS, exterior rings are clockwise, holes are counter-clockwise
-        # For simplicity, treat each ring as a separate polygon exterior
-        # (handles most parcels which are simple polygons)
         if not current_polygon:
             current_polygon.append(ring)
+        elif _is_clockwise(ring):
+            polygons.append(current_polygon)
+            current_polygon = [ring]
         else:
-            # Check if this is a hole (counter-clockwise) or new polygon
-            if _is_clockwise(ring):
-                polygons.append(current_polygon)
-                current_polygon = [ring]
-            else:
-                current_polygon.append(ring)
-
+            current_polygon.append(ring)
     if current_polygon:
         polygons.append(current_polygon)
-
-    return {"type": "MultiPolygon", "coordinates": [p for p in polygons]}
+    return {"type": "MultiPolygon", "coordinates": polygons}
 
 
 def _is_clockwise(ring: list[list[float]]) -> bool:
-    """Determine if a ring is clockwise using the shoelace formula."""
     total = 0.0
     for i in range(len(ring) - 1):
         x1, y1 = ring[i][0], ring[i][1]
@@ -185,14 +218,10 @@ def _is_clockwise(ring: list[list[float]]) -> bool:
 
 @asset_check(asset=parcels_arcgis)
 def parcels_record_count(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.parcels has > 150,000 current records."""
-    county = get_county_config()
-    result = database.execute(
-        "SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL"
-    )
+    result = database.execute("SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL")
     count = result[0][0] if result else 0
     return AssetCheckResult(
-        passed=count > county.assessment_min_records,
+        passed=count > 150000,
         severity=AssetCheckSeverity.ERROR,
         metadata={"current_record_count": MetadataValue.int(count)},
     )
@@ -200,7 +229,6 @@ def parcels_record_count(database: DatabaseResource) -> AssetCheckResult:
 
 @asset_check(asset=parcels_arcgis)
 def parcels_schema_drift() -> AssetCheckResult:
-    """Verify ArcGIS FeatureServer still has expected parcel fields."""
     county = get_county_config()
     try:
         resp = requests.get(f"{county.arcgis_parcels_url}?f=json", timeout=30)
@@ -218,7 +246,6 @@ def parcels_schema_drift() -> AssetCheckResult:
         )
     except requests.exceptions.RequestException as e:
         return AssetCheckResult(
-            passed=False,
-            severity=AssetCheckSeverity.WARN,
+            passed=False, severity=AssetCheckSeverity.WARN,
             metadata={"error": MetadataValue.text(f"Network error: {e}")},
         )
