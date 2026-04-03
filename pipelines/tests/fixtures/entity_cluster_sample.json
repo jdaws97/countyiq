@@ -1,0 +1,92 @@
+{
+  "cluster_id": "cluster_001",
+  "records": {
+    "parcels": [
+      {
+        "pidn": "6701234567890A",
+        "owner_full": "SMITH JOHN A",
+        "propadr": "123 MAIN ST",
+        "aprtotal": 250000.0,
+        "acres": 1.5,
+        "class": "C",
+        "saledt": "15-MAR-2019",
+        "price": 275000.0,
+        "prev_owner": "JONES MARY B",
+        "municipality": "Spring Garden Township"
+      },
+      {
+        "pidn": "6701234567890B",
+        "owner_full": "SMITH JOHN A",
+        "propadr": "456 ELM ST",
+        "aprtotal": 180000.0,
+        "acres": 0.75,
+        "class": "R",
+        "saledt": "01-JUN-2021",
+        "price": 195000.0,
+        "prev_owner": "WILLIAMS ROBERT C",
+        "municipality": "Spring Garden Township"
+      }
+    ],
+    "tax_claims": [
+      {
+        "pidn": "6701234567890A",
+        "owner_name": "SMITH JOHN A",
+        "tax_year": 2023,
+        "authority_name": "COUNTY",
+        "total": 1834.56
+      },
+      {
+        "pidn": "6701234567890A",
+        "owner_name": "SMITH JOHN A",
+        "tax_year": 2024,
+        "authority_name": "COUNTY",
+        "total": 1920.00
+      },
+      {
+        "pidn": "6701234567890B",
+        "owner_name": "J A SMITH HOLDINGS LLC",
+        "tax_year": 2024,
+        "authority_name": "TOWNSHIP",
+        "total": 980.00
+      }
+    ],
+    "plcb_licenses": [
+      {
+        "license_number": "R-12345",
+        "license_type": "RESTAURANT LIQUOR",
+        "licensee": "MOUNT ROSE TAVERN INC",
+        "premises_name": "MT ROSE TAVERN",
+        "premises_owner": "SMITH JOHN A",
+        "premises_address": "123 MAIN ST, YORK PA 17403",
+        "municipality": "Spring Garden Township",
+        "status": "ACTIVE"
+      }
+    ],
+    "corporate_entities": [
+      {
+        "entity_name": "J A SMITH HOLDINGS LLC",
+        "entity_number": "7654321",
+        "status": "ACTIVE",
+        "formation_date": "2017-06-15",
+        "office_address": "789 COMMERCE DR, YORK PA 17401"
+      },
+      {
+        "entity_name": "MOUNT ROSE TAVERN INC",
+        "entity_number": "3456789",
+        "status": "ACTIVE",
+        "formation_date": "2012-01-20",
+        "office_address": "789 COMMERCE DR, YORK PA 17401"
+      }
+    ],
+    "proceedings": [
+      {
+        "extraction_type": "conditional_use",
+        "applicant_name": "J A SMITH HOLDINGS",
+        "parcel_reference": "6701234567890A",
+        "decision": "approved",
+        "meeting_date": "2025-09-12",
+        "body_name": "Spring Garden Township Planning Commission"
+      }
+    ]
+  }
+}
