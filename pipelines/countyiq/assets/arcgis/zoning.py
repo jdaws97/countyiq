@@ -28,7 +28,7 @@ KEY_COLUMNS = ["zrecid"]
 VALUE_COLUMNS = [
     "muni_name", "district", "zcode", "zname", "ztype",
     "gen_zcode", "gen_zname", "changetype", "prj_num",
-    "muni_ord", "adpt_date", "prev_zcode", "prev_zname",
+    "muni_ord", "adpt_date", "prev_zcode", "prev_zname", "source_url",
 ]
 
 EXPECTED_FIELDS = {
@@ -65,6 +65,8 @@ def zoning_arcgis(
     s3.archive(f"{county.s3_prefix}/arcgis/zoning", raw_features)
 
     records = parse_zoning_features(raw_features)
+    for rec in records:
+        rec["source_url"] = county.arcgis_zoning_url
     context.log.info(f"Parsed {len(records)} zoning records")
 
     if not records:

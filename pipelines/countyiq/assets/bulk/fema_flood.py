@@ -48,6 +48,7 @@ VALUE_COLUMNS = [
     "depth",
     "study_typ",
     "source_cit",
+    "source_url",
 ]
 
 # Expected fields from FEMA MapServer layer metadata (for schema drift check)
@@ -134,6 +135,8 @@ def fema_flood_zones(
 
     # 3. Parse features
     records = parse_fema_geojson(geojson)
+    for rec in records:
+        rec["source_url"] = county.fema_nfhl_url
     context.log.info(f"Parsed {len(records)} flood zone records")
 
     if not records:

@@ -27,7 +27,7 @@ from countyiq.resources.storage import S3StorageResource
 KEY_COLUMNS = ["road_id"]
 VALUE_COLUMNS = [
     "route_number", "road_name", "road_class", "municipality",
-    "speed_limit", "surface_type",
+    "speed_limit", "surface_type", "source_url",
 ]
 
 EXPECTED_FIELDS = {
@@ -62,6 +62,8 @@ def penndot_roads_arcgis(
     s3.archive(f"{county.s3_prefix}/penndot/roads", raw_features)
 
     records = parse_penndot_roads_features(raw_features)
+    for rec in records:
+        rec["source_url"] = county.penndot_roads_url
     context.log.info(f"Parsed {len(records)} PennDOT road records")
 
     if not records:

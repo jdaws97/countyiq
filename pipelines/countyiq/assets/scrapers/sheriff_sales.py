@@ -29,7 +29,7 @@ from countyiq.resources.storage import S3StorageResource
 KEY_COLUMNS = ["case_no", "property_address"]
 VALUE_COLUMNS = [
     "plaintiff", "defendant", "zip_code",
-    "municipality", "judgment_amount", "status", "status_date",
+    "municipality", "judgment_amount", "status", "status_date", "source_url",
 ]
 
 
@@ -130,6 +130,8 @@ def sheriff_sales_scrape(
     s3.archive(f"{county.s3_prefix}/scrapers/sheriff_sales", html, filename="listing.html")
 
     records = parse_sheriff_sale_page(html)
+    for rec in records:
+        rec["source_url"] = county.sheriff_sales_url
     context.log.info(f"Parsed {len(records)} sheriff sale records")
 
     if not records:

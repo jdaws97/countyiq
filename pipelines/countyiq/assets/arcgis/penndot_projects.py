@@ -27,7 +27,7 @@ from countyiq.resources.storage import S3StorageResource
 KEY_COLUMNS = ["project_id"]
 VALUE_COLUMNS = [
     "project_name", "description", "status", "project_type",
-    "start_date", "end_date", "cost", "municipality", "county", "data",
+    "start_date", "end_date", "cost", "municipality", "county", "data", "source_url",
 ]
 
 EXPECTED_FIELDS = {
@@ -72,6 +72,8 @@ def penndot_projects_arcgis(
     s3.archive(f"{county.s3_prefix}/penndot/projects", all_features)
 
     records = parse_penndot_projects_features(all_features)
+    for rec in records:
+        rec["source_url"] = county.penndot_projects_url
     context.log.info(f"Parsed {len(records)} project records (deduplicated)")
 
     if not records:

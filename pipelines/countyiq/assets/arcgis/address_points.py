@@ -31,7 +31,7 @@ VALUE_COLUMNS = [
     "add_number", "addnum_suf", "st_pre_dir", "st_pre_typ",
     "street_name", "st_pos_typ", "st_pos_dir",
     "inc_muni", "post_comm", "post_code", "post_code4",
-    "building", "floor", "unit", "place_type", "long", "lat",
+    "building", "floor", "unit", "place_type", "long", "lat", "source_url",
 ]
 
 EXPECTED_FIELDS = {
@@ -85,6 +85,7 @@ def address_points_arcgis(
                 archive_handle=archive_file,
                 min_records=county.arcgis_address_pts_min_records,
                 context=context,
+                source_url=county.arcgis_address_pts_url,
             )
 
         s3.archive_file(
@@ -108,7 +109,7 @@ def address_points_arcgis(
     )
 
 
-def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_records: int, context) -> dict:
+def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_records: int, context, source_url: str = "") -> dict:
     """Stream ArcGIS pages into a temp table and finalize one SCD2 upsert."""
     conn = cursor.connection
     was_autocommit = conn.autocommit
@@ -134,7 +135,7 @@ def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_recor
         raw_feature_count = 0
         for page_num, raw_features in enumerate(feature_pages, start=1):
             raw_feature_count += len(raw_features)
-            page_record_count = _stage_address_points_page(cursor, insert_sql, all_cols, raw_features, archive_handle)
+            page_record_count = _stage_address_points_page(cursor, insert_sql, all_cols, raw_features, archive_handle, source_url)
             record_count += page_record_count
             context.log.info(
                 f"Staged address_points page {page_num}: {page_record_count} parsed records "
@@ -204,7 +205,7 @@ def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_recor
         raise
 
 
-def _stage_address_points_page(cursor, insert_sql: str, all_cols: list[str], raw_features: list[dict], archive_handle) -> int:
+def _stage_address_points_page(cursor, insert_sql: str, all_cols: list[str], raw_features: list[dict], archive_handle, source_url: str = "") -> int:
     """Parse one ArcGIS page and bulk insert it into the temp table."""
     rows = []
     record_count = 0
@@ -216,6 +217,8 @@ def _stage_address_points_page(cursor, insert_sql: str, all_cols: list[str], raw
         record = parse_address_point_feature(feat)
         if record is None:
             continue
+
+        record["source_url"] = source_url
 
         geom = feat.get("geometry")
         geom_json = None

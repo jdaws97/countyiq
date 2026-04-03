@@ -31,7 +31,7 @@ KEY_COLUMNS = ["pidn"]
 
 VALUE_COLUMNS = [
     "owner_full", "propadr", "aprtotal", "saledt", "price",
-    "municipality", "school_dis", "acres", "class",
+    "municipality", "school_dis", "acres", "class", "source_url",
 ]
 
 ALL_COLUMNS = KEY_COLUMNS + VALUE_COLUMNS
@@ -88,6 +88,7 @@ def parcels_arcgis(
             # Insert records into temp table (no geometry yet)
             rows = []
             for rec in records:
+                rec["source_url"] = county.arcgis_parcels_url
                 row = [rec.get(col) for col in ALL_COLUMNS]
                 rows.append(row)
             execute_batch(cur, insert_sql, rows, page_size=1000)

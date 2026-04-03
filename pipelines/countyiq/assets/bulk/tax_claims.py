@@ -47,6 +47,7 @@ VALUE_COLUMNS = [
     "fees_paid",
     "total",
     "report_date",
+    "source_url",
 ]
 
 
@@ -115,6 +116,8 @@ def tax_claims(
         records = parse_tax_claims_text(text)
         del text
         gc.collect()
+        for rec in records:
+            rec["source_url"] = county.tax_claims_pdf_url
         context.log.info(f"Parsed {len(records)} tax claim records")
     finally:
         import shutil

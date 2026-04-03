@@ -75,9 +75,9 @@ def zipcodes_arcgis(
             if geom and "rings" in geom:
                 geojson = json.dumps({"type": "Polygon", "coordinates": geom["rings"]})
                 cur.execute("""
-                    INSERT INTO staging.zipcodes (zipcode, po_name, geom)
-                    VALUES (%s, %s, ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326))
-                """, (zipcode, po_name, geojson))
+                    INSERT INTO staging.zipcodes (zipcode, po_name, source_url, geom)
+                    VALUES (%s, %s, %s, ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326))
+                """, (zipcode, po_name, county.arcgis_zipcodes_url, geojson))
                 inserted += 1
 
         conn.commit()

@@ -42,6 +42,7 @@ VALUE_COLUMNS = [
     "municipality",
     "last_issue_date",
     "expiration_date",
+    "source_url",
 ]
 
 
@@ -70,6 +71,8 @@ def plcb_licenses(
 
     # 3. Parse and filter to county
     records = parse_plcb_csv(csv_text, county_filter=county.plcb_filter)
+    for rec in records:
+        rec["source_url"] = PLCB_CSV_URL
     context.log.info(f"Parsed {len(records)} {county.name} license records")
 
     if not records:

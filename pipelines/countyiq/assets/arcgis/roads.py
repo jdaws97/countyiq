@@ -29,7 +29,7 @@ VALUE_COLUMNS = [
     "street_name", "st_pre_dir", "st_pre_typ", "st_pos_typ", "st_pos_dir",
     "road_class", "speed_limit", "one_way", "rte_num",
     "from_addr_l", "to_addr_l", "from_addr_r", "to_addr_r",
-    "inc_muni_l", "inc_muni_r", "post_code_l", "post_code_r",
+    "inc_muni_l", "inc_muni_r", "post_code_l", "post_code_r", "source_url",
 ]
 
 EXPECTED_FIELDS = {
@@ -67,6 +67,8 @@ def roads_arcgis(
     s3.archive(f"{county.s3_prefix}/arcgis/roads", raw_features)
 
     records = parse_roads_features(raw_features)
+    for rec in records:
+        rec["source_url"] = county.arcgis_roads_url
     context.log.info(f"Parsed {len(records)} road records")
 
     if not records:

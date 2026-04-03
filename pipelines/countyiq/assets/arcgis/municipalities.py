@@ -25,7 +25,7 @@ from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["name"]
-VALUE_COLUMNS = ["muni_type", "county"]
+VALUE_COLUMNS = ["muni_type", "county", "source_url"]
 
 EXPECTED_FIELDS = {"MUNI_NAME", "TYPE"}
 
@@ -57,6 +57,8 @@ def municipalities_arcgis(
     s3.archive(f"{county.s3_prefix}/arcgis/municipalities", raw_features)
 
     records = parse_municipalities_features(raw_features)
+    for rec in records:
+        rec["source_url"] = county.arcgis_municipalities_url
     context.log.info(f"Parsed {len(records)} municipality records")
 
     if not records:

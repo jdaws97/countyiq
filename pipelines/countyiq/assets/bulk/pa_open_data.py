@@ -32,7 +32,7 @@ MAX_RETRIES = 3
 RETRY_BACKOFF = 5  # seconds, multiplied by attempt number
 
 KEY_COLUMNS = ["dataset_id", "record_id"]
-VALUE_COLUMNS = ["data"]
+VALUE_COLUMNS = ["data", "source_url"]
 
 
 def _fetch_page(url: str, attempt: int = 1) -> list[dict]:
@@ -121,6 +121,9 @@ def pa_open_data(
 
         # 3. Parse
         parsed = parse_soda_records(raw_records, dataset_id, record_id_field)
+        dataset_url = f"{county.soda_base_url}/{dataset_id}.json"
+        for rec in parsed:
+            rec["source_url"] = dataset_url
         context.log.info(f"Parsed {len(parsed)} records for {dataset_id}")
 
         if not parsed:

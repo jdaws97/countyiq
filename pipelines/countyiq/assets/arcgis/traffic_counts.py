@@ -90,10 +90,10 @@ def traffic_counts_arcgis(
                 continue
             geojson = json.dumps({"type": "MultiLineString", "coordinates": geom["paths"]})
             cur.execute("""
-                INSERT INTO staging.traffic_counts (objectid, route_number, aadt, truck_aadt, segment_length, geom)
-                VALUES (%s, %s, %s, %s, %s, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))
+                INSERT INTO staging.traffic_counts (objectid, route_number, aadt, truck_aadt, segment_length, source_url, geom)
+                VALUES (%s, %s, %s, %s, %s, %s, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))
             """, (a.get("OBJECTID"), a.get("ST_RT_NO"), a.get("CUR_AADT"),
-                  a.get("ADTT_CUR"), a.get("SEG_LNGTH_FEET"), geojson))
+                  a.get("ADTT_CUR"), a.get("SEG_LNGTH_FEET"), county.traffic_counts_url, geojson))
             inserted += 1
 
         conn.commit()

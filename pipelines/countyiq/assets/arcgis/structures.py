@@ -26,7 +26,7 @@ from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["objectid"]
-VALUE_COLUMNS = ["index_id", "building_type"]
+VALUE_COLUMNS = ["index_id", "building_type", "source_url"]
 ALL_COLUMNS = KEY_COLUMNS + VALUE_COLUMNS
 
 EXPECTED_FIELDS = {"OBJECTID", "INDEX_", "BUILDING_TYPE"}
@@ -85,6 +85,7 @@ def structures_arcgis(
                     oid,
                     attrs.get("INDEX_"),
                     attrs.get("BUILDING_TYPE"),
+                    county.arcgis_structures_url,
                 ]
                 geom = feat.get("geometry")
                 geom_json = None
