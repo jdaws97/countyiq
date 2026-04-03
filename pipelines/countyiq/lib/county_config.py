@@ -172,7 +172,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         arcgis_conservation_easements_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Conservation_Easements/FeatureServer/0",
         arcgis_ag_security_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Ag_Security/FeatureServer/0",
         arcgis_cdbg_housing_url="https://arcweb1.ycpc.org/server/rest/services/CDBG/CDBG_Housing_Locations/FeatureServer/0",
-        pa_dos_search_url="https://www.corporations.pa.gov/Search/CorpSearch",
+        pa_dos_search_url="https://file.dos.pa.gov/search/business",
         pa_dos_min_records=100,
         municipality_websites=(
             # Seed with a few known municipalities to prove the pipeline works
