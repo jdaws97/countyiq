@@ -46,6 +46,15 @@ class CountyConfig:
     assessment_throttle_seconds: float = 5.0  # Delay between all requests
     assessment_session_refresh: int = 200     # Re-establish session after N detail pages
 
+    # Recorder of Deeds (Tyler Records Public Access)
+    recorder_base_url: str = ""              # Tyler self-service base URL
+    recorder_parcel_search_id: str = ""      # Search ID for parcel/UPI search
+    recorder_document_search_id: str = ""    # Search ID for date/name/doc search
+    recorder_min_documents: int = 1
+    recorder_max_parcels_per_run: int = 500
+    recorder_throttle_seconds: float = 0.25
+    recorder_session_refresh: int = 500
+
     # PA Open Data Portal (SODA API)
     soda_base_url: str = "https://data.pa.gov/resource"
     soda_datasets: tuple = ()        # Tuple of (dataset_id, county_filter_field, county_filter_value, record_id_field) tuples
@@ -84,6 +93,23 @@ class CountyConfig:
     sheriff_sales_url: str = ""        # Sheriff sale listing URL
     sheriff_sales_min_records: int = 10
 
+    # Development radar ArcGIS layers
+    arcgis_planning_subdivisions_url: str = ""
+    arcgis_planning_subdivisions_min_records: int = 1000
+    arcgis_ecodev_candidates_url: str = ""
+    arcgis_growth_areas_url: str = ""
+    arcgis_future_landuse_url: str = ""
+    arcgis_conservation_easements_url: str = ""
+    arcgis_ag_security_url: str = ""
+    arcgis_cdbg_housing_url: str = ""
+
+    # PA DOS Corporate Entities
+    pa_dos_search_url: str = ""
+    pa_dos_min_records: int = 100
+
+    # Public Proceedings - tuple of (body_name, minutes_url, proceeding_type) tuples
+    municipality_websites: tuple = ()
+
     # S3 archive prefix (raw data goes to s3://york-county-raw/<prefix>/...)
     s3_prefix: str = ""
 
@@ -107,6 +133,13 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         arcgis_address_pts_min_records=100000,
         assessment_url="https://assessmentpublic.yorkcountypa.gov/",
         assessment_min_records=150000,
+        recorder_base_url="https://webrecorders.yorkcountypa.gov/web/",
+        recorder_parcel_search_id="DOCSEARCH41S1",
+        recorder_document_search_id="DOCSEARCH138S1",
+        recorder_min_documents=1,
+        recorder_max_parcels_per_run=500,
+        recorder_throttle_seconds=0.25,
+        recorder_session_refresh=500,
         soda_datasets=(
             # (dataset_id, county_filter_field, county_filter_value, record_id_field)
             ("xvd7-5r2c", "shortcountyname", "York", ":id"),  # Registered Businesses in PA Current by County
@@ -131,6 +164,20 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         traffic_counts_min_records=1000,
         sheriff_sales_url="https://attorneyportal.yorkcountypa.gov/sheriff.salelisting/",
         sheriff_sales_min_records=10,
+        arcgis_planning_subdivisions_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+        arcgis_planning_subdivisions_min_records=5000,
+        arcgis_ecodev_candidates_url="https://arcweb1.ycpc.org/server/rest/services/Projects/EcoDev_Candidates_Parcels/FeatureServer/0",
+        arcgis_growth_areas_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0",
+        arcgis_future_landuse_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/LANDUSE_Future_Landuse/FeatureServer/0",
+        arcgis_conservation_easements_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Conservation_Easements/FeatureServer/0",
+        arcgis_ag_security_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Ag_Security/FeatureServer/0",
+        arcgis_cdbg_housing_url="https://arcweb1.ycpc.org/server/rest/services/CDBG/CDBG_Housing_Locations/FeatureServer/0",
+        pa_dos_search_url="https://www.corporations.pa.gov/Search/CorpSearch",
+        pa_dos_min_records=100,
+        municipality_websites=(
+            # Seed with a few known municipalities to prove the pipeline works
+            # Full list will be populated by researching each municipality's website
+        ),
         s3_prefix="york",
     ),
 }
