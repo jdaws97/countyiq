@@ -77,7 +77,7 @@ def upgrade() -> None:
     op.create_table(
         "proceeding_extractions",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("proceeding_id", sa.Integer, sa.ForeignKey("staging.public_proceedings.id"), nullable=False),
+        sa.Column("proceeding_id", sa.Integer, nullable=False),
         sa.Column("extraction_type", sa.Text, nullable=False),
         sa.Column("applicant_name", sa.Text),
         sa.Column("parcel_reference", sa.Text),
@@ -89,6 +89,7 @@ def upgrade() -> None:
         sa.Column("extraction_confidence", sa.Float),
         sa.Column("model_used", sa.Text),
         sa.Column("page_number", sa.Integer),
+        sa.ForeignKeyConstraint(["proceeding_id"], ["staging.public_proceedings.id"], name="fk_extraction_proceeding"),
         schema="staging",
     )
     op.create_index(
@@ -123,7 +124,7 @@ def upgrade() -> None:
         sa.Column("validation_reasoning", sa.Text),
         sa.Column("cross_references", JSONB),
         sa.Column("validated_at", sa.DateTime(timezone=True)),
-        sa.UniqueConstraint("pidn", "signal_key"),
+        sa.UniqueConstraint("pidn", "signal_key", name="uq_evidence_pidn_signal"),
         schema="public",
     )
     op.create_index(
@@ -195,7 +196,7 @@ def upgrade() -> None:
         "intelligence_passes",
         sa.Column("pidn", sa.Text, nullable=False),
         sa.Column("pass_number", sa.Integer, nullable=False),
-        sa.Column("status", sa.Text, nullable=False, server_default="pending"),
+        sa.Column("status", sa.Text, nullable=False, server_default=sa.text("'pending'")),
         sa.Column("last_run_at", sa.DateTime(timezone=True)),
         sa.Column("input_hash", sa.Text),
         sa.Column("error_message", sa.Text),
