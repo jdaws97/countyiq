@@ -43,3 +43,33 @@ scout_monitor_refresh = define_asset_job(
     selection=AssetSelection.assets("county_scout_monitor"),
     description="Monitor promoted County Scout sources for changes and outages",
 )
+
+radar_refresh = define_asset_job(
+    name="radar_refresh",
+    selection=AssetSelection.groups("radar"),
+    description="Refresh all development radar ArcGIS layers",
+)
+
+pa_dos_refresh = define_asset_job(
+    name="pa_dos_refresh",
+    selection=AssetSelection.assets("pa_dos_entities"),
+    description="Refresh PA DOS corporate entity lookups",
+)
+
+proceedings_refresh = define_asset_job(
+    name="proceedings_refresh",
+    selection=AssetSelection.assets("public_proceedings_scrape"),
+    description="Scrape meeting minutes from all York County municipalities",
+)
+
+proceedings_extraction_refresh = define_asset_job(
+    name="proceedings_extraction_refresh",
+    selection=AssetSelection.assets("proceeding_extraction"),
+    description="Run Pass 0: extract structured records from meeting minute PDFs",
+)
+
+intelligence_data_refresh = define_asset_job(
+    name="intelligence_data_refresh",
+    selection=AssetSelection.assets("pa_dos_entities", "public_proceedings_scrape", "proceeding_extraction"),
+    description="Full intelligence data pipeline: PA DOS + proceedings + extraction",
+)
