@@ -1,0 +1,92 @@
+{
+  "pidn": "6700112233445",
+  "parcel": {
+    "pidn": "6700112233445",
+    "owner": "KEYSTONE DEVELOPMENT GROUP LLC",
+    "address": "550 HERITAGE HILLS DR",
+    "assessed_value": 185000,
+    "acres": 3.2,
+    "property_class": "V",
+    "sale_date": "15-JUN-2024",
+    "sale_price": 210000,
+    "previous_owner": "MILLER FARMS INC",
+    "municipality": "Manchester Township",
+    "school_district": "Central York",
+    "source_url": ""
+  },
+  "entity": {
+    "found": true,
+    "entity_id": 17,
+    "canonical_name": "KEYSTONE DEVELOPMENT GROUP LLC",
+    "entity_type": "llc",
+    "linked_names": ["KEYSTONE DEV GROUP", "KEYSTONE DEVELOPMENT GROUP"],
+    "relationships": {
+      "controls": ["HERITAGE HILLS REALTY LP"]
+    },
+    "verification_status": "verified"
+  },
+  "portfolio": {
+    "portfolio_count": 7,
+    "portfolio_value": 1450000,
+    "portfolio_delinquency": 0
+  },
+  "validated_signals": [
+    {
+      "signal_key": "active_subdivision",
+      "validation_status": "confirmed",
+      "adjusted_significance": "high",
+      "reasoning": "Heritage Hills Phase III is a recently approved final subdivision plan with 42 lots on 28.6 acres. The plan was approved by Manchester Township Planning Commission on 2025-07-10. The developer, Keystone Development Group LLC, is a verified entity with an active portfolio.",
+      "key_facts": [
+        "Heritage Hills Phase III approved 2025-07-10",
+        "42 proposed lots on 28.6 acres",
+        "Final subdivision plan — not preliminary"
+      ],
+      "cross_references": [
+        {
+          "source": "proceedings",
+          "detail": "Manchester Township Planning Commission approved 2025-07-10"
+        }
+      ],
+      "source_url": "https://manchester-twp.org/minutes/2025-07-10",
+      "internal_url": "/property/6700112233445"
+    },
+    {
+      "signal_key": "zoning_mismatch",
+      "validation_status": "confirmed",
+      "adjusted_significance": "medium",
+      "reasoning": "Current zoning is Agricultural (A) but future land use designation is Medium Density Residential. This is part of a corridor-wide pattern along Heritage Hills Dr where multiple parcels share the same mismatch, suggesting planned rezoning.",
+      "key_facts": [
+        "Current zoning: Agricultural (A)",
+        "Future land use: Medium Density Residential",
+        "Corridor pattern — 4 adjacent parcels share mismatch"
+      ],
+      "cross_references": [
+        {
+          "source": "future_landuse",
+          "detail": "YCPC Future Land Use Plan designates area as Medium Density Residential"
+        }
+      ],
+      "source_url": "",
+      "internal_url": "/property/6700112233445"
+    },
+    {
+      "signal_key": "flood_zone",
+      "validation_status": "downgraded",
+      "adjusted_significance": "low",
+      "reasoning": "Flood zone overlap is minimal — only 0.3 acres of the 3.2-acre parcel falls within FEMA Zone AE. The overlap is along the western property edge and does not affect the buildable area identified in the subdivision plan.",
+      "key_facts": [
+        "FEMA Zone AE overlap: 0.3 of 3.2 acres (9%)",
+        "Overlap on western edge only",
+        "Does not affect platted lots"
+      ],
+      "cross_references": [
+        {
+          "source": "fema_flood_zones",
+          "detail": "Zone AE with BFE 385ft along Codorus Creek tributary"
+        }
+      ],
+      "source_url": "https://msc.fema.gov/portal/search",
+      "internal_url": "/property/6700112233445"
+    }
+  ]
+}
