@@ -73,3 +73,36 @@ intelligence_data_refresh = define_asset_job(
     selection=AssetSelection.assets("pa_dos_entities", "public_proceedings_scrape", "proceeding_extraction"),
     description="Full intelligence data pipeline: PA DOS + proceedings + extraction",
 )
+
+entity_verification_refresh = define_asset_job(
+    name="entity_verification_refresh",
+    selection=AssetSelection.assets("entity_verification"),
+    description="Pass 1: entity verification across all sources",
+)
+
+signal_validation_refresh = define_asset_job(
+    name="signal_validation_refresh",
+    selection=AssetSelection.assets("signal_validation"),
+    description="Pass 2: validate each signal on each parcel",
+)
+
+brief_generation_refresh = define_asset_job(
+    name="brief_generation_refresh",
+    selection=AssetSelection.assets("brief_generation"),
+    description="Pass 3: generate intelligence briefs from validated signals",
+)
+
+county_narratives_refresh = define_asset_job(
+    name="county_narratives_refresh",
+    selection=AssetSelection.assets("county_narratives"),
+    description="Pass 4: detect cross-parcel patterns and generate county narratives",
+)
+
+intelligence_full_pipeline = define_asset_job(
+    name="intelligence_full_pipeline",
+    selection=AssetSelection.assets(
+        "entity_verification", "signal_validation",
+        "brief_generation", "county_narratives",
+    ),
+    description="Full intelligence pipeline: Passes 1-4",
+)
