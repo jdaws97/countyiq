@@ -21,40 +21,32 @@ from typing import Any
 # SQL CONSTANTS
 # =============================================================================
 
+# Reads from the pre-computed materialized view instead of running
+# the expensive trgm self-join live. The view is refreshed by the
+# refresh_entity_candidate_pairs Dagster asset on a weekly schedule.
 CANDIDATE_CLUSTERS_QUERY = """
-    WITH trgm_pairs AS (
-        SELECT DISTINCT
-            a.owner_full AS name_a,
-            b.owner_full AS name_b,
-            a.municipality,
-            similarity(a.owner_full, b.owner_full) AS sim
-        FROM staging.parcels a
-        JOIN staging.parcels b
-            ON a.municipality = b.municipality
-           AND a.owner_full < b.owner_full
-           AND similarity(a.owner_full, b.owner_full) > 0.5
-        WHERE a.valid_to IS NULL
-          AND b.valid_to IS NULL
-    ),
-    corp_pairs AS (
-        SELECT DISTINCT
-            c1.entity_name AS name_a,
-            c2.entity_name AS name_b,
-            '' AS municipality,
-            0.0 AS sim
-        FROM staging.corporate_entities c1
-        JOIN staging.corporate_entities c2
-            ON c1.office_address = c2.office_address
-           AND c1.entity_name < c2.entity_name
-        WHERE c1.valid_to IS NULL
-          AND c2.valid_to IS NULL
-          AND c1.office_address IS NOT NULL
-          AND c1.office_address != ''
-    )
-    SELECT name_a, name_b, municipality, sim FROM trgm_pairs
+    SELECT name_a, name_b, municipality, sim
+    FROM public.entity_candidate_pairs
+
     UNION
-    SELECT name_a, name_b, municipality, sim FROM corp_pairs
+
+    SELECT DISTINCT
+        c1.entity_name AS name_a,
+        c2.entity_name AS name_b,
+        '' AS municipality,
+        0.0 AS sim
+    FROM staging.corporate_entities c1
+    JOIN staging.corporate_entities c2
+        ON c1.office_address = c2.office_address
+       AND c1.entity_name < c2.entity_name
+    WHERE c1.valid_to IS NULL
+      AND c2.valid_to IS NULL
+      AND c1.office_address IS NOT NULL
+      AND c1.office_address != ''
 """
+
+# Standalone refresh query — used by the Dagster asset that maintains the matview.
+REFRESH_CANDIDATE_PAIRS = "REFRESH MATERIALIZED VIEW public.entity_candidate_pairs"
 
 CLUSTER_RECORDS_QUERY_PARCELS = """
     SELECT
@@ -422,6 +414,180 @@ def parse_entity_verification_output(output: dict) -> dict:
 _MAX_PARCELS_DETAIL = 50
 _MAX_TAX_CLAIMS_DETAIL = 30
 
+
+# =============================================================================
+# MEGA-BATCH: multiple clusters per LLM call
+# =============================================================================
+
+MEGA_ENTITY_TEMPLATE = """You are a county intelligence analyst verifying entity identities across public records from York County, PA.
+
+Below are {n_clusters} clusters of potentially related entities. For each cluster, determine:
+1. Which name variants belong to the SAME real-world entity
+2. Which are SEPARATE entities with similar names
+3. Relationship structures (parent/subsidiary, LLC controlled by same person)
+4. Confidence level and evidence
+
+{cluster_blocks}
+
+OUTPUT — return ONLY valid JSON:
+{{
+  "clusters": [
+    {{
+      "cluster_id": 0,
+      "entities": [
+        {{
+          "canonical_name": "primary name",
+          "entity_type": "individual|llc|corporation|partnership|trust|government|unknown",
+          "confidence": 0.0-1.0,
+          "reasoning": "why these are the same entity",
+          "linked_records": {{
+            "parcels": ["list of PIDNs"],
+            "tax_claims": ["PIDNs with tax claims"],
+            "plcb_licenses": ["license numbers"],
+            "corporate_entities": ["entity names"],
+            "proceedings": ["applicant names"]
+          }},
+          "relationships": [
+            {{"related_entity": "...", "relationship_type": "controls|officer_of|registered_agent_for|subsidiary_of|shares_address_with|same_person", "evidence": "..."}}
+          ],
+          "portfolio_summary": {{"parcel_count": 0, "total_assessed_value": 0, "tax_delinquent_parcels": 0, "total_tax_owed": 0}}
+        }}
+      ],
+      "rejected_matches": [
+        {{"name_a": "...", "name_b": "...", "reason": "why NOT the same entity"}}
+      ]
+    }}
+  ]
+}}"""
+
+
+def build_mega_entity_prompt(cluster_records_list: list[tuple[int, list[str], dict]]) -> str:
+    """Build a mega-batch prompt for N entity clusters in one LLM call.
+
+    Args:
+        cluster_records_list: List of (cluster_id, cluster_names, records) tuples.
+
+    Returns:
+        Formatted prompt string.
+    """
+    blocks = []
+    for cluster_id, names, records in cluster_records_list:
+        lines = [f"=== CLUSTER {cluster_id}: {names} ==="]
+
+        parcel_text = _format_parcel_records(records.get("parcels", []))
+        if parcel_text:
+            lines.append(f"PARCEL RECORDS:\n{parcel_text}")
+
+        tax_text = _format_tax_claims(records.get("tax_claims", []))
+        if tax_text:
+            lines.append(f"TAX CLAIMS:\n{tax_text}")
+
+        corp_text = _format_corporate(records.get("corporate_entities", []))
+        if corp_text:
+            lines.append(f"CORPORATE:\n{corp_text}")
+
+        summary = records.get("portfolio_summary")
+        if summary:
+            lines.append(
+                f"PORTFOLIO SUMMARY: {summary['total_parcels']} parcels (showing {summary['parcels_shown']}), "
+                f"${summary['total_assessed_value']:,.0f} assessed, ${summary['total_tax_owed']:,.2f} tax owed"
+            )
+
+        blocks.append("\n".join(lines))
+
+    return MEGA_ENTITY_TEMPLATE.format(
+        n_clusters=len(cluster_records_list),
+        cluster_blocks="\n\n".join(blocks),
+    )
+
+
+def parse_mega_entity_output(output: Any, cluster_records_list: list) -> dict:
+    """Parse mega-batch entity resolution output.
+
+    Args:
+        output: Parsed JSON from LLM.
+        cluster_records_list: The clusters that were sent.
+
+    Returns:
+        Dict with: clusters (list of parsed cluster results), errors.
+    """
+    if not isinstance(output, dict):
+        return {"clusters": [], "parse_error": "not a dict"}
+
+    raw_clusters = output.get("clusters", [])
+    if not isinstance(raw_clusters, list):
+        return {"clusters": [], "parse_error": "missing clusters array"}
+
+    results = []
+    for raw_cluster in raw_clusters:
+        if not isinstance(raw_cluster, dict):
+            continue
+
+        cluster_id = raw_cluster.get("cluster_id", -1)
+        entities = raw_cluster.get("entities", [])
+        rejected = raw_cluster.get("rejected_matches", [])
+
+        # Normalize entities using the existing parser
+        parsed = parse_entity_verification_output({"entities": entities, "rejected_matches": rejected})
+        parsed["cluster_id"] = cluster_id
+        results.append(parsed)
+
+    return {"clusters": results}
+
+
+def batch_clusters_by_token_budget(
+    all_clusters: list[tuple[list[str], dict]],
+    max_prompt_chars: int = 40000,
+) -> list[list[tuple[int, list[str], dict]]]:
+    """Group clusters into mega-batches that fit within a token budget.
+
+    Large clusters (50+ parcels) get their own batch. Small clusters are
+    packed together until the estimated prompt size exceeds the budget.
+
+    Args:
+        all_clusters: List of (cluster_names, records) tuples.
+        max_prompt_chars: Approximate character budget per batch.
+
+    Returns:
+        List of batches. Each batch is a list of (cluster_id, names, records).
+    """
+    batches = []
+    current_batch = []
+    current_chars = 2000  # base template overhead
+
+    for i, (names, records) in enumerate(all_clusters):
+        # Estimate prompt size for this cluster
+        n_parcels = len(records.get("parcels", []))
+        n_tax = len(records.get("tax_claims", []))
+        est_chars = n_parcels * 120 + n_tax * 80 + len(str(names)) * 2 + 200
+
+        # Large clusters get their own batch
+        if n_parcels >= 50:
+            if current_batch:
+                batches.append(current_batch)
+                current_batch = []
+                current_chars = 2000
+            batches.append([(i, names, records)])
+            continue
+
+        # Would this cluster overflow the current batch?
+        if current_chars + est_chars > max_prompt_chars and current_batch:
+            batches.append(current_batch)
+            current_batch = []
+            current_chars = 2000
+
+        current_batch.append((i, names, records))
+        current_chars += est_chars
+
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches
+
+
+# =============================================================================
+# CONTEXT GATHERING
+# =============================================================================
 
 def gather_cluster_records(cursor, names: list[str]) -> dict:
     """Gather all records for a list of candidate entity names.
