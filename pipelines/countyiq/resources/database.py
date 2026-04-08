@@ -1,6 +1,8 @@
 import os
+from contextlib import contextmanager
 
 import psycopg2
+import psycopg2.extras
 from dagster import ConfigurableResource, InitResourceContext
 
 
@@ -49,6 +51,23 @@ class DatabaseResource(ConfigurableResource):
 
     def cursor(self):
         return self._get_conn().cursor()
+
+    @contextmanager
+    def dict_cursor(self):
+        """Yield a RealDictCursor bound to the shared connection.
+
+        Use when callers need dict-row access (e.g., gather_parcel_batch_context
+        passing rows to formatter functions that look up columns by name).
+        The connection runs in autocommit mode, so each statement commits
+        independently — this context manager does not provide transaction
+        semantics, only cursor lifecycle and dict-row access.
+        """
+        conn = self._get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            yield cur
+        finally:
+            cur.close()
 
     def teardown_after_execution(self, context: InitResourceContext) -> None:
         if self._conn and not self._conn.closed:

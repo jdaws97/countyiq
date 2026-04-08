@@ -140,7 +140,10 @@ class TestHarnessConfig:
 
     def test_default_temperature(self):
         config = HarnessConfig(model_path="/models/llava.gguf")
-        assert config.temperature == 0.1
+        # Default was changed from 0.1 → 0.7 alongside the openrouter backend
+        # work. Per-model sampling should go through MODEL_PRESETS via
+        # get_preset_for_model() rather than relying on this default.
+        assert config.temperature == 0.7
 
     def test_default_max_tokens(self):
         config = HarnessConfig(model_path="/models/llava.gguf")

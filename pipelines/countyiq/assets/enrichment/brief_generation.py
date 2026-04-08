@@ -37,31 +37,41 @@ from countyiq.resources.database import DatabaseResource
 # SQL constants
 # ---------------------------------------------------------------------------
 
-ELIGIBLE_PARCELS_QUERY = """
+PARCELS_NEEDING_BRIEFS_QUERY = """
+    -- Selects parcels that need a brief for any of these reasons:
+    --   1. Has medium/high evidence but no brief yet (new parcel)
+    --   2. Has a brief but the last generation is older than 7 days
+    --      (stale — the input-hash check in Python handles whether the
+    --      context actually changed; this just ensures it enters the
+    --      candidate set for recheck)
     SELECT DISTINCT e.pidn
     FROM public.evidence e
     LEFT JOIN public.parcel_briefs pb
         ON pb.pidn = e.pidn
     WHERE e.adjusted_significance IN ('high', 'medium')
-      AND pb.pidn IS NULL
+      AND (
+          pb.pidn IS NULL                           -- Reason 1: no brief yet
+          OR pb.generated_at < NOW() - INTERVAL '7 days'  -- Reason 2: stale brief
+      )
     ORDER BY e.pidn
 """
 
 UPSERT_BRIEF_QUERY = """
     INSERT INTO public.parcel_briefs
-        (pidn, brief, assessment, assessment_reasoning,
-         key_questions, citations, brief_version,
+        (pidn, brief_text, assessment, assessment_reasoning,
+         key_questions, signal_count, citations, brief_version,
          pass_metadata, generated_at)
     VALUES
-        (%(pidn)s, %(brief)s, %(assessment)s, %(assessment_reasoning)s,
-         %(key_questions)s::jsonb, %(citations)s::jsonb, 1,
+        (%(pidn)s, %(brief_text)s, %(assessment)s, %(assessment_reasoning)s,
+         %(key_questions)s::text[], %(signal_count)s, %(citations)s::jsonb, 1,
          %(pass_metadata)s::jsonb, %(generated_at)s)
     ON CONFLICT (pidn)
     DO UPDATE SET
-        brief = EXCLUDED.brief,
+        brief_text = EXCLUDED.brief_text,
         assessment = EXCLUDED.assessment,
         assessment_reasoning = EXCLUDED.assessment_reasoning,
         key_questions = EXCLUDED.key_questions,
+        signal_count = EXCLUDED.signal_count,
         citations = EXCLUDED.citations,
         brief_version = public.parcel_briefs.brief_version + 1,
         pass_metadata = EXCLUDED.pass_metadata,
@@ -79,7 +89,7 @@ UPSERT_BRIEF_QUERY = """
         "Pass 3: synthesize validated signals into intelligence briefs "
         "for parcels with medium or high significance signals"
     ),
-    deps=["signal_validation"],
+    deps=["signal_validation_batched"],
     kinds={"postgres", "llm"},
 )
 def brief_generation(
@@ -117,7 +127,7 @@ def brief_generation(
     # Find eligible parcels (medium+ signals, no existing brief)
     # ------------------------------------------------------------------
     log.info("Querying parcels eligible for brief generation")
-    rows = database.execute(ELIGIBLE_PARCELS_QUERY)
+    rows = database.execute(PARCELS_NEEDING_BRIEFS_QUERY)
 
     if not rows:
         log.info("No parcels eligible for brief generation.")
@@ -168,7 +178,8 @@ def brief_generation(
                 """,
                 {"pidn": pidn},
             )
-            if existing and existing[0][0] == input_hash:
+            prior_hash = existing[0][0] if existing and not isinstance(existing[0], dict) else (existing[0].get("input_hash") if existing else None)
+            if prior_hash == input_hash:
                 log.debug("Parcel %s context unchanged, skipping brief generation", pidn)
                 skipped += 1
                 continue
@@ -207,14 +218,29 @@ def brief_generation(
                 "temperature": 0.2,
             }
 
+            # key_questions: LLM returns a JSON list of strings, but the
+            # schema defines TEXT[]. Postgres accepts a Python list directly
+            # as an array parameter — no json.dumps or ::jsonb cast needed.
+            key_questions_raw = parsed.get("key_questions", [])
+            if isinstance(key_questions_raw, str):
+                try:
+                    key_questions_raw = json.loads(key_questions_raw)
+                except (json.JSONDecodeError, TypeError):
+                    key_questions_raw = [key_questions_raw]
+            if not isinstance(key_questions_raw, list):
+                key_questions_raw = []
+
+            validated_signals = ctx.get("validated_signals", [])
+
             database.execute(
                 UPSERT_BRIEF_QUERY,
                 {
                     "pidn": pidn,
-                    "brief": parsed["brief"],
+                    "brief_text": parsed["brief"],
                     "assessment": parsed["assessment"],
                     "assessment_reasoning": parsed.get("assessment_reasoning", ""),
-                    "key_questions": json.dumps(parsed.get("key_questions", [])),
+                    "key_questions": key_questions_raw,
+                    "signal_count": len(validated_signals),
                     "citations": json.dumps(parsed.get("citations", [])),
                     "pass_metadata": json.dumps(pass_metadata),
                     "generated_at": now,

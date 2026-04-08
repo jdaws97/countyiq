@@ -45,7 +45,7 @@ TAX_CLAIMS_QUERY = """
     FROM staging.tax_claims
     WHERE pidn = %(pidn)s
       AND valid_to IS NULL
-    ORDER BY tax_year
+    ORDER BY tax_year, authority_name, total
 """
 
 PROCEEDINGS_FOR_PARCEL_QUERY = """
@@ -62,7 +62,7 @@ PROCEEDINGS_FOR_PARCEL_QUERY = """
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
     WHERE pe.parcel_reference = %(pidn)s
       AND pp.valid_to IS NULL
-    ORDER BY pp.meeting_date DESC
+    ORDER BY pp.meeting_date DESC, pe.id
 """
 
 PROCEEDINGS_FOR_ENTITY_QUERY = """
@@ -79,7 +79,7 @@ PROCEEDINGS_FOR_ENTITY_QUERY = """
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
     WHERE pe.applicant_name = ANY(%(names)s)
       AND pp.valid_to IS NULL
-    ORDER BY pp.meeting_date DESC
+    ORDER BY pp.meeting_date DESC, pe.id
 """
 
 NEIGHBORS_QUERY = """
@@ -109,6 +109,7 @@ NEIGHBORS_QUERY = """
     WHERE p.pidn = %(pidn)s
       AND p.valid_to IS NULL
       AND p.geom IS NOT NULL
+    ORDER BY n.pidn
 """
 
 CORPORATE_FOR_NAMES_QUERY = """
@@ -122,6 +123,7 @@ CORPORATE_FOR_NAMES_QUERY = """
     FROM staging.corporate_entities
     WHERE entity_name = ANY(%(names)s)
       AND valid_to IS NULL
+    ORDER BY entity_name, entity_number
 """
 
 ENTITY_GRAPH_QUERY = """
@@ -135,6 +137,9 @@ ENTITY_GRAPH_QUERY = """
     FROM public.entity_graph
     WHERE canonical_name = %(name)s
        OR %(name)s = ANY(linked_names)
+    ORDER BY
+        (canonical_name = %(name)s) DESC,  -- prefer exact canonical match
+        entity_id
     LIMIT 1
 """
 
@@ -148,7 +153,7 @@ PORTFOLIO_QUERY = """
     FROM staging.parcels
     WHERE owner_full = ANY(%(names)s)
       AND valid_to IS NULL
-    ORDER BY aprtotal DESC NULLS LAST
+    ORDER BY aprtotal DESC NULLS LAST, pidn
 """
 
 
@@ -236,6 +241,36 @@ def format_tax_claims_context(rows: list[dict]) -> list[dict]:
     ]
 
 
+def _normalize_relationships(raw) -> dict:
+    """Normalize relationships from the entity_graph JSONB column.
+
+    Pass 1 stores relationships as a **list of objects**:
+        [{"related_entity": "...", "relationship_type": "...", "evidence": "..."}]
+
+    But downstream consumers (Pass 2, Pass 3) iterate with .items() expecting
+    a **dict** keyed by relationship_type:
+        {"controls": ["Entity A"], "officer_of": ["Entity B", "Entity C"]}
+
+    This function bridges the gap so both shapes work.
+    """
+    if not raw:
+        return {}
+    # Already a dict (legacy data or test fixtures) — pass through
+    if isinstance(raw, dict):
+        return raw
+    # List of objects (production Pass 1 output) — group by relationship_type
+    if isinstance(raw, list):
+        grouped: dict[str, list[str]] = {}
+        for item in raw:
+            if isinstance(item, dict):
+                rel_type = item.get("relationship_type", "unknown")
+                related = item.get("related_entity", "")
+                if related:
+                    grouped.setdefault(rel_type, []).append(related)
+        return grouped
+    return {}
+
+
 def format_entity_context(row: dict | None) -> dict:
     """Format a public.entity_graph row dict into a clean context dict.
 
@@ -255,7 +290,7 @@ def format_entity_context(row: dict | None) -> dict:
         "canonical_name": _str(row.get("canonical_name")),
         "entity_type": _str(row.get("entity_type")),
         "linked_names": row.get("linked_names") or [],
-        "relationships": row.get("relationships") or {},
+        "relationships": _normalize_relationships(row.get("relationships")),
         "verification_status": _str(row.get("verification_status")),
     }
 

@@ -166,6 +166,7 @@ def proceeding_extraction(
 
         total_pages = len(images)
         log.info("Proceeding %d: %d pages", proceeding_id, total_pages)
+        _prior_inserted = extractions_inserted  # track per-proceeding count
 
         # Process each page
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -236,6 +237,33 @@ def proceeding_extraction(
                             proceeding_id, page_num, exc,
                         )
                         errors += 1
+
+        # If no extractions were found across all pages, insert a sentinel
+        # row so the NOT EXISTS check stops re-selecting this proceeding on
+        # subsequent runs.  extraction_type='_no_extractions' marks this as a
+        # deliberate zero-result marker, not a real extraction.
+        proceeding_extraction_count = extractions_inserted - _prior_inserted
+        if proceeding_extraction_count == 0:
+            try:
+                database.execute(
+                    """
+                    INSERT INTO staging.proceeding_extractions
+                        (proceeding_id, extraction_type, extraction_confidence,
+                         model_used, page_number)
+                    VALUES (%s, '_no_extractions', 0.0, %s, 0)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (proceeding_id, Path(model_path).name),
+                )
+                log.info(
+                    "Proceeding %d: zero extractions across %d pages, sentinel inserted",
+                    proceeding_id, total_pages,
+                )
+            except Exception as exc:
+                log.warning(
+                    "Failed to insert sentinel for proceeding %d: %s",
+                    proceeding_id, exc,
+                )
 
         proceedings_processed += 1
         log.info(

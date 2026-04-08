@@ -10,17 +10,13 @@ Two stages:
      entity, identifying relationship structures, and flagging rejected
      matches.
 
-The asset is controlled by the COUNTYIQ_TEXT_MODEL environment variable.
-If that variable is not set, the asset returns immediately with
-status="skipped", allowing it to exist in the Dagster graph without
-failing on machines that have no model configured.
-
-llama-cpp-python is lazy-imported. If it is not installed the asset will
-also return status="skipped" rather than raise at module load time.
+Controlled by COUNTYIQ_OPENROUTER_MODEL (API slug) or COUNTYIQ_TEXT_MODEL
+(local GGUF path). If neither is set, returns status="skipped".
 """
 
 import json
 import os
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -104,28 +100,50 @@ def entity_verification(
     log = context.log
 
     # ------------------------------------------------------------------
-    # Guard: model must be configured
+    # Resolve backend and model (same pattern as signal_validation_batched)
     # ------------------------------------------------------------------
-    model_path = os.environ.get("COUNTYIQ_TEXT_MODEL")
-    if not model_path:
+    openrouter_model = os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
+    local_model = os.environ.get("COUNTYIQ_TEXT_MODEL")
+
+    if openrouter_model:
+        backend = "openrouter"
+        model_path = openrouter_model
+    elif local_model:
+        backend = "llama_cpp"
+        model_path = local_model
+    else:
         log.info(
-            "COUNTYIQ_TEXT_MODEL is not set — skipping Pass 1 entity verification. "
-            "Set this env var to the path of a GGUF text model to enable."
+            "Neither COUNTYIQ_OPENROUTER_MODEL nor COUNTYIQ_TEXT_MODEL is set — "
+            "skipping Pass 1 entity verification."
         )
-        return _skipped_result("COUNTYIQ_TEXT_MODEL not set")
+        return _skipped_result("no model configured")
+
+    log.info(f"Pass 1: backend={backend} model={model_path}")
 
     # ------------------------------------------------------------------
     # Guard: llm_harness must be importable
     # ------------------------------------------------------------------
     try:
-        from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry  # noqa: F401
+        from countyiq.lib.llm_harness import (
+            HarnessConfig,
+            get_preset_for_model,
+            invoke_with_retry,
+        )
     except ImportError as exc:
         log.warning("llm_harness import failed (%s) — skipping", exc)
         return _skipped_result("llm_harness import failed")
 
-    from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry
+    thinking_enabled = os.environ.get("COUNTYIQ_THINKING", "true").lower() in ("1", "true", "yes")
+    preset = get_preset_for_model(model_path, thinking=thinking_enabled, reasoning_task=True)
 
-    config = HarnessConfig(model_path=model_path, max_tokens=4096)
+    config = HarnessConfig(
+        model_path=model_path,
+        backend=backend,
+        max_tokens=4096,
+        thinking=thinking_enabled,
+        archive_label="pass1_entity",
+        **preset,
+    )
 
     # ------------------------------------------------------------------
     # Stage A: Find candidate clusters
@@ -152,19 +170,16 @@ def entity_verification(
     # ------------------------------------------------------------------
     clusters_processed = 0
     entities_created = 0
+    skipped = 0
     errors = 0
 
-    conn = database._get_conn()
-
-    for cluster_names in clusters:
+    for i, cluster_names in enumerate(clusters, 1):
+        input_hash: str | None = None
+        cluster_key = cluster_names[0]  # first name in cluster is the tracking key
         try:
-            # Gather records for this cluster
-            with conn.cursor() as cur:
-                # Use RealDictCursor-style access
-                import psycopg2.extras  # lazy import
-                cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            # Gather records for this cluster using the public dict_cursor
+            with database.dict_cursor() as cur:
                 records = gather_cluster_records(cur, cluster_names)
-                cur.close()
 
             # Compute input hash for change detection
             input_hash = compute_input_hash(records)
@@ -177,15 +192,22 @@ def entity_verification(
                   AND pass_number = 1
                   AND status = 'complete'
                 """,
-                {"cluster_key": cluster_names[0]},
+                {"cluster_key": cluster_key},
             )
-            if existing and existing[0][0] == input_hash:
-                log.debug("Cluster %s unchanged, skipping", cluster_names[0])
+            prior_hash = None
+            if existing:
+                row = existing[0]
+                prior_hash = row[0] if not isinstance(row, dict) else row.get("input_hash")
+            if prior_hash == input_hash:
+                log.debug("Cluster %s unchanged, skipping", cluster_key)
+                skipped += 1
                 continue
 
             # Build prompt and invoke LLM
             prompt = build_entity_cluster_prompt(records)
-            result = invoke_with_retry(config, prompt, retries=1)
+            result = invoke_with_retry(
+                config, prompt, retries=1, archive_key=cluster_key,
+            )
 
             if not result.success:
                 log.warning(
@@ -193,7 +215,7 @@ def entity_verification(
                     cluster_names[:2], result.error,
                 )
                 _update_pass_status(
-                    database, cluster_names[0], 1, "error",
+                    database, cluster_key, 1, "error",
                     input_hash, result.error,
                 )
                 errors += 1
@@ -207,20 +229,24 @@ def entity_verification(
                     cluster_names[:2], parsed["error"],
                 )
                 _update_pass_status(
-                    database, cluster_names[0], 1, "error",
+                    database, cluster_key, 1, "error",
                     input_hash, parsed["error"],
                 )
                 errors += 1
                 continue
 
-            # Upsert entities to public.entity_graph
+            # Upsert entities to public.entity_graph.
+            # Inject cluster_names so _upsert_entity can include the original
+            # name variants (the SQL candidate cluster) in linked_names for
+            # downstream entity lookup.
             for entity in parsed.get("entities", []):
+                entity["cluster_names"] = cluster_names
                 _upsert_entity(database, entity, Path(model_path).name)
                 entities_created += 1
 
             # Update pass tracking
             _update_pass_status(
-                database, cluster_names[0], 1, "complete", input_hash,
+                database, cluster_key, 1, "complete", input_hash,
             )
             clusters_processed += 1
 
@@ -230,19 +256,41 @@ def entity_verification(
                 len(parsed.get("entities", [])),
             )
 
+            if (i % 25) == 0:
+                log.info(
+                    f"Progress: {i}/{len(clusters)} clusters "
+                    f"({clusters_processed} processed, {skipped} skipped, {errors} errors)"
+                )
+
         except Exception as exc:
-            log.warning("Error processing cluster %s: %s", cluster_names[:2], exc)
+            log.warning(
+                f"Error processing cluster {cluster_names[:2]}: {exc}\n"
+                f"{traceback.format_exc()}"
+            )
+            try:
+                _update_pass_status(
+                    database, cluster_key, 1, "error",
+                    input_hash or "", str(exc),
+                )
+            except Exception:
+                pass  # don't let status-write failure break the loop
             errors += 1
 
     log.info(
-        "Pass 1 complete: %d clusters processed, %d entities created, %d errors",
-        clusters_processed, entities_created, errors,
+        "Pass 1 complete: %d clusters processed, %d entities created, "
+        "%d skipped, %d errors",
+        clusters_processed, entities_created, skipped, errors,
     )
 
     return MaterializeResult(
         metadata={
             "status": MetadataValue.text("complete"),
+            "backend": MetadataValue.text(backend),
+            "model": MetadataValue.text(model_path),
+            "thinking": MetadataValue.bool(thinking_enabled),
+            "total_clusters": MetadataValue.int(len(clusters)),
             "clusters_processed": MetadataValue.int(clusters_processed),
+            "clusters_skipped": MetadataValue.int(skipped),
             "entities_created": MetadataValue.int(entities_created),
             "errors": MetadataValue.int(errors),
         }
@@ -277,11 +325,22 @@ def _upsert_entity(database: DatabaseResource, entity: dict, model_name: str) ->
         {
             "canonical_name": entity.get("canonical_name", ""),
             "entity_type": entity.get("entity_type", "unknown"),
+            # linked_names must contain OWNER NAME ALIASES so that
+            # ENTITY_GRAPH_QUERY (WHERE %(name)s = ANY(linked_names))
+            # resolves entity lookups by name. The old code put PIDNs here
+            # which would never match an owner_full string.
+            #
+            # Sources of name aliases:
+            #   - corporate_entities: actual entity name strings
+            #   - proceedings: applicant name strings
+            #   - cluster_names: the original name variants from the SQL
+            #     candidate cluster (the names that were similar enough to
+            #     group together in the first place)
             "linked_names": list(
                 set(
-                    entity.get("linked_records", {}).get("parcels", [])
-                    + entity.get("linked_records", {}).get("corporate_entities", [])
+                    entity.get("linked_records", {}).get("corporate_entities", [])
                     + entity.get("linked_records", {}).get("proceedings", [])
+                    + entity.get("cluster_names", [])
                 )
             ) or None,
             "linked_sources": json.dumps(entity.get("linked_records", {})),
