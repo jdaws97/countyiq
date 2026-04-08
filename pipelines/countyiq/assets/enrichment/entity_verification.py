@@ -139,7 +139,7 @@ def entity_verification(
     config = HarnessConfig(
         model_path=model_path,
         backend=backend,
-        max_tokens=4096,
+        max_tokens=8192,  # Entity resolution needs more output for large portfolios
         thinking=thinking_enabled,
         archive_label="pass1_entity",
         **preset,

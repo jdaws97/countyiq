@@ -340,6 +340,21 @@ def build_entity_cluster_prompt(records: dict) -> str:
     if proc_text:
         sections.append(f"PUBLIC PROCEEDINGS:\n{proc_text}")
 
+    # Portfolio summary — added when records are truncated for large entities
+    summary = records.get("portfolio_summary")
+    if summary:
+        summary_lines = [
+            "PORTFOLIO SUMMARY (records truncated — full statistics below):",
+            f"- Total parcels: {summary['total_parcels']} (showing {summary['parcels_shown']} above)",
+            f"- Total assessed value: ${summary['total_assessed_value']:,.0f}",
+            f"- Total tax claims: {summary['total_tax_claims']} (showing {summary['tax_claims_shown']} above)",
+            f"- Total tax owed: ${summary['total_tax_owed']:,.2f}",
+            f"- Owner name variants: {summary['owners']}",
+            f"- Property classes: {summary['classes']}",
+            f"- Municipalities: {summary['municipalities']}",
+        ]
+        sections.append("\n".join(summary_lines))
+
     combined_sections = "\n\n".join(sections) if sections else "(no records)"
 
     return ENTITY_VERIFICATION_TEMPLATE.format(sections=combined_sections)
@@ -401,6 +416,13 @@ def parse_entity_verification_output(output: dict) -> dict:
     }
 
 
+# Maximum records per source to include in the LLM prompt.
+# Entities with more parcels than this get a summary section instead of
+# the full listing, so the prompt stays within token budgets.
+_MAX_PARCELS_DETAIL = 50
+_MAX_TAX_CLAIMS_DETAIL = 30
+
+
 def gather_cluster_records(cursor, names: list[str]) -> dict:
     """Gather all records for a list of candidate entity names.
 
@@ -408,22 +430,25 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
     corporate_entities, and proceeding_extractions to collect all
     records associated with the given names.
 
+    For large entities (50+ parcels), the full parcel list is truncated
+    and a portfolio_summary is added so the LLM has the aggregate picture
+    without overflowing the token budget.
+
     Args:
         cursor: psycopg2 cursor (RealDictCursor or similar).
         names: List of entity name strings to query for.
 
     Returns:
         Dict with keys: parcels, tax_claims, plcb_licenses,
-        corporate_entities, proceedings. Each value is a list of
-        row dicts.
+        corporate_entities, proceedings, portfolio_summary (if truncated).
     """
     params = {"names": names}
 
     cursor.execute(CLUSTER_RECORDS_QUERY_PARCELS, params)
-    parcels = [dict(row) for row in cursor.fetchall()] if cursor.description else []
+    all_parcels = [dict(row) for row in cursor.fetchall()] if cursor.description else []
 
     cursor.execute(CLUSTER_RECORDS_QUERY_TAX, params)
-    tax_claims = [dict(row) for row in cursor.fetchall()] if cursor.description else []
+    all_tax = [dict(row) for row in cursor.fetchall()] if cursor.description else []
 
     cursor.execute(CLUSTER_RECORDS_QUERY_PLCB, params)
     plcb_licenses = [dict(row) for row in cursor.fetchall()] if cursor.description else []
@@ -434,10 +459,37 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
     cursor.execute(CLUSTER_RECORDS_QUERY_PROCEEDINGS, params)
     proceedings = [dict(row) for row in cursor.fetchall()] if cursor.description else []
 
-    return {
-        "parcels": parcels,
-        "tax_claims": tax_claims,
+    result = {
+        "parcels": all_parcels[:_MAX_PARCELS_DETAIL],
+        "tax_claims": all_tax[:_MAX_TAX_CLAIMS_DETAIL],
         "plcb_licenses": plcb_licenses,
         "corporate_entities": corporate_entities,
         "proceedings": proceedings,
     }
+
+    # For large entities, add a portfolio summary so the LLM knows the
+    # full scale even though the detail is truncated.
+    if len(all_parcels) > _MAX_PARCELS_DETAIL or len(all_tax) > _MAX_TAX_CLAIMS_DETAIL:
+        total_assessed = sum(float(p.get("aprtotal") or 0) for p in all_parcels)
+        total_tax = sum(float(t.get("total") or 0) for t in all_tax)
+        owner_counts = {}
+        class_counts = {}
+        muni_counts = {}
+        for p in all_parcels:
+            owner_counts[p.get("owner_full", "?")] = owner_counts.get(p.get("owner_full", "?"), 0) + 1
+            class_counts[p.get("class", "?")] = class_counts.get(p.get("class", "?"), 0) + 1
+            muni_counts[p.get("municipality", "?")] = muni_counts.get(p.get("municipality", "?"), 0) + 1
+
+        result["portfolio_summary"] = {
+            "total_parcels": len(all_parcels),
+            "parcels_shown": len(result["parcels"]),
+            "total_assessed_value": total_assessed,
+            "total_tax_claims": len(all_tax),
+            "tax_claims_shown": len(result["tax_claims"]),
+            "total_tax_owed": total_tax,
+            "owners": dict(sorted(owner_counts.items(), key=lambda x: -x[1])[:10]),
+            "classes": class_counts,
+            "municipalities": dict(sorted(muni_counts.items(), key=lambda x: -x[1])[:10]),
+        }
+
+    return result
