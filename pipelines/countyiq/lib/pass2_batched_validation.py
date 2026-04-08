@@ -265,10 +265,19 @@ def _format_entity_section(entity: dict) -> str:
     ]
     if entity.get("linked_names"):
         lines.append(f"Linked names: {', '.join(entity['linked_names'])}")
-    if entity.get("relationships"):
-        for rel in entity["relationships"][:3]:
+    rels = entity.get("relationships", {})
+    if rels and isinstance(rels, dict):
+        # Normalized form: {"controls": ["Entity A"], "officer_of": ["Entity B"]}
+        for rel_type, targets in list(rels.items())[:3]:
+            if isinstance(targets, list):
+                lines.append(f"Relationship: {rel_type} -> {', '.join(targets)}")
+            else:
+                lines.append(f"Relationship: {rel_type} -> {targets}")
+    elif rels and isinstance(rels, list):
+        # Legacy form: [{"related_entity": "...", "relationship_type": "..."}]
+        for rel in rels[:3]:
             lines.append(
-                f"Relationship: {rel.get('relationship', '?')} -> {rel.get('related_entity', '?')}"
+                f"Relationship: {rel.get('relationship_type', '?')} -> {rel.get('related_entity', '?')}"
             )
     return "\n".join(lines)
 

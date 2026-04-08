@@ -62,7 +62,7 @@ BRIEFS_FOR_PIDNS_QUERY = """
         pb.pidn,
         p.propadr AS address,
         pb.assessment,
-        LEFT(pb.brief, 300) AS brief_excerpt
+        LEFT(pb.brief_text, 300) AS brief_excerpt
     FROM public.parcel_briefs pb
     JOIN staging.parcels p ON p.pidn = pb.pidn AND p.valid_to IS NULL
     WHERE pb.pidn = ANY(%(pidns)s)
@@ -135,28 +135,45 @@ def county_narratives(
     log = context.log
 
     # ------------------------------------------------------------------
-    # Guard: model must be configured
+    # Resolve backend and model (same pattern as Pass 1/2/3)
     # ------------------------------------------------------------------
-    model_path = os.environ.get("COUNTYIQ_TEXT_MODEL")
-    if not model_path:
-        log.info(
-            "COUNTYIQ_TEXT_MODEL is not set — skipping Pass 4 county narratives. "
-            "Set this env var to the path of a GGUF text model to enable."
-        )
-        return _skipped_result("COUNTYIQ_TEXT_MODEL not set")
+    openrouter_model = os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
+    local_model = os.environ.get("COUNTYIQ_TEXT_MODEL")
 
-    # ------------------------------------------------------------------
-    # Guard: llm_harness must be importable
-    # ------------------------------------------------------------------
+    if openrouter_model:
+        backend = "openrouter"
+        model_path = openrouter_model
+    elif local_model:
+        backend = "llama_cpp"
+        model_path = local_model
+    else:
+        log.info(
+            "Neither COUNTYIQ_OPENROUTER_MODEL nor COUNTYIQ_TEXT_MODEL is set — "
+            "skipping Pass 4 county narratives."
+        )
+        return _skipped_result("no model configured")
+
+    log.info(f"Pass 4: backend={backend} model={model_path}")
+
     try:
-        from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry  # noqa: F401
+        from countyiq.lib.llm_harness import (
+            HarnessConfig, get_preset_for_model, invoke_with_retry,
+        )
     except ImportError as exc:
         log.warning("llm_harness import failed (%s) — skipping", exc)
         return _skipped_result("llm_harness import failed")
 
-    from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry
+    thinking_enabled = os.environ.get("COUNTYIQ_THINKING", "true").lower() in ("1", "true", "yes")
+    preset = get_preset_for_model(model_path, thinking=thinking_enabled, reasoning_task=True)
 
-    config = HarnessConfig(model_path=model_path, max_tokens=2048, temperature=0.3)
+    config = HarnessConfig(
+        model_path=model_path,
+        backend=backend,
+        max_tokens=2048,
+        thinking=thinking_enabled,
+        archive_label="pass4_narratives",
+        **preset,
+    )
 
     # ------------------------------------------------------------------
     # Cleanup expired narratives

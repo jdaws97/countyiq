@@ -52,18 +52,26 @@ def proceeding_extraction(
     log = context.log
 
     # ------------------------------------------------------------------
-    # Guard: model must be configured
+    # Resolve backend and model (same pattern as Pass 1/2/3/4)
     # ------------------------------------------------------------------
-    model_path = os.environ.get("COUNTYIQ_MULTIMODAL_MODEL")
-    if not model_path:
+    openrouter_model = os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
+    local_model = os.environ.get("COUNTYIQ_MULTIMODAL_MODEL") or os.environ.get("COUNTYIQ_TEXT_MODEL")
+
+    if openrouter_model:
+        backend = "openrouter"
+        model_path = openrouter_model
+    elif local_model:
+        backend = "llama_cpp"
+        model_path = local_model
+    else:
         log.info(
-            "COUNTYIQ_MULTIMODAL_MODEL is not set — skipping Pass 0 extraction. "
-            "Set this env var to the path of a GGUF multimodal model to enable."
+            "No model configured — skipping Pass 0 extraction. "
+            "Set COUNTYIQ_OPENROUTER_MODEL or COUNTYIQ_MULTIMODAL_MODEL."
         )
         return MaterializeResult(
             metadata={
                 "status": MetadataValue.text("skipped"),
-                "reason": MetadataValue.text("COUNTYIQ_MULTIMODAL_MODEL not set"),
+                "reason": MetadataValue.text("no model configured"),
                 "proceedings_processed": MetadataValue.int(0),
                 "extractions_inserted": MetadataValue.int(0),
                 "pages_processed": MetadataValue.int(0),
@@ -71,35 +79,34 @@ def proceeding_extraction(
             }
         )
 
+    log.info(f"Pass 0: backend={backend} model={model_path}")
+
     # ------------------------------------------------------------------
     # Guard: optional dependencies must be importable
     # ------------------------------------------------------------------
     try:
-        from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry  # noqa: F401
+        from countyiq.lib.llm_harness import (
+            HarnessConfig, get_preset_for_model, invoke_with_retry,
+        )
     except ImportError as exc:
         log.warning("llm_harness import failed (%s) — skipping", exc)
         return _skipped_result("llm_harness import failed")
 
     try:
-        from pdf2image import convert_from_bytes  # noqa: F401
+        from pdf2image import convert_from_bytes
     except ImportError as exc:
         log.warning("pdf2image not installed (%s) — skipping", exc)
         return _skipped_result("pdf2image not installed")
 
-    try:
-        import requests  # noqa: F401
-    except ImportError as exc:
-        log.warning("requests not installed (%s) — skipping", exc)
-        return _skipped_result("requests not installed")
-
-    # ------------------------------------------------------------------
-    # Re-import for actual use now that we've confirmed availability
-    # ------------------------------------------------------------------
-    from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry
-    from pdf2image import convert_from_bytes
     import requests
 
-    config = HarnessConfig(model_path=model_path)
+    preset = get_preset_for_model(model_path, thinking=False, reasoning_task=False)
+    config = HarnessConfig(
+        model_path=model_path,
+        backend=backend,
+        archive_label="pass0_extraction",
+        **preset,
+    )
 
     # ------------------------------------------------------------------
     # Find unprocessed proceedings

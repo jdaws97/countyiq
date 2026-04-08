@@ -55,11 +55,13 @@ VALID_TRAJECTORIES = {
 # =============================================================================
 
 CORRIDOR_SCAN_QUERY = """
-    WITH signal_clusters AS (
+    WITH adjacent_pairs AS (
+        -- Find pairs of parcels with the SAME signal type within 500m
         SELECT
             e1.signal_key,
-            ARRAY_AGG(DISTINCT e1.pidn ORDER BY e1.pidn) AS cluster_pidns,
-            COUNT(DISTINCT e1.pidn) AS cluster_size
+            e1.pidn AS pidn_a,
+            e2.pidn AS pidn_b,
+            p1.municipality
         FROM public.evidence e1
         JOIN staging.parcels p1
             ON p1.pidn = e1.pidn AND p1.valid_to IS NULL AND p1.geom IS NOT NULL
@@ -68,12 +70,32 @@ CORRIDOR_SCAN_QUERY = """
         JOIN staging.parcels p2
             ON p2.pidn = e2.pidn AND p2.valid_to IS NULL AND p2.geom IS NOT NULL
         WHERE ST_DWithin(p1.geom::geography, p2.geom::geography, 500)
-        GROUP BY e1.signal_key
-        HAVING COUNT(DISTINCT e1.pidn) >= 3
+    ),
+    signal_clusters AS (
+        -- Group by signal_key AND municipality to avoid merging
+        -- geographically distant parcels that share a signal type.
+        -- Collect BOTH sides of each pair to avoid dropping PIDNs.
+        SELECT
+            signal_key,
+            municipality,
+            ARRAY(
+                SELECT DISTINCT unnest
+                FROM unnest(
+                    ARRAY_AGG(pidn_a) || ARRAY_AGG(pidn_b)
+                )
+                ORDER BY unnest
+            ) AS cluster_pidns
+        FROM adjacent_pairs
+        GROUP BY signal_key, municipality
     )
-    SELECT signal_key, cluster_pidns, cluster_size
+    SELECT
+        signal_key,
+        municipality,
+        cluster_pidns,
+        array_length(cluster_pidns, 1) AS cluster_size
     FROM signal_clusters
-    ORDER BY cluster_size DESC
+    WHERE array_length(cluster_pidns, 1) >= 3
+    ORDER BY array_length(cluster_pidns, 1) DESC
 """
 
 CORRIDOR_TEMPLATE = """You are a county intelligence analyst identifying corridor-level development patterns in York County, PA.
@@ -333,6 +355,18 @@ def build_portfolio_prompt(portfolio: dict) -> str:
 # =============================================================================
 
 MUNICIPAL_SCAN_QUERY = """
+    WITH tax_by_muni AS (
+        -- Pre-aggregate tax totals per municipality to avoid fan-out
+        -- when joining with evidence (which is also one-to-many per parcel)
+        SELECT
+            p.municipality,
+            COUNT(DISTINCT tc.pidn) AS delinquent_parcels,
+            COALESCE(SUM(tc.total), 0) AS total_owed
+        FROM staging.parcels p
+        JOIN staging.tax_claims tc ON tc.pidn = p.pidn AND tc.valid_to IS NULL
+        WHERE p.valid_to IS NULL AND p.municipality IS NOT NULL
+        GROUP BY p.municipality
+    )
     SELECT
         p.municipality,
         -- Assessment distribution from parcel_briefs
@@ -345,16 +379,16 @@ MUNICIPAL_SCAN_QUERY = """
         COUNT(DISTINCT e.pidn) FILTER (WHERE e.adjusted_significance = 'high') AS high_signal_count,
         COUNT(DISTINCT e.pidn) FILTER (WHERE e.adjusted_significance = 'medium') AS medium_signal_count,
         COUNT(DISTINCT e.pidn) FILTER (WHERE e.adjusted_significance = 'low') AS low_signal_count,
-        -- Distress summary from tax_claims
-        COUNT(DISTINCT tc.pidn) AS delinquent_parcels,
-        COALESCE(SUM(tc.total), 0) AS total_owed
+        -- Distress summary (from pre-aggregated CTE — no fan-out)
+        COALESCE(tbm.delinquent_parcels, 0) AS delinquent_parcels,
+        COALESCE(tbm.total_owed, 0) AS total_owed
     FROM staging.parcels p
     LEFT JOIN public.parcel_briefs pb ON pb.pidn = p.pidn
     LEFT JOIN public.evidence e ON e.pidn = p.pidn
-    LEFT JOIN staging.tax_claims tc ON tc.pidn = p.pidn AND tc.valid_to IS NULL
+    LEFT JOIN tax_by_muni tbm ON tbm.municipality = p.municipality
     WHERE p.valid_to IS NULL
       AND p.municipality IS NOT NULL
-    GROUP BY p.municipality
+    GROUP BY p.municipality, tbm.delinquent_parcels, tbm.total_owed
     HAVING COUNT(DISTINCT pb.pidn) >= 1
     ORDER BY p.municipality
 """
