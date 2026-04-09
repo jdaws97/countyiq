@@ -15,6 +15,7 @@ If none are set, the asset returns immediately with status="skipped".
 """
 
 import json
+import os
 from pathlib import Path
 
 from dagster import (
@@ -47,9 +48,14 @@ def proceeding_extraction(
     log = context.log
 
     # ------------------------------------------------------------------
-    # Resolve backend and model (same pattern as Pass 1/2/3/4)
+    # Resolve backend and model
+    # Pass 0 checks COUNTYIQ_PASS0_MODEL first (for PDF-native models
+    # like Grok 4.1 Fast), then falls back to the generic model env vars.
     # ------------------------------------------------------------------
-    openrouter_model = os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
+    openrouter_model = (
+        os.environ.get("COUNTYIQ_PASS0_MODEL")
+        or os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
+    )
     local_model = os.environ.get("COUNTYIQ_MULTIMODAL_MODEL") or os.environ.get("COUNTYIQ_TEXT_MODEL")
 
     if openrouter_model:

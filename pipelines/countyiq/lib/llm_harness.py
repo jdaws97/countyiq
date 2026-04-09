@@ -359,7 +359,7 @@ def _build_messages(
         messages.append({
             "role": "user",
             "content": [
-                {"type": "file", "file": {"filename": "document.pdf", "data": f"data:application/pdf;base64,{pdf_b64}"}},
+                {"type": "file", "file": {"filename": "document.pdf", "file_data": f"data:application/pdf;base64,{pdf_b64}"}},
                 {"type": "text", "text": user_prompt},
             ],
         })
