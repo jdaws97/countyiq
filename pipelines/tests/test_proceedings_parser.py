@@ -210,3 +210,28 @@ class TestClassifyProceedingType:
     # Priority: zoning_hearing beats planning_commission if both present
     def test_zhb_takes_priority_over_pc_hint(self):
         assert classify_proceeding_type("ZHB_PC_overlap.pdf", "PC ZHB overlap") == "zoning_hearing"
+
+
+# ---------------------------------------------------------------------------
+# New date patterns (2026-04-08 municipality survey)
+# ---------------------------------------------------------------------------
+
+class TestParseMeetingDateNewPatterns:
+    """Tests for date patterns found during the 2026-04-08 municipality survey."""
+
+    # M.D.YY dotted short year (Jefferson Boro: "3.4.26.pdf")
+    def test_dotted_short_year(self):
+        assert parse_meeting_date_from_filename("3.4.26.pdf") == "2026-03-04"
+
+    def test_dotted_short_year_two_digit_month(self):
+        assert parse_meeting_date_from_filename("12.08.25.pdf") == "2025-12-08"
+
+    # "Month Day, Year" from link text (New Freedom: "January 5, 2026 – Meeting Packet")
+    def test_month_day_year_link_text(self):
+        assert parse_meeting_date_from_filename("January 5, 2026") == "2026-01-05"
+
+    def test_month_day_year_with_ordinal(self):
+        assert parse_meeting_date_from_filename("March 9th, 2026") == "2026-03-09"
+
+    def test_month_day_year_february(self):
+        assert parse_meeting_date_from_filename("February 24th, 2026") == "2026-02-24"

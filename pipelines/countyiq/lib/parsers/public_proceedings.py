@@ -44,6 +44,18 @@ def _mdy(m: re.Match) -> str:
     return f"{m.group(3)}-{m.group(1)}-{m.group(2)}"
 
 
+# "Month Day, Year" or "Month Dayth, Year" — e.g. "January 5, 2026", "March 9th, 2026"
+@_register(
+    r"(january|february|march|april|may|june|july|august|"
+    r"september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?"
+    r"(?:,?\s+|\s+)(\d{4})"
+)
+def _month_day_year(m: re.Match) -> str:
+    month_num = _MONTH_MAP[m.group(1).lower()]
+    day = m.group(2).zfill(2)
+    return f"{m.group(3)}-{month_num}-{day}"
+
+
 # Month_YYYY  or  Month-YYYY  (e.g. "March_2025", "November-2024")
 # Note: we avoid (?<!\w) because underscore is a \w char and filenames use
 # underscores as separators.  We only require the month not be preceded by
@@ -55,6 +67,15 @@ def _mdy(m: re.Match) -> str:
 def _month_year(m: re.Match) -> str:
     month_num = _MONTH_MAP[m.group(1).lower()]
     return f"{m.group(2)}-{month_num}-01"
+
+
+# M.D.YY (dotted, short year) — e.g. "3.4.26" → "2026-03-04"
+@_register(r"(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{2})(?!\d)")
+def _dotted_short_year(m: re.Match) -> str:
+    month = m.group(1).zfill(2)
+    day = m.group(2).zfill(2)
+    year = f"20{m.group(3)}"
+    return f"{year}-{month}-{day}"
 
 
 # ---------------------------------------------------------------------------
@@ -107,10 +128,12 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
 def parse_meeting_date_from_filename(filename: str) -> str | None:
     """Extract an ISO date (YYYY-MM-DD) from a meeting minutes filename.
 
-    Recognises three common patterns (in priority order):
+    Recognises five common patterns (in priority order):
       1. YYYY-MM-DD or YYYY_MM_DD  →  "2025-11-14"
       2. MM-DD-YYYY or MM_DD_YYYY  →  "2026-01-15"
-      3. MonthName_YYYY            →  "2025-03-01"  (day defaults to 01)
+      3. MonthName Day, Year       →  "2026-01-05"
+      4. MonthName_YYYY            →  "2025-03-01"  (day defaults to 01)
+      5. M.D.YY                    →  "2026-03-04"
 
     Args:
         filename: The bare filename string (e.g. "PC_01-15-2026.pdf").
