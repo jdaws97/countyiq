@@ -326,7 +326,12 @@ def extract_json_object(text: str) -> str:
     return text  # Unmatched braces, return original
 
 
-def _build_messages(config: HarnessConfig, prompt: str, image_path: str | None) -> list:
+def _build_messages(
+    config: HarnessConfig,
+    prompt: str,
+    image_path: str | None,
+    pdf_bytes: bytes | None = None,
+) -> list:
     """Build the messages array with per-model-family thinking control."""
     family = config.model_family if config.model_family != "auto" else detect_model_family(config.model_path)
 
@@ -347,8 +352,18 @@ def _build_messages(config: HarnessConfig, prompt: str, image_path: str | None) 
         else:
             user_prompt = "/no_think\n\n" + prompt
 
-    # Build user message (with optional image)
-    if image_path:
+    # Build user message (with optional PDF, image, or text-only)
+    if pdf_bytes:
+        import base64 as b64mod
+        pdf_b64 = b64mod.b64encode(pdf_bytes).decode("utf-8")
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "file", "file": {"filename": "document.pdf", "data": f"data:application/pdf;base64,{pdf_b64}"}},
+                {"type": "text", "text": user_prompt},
+            ],
+        })
+    elif image_path:
         import base64  # lazy import
         with open(image_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode("utf-8")
@@ -446,7 +461,7 @@ def _post_with_backoff(url: str, json_payload: dict, headers: dict, timeout: int
     raise RuntimeError("backoff loop exited without response")
 
 
-def _invoke_openrouter(config: HarnessConfig, prompt: str, image_path: str | None) -> tuple[str, str | None]:
+def _invoke_openrouter(config: HarnessConfig, prompt: str, image_path: str | None, pdf_bytes: bytes | None = None) -> tuple[str, str | None]:
     """Invoke OpenRouter API. Returns (raw_output, error).
 
     Handles:
@@ -464,7 +479,7 @@ def _invoke_openrouter(config: HarnessConfig, prompt: str, image_path: str | Non
         return "", "OPENROUTER_API_KEY not set"
 
     family = config.model_family if config.model_family != "auto" else detect_model_family(config.model_path)
-    messages = _build_messages(config, prompt, image_path)
+    messages = _build_messages(config, prompt, image_path, pdf_bytes=pdf_bytes)
 
     payload = {
         "model": config.model_path,  # For openrouter backend, model_path is the model slug
@@ -606,15 +621,18 @@ def invoke(
     prompt: str,
     image_path: str | None = None,
     archive_key: str | None = None,
+    pdf_bytes: bytes | None = None,
 ) -> HarnessResult:
     """Invoke the LLM via the configured backend.
 
     Args:
         config: HarnessConfig specifying backend, model, sampling params.
         prompt: Full prompt text.
-        image_path: Optional image path (llama_cpp multimodal only).
+        image_path: Optional image path for multimodal vision input.
         archive_key: Optional identifier for archival (e.g., pidn or cluster_id).
                      Required if config.archive_label is set.
+        pdf_bytes: Optional raw PDF bytes. Sent as a file content block to
+                   models that support native PDF input (e.g., Grok 4.1).
 
     Returns:
         HarnessResult with parsed JSON output or error details.
@@ -623,7 +641,7 @@ def invoke(
 
     # Dispatch to backend
     if config.backend == "openrouter":
-        raw_output, error = _invoke_openrouter(config, prompt, image_path)
+        raw_output, error = _invoke_openrouter(config, prompt, image_path, pdf_bytes=pdf_bytes)
     else:
         raw_output, error = _invoke_llama_cpp(config, prompt, image_path)
 
@@ -674,13 +692,14 @@ def invoke_with_retry(
     image_path: str | None = None,
     retries: int = 1,
     archive_key: str | None = None,
+    pdf_bytes: bytes | None = None,
 ) -> HarnessResult:
     """Invoke with retry on failure."""
-    result = invoke(config, prompt, image_path, archive_key=archive_key)
+    result = invoke(config, prompt, image_path, archive_key=archive_key, pdf_bytes=pdf_bytes)
     if result.success:
         return result
     for _ in range(retries):
-        result = invoke(config, prompt, image_path, archive_key=archive_key)
+        result = invoke(config, prompt, image_path, archive_key=archive_key, pdf_bytes=pdf_bytes)
         if result.success:
             return result
     return result

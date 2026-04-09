@@ -1,25 +1,20 @@
-"""Pass 0 — Multimodal Document Extraction.
+"""Pass 0 — Document Extraction via native PDF input.
 
 For each unprocessed proceeding in staging.public_proceedings:
-  1. Download the PDF from R2 (via the document_url stored at ingest time)
-  2. Convert each page to a PNG image using pdf2image
-  3. Send each page image to the multimodal LLM using llm_harness
-  4. Store extracted records in staging.proceeding_extractions
+  1. Download the PDF (via the document_url stored at ingest time)
+  2. Send the entire PDF to the LLM via OpenRouter's native PDF support
+  3. Store extracted records in staging.proceeding_extractions
 
-The asset is controlled by the COUNTYIQ_MULTIMODAL_MODEL environment variable.
-If that variable is not set, the asset returns immediately with status="skipped",
-allowing it to exist in the Dagster graph without failing on machines that have
-no model configured.
+Uses models with native PDF input (e.g., Grok 4.1 Fast via OpenRouter).
+The PDF is sent as a base64-encoded file content block — no pdf2image
+or OCR conversion needed.
 
-llama-cpp-python and pdf2image are lazy-imported. If they are not installed the
-asset will also return status="skipped" (with a warning) rather than raise at
-module load time.
+The asset is controlled by COUNTYIQ_OPENROUTER_MODEL (preferred) or
+COUNTYIQ_MULTIMODAL_MODEL / COUNTYIQ_TEXT_MODEL environment variables.
+If none are set, the asset returns immediately with status="skipped".
 """
 
 import json
-import os
-import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 
 from dagster import (
@@ -74,7 +69,6 @@ def proceeding_extraction(
                 "reason": MetadataValue.text("no model configured"),
                 "proceedings_processed": MetadataValue.int(0),
                 "extractions_inserted": MetadataValue.int(0),
-                "pages_processed": MetadataValue.int(0),
                 "errors": MetadataValue.int(0),
             }
         )
@@ -91,12 +85,6 @@ def proceeding_extraction(
     except ImportError as exc:
         log.warning("llm_harness import failed (%s) — skipping", exc)
         return _skipped_result("llm_harness import failed")
-
-    try:
-        from pdf2image import convert_from_bytes
-    except ImportError as exc:
-        log.warning("pdf2image not installed (%s) — skipping", exc)
-        return _skipped_result("pdf2image not installed")
 
     import requests
 
@@ -138,7 +126,6 @@ def proceeding_extraction(
                 "status": MetadataValue.text("complete"),
                 "proceedings_processed": MetadataValue.int(0),
                 "extractions_inserted": MetadataValue.int(0),
-                "pages_processed": MetadataValue.int(0),
                 "errors": MetadataValue.int(0),
             }
         )
@@ -147,7 +134,6 @@ def proceeding_extraction(
 
     proceedings_processed = 0
     extractions_inserted = 0
-    pages_processed = 0
     errors = 0
 
     _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"}
@@ -168,111 +154,103 @@ def proceeding_extraction(
             errors += 1
             continue
 
-        # Convert PDF pages to images
-        try:
-            images = convert_from_bytes(pdf_bytes, dpi=150, fmt="png")
-        except Exception as exc:
-            log.warning("pdf2image failed for proceeding %d: %s", proceeding_id, exc)
+        pdf_size_kb = len(pdf_bytes) // 1024
+        log.info("Proceeding %d: downloaded %d KB PDF", proceeding_id, pdf_size_kb)
+
+        # Clear any partial extraction rows from a prior failed attempt
+        existing_rows = database.execute(
+            "SELECT COUNT(*) FROM staging.proceeding_extractions WHERE proceeding_id = %s",
+            (proceeding_id,),
+        ) or []
+        existing_count = existing_rows[0][0] if existing_rows else 0
+        if existing_count:
+            database.execute(
+                "DELETE FROM staging.proceeding_extractions WHERE proceeding_id = %s",
+                (proceeding_id,),
+            )
+            log.info("Proceeding %d: cleared %d partial row(s) before retry", proceeding_id, existing_count)
+
+        _prior_inserted = extractions_inserted
+
+        # Build prompt — handle nullable meeting_date
+        date_clause = f" dated {meeting_date}" if meeting_date else ""
+        prompt = EXTRACTION_PROMPT.format(
+            body_name=body_name,
+            proceeding_type=proceeding_type,
+            date_clause=date_clause,
+        )
+
+        # Send entire PDF to the LLM in one call
+        result = invoke_with_retry(
+            config,
+            prompt,
+            pdf_bytes=pdf_bytes,
+            retries=1,
+            archive_key=f"{proceeding_id}",
+        )
+
+        if not result.success:
+            log.warning(
+                "LLM failed on proceeding %d: %s",
+                proceeding_id, result.error,
+            )
             errors += 1
+            # Don't insert sentinel — eligible for retry next run
             continue
 
-        total_pages = len(images)
-        log.info("Proceeding %d: %d pages", proceeding_id, total_pages)
-        _prior_inserted = extractions_inserted  # track per-proceeding count
-        _page_failures = 0  # track page-level failures for completion sentinel
+        extractions = (result.parsed or {}).get("extractions", [])
 
-        # Process each page
-        with tempfile.TemporaryDirectory() as tmpdir:
-            for page_num, page_image in enumerate(images, start=1):
-                img_path = os.path.join(tmpdir, f"page_{page_num:04d}.png")
-                page_image.save(img_path, format="PNG")
+        for extraction in extractions:
+            try:
+                confidence_label = extraction.get("confidence", "low")
+                confidence_float = _CONFIDENCE_MAP.get(confidence_label, 0.3)
 
-                prompt = EXTRACTION_PROMPT.format(
-                    body_name=body_name,
-                    page_num=page_num,
-                    total_pages=total_pages,
-                    proceeding_type=proceeding_type,
-                    meeting_date=str(meeting_date),
+                conditions = extraction.get("conditions")
+                conditions_json = json.dumps(conditions) if conditions else None
+
+                database.execute(
+                    """
+                    INSERT INTO staging.proceeding_extractions
+                        (proceeding_id, extraction_type, applicant_name,
+                         parcel_reference, current_zoning, proposed_zoning,
+                         decision, conditions, supporting_text,
+                         extraction_confidence, model_used, page_number)
+                    VALUES
+                        (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                    """,
+                    (
+                        proceeding_id,
+                        extraction.get("extraction_type"),
+                        extraction.get("applicant_name"),
+                        extraction.get("parcel_reference"),
+                        extraction.get("current_zoning"),
+                        extraction.get("proposed_zoning"),
+                        extraction.get("decision"),
+                        conditions_json,
+                        extraction.get("supporting_text"),
+                        confidence_float,
+                        Path(model_path).name,
+                        None,  # page_number not applicable for whole-document extraction
+                    ),
                 )
+                extractions_inserted += 1
+            except Exception as exc:
+                log.warning(
+                    "DB insert failed for proceeding %d extraction: %s",
+                    proceeding_id, exc,
+                )
+                errors += 1
 
-                result = invoke_with_retry(config, prompt, image_path=img_path, retries=1)
-                pages_processed += 1
-
-                if not result.success:
-                    log.warning(
-                        "LLM failed on proceeding %d page %d: %s",
-                        proceeding_id, page_num, result.error,
-                    )
-                    errors += 1
-                    _page_failures += 1
-                    continue
-
-                extractions = (result.parsed or {}).get("extractions", [])
-                if not extractions:
-                    continue
-
-                for extraction in extractions:
-                    try:
-                        confidence_label = extraction.get("confidence", "low")
-                        confidence_float = _CONFIDENCE_MAP.get(confidence_label, 0.3)
-
-                        conditions = extraction.get("conditions")
-                        conditions_json = json.dumps(conditions) if conditions else None
-
-                        database.execute(
-                            """
-                            INSERT INTO staging.proceeding_extractions
-                                (proceeding_id, extraction_type, applicant_name,
-                                 parcel_reference, current_zoning, proposed_zoning,
-                                 decision, conditions, supporting_text,
-                                 extraction_confidence, model_used, page_number)
-                            VALUES
-                                (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
-                            """,
-                            (
-                                proceeding_id,
-                                extraction.get("extraction_type"),
-                                extraction.get("applicant_name"),
-                                extraction.get("parcel_reference"),
-                                extraction.get("current_zoning"),
-                                extraction.get("proposed_zoning"),
-                                extraction.get("decision"),
-                                conditions_json,
-                                extraction.get("supporting_text"),
-                                confidence_float,
-                                Path(model_path).name,
-                                page_num,
-                            ),
-                        )
-                        extractions_inserted += 1
-                    except Exception as exc:
-                        log.warning(
-                            "DB insert failed for proceeding %d page %d extraction: %s",
-                            proceeding_id, page_num, exc,
-                        )
-                        errors += 1
-
-        # Sentinel logic: only mark as complete if ALL pages were processed
-        # without failure. Partial failures leave the proceeding eligible for
-        # retry on the next run.
+        # Sentinel logic
         proceeding_extraction_count = extractions_inserted - _prior_inserted
+        sentinel_type = "_complete" if proceeding_extraction_count > 0 else "_no_extractions"
 
-        if _page_failures > 0:
-            log.warning(
-                "Proceeding %d: %d of %d pages failed — NOT marking complete "
-                "(will retry on next run)",
-                proceeding_id, _page_failures, total_pages,
-            )
-            # Don't insert any sentinel — the proceeding stays eligible
-        elif proceeding_extraction_count == 0:
-            # All pages succeeded but nothing was extracted — mark as
-            # intentionally empty so we don't re-process a blank document.
+        if proceeding_extraction_count == 0:
             try:
                 database.execute(
                     """
                     INSERT INTO staging.proceeding_extractions
-                        (proceeding_id, extraction_type, extraction_confidence,
-                         model_used, page_number)
+                        (proceeding_id, extraction_type, extraction_confidence, model_used, page_number)
                     VALUES (%s, '_no_extractions', 0.0, %s, 0)
                     ON CONFLICT DO NOTHING
                     """,
@@ -280,52 +258,35 @@ def proceeding_extraction(
                 )
             except Exception as exc:
                 log.warning("Failed to insert no-extractions sentinel for %d: %s", proceeding_id, exc)
-            # Also insert _complete since all pages ran cleanly
-            try:
-                database.execute(
-                    """
-                    INSERT INTO staging.proceeding_extractions
-                        (proceeding_id, extraction_type, extraction_confidence,
-                         model_used, page_number)
-                    VALUES (%s, '_complete', 1.0, %s, %s)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (proceeding_id, Path(model_path).name, total_pages),
-                )
-            except Exception as exc:
-                log.warning("Failed to insert completion sentinel for %d: %s", proceeding_id, exc)
-        else:
-            # Pages all succeeded AND we got real extractions — mark complete
-            try:
-                database.execute(
-                    """
-                    INSERT INTO staging.proceeding_extractions
-                        (proceeding_id, extraction_type, extraction_confidence,
-                         model_used, page_number)
-                    VALUES (%s, '_complete', 1.0, %s, %s)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (proceeding_id, Path(model_path).name, total_pages),
-                )
-            except Exception as exc:
-                log.warning("Failed to insert completion sentinel for %d: %s", proceeding_id, exc)
+
+        try:
+            database.execute(
+                """
+                INSERT INTO staging.proceeding_extractions
+                    (proceeding_id, extraction_type, extraction_confidence, model_used, page_number)
+                VALUES (%s, '_complete', 1.0, %s, 0)
+                ON CONFLICT DO NOTHING
+                """,
+                (proceeding_id, Path(model_path).name),
+            )
+        except Exception as exc:
+            log.warning("Failed to insert completion sentinel for %d: %s", proceeding_id, exc)
 
         proceedings_processed += 1
         log.info(
-            "Proceeding %d complete: %d pages, %d extractions so far",
-            proceeding_id, total_pages, extractions_inserted,
+            "Proceeding %d complete: %d extractions (total so far: %d)",
+            proceeding_id, proceeding_extraction_count, extractions_inserted,
         )
 
     log.info(
-        "Pass 0 complete: %d proceedings, %d pages, %d extractions, %d errors",
-        proceedings_processed, pages_processed, extractions_inserted, errors,
+        "Pass 0 complete: %d proceedings, %d extractions, %d errors",
+        proceedings_processed, extractions_inserted, errors,
     )
 
     return MaterializeResult(
         metadata={
             "status": MetadataValue.text("complete"),
             "proceedings_processed": MetadataValue.int(proceedings_processed),
-            "pages_processed": MetadataValue.int(pages_processed),
             "extractions_inserted": MetadataValue.int(extractions_inserted),
             "errors": MetadataValue.int(errors),
         }
@@ -339,7 +300,6 @@ def _skipped_result(reason: str) -> MaterializeResult:
             "reason": MetadataValue.text(reason),
             "proceedings_processed": MetadataValue.int(0),
             "extractions_inserted": MetadataValue.int(0),
-            "pages_processed": MetadataValue.int(0),
             "errors": MetadataValue.int(0),
         }
     )

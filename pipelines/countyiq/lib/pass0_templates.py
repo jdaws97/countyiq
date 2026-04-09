@@ -1,9 +1,9 @@
 """Prompt templates for Pass 0: Document Intelligence."""
 
 EXTRACTION_PROMPT = """You are reading a municipal meeting document from {body_name}, York County, PA.
-This is page {page_num} of {total_pages} from a {proceeding_type} meeting on {meeting_date}.
+This is a {proceeding_type} meeting document{date_clause}.
 
-Extract ALL of the following if present on this page:
+Read the ENTIRE document and extract ALL of the following if present:
 - Rezoning applications (applicant, parcel/address, current zoning, proposed zoning, decision)
 - Variance requests (applicant, parcel/address, variance type, decision)
 - Conditional use permits (applicant, parcel/address, proposed use, decision)
@@ -15,7 +15,7 @@ For each extracted record, include:
 - The exact text from the document that supports your extraction
 - Your confidence level (high/medium/low)
 
-If this page contains no relevant records, return {{"extractions": []}}.
+If the document contains no relevant records, return {{"extractions": []}}.
 
 OUTPUT FORMAT:
 {{
