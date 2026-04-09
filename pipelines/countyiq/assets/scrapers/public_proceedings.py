@@ -11,6 +11,7 @@ Strategy:
   - Return MaterializeResult with counts
 """
 
+import hashlib
 import random
 import re
 import time
@@ -76,7 +77,7 @@ def public_proceedings_scrape(
                 "pdfs_found": MetadataValue.int(0),
                 "pdfs_new": MetadataValue.int(0),
                 "pdfs_skipped_duplicate": MetadataValue.int(0),
-                "pdfs_skipped_no_date": MetadataValue.int(0),
+                "pdfs_null_date": MetadataValue.int(0),
                 "pdfs_archived": MetadataValue.int(0),
                 "errors": MetadataValue.int(0),
             }
@@ -90,7 +91,7 @@ def public_proceedings_scrape(
     pdfs_found = 0
     pdfs_new = 0
     pdfs_skipped_duplicate = 0
-    pdfs_skipped_no_date = 0
+    pdfs_null_date = 0
     pdfs_archived = 0
     errors = 0
 
@@ -134,12 +135,11 @@ def public_proceedings_scrape(
                 meeting_date = parse_meeting_date_from_filename(link_text)
 
             if meeting_date is None:
-                log.warning(
-                    "'%s': could not parse meeting date from '%s' (link_text=%r) — skipping",
+                log.info(
+                    "'%s': no date parsed from '%s' (link_text=%r) — will insert with NULL date",
                     body_name, filename, link_text,
                 )
-                pdfs_skipped_no_date += 1
-                continue
+                pdfs_null_date += 1
 
             # --- Resolve proceeding type (override from filename if more specific) ---
             classified = classify_proceeding_type(filename, link_text)
@@ -174,6 +174,16 @@ def public_proceedings_scrape(
                 _throttle()
                 continue
 
+            # --- Content-hash dedup (catches same-URL overwrites) ---
+            content_hash = hashlib.sha256(pdf_bytes).hexdigest()
+            if _content_hash_exists(database, content_hash):
+                log.debug(
+                    "'%s': content hash match for '%s' — skipping",
+                    body_name, filename,
+                )
+                pdfs_skipped_duplicate += 1
+                continue
+
             # --- Archive to R2 ---
             safe_body = _safe_name(body_name)
             r2_path = (
@@ -203,6 +213,7 @@ def public_proceedings_scrape(
                     proceeding_type=resolved_type,
                     source_url=minutes_url,
                     document_url=document_url,
+                    content_hash=content_hash,
                 )
                 pdfs_new += 1
                 log.info(
@@ -223,9 +234,9 @@ def public_proceedings_scrape(
 
     log.info(
         "Scrape complete: %d PDFs found, %d new, %d duplicates, "
-        "%d missing date, %d archived, %d errors",
+        "%d null date, %d archived, %d errors",
         pdfs_found, pdfs_new, pdfs_skipped_duplicate,
-        pdfs_skipped_no_date, pdfs_archived, errors,
+        pdfs_null_date, pdfs_archived, errors,
     )
 
     return MaterializeResult(
@@ -235,7 +246,7 @@ def public_proceedings_scrape(
             "pdfs_found": MetadataValue.int(pdfs_found),
             "pdfs_new": MetadataValue.int(pdfs_new),
             "pdfs_skipped_duplicate": MetadataValue.int(pdfs_skipped_duplicate),
-            "pdfs_skipped_no_date": MetadataValue.int(pdfs_skipped_no_date),
+            "pdfs_null_date": MetadataValue.int(pdfs_null_date),
             "pdfs_archived": MetadataValue.int(pdfs_archived),
             "errors": MetadataValue.int(errors),
             "current_records": MetadataValue.int(_get_current_count(database)),
@@ -263,22 +274,40 @@ def _already_exists(database: DatabaseResource, body_name: str, document_url: st
     return bool(rows)
 
 
+def _content_hash_exists(database: DatabaseResource, content_hash: str) -> bool:
+    """Return True if a PDF with this SHA-256 hash is already stored."""
+    rows = database.execute(
+        """
+        SELECT 1
+        FROM staging.public_proceedings
+        WHERE content_hash = %s
+          AND valid_to IS NULL
+        LIMIT 1
+        """,
+        (content_hash,),
+    )
+    return bool(rows)
+
+
 def _insert_proceeding(
     database: DatabaseResource,
     body_name: str,
-    meeting_date: str,
+    meeting_date: str | None,
     proceeding_type: str,
     source_url: str,
     document_url: str,
+    content_hash: str | None = None,
 ) -> None:
     """Insert a new public proceedings row with SCD2 valid_from."""
     database.execute(
         """
         INSERT INTO staging.public_proceedings
-            (body_name, meeting_date, proceeding_type, source_url, document_url, valid_from)
-        VALUES (%s, %s, %s, %s, %s, NOW())
+            (body_name, meeting_date, proceeding_type, source_url, document_url,
+             content_hash, valid_from)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
         """,
-        (body_name, meeting_date, proceeding_type, source_url, document_url),
+        (body_name, meeting_date, proceeding_type, source_url, document_url,
+         content_hash),
     )
 
 
