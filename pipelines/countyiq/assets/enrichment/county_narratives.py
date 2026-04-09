@@ -56,6 +56,13 @@ CLEANUP_EXPIRED_QUERY = """
     WHERE expires_at < NOW()
 """
 
+# Delete existing narratives of a given type before inserting fresh ones.
+# This prevents duplicate accumulation across weekly runs.
+DEDUPE_NARRATIVE_TYPE_QUERY = """
+    DELETE FROM public.county_narratives
+    WHERE narrative_type = %(narrative_type)s
+"""
+
 # Gather briefs for a list of PIDNs
 BRIEFS_FOR_PIDNS_QUERY = """
     SELECT
@@ -78,8 +85,15 @@ PROCEEDINGS_FOR_PIDNS_QUERY = """
         pp.body_name AS body
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
-    WHERE pe.parcel_reference = ANY(%(pidns)s)
-      AND pp.valid_to IS NULL
+    WHERE pp.valid_to IS NULL
+      AND pe.extraction_type NOT IN ('_complete', '_no_extractions')
+      AND (
+          pe.parcel_reference = ANY(%(pidns)s)
+          OR pe.parcel_reference IN (
+              SELECT propadr FROM staging.parcels
+              WHERE pidn = ANY(%(pidns)s) AND valid_to IS NULL AND propadr IS NOT NULL
+          )
+      )
     ORDER BY pp.meeting_date DESC
     LIMIT 20
 """
@@ -100,17 +114,25 @@ DEEDS_FOR_ENTITY_QUERY = """
     LIMIT 20
 """
 
-# ZHB decisions per municipality
+# ZHB decisions per municipality — matches by PIDN or address
 ZHB_DECISIONS_QUERY = """
     SELECT
         pe.decision,
         COUNT(*) AS cnt
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
-    JOIN staging.parcels p ON p.pidn = pe.parcel_reference AND p.valid_to IS NULL
     WHERE pp.valid_to IS NULL
-      AND p.municipality = %(municipality)s
+      AND pe.extraction_type NOT IN ('_complete', '_no_extractions')
       AND pe.extraction_type ILIKE '%%zoning%%'
+      AND EXISTS (
+          SELECT 1 FROM staging.parcels p
+          WHERE p.valid_to IS NULL
+            AND p.municipality = %(municipality)s
+            AND (
+                p.pidn = pe.parcel_reference
+                OR (p.propadr IS NOT NULL AND p.propadr = pe.parcel_reference)
+            )
+      )
     GROUP BY pe.decision
 """
 
@@ -176,10 +198,14 @@ def county_narratives(
     )
 
     # ------------------------------------------------------------------
-    # Cleanup expired narratives
+    # Cleanup: remove expired narratives AND delete all current narratives
+    # for each type we're about to regenerate. This prevents duplicate
+    # accumulation across weekly runs.
     # ------------------------------------------------------------------
     database.execute(CLEANUP_EXPIRED_QUERY)
-    log.info("Cleaned up expired narratives")
+    for ntype in ("corridor", "municipality", "owner_portfolio", "market_segment"):
+        database.execute(DEDUPE_NARRATIVE_TYPE_QUERY, {"narrative_type": ntype})
+    log.info("Cleaned up expired + stale narratives")
 
     counts = {
         "corridor": 0,
@@ -199,9 +225,17 @@ def county_narratives(
 
         for row in corridor_rows:
             try:
-                signal_key = row[0] if isinstance(row, (tuple, list)) else row.get("signal_key")
-                cluster_pidns = row[1] if isinstance(row, (tuple, list)) else row.get("cluster_pidns")
-                cluster_size = row[2] if isinstance(row, (tuple, list)) else row.get("cluster_size")
+                # CORRIDOR_SCAN_QUERY returns: signal_key, municipality, cluster_pidns, cluster_size
+                if isinstance(row, (tuple, list)):
+                    signal_key = row[0]
+                    municipality = row[1]
+                    cluster_pidns = row[2]
+                    cluster_size = row[3]
+                else:
+                    signal_key = row.get("signal_key")
+                    municipality = row.get("municipality")
+                    cluster_pidns = row.get("cluster_pidns")
+                    cluster_size = row.get("cluster_size")
 
                 # Gather briefs and proceedings for the cluster
                 briefs_rows = database.execute(BRIEFS_FOR_PIDNS_QUERY, {"pidns": cluster_pidns}) or []

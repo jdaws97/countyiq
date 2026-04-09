@@ -94,7 +94,11 @@ CORRIDOR_SCAN_QUERY = """
         cluster_pidns,
         array_length(cluster_pidns, 1) AS cluster_size
     FROM signal_clusters
-    WHERE array_length(cluster_pidns, 1) >= 3
+    -- NOTE: This groups by (signal_key, municipality) which can merge
+    -- spatially disconnected clusters within the same municipality.
+    -- Cap at 30 parcels to limit false-merge damage. True connected-
+    -- component clustering (ST_ClusterDBSCAN) lives in pass2_spatial_validation.
+    WHERE array_length(cluster_pidns, 1) BETWEEN 3 AND 30
     ORDER BY array_length(cluster_pidns, 1) DESC
 """
 

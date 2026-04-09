@@ -118,9 +118,14 @@ def proceeding_extraction(
         WHERE pp.valid_to IS NULL
           AND pp.document_url IS NOT NULL
           AND NOT EXISTS (
+              -- Only skip proceedings that have been FULLY extracted.
+              -- A proceeding is fully extracted when it has a sentinel row
+              -- with extraction_type = '_complete'. Partial extractions
+              -- (some pages succeeded, others failed) will be retried.
               SELECT 1
               FROM staging.proceeding_extractions pe
               WHERE pe.proceeding_id = pp.id
+                AND pe.extraction_type = '_complete'
           )
         ORDER BY pp.meeting_date DESC
         """
@@ -174,6 +179,7 @@ def proceeding_extraction(
         total_pages = len(images)
         log.info("Proceeding %d: %d pages", proceeding_id, total_pages)
         _prior_inserted = extractions_inserted  # track per-proceeding count
+        _page_failures = 0  # track page-level failures for completion sentinel
 
         # Process each page
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -198,6 +204,7 @@ def proceeding_extraction(
                         proceeding_id, page_num, result.error,
                     )
                     errors += 1
+                    _page_failures += 1
                     continue
 
                 extractions = (result.parsed or {}).get("extractions", [])
@@ -245,12 +252,21 @@ def proceeding_extraction(
                         )
                         errors += 1
 
-        # If no extractions were found across all pages, insert a sentinel
-        # row so the NOT EXISTS check stops re-selecting this proceeding on
-        # subsequent runs.  extraction_type='_no_extractions' marks this as a
-        # deliberate zero-result marker, not a real extraction.
+        # Sentinel logic: only mark as complete if ALL pages were processed
+        # without failure. Partial failures leave the proceeding eligible for
+        # retry on the next run.
         proceeding_extraction_count = extractions_inserted - _prior_inserted
-        if proceeding_extraction_count == 0:
+
+        if _page_failures > 0:
+            log.warning(
+                "Proceeding %d: %d of %d pages failed — NOT marking complete "
+                "(will retry on next run)",
+                proceeding_id, _page_failures, total_pages,
+            )
+            # Don't insert any sentinel — the proceeding stays eligible
+        elif proceeding_extraction_count == 0:
+            # All pages succeeded but nothing was extracted — mark as
+            # intentionally empty so we don't re-process a blank document.
             try:
                 database.execute(
                     """
@@ -262,15 +278,37 @@ def proceeding_extraction(
                     """,
                     (proceeding_id, Path(model_path).name),
                 )
-                log.info(
-                    "Proceeding %d: zero extractions across %d pages, sentinel inserted",
-                    proceeding_id, total_pages,
+            except Exception as exc:
+                log.warning("Failed to insert no-extractions sentinel for %d: %s", proceeding_id, exc)
+            # Also insert _complete since all pages ran cleanly
+            try:
+                database.execute(
+                    """
+                    INSERT INTO staging.proceeding_extractions
+                        (proceeding_id, extraction_type, extraction_confidence,
+                         model_used, page_number)
+                    VALUES (%s, '_complete', 1.0, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (proceeding_id, Path(model_path).name, total_pages),
                 )
             except Exception as exc:
-                log.warning(
-                    "Failed to insert sentinel for proceeding %d: %s",
-                    proceeding_id, exc,
+                log.warning("Failed to insert completion sentinel for %d: %s", proceeding_id, exc)
+        else:
+            # Pages all succeeded AND we got real extractions — mark complete
+            try:
+                database.execute(
+                    """
+                    INSERT INTO staging.proceeding_extractions
+                        (proceeding_id, extraction_type, extraction_confidence,
+                         model_used, page_number)
+                    VALUES (%s, '_complete', 1.0, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (proceeding_id, Path(model_path).name, total_pages),
                 )
+            except Exception as exc:
+                log.warning("Failed to insert completion sentinel for %d: %s", proceeding_id, exc)
 
         proceedings_processed += 1
         log.info(

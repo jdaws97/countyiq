@@ -60,8 +60,17 @@ PROCEEDINGS_FOR_PARCEL_QUERY = """
         pe.supporting_text
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
-    WHERE pe.parcel_reference = %(pidn)s
-      AND pp.valid_to IS NULL
+    WHERE pp.valid_to IS NULL
+      AND pe.extraction_type NOT IN ('_complete', '_no_extractions')
+      AND (
+          -- Match by exact PIDN
+          pe.parcel_reference = %(pidn)s
+          -- OR match by address (LLM may extract address instead of PIDN)
+          OR pe.parcel_reference IN (
+              SELECT propadr FROM staging.parcels
+              WHERE pidn = %(pidn)s AND valid_to IS NULL AND propadr IS NOT NULL
+          )
+      )
     ORDER BY pp.meeting_date DESC, pe.id
 """
 

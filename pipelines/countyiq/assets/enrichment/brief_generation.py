@@ -39,19 +39,17 @@ from countyiq.resources.database import DatabaseResource
 
 PARCELS_NEEDING_BRIEFS_QUERY = """
     -- Selects parcels that need a brief for any of these reasons:
-    --   1. Has medium/high evidence but no brief yet (new parcel)
-    --   2. Has a brief but the last generation is older than 7 days
-    --      (stale — the input-hash check in Python handles whether the
-    --      context actually changed; this just ensures it enters the
-    --      candidate set for recheck)
+    --   1. Has medium/high evidence but no brief yet
+    --   2. Has evidence that was validated MORE RECENTLY than the current brief
+    --      (upstream Pass 2 produced new/updated evidence since the brief was written)
     SELECT DISTINCT e.pidn
     FROM public.evidence e
     LEFT JOIN public.parcel_briefs pb
         ON pb.pidn = e.pidn
     WHERE e.adjusted_significance IN ('high', 'medium')
       AND (
-          pb.pidn IS NULL                           -- Reason 1: no brief yet
-          OR pb.generated_at < NOW() - INTERVAL '7 days'  -- Reason 2: stale brief
+          pb.pidn IS NULL                              -- Reason 1: no brief
+          OR e.validated_at > pb.generated_at           -- Reason 2: evidence is fresher than brief
       )
     ORDER BY e.pidn
 """

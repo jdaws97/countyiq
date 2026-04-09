@@ -175,8 +175,59 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         pa_dos_search_url="https://file.dos.pa.gov/search/business",
         pa_dos_min_records=100,
         municipality_websites=(
-            # Seed with a few known municipalities to prove the pipeline works
-            # Full list will be populated by researching each municipality's website
+            # 42 municipalities with confirmed meeting minutes pages.
+            # Format: (body_name, minutes_page_url, proceeding_type)
+            # Scraped 2026-04-08. Remaining 30 either have no website or
+            # no discoverable minutes page.
+
+            # === CivicPlus AgendaCenter sites (most reliable for PDF scraping) ===
+            ("Hallam Borough Council", "https://hallamborough.com/AgendaCenter", "borough_council"),
+            ("Hanover Borough Council", "https://hanoverboroughpa.gov/AgendaCenter", "borough_council"),
+            ("Lewisberry Borough Council", "https://lewisberryborough.org/AgendaCenter/", "borough_council"),
+            ("Manchester Borough Council", "https://manchesterborough.gov/AgendaCenter/", "borough_council"),
+            ("Manheim Twp Board of Supervisors", "https://manheimtownship.org/AgendaCenter", "board_of_supervisors"),
+            ("Monaghan Twp Board of Supervisors", "https://monaghantownship.com/AgendaCenter", "board_of_supervisors"),
+            ("New Salem Borough Council", "https://newsalemborough.org/AgendaCenter/", "borough_council"),
+            ("Springfield Twp Board of Supervisors", "https://springfieldtownship.com/AgendaCenter", "board_of_supervisors"),
+            ("York Haven Borough Council", "https://yorkhavenborough.org/AgendaCenter/", "borough_council"),
+
+            # === WordPress / custom CMS sites ===
+            ("Carroll Twp Board of Supervisors", "https://www.carrolltownship.com/bos-agenda-2024/", "board_of_supervisors"),
+            ("Codorus Twp Board of Supervisors", "https://codorustownship.org/meeting-minutes/", "board_of_supervisors"),
+            ("Conewago Twp Board of Supervisors", "https://conewagotownship.com/boards-and-commissions/board-of-supervisors/minutes/", "board_of_supervisors"),
+            ("Dover Twp Board of Supervisors", "https://www.dovertownship.org/minutes/", "board_of_supervisors"),
+            ("East Hopewell Twp Board of Supervisors", "https://www.easthopewelltownshippa.gov/meetings", "board_of_supervisors"),
+            ("East Prospect Borough Council", "https://www.eastprospectborough.com/minutes", "borough_council"),
+            ("Fairview Twp Board of Supervisors", "https://www.fairviewtownship.com/boards/supervisors/minutes", "board_of_supervisors"),
+            ("Fawn Grove Borough Council", "https://fawngroveborough.org/documents/council-meeting-minutes/", "borough_council"),
+            ("Felton Borough Council", "https://feltonboroughpa.com/documents/minutes/", "borough_council"),
+            ("Fawn Twp Board of Supervisors", "https://fawntownship.com/meetings/", "board_of_supervisors"),
+            ("Franklin Twp Board of Supervisors", "https://franklintownship.org/meeting-minutes-agendas/", "board_of_supervisors"),
+            ("Hellam Twp Board of Supervisors", "https://www.hellamtownship.gov/departments/public-meetings/", "board_of_supervisors"),
+            ("Hopewell Twp Board of Supervisors", "https://www.hopewelltownship.com/public-meetings/board-of-supervisors/", "board_of_supervisors"),
+            ("Jackson Twp Board of Supervisors", "https://jackson-township.org/meeting-agendas/", "board_of_supervisors"),
+            ("North York Borough Council", "https://northyorkborough.com/borough-council-meeting-minutes/", "borough_council"),
+            ("Paradise Twp Board of Supervisors", "https://paradisetownship.org/documents/board-of-supervisor-agenda-notices/", "board_of_supervisors"),
+            ("Peach Bottom Twp Board of Supervisors", "https://www.peachbottomtownship.org/meeting-minutes", "board_of_supervisors"),
+            ("Penn Twp Board of Supervisors", "https://penntownship.org/meeting-minutes/", "board_of_supervisors"),
+            ("Seven Valleys Borough Council", "https://sevenvalleysborough.com/minutes/", "borough_council"),
+            ("Shrewsbury Borough Council", "https://shrewsburyborough.org/minutes/", "borough_council"),
+            ("Shrewsbury Twp Board of Supervisors", "https://www.shrewsburytownship.org/minutes/", "board_of_supervisors"),
+            ("Wellsville Borough Council", "https://wellsvilleborough.com/boards-commissions/borough-council-agenda-budget/", "borough_council"),
+            ("West Manchester Twp Board of Supervisors", "https://www.westmanchestertownship.com/boards-committees/board-of-supervisors/", "board_of_supervisors"),
+            ("Windsor Twp Board of Supervisors", "https://windsortownship.com/events-minutes/board-of-trustees/", "board_of_supervisors"),
+            ("Wrightsville Borough Council", "https://wrightsvilleborough.com/meeting-minutes/", "borough_council"),
+            ("Yoe Borough Council", "https://yoeborough.org/information/minutes/", "borough_council"),
+            ("Yorkana Borough Council", "https://yorkanaborough.com/meeting-minutes/", "borough_council"),
+            ("York City Council", "https://www.yorkcity.org/government/city-council/meetings/", "city_council"),
+            ("York Twp Board of Commissioners", "https://yorktownshippa.gov/ZHB", "zoning_hearing"),
+
+            # === Large municipalities found via extra search ===
+            ("Springettsbury Twp Board of Supervisors", "https://springettsbury.com/", "board_of_supervisors"),
+            ("Manchester Twp Board of Supervisors", "https://www.manchestertwp.org/", "board_of_supervisors"),
+
+            # === York County Commissioners ===
+            ("York County Commissioners", "https://yorkcountypa.gov/817/Meeting-Agendas-and-Minutes", "county_commissioners"),
         ),
         s3_prefix="york",
     ),
