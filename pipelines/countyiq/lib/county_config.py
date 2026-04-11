@@ -197,17 +197,19 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             # --- WordPress / custom CMS sites ---
             ("Carroll Twp Board of Supervisors", "https://www.carrolltownship.com/bos-agenda-2024/", "board_of_supervisors"),
             ("Codorus Twp Board of Supervisors", "https://codorustownship.org/meeting-minutes/", "board_of_supervisors"),
-            # Conewago posts minutes on year-specific archive pages; update annually
-            ("Conewago Twp Board of Supervisors", "https://conewagotownship.com/2026-board-of-supervisors-minutes/", "board_of_supervisors"),
+            # York County's Conewago Twp is conewagotwp.com (conewagotownship.com is Dauphin County)
+            ("Conewago Twp Board of Supervisors", "https://www.conewagotwp.com/board-of-supervisors/", "board_of_supervisors"),
             ("Dallastown Borough Council", "https://dallastownboro.com/meetings-agendas-minutes/", "borough_council"),
             ("Dover Twp Board of Supervisors", "https://www.dovertownship.org/minutes/", "board_of_supervisors"),
             # East Hopewell is a Wix site; minutes live under /board-of-supervisors
             ("East Hopewell Twp Board of Supervisors", "https://www.easthopewelltownshippa.gov/board-of-supervisors", "board_of_supervisors"),
             ("East Manchester Twp Board of Supervisors", "https://emanchestertwp.com/boards-and-committees/meetings-archive/", "board_of_supervisors"),
             ("East Prospect Borough Council", "https://www.eastprospectborough.com/minutes", "borough_council"),
-            ("Fairview Twp Board of Supervisors", "https://www.fairviewtownship.com/boards/supervisors/minutes", "board_of_supervisors"),
+            # Fairview Twp actual site is twp.fairview.pa.us (not fairviewtownship.com)
+            ("Fairview Twp Board of Supervisors", "https://twp.fairview.pa.us/board-of-supervisors/", "board_of_supervisors"),
             ("Fawn Grove Borough Council", "https://fawngroveborough.org/documents/council-meeting-minutes/", "borough_council"),
-            ("Fawn Twp Board of Supervisors", "https://fawntownship.com/meetings/", "board_of_supervisors"),
+            # Fawn Twp actual site is fawntwp.org (not fawntownship.com which has WordPress error)
+            ("Fawn Twp Board of Supervisors", "https://fawntwp.org/monthly-meeting-minutes/", "board_of_supervisors"),
             ("Felton Borough Council", "https://feltonboroughpa.com/documents/minutes/", "borough_council"),
             ("Franklin Twp Board of Supervisors", "https://franklintownship.org/meeting-minutes-agendas/", "board_of_supervisors"),
             ("Goldsboro Borough Council", "https://goldsboropa.com/document-library-2/", "borough_council"),
@@ -220,7 +222,8 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ("North York Borough Council", "https://northyorkborough.com/borough-council-meeting-minutes/", "borough_council"),
             ("Paradise Twp Board of Supervisors", "https://paradisetownship.org/documents/board-of-supervisor-agenda-notices/", "board_of_supervisors"),
             ("Peach Bottom Twp Board of Supervisors", "https://www.peachbottomtownship.org/meeting-minutes", "board_of_supervisors"),
-            ("Penn Twp Board of Supervisors", "https://penntownship.org/meeting-minutes/", "board_of_supervisors"),
+            # Penn Twp /meeting-minutes/ page is empty; all 238 PDFs live at /documents/
+            ("Penn Twp Board of Supervisors", "https://penntownship.org/documents/", "board_of_supervisors"),
             ("Red Lion Borough Council", "https://redlionpa.org/government/agendas-minutes/borough-council-agendas-minutes/", "borough_council"),
             ("Seven Valleys Borough Council", "https://sevenvalleysborough.com/minutes/", "borough_council"),
             ("Shrewsbury Borough Council", "https://shrewsburyborough.org/minutes/", "borough_council"),
@@ -265,10 +268,11 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             # ZONING HEARING BOARDS (ZHB)
             # ================================================================
             ("Carroll Twp Zoning Hearing Board", "https://www.carrolltownship.com/zoning-hearing-board/", "zoning_hearing"),
-            ("Conewago Twp Zoning Hearing Board", "https://conewagotownship.com/boards-and-commissions/zoning-hearing-board/", "zoning_hearing"),
+            # Year-specific URL; update annually
+            ("Conewago Twp Zoning Hearing Board", "https://www.conewagotwp.com/2026-zoning-agendas-minutes/", "zoning_hearing"),
             ("Dover Twp Zoning Hearing Board", "https://www.dovertownship.org/boards/zoning-hearing-board/", "zoning_hearing"),
             ("East Manchester Twp Zoning Hearing Board", "https://emanchestertwp.com/boards-and-committees/zoning-hearing-board/", "zoning_hearing"),
-            ("Fairview Twp Zoning Hearing Board", "https://www.fairviewtownship.com/zoning/zoning-department", "zoning_hearing"),
+            ("Fairview Twp Zoning Hearing Board", "https://twp.fairview.pa.us/zoning-hearing-board/", "zoning_hearing"),
             ("Goldsboro Boro Zoning Hearing Board", "https://goldsboropa.com/zoning-hearing-board/", "zoning_hearing"),
             ("Hanover Boro Zoning Hearing Board", "https://hanoverboroughpa.gov/AgendaCenter/Zoning-Hearing-Board-11", "zoning_hearing"),
             ("Hellam Twp Zoning Hearing Board", "https://www.hellamtownship.gov/government/zoning-hearing-board/", "zoning_hearing"),
@@ -292,11 +296,12 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             # PLANNING COMMISSIONS (PC)
             # ================================================================
             ("Carroll Twp Planning Commission", "https://www.carrolltownship.com/planning-commission/", "planning_commission"),
-            ("Conewago Twp Planning Commission", "https://conewagotownship.com/boards-and-commissions/planning-commission/", "planning_commission"),
+            # Year-specific URL; update annually
+            ("Conewago Twp Planning Commission", "https://www.conewagotwp.com/2026-planning-agendas-minutes/", "planning_commission"),
             ("Dover Twp Planning Commission", "https://www.dovertownship.org/boards/planning-commission/", "planning_commission"),
             ("East Hopewell Twp Planning Commission", "https://www.easthopewelltownshippa.gov/planning-commission", "planning_commission"),
             ("East Manchester Twp Planning Commission", "https://emanchestertwp.com/boards-and-committees/planning-commission/", "planning_commission"),
-            ("Fairview Twp Planning Commission", "https://www.fairviewtownship.com/planning-commission", "planning_commission"),
+            ("Fairview Twp Planning Commission", "https://twp.fairview.pa.us/planning-commission/", "planning_commission"),
             ("Franklin Twp Planning Commission", "https://franklintownship.org/planning-commission-meeting-minutesagendas/", "planning_commission"),
             ("Goldsboro Boro Planning Commission", "https://goldsboropa.com/planning-commission/", "planning_commission"),
             ("Hanover Boro Planning Commission", "https://hanoverboroughpa.gov/AgendaCenter/Planning-Commission-8", "planning_commission"),
@@ -304,7 +309,8 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ("Hopewell Twp Planning Commission", "https://www.hopewelltownship.com/public-meetings/planning-commission-board/", "planning_commission"),
             ("North Codorus Twp Planning Commission", "https://northcodorustwp.org/planning-commission-2/", "planning_commission"),
             ("Paradise Twp Planning Commission", "https://paradisetownship.org/documents/planning-commission-agendas-minutes/", "planning_commission"),
-            ("Penn Twp Planning Commission", "https://penntownship.org/planning-commission/", "planning_commission"),
+            # Penn Twp's /documents/ page holds both BOS and PC documents; classifier routes by filename
+            ("Penn Twp Planning Commission", "https://penntownship.org/documents/", "planning_commission"),
             ("Red Lion Boro Planning Commission", "https://redlionpa.org/government/agendas-minutes/2023-planning-commission-agendas-minutes/", "planning_commission"),
             ("Shrewsbury Twp Planning Commission", "https://www.shrewsburytownship.org/government/planning-commission/", "planning_commission"),
             ("Spring Garden Twp Planning Commission", "https://www.springgardentwp.org/planning-commission/", "planning_commission"),
