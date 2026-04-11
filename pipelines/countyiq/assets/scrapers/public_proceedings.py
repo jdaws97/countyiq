@@ -2,7 +2,10 @@
 
 Strategy:
   - Read municipality_websites from county config (body_name, minutes_url, proceeding_type)
-  - For each municipality, GET the minutes page and extract PDF links
+  - For each municipality:
+      1. GET the minutes page via simple HTTP and extract PDF links
+      2. If 0 PDFs found, retry via headless Playwright (handles JS-rendered sites
+         like CivicEngage AgendaCenter, CourseVector, Wix, GoDaddy, etc.)
   - For each new PDF (not already in staging.public_proceedings):
       - Download the PDF
       - Archive binary to R2
@@ -49,6 +52,79 @@ _HEADERS = {
     )
 }
 
+# How long to wait for JS-rendered content before grabbing the DOM
+_PLAYWRIGHT_NAV_TIMEOUT_MS = 20000
+_PLAYWRIGHT_SETTLE_MS = 2000
+
+
+class _PlaywrightFetcher:
+    """Lazy headless-browser fetcher for JS-rendered sites.
+
+    Reuses a single Chromium instance across all municipalities to avoid
+    the ~1s startup cost per page. Lazy-imports playwright so the scraper
+    can run without it installed if every site uses static HTML.
+    """
+
+    def __init__(self, log):
+        self._log = log
+        self._playwright = None
+        self._browser = None
+        self._unavailable = False
+
+    def _ensure_browser(self) -> bool:
+        if self._unavailable:
+            return False
+        if self._browser is not None:
+            return True
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            self._log.warning(
+                "playwright not installed — skipping JS-rendered fallback. "
+                "Install with: uv pip install playwright && playwright install chromium"
+            )
+            self._unavailable = True
+            return False
+        try:
+            self._playwright = sync_playwright().start()
+            self._browser = self._playwright.chromium.launch(headless=True)
+            self._log.info("Playwright Chromium launched for JS fallback")
+            return True
+        except Exception as exc:
+            self._log.warning("Failed to launch Playwright Chromium: %s", exc)
+            self._unavailable = True
+            return False
+
+    def fetch_html(self, url: str) -> str | None:
+        """Fetch the fully-rendered HTML for a URL, or None on failure."""
+        if not self._ensure_browser():
+            return None
+        try:
+            page = self._browser.new_page(user_agent=_HEADERS["User-Agent"])
+            try:
+                page.goto(url, timeout=_PLAYWRIGHT_NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+                page.wait_for_timeout(_PLAYWRIGHT_SETTLE_MS)
+                return page.content()
+            finally:
+                page.close()
+        except Exception as exc:
+            self._log.warning("Playwright fetch failed for %s: %s", url, exc)
+            return None
+
+    def close(self) -> None:
+        if self._browser is not None:
+            try:
+                self._browser.close()
+            except Exception:
+                pass
+        if self._playwright is not None:
+            try:
+                self._playwright.stop()
+            except Exception:
+                pass
+        self._browser = None
+        self._playwright = None
+
 
 @asset(
     group_name="scrapers",
@@ -75,6 +151,7 @@ def public_proceedings_scrape(
                 "status": MetadataValue.text("no_municipalities_configured"),
                 "municipalities_configured": MetadataValue.int(0),
                 "pdfs_found": MetadataValue.int(0),
+                "pdfs_via_playwright": MetadataValue.int(0),
                 "pdfs_new": MetadataValue.int(0),
                 "pdfs_skipped_duplicate": MetadataValue.int(0),
                 "pdfs_null_date": MetadataValue.int(0),
@@ -93,12 +170,16 @@ def public_proceedings_scrape(
     pdfs_skipped_duplicate = 0
     pdfs_null_date = 0
     pdfs_archived = 0
+    pdfs_via_playwright = 0
     errors = 0
+
+    playwright_fetcher = _PlaywrightFetcher(log)
 
     for body_name, minutes_url, proceeding_type in municipality_websites:
         log.info("Scraping '%s' at %s", body_name, minutes_url)
 
-        # --- Fetch the minutes listing page ---
+        # --- Fetch the minutes listing page (simple HTTP first) ---
+        html = None
         try:
             resp = requests.get(
                 minutes_url,
@@ -107,17 +188,38 @@ def public_proceedings_scrape(
                 allow_redirects=True,
             )
             resp.raise_for_status()
+            html = resp.text
         except Exception as exc:
             log.warning(
-                "Failed to fetch minutes page for '%s' (%s): %s",
+                "Simple HTTP fetch failed for '%s' (%s): %s — will try Playwright",
                 body_name, minutes_url, exc,
             )
+
+        # --- Parse PDF links ---
+        pdf_links = extract_pdf_links(html or "", minutes_url)
+
+        # --- Playwright fallback for sites that returned 0 PDFs ---
+        if not pdf_links:
+            log.info(
+                "'%s': simple HTTP found 0 PDFs — trying Playwright fallback",
+                body_name,
+            )
+            rendered_html = playwright_fetcher.fetch_html(minutes_url)
+            if rendered_html:
+                pdf_links = extract_pdf_links(rendered_html, minutes_url)
+                if pdf_links:
+                    pdfs_via_playwright += len(pdf_links)
+                    log.info(
+                        "'%s': Playwright fallback found %d PDFs",
+                        body_name, len(pdf_links),
+                    )
+
+        if not pdf_links and html is None:
+            # Both fetchers failed entirely
             errors += 1
             _throttle()
             continue
 
-        # --- Parse PDF links ---
-        pdf_links = extract_pdf_links(resp.text, minutes_url)
         pdfs_found += len(pdf_links)
         log.info(
             "'%s': found %d PDF link(s)", body_name, len(pdf_links)
@@ -232,10 +334,12 @@ def public_proceedings_scrape(
         # Throttle between municipalities too
         _throttle()
 
+    playwright_fetcher.close()
+
     log.info(
-        "Scrape complete: %d PDFs found, %d new, %d duplicates, "
+        "Scrape complete: %d PDFs found (%d via Playwright), %d new, %d duplicates, "
         "%d null date, %d archived, %d errors",
-        pdfs_found, pdfs_new, pdfs_skipped_duplicate,
+        pdfs_found, pdfs_via_playwright, pdfs_new, pdfs_skipped_duplicate,
         pdfs_null_date, pdfs_archived, errors,
     )
 
@@ -244,6 +348,7 @@ def public_proceedings_scrape(
             "status": MetadataValue.text("complete"),
             "municipalities_configured": MetadataValue.int(len(municipality_websites)),
             "pdfs_found": MetadataValue.int(pdfs_found),
+            "pdfs_via_playwright": MetadataValue.int(pdfs_via_playwright),
             "pdfs_new": MetadataValue.int(pdfs_new),
             "pdfs_skipped_duplicate": MetadataValue.int(pdfs_skipped_duplicate),
             "pdfs_null_date": MetadataValue.int(pdfs_null_date),

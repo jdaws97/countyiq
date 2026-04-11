@@ -101,6 +101,7 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
         re.IGNORECASE | re.DOTALL,
     )
     records = []
+    seen_urls: set[str] = set()
     for m in anchor_re.finditer(html):
         href = m.group(1).strip()
         raw_text = m.group(2)
@@ -108,13 +109,37 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
         link_text = re.sub(r"<[^>]+>", "", raw_text).strip()
         link_text = re.sub(r"\s+", " ", link_text)
 
-        # Only keep links that end with .pdf (case-insensitive)
+        # Keep links that either:
+        #   (a) end with .pdf, OR
+        #   (b) match a known PDF-serving route pattern where the URL has
+        #       no .pdf extension but the route returns application/pdf.
+        #       CivicEngage:   /AgendaCenter/ViewFile/...
+        #                       /DocumentCenter/View/...
+        #       CourseVector:  /document/<slug>/     (PA Boroughs template)
         path = urlparse(href).path
-        if not path.lower().endswith(".pdf"):
+        path_lower = path.lower()
+        is_pdf_ext = path_lower.endswith(".pdf")
+        is_civicengage = (
+            "/agendacenter/viewfile/" in path_lower
+            or "/documentcenter/view/" in path_lower
+        )
+        is_coursevector_doc = re.match(r"^/document/[^/]+/?$", path_lower) is not None
+        if not (is_pdf_ext or is_civicengage or is_coursevector_doc):
             continue
 
         absolute_url = urljoin(base_url, href)
-        filename = path.split("/")[-1] or href.split("/")[-1]
+        # Dedup: CivicEngage lists each meeting item 2-3 times per page
+        if absolute_url in seen_urls:
+            continue
+        seen_urls.add(absolute_url)
+
+        if is_pdf_ext:
+            filename = path.split("/")[-1] or href.split("/")[-1]
+        else:
+            # Synthesize a filename from the URL tail + link text so the
+            # date parser and classifier have something to work with.
+            tail = path.rstrip("/").split("/")[-1] or "document"
+            filename = f"{tail}.pdf"
 
         records.append({
             "url": absolute_url,
