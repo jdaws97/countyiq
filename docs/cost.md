@@ -1,5 +1,8 @@
 # Cost Breakdown
 
+> This file is a historical baseline, not the final current hosting decision.
+> The pricing below was built around the old Hetzner baseline and should be re-run once the Hostinger decision is finalized.
+
 ## Monthly Cost
 
 | Service | Cost | Notes |

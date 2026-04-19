@@ -2,21 +2,15 @@
 
 import json
 import os
+import sys
 
 import requests
 
-# NOTE: This calls OpenRouter over HTTPS. In the Lambda VPC deployment,
-# Lambda can only reach RDS (no internet egress). Options:
-# 1. Move LLM call to a non-VPC Lambda function
-# 2. Add NAT Gateway (~$32/mo)
-# 3. Use VPC endpoint for the LLM service
-# For local dev and pre-deployment, this works as-is.
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# Free first, then newest cheap paid models
-MODELS = [
+DEFAULT_MODELS = [
     "google/gemma-3-27b-it:free",
-    "mistralai/mistral-small-2603",        # Mar 2026, $0.0009/q, 262K ctx
-    "qwen/qwen3.5-9b",                     # Mar 2026, $0.0003/q, 256K ctx
+    "mistralai/mistral-small-2603",
+    "qwen/qwen3.5-9b",
 ]
 
 SYSTEM_PROMPT = """You are the search engine for CountyIQ, a civic intelligence platform for York County, Pennsylvania.
@@ -91,7 +85,9 @@ For PLCB: premises_address LIKE '%17404%' (zip embedded in address string)
 - "breweries in 17404" → {"intent":"query","table":"plcb_licenses","description":"Breweries with liquor licenses in 17404 zip code (note: only covers licensed establishments)","sql_where":"valid_to IS NULL AND UPPER(status) = 'ACTIVE' AND license_type ILIKE '%brewery%' AND premises_address LIKE '%17404%'","sql_order":"licensee","sql_limit":20}
 - "restaurants in york city" → {"intent":"query","table":"plcb_licenses","description":"Restaurants with liquor licenses in York City (note: only covers licensed restaurants)","sql_where":"valid_to IS NULL AND UPPER(status) = 'ACTIVE' AND license_type ILIKE '%restaurant%' AND UPPER(municipality) LIKE '%YORK CITY%'","sql_order":"premises_name","sql_limit":20}
 - "vacant land that is tax delinquent" → {"intent":"query","table":"parcels","description":"Vacant parcels (no building, not high-value residential) with outstanding tax delinquency","sql_where":"valid_to IS NULL AND NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND s.geom IS NOT NULL AND ST_Intersects(s.geom, staging.parcels.geom)) AND (class NOT IN ('R') OR aprtotal IS NULL OR aprtotal::numeric < 50000) AND (price IS NULL OR price::numeric < 100000) AND pidn IN (SELECT tc.pidn FROM staging.tax_claims tc WHERE tc.valid_to IS NULL AND tc.total > 0)","sql_order":"acres DESC","sql_limit":20}
+- "vacant parcels in Spring Garden Township over 2 acres that are delinquent" → {"intent":"query","table":"parcels","description":"Vacant, tax-delinquent parcels over 2 acres in Spring Garden Township","sql_where":"valid_to IS NULL AND acres > 2 AND NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND s.geom IS NOT NULL AND ST_Intersects(s.geom, staging.parcels.geom)) AND (class NOT IN ('R') OR aprtotal IS NULL OR aprtotal::numeric < 50000) AND pidn IN (SELECT tc.pidn FROM staging.tax_claims tc WHERE tc.valid_to IS NULL AND tc.total > 0) AND pidn IN (SELECT p2.pidn FROM staging.parcels p2 JOIN staging.municipalities m ON ST_Intersects(p2.geom, m.geom) WHERE m.valid_to IS NULL AND UPPER(m.name) LIKE '%SPRING GARDEN%')","sql_order":"acres DESC","sql_limit":20}
 - "parcels in flood zone in 17401" → {"intent":"query","table":"parcels","description":"Properties in FEMA flood zones within 17401 zip code","sql_where":"valid_to IS NULL AND EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, staging.parcels.geom)) AND pidn IN (SELECT p2.pidn FROM staging.parcels p2 JOIN staging.zipcodes z ON ST_Intersects(p2.geom, z.geom) WHERE z.zipcode = '17401')","sql_order":"aprtotal::numeric DESC","sql_limit":20}
+- "large farms near flood zones" → {"intent":"query","table":"parcels","description":"Farm parcels over 10 acres near FEMA flood zones","sql_where":"valid_to IS NULL AND class = 'F' AND acres > 10 AND EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, staging.parcels.geom))","sql_order":"acres DESC","sql_limit":20}
 - "who owns 123 main st" → {"intent":"query","table":"parcels","description":"Owner of 123 Main St","sql_where":"valid_to IS NULL AND UPPER(propadr) LIKE '%123 MAIN%'","sql_order":"propadr","sql_limit":5}
 - "Jarod Daws" → {"intent":"lookup","search_term":"DAWS JAROD","description":"Looking up property owner Jarod Daws (names stored as LAST FIRST)"}
 - "top delinquent owners" → {"intent":"redirect","redirect_path":"/delinquent","description":"Top delinquent property owners"}
@@ -123,6 +119,8 @@ For page redirects:
 
 ## Rules
 - Always include valid_to IS NULL in WHERE clauses
+- For multi-condition queries, use pidn IN (SELECT ...) subqueries chained with AND — do NOT nest subqueries inside each other
+- Every opening parenthesis MUST have a matching closing parenthesis. Double-check before responding.
 - Cast aprtotal and price to numeric for comparisons: aprtotal::numeric, price::numeric
 - saledt is text format "DD-MON-YYYY" — use TO_DATE(saledt, 'DD-MON-YYYY') for date comparisons
 - For "recent sales", use: TO_DATE(saledt, 'DD-MON-YYYY') > CURRENT_DATE - INTERVAL '1 year'
@@ -132,20 +130,66 @@ For page redirects:
 - Return ONLY the JSON object, no markdown fences"""
 
 
+def _clean_llm_json(content: str) -> dict | None:
+    content = (content or "").strip()
+    if not content:
+        return None
+    if content.startswith("```"):
+        content = content.split("\n", 1)[1]
+    if content.endswith("```"):
+        content = content.rsplit("```", 1)[0]
+    content = content.strip()
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        start = content.find("{")
+        end = content.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        try:
+            return json.loads(content[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+
+
+def resolve_search_models() -> list[str]:
+    """Resolve the model list for interactive search.
+
+    Search should use a dedicated model override when present, then fall back
+    to the cheap/default search pool. It should not inherit the general
+    pass-model default because that puts higher-cost models on the live search
+    path.
+    """
+    configured = os.environ.get("COUNTYIQ_SEARCH_MODEL")
+    candidates = [configured.strip()] if configured and configured.strip() else []
+    candidates.extend(DEFAULT_MODELS)
+
+    resolved: list[str] = []
+    for model in candidates:
+        if model and model not in resolved:
+            resolved.append(model)
+    return resolved
+
+
 def parse_query_with_llm(query: str) -> dict | None:
     """Send a natural language query to OpenRouter and get structured intent."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         return None
 
-    for model in MODELS:
+    models = resolve_search_models()
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    for model in models:
         try:
             resp = requests.post(
                 OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers=headers,
                 json={
                     "model": model,
                     "messages": [
@@ -154,38 +198,25 @@ def parse_query_with_llm(query: str) -> dict | None:
                     ],
                     "max_tokens": 500,
                     "temperature": 0,
+                    "response_format": {"type": "json_object"},
                 },
                 timeout=15,
             )
-            if resp.status_code == 429 or resp.status_code == 404:
-                import sys
+            if resp.status_code in (429, 404):
                 print(f"LLM {model}: {resp.status_code}, trying next...", file=sys.stderr)
                 continue
             resp.raise_for_status()
-            choices = resp.json().get("choices", [])
+            payload = resp.json()
+            choices = payload.get("choices", [])
             if not choices:
                 continue
             content = choices[0].get("message", {}).get("content")
-            if not content:
-                import sys
-                print(f"LLM {model}: empty response", file=sys.stderr)
-                continue
-
-            content = content.strip()
-            if content.startswith("```"):
-                content = content.split("\n", 1)[1]
-            if content.endswith("```"):
-                content = content.rsplit("```", 1)[0]
-            content = content.strip()
-
-            return json.loads(content)
-        except json.JSONDecodeError:
-            import sys
+            parsed = _clean_llm_json(content or "")
+            if parsed:
+                return parsed
             print(f"LLM {model}: bad JSON response", file=sys.stderr)
-            continue
-        except Exception as e:
-            import sys
-            print(f"LLM {model} error: {e}", file=sys.stderr)
+        except requests.exceptions.RequestException as exc:
+            print(f"LLM {model} error: {exc}", file=sys.stderr)
             continue
 
     return None

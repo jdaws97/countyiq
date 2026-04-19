@@ -13,6 +13,7 @@ from countyiq.lib.pass1_entity_verification import (
     ENTITY_VERIFICATION_TEMPLATE,
     build_entity_cluster_prompt,
     parse_entity_verification_output,
+    stable_cluster_key,
 )
 
 
@@ -258,6 +259,20 @@ class TestParseEntityVerificationOutput:
         }
         result = parse_entity_verification_output(output)
         assert result["entities"][0]["confidence"] == 0.0
+
+
+class TestStableClusterKey:
+    """Tests for deterministic Pass 1 cluster tracking keys."""
+
+    def test_order_independent(self):
+        a = stable_cluster_key(["SMITH JOHN A", "J A SMITH HOLDINGS LLC"])
+        b = stable_cluster_key(["J A SMITH HOLDINGS LLC", "SMITH JOHN A"])
+        assert a == b
+
+    def test_blank_names_ignored(self):
+        a = stable_cluster_key(["SMITH JOHN A", "", "  ", "SMITH JOHN A"])
+        b = stable_cluster_key(["SMITH JOHN A"])
+        assert a == b
 
     def test_confidence_non_numeric_defaults(self):
         output = {

@@ -7,6 +7,7 @@ No actual LLM calls are made and no database is required.
 import pytest
 
 from countyiq.lib.pass4_county_narratives import (
+    CORRIDOR_SCAN_QUERY,
     CORRIDOR_TEMPLATE,
     PORTFOLIO_TEMPLATE,
     MUNICIPAL_TEMPLATE,
@@ -174,6 +175,10 @@ def valid_narrative_output():
 
 class TestCorridorTemplate:
     """Tests for CORRIDOR_TEMPLATE and build_corridor_prompt."""
+
+    def test_corridor_query_uses_dbscan_clusters(self):
+        assert "ST_ClusterDBSCAN" in CORRIDOR_SCAN_QUERY
+        assert "cluster_id" in CORRIDOR_SCAN_QUERY
 
     def test_has_cluster_section(self):
         assert "CLUSTER" in CORRIDOR_TEMPLATE

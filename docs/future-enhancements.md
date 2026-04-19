@@ -1,5 +1,8 @@
 # Future Enhancements
 
+> These ideas assume the current containerized VPS direction.
+> Where they reference Hetzner specifically, treat that as historical provider context rather than a hard requirement.
+
 ## Future Enhancements (Not Implemented)
 
 These are documented for future reference. None are needed for the MVP.

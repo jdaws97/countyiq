@@ -3,10 +3,10 @@
 Used by all Playwright-based scraper assets (assessment, eFACTS, CRIMEWATCH, etc.).
 """
 
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import contextmanager
 
 from dagster import get_dagster_logger
-from playwright.sync_api import sync_playwright, Browser, Page
+from playwright.sync_api import sync_playwright, Error as PlaywrightError, Page
 
 
 # Shared browser launch args — reduce memory footprint on t3.micro
@@ -81,5 +81,5 @@ def take_screenshot(page: Page, path: str = "/tmp/debug_screenshot.png"):
     try:
         page.screenshot(path=path, full_page=True)
         log.info(f"Screenshot saved to {path}")
-    except Exception as e:
+    except PlaywrightError as e:
         log.warning(f"Screenshot failed: {e}")

@@ -91,10 +91,13 @@ def compute_stats(eval_data: dict) -> dict:
 
     return {
         "model_name": meta.get("model_name", "unknown"),
+        "mode_tag": meta.get("mode_tag", "nothink"),
+        "thinking": meta.get("thinking", False),
+        "model_family": meta.get("model_family", "?"),
         "pass_num": meta.get("pass_num", "?"),
         "evaluated_at": meta.get("evaluated_at", ""),
         "n_ctx": meta.get("n_ctx", "?"),
-        "temperature": meta.get("temperature", "?"),
+        "temperature": (meta.get("sampling") or {}).get("temperature", meta.get("temperature", "?")),
         "total": total,
         "success_count": success_count,
         "success_rate": success_rate,
@@ -197,9 +200,9 @@ Examples:
     print()
 
     # Column widths
-    COL_MODEL = 40
-    COL_PASS = 5
-    COL_N = 6
+    COL_MODEL = 38
+    COL_MODE = 9
+    COL_N = 5
     COL_SUCCESS = 14
     COL_JSON = 14
     COL_AVG = 8
@@ -208,7 +211,7 @@ Examples:
 
     header = (
         f"{'Model':<{COL_MODEL}} "
-        f"{'Pass':>{COL_PASS}} "
+        f"{'Mode':<{COL_MODE}} "
         f"{'N':>{COL_N}} "
         f"{'Success %':<{COL_SUCCESS}} "
         f"{'JSON Valid %':<{COL_JSON}} "
@@ -220,7 +223,9 @@ Examples:
     print("-" * len(header))
 
     for s in stats_list:
-        model_display = s["model_name"]
+        # Compose display name with mode tag for clarity
+        base = s["model_name"].replace("-Q4_K_M", "").replace("-it", "").replace("-2512", "")
+        model_display = f"{base} [{s.get('mode_tag', '?')}]"
         if len(model_display) > COL_MODEL:
             model_display = model_display[: COL_MODEL - 3] + "..."
 
@@ -229,7 +234,7 @@ Examples:
 
         print(
             f"{model_display:<{COL_MODEL}} "
-            f"{s['pass_num']:>{COL_PASS}} "
+            f"{s['mode_tag']:<{COL_MODE}} "
             f"{s['total']:>{COL_N}} "
             f"{success_bar:<{COL_SUCCESS}} "
             f"{json_bar:<{COL_JSON}} "
@@ -250,7 +255,7 @@ Examples:
             cats = s.get("categories")
             if not cats:
                 continue
-            print(f"\n  {s['model_name']}  Pass {s['pass_num']}")
+            print(f"\n  {s['model_name']}  [{s['mode_tag']}]  Pass {s['pass_num']}")
             for cat_name, cat_data in sorted(cats.items()):
                 cat_total = cat_data["total"]
                 cat_success = cat_data["success"]

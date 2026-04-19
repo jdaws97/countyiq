@@ -57,7 +57,7 @@ class CountyConfig:
 
     # PA Open Data Portal (SODA API)
     soda_base_url: str = "https://data.pa.gov/resource"
-    soda_datasets: tuple = ()        # Tuple of (dataset_id, county_filter_field, county_filter_value, record_id_field) tuples
+    soda_datasets: tuple[tuple[str, str, str, str], ...] = ()
     soda_min_records: int = 50       # Minimum expected records per dataset (truncation guard)
 
     # PennDOT Open Data (state road segments — MapServer)
@@ -67,7 +67,7 @@ class CountyConfig:
 
     # PennDOT Projects (PA Projects MapServer)
     penndot_projects_url: str = ""   # MapServer base URL
-    penndot_projects_layers: tuple = (1, 2, 4, 5)  # Underway, 4yr plan, under dev, under construction
+    penndot_projects_layers: tuple[int, ...] = (1, 2, 4, 5)
     penndot_projects_county_filter: str = ""  # COUNTY_NAME filter value
     penndot_projects_min_records: int = 10
 
@@ -108,7 +108,7 @@ class CountyConfig:
     pa_dos_min_records: int = 100
 
     # Public Proceedings - tuple of (body_name, minutes_url, proceeding_type) tuples
-    municipality_websites: tuple = ()
+    municipality_websites: tuple[tuple[str, str, str], ...] = ()
 
     # S3 archive prefix (raw data goes to s3://york-county-raw/<prefix>/...)
     s3_prefix: str = ""

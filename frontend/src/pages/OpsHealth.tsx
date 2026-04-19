@@ -1,16 +1,6 @@
 import { useEffect, useState } from 'react'
-import Nav from '../components/Nav'
-
-interface SourceStatus {
-  status: 'green' | 'red' | string
-  record_count: number
-}
-
-interface HealthData {
-  overall: 'green' | 'yellow' | 'red' | string
-  sources: Record<string, SourceStatus>
-  summary: string
-}
+import PageShell from '../components/PageShell'
+import type { HealthData, OverallHealthStatus } from '../types/ops'
 
 function formatSourceName(key: string): string {
   return key
@@ -18,7 +8,7 @@ function formatSourceName(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-const OVERALL_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+const OVERALL_COLORS: Record<OverallHealthStatus, { bg: string; text: string; label: string }> = {
   green:  { bg: 'rgba(61, 189, 111, 0.15)',  text: '#3dbd6f', label: 'All Systems Go' },
   yellow: { bg: 'rgba(212, 168, 67, 0.15)',  text: '#d4a843', label: 'Degraded' },
   red:    { bg: 'rgba(224, 82, 82, 0.15)',   text: '#e05252', label: 'Incident' },
@@ -50,16 +40,7 @@ export default function OpsHealth() {
   const sourceEntries = health ? Object.entries(health.sources) : []
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <Nav />
-
-      <main
-        style={{
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '48px 32px',
-        }}
-      >
+    <PageShell maxWidth={1200}>
         {/* Page header */}
         <div
           style={{
@@ -300,7 +281,6 @@ export default function OpsHealth() {
             })}
           </div>
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

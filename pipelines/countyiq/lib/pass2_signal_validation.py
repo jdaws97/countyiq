@@ -15,8 +15,6 @@ Plus a database helper:
 
 from __future__ import annotations
 
-import json
-from typing import Any
 
 from countyiq.lib.intelligence_common import (
     PARCEL_QUERY,
@@ -528,7 +526,7 @@ def gather_signal_context(cursor, pidn: str, signal: dict) -> dict:
     }
 
 
-def parse_signal_validation_output(output: Any) -> dict:
+def parse_signal_validation_output(output: object) -> dict:
     """Validate and normalize LLM signal validation output.
 
     Clamps validation_status to VALID_STATUSES (default: "confirmed").

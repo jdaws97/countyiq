@@ -14,8 +14,6 @@ The per-signal version (pass2_signal_validation.py) is retained for A/B
 comparison and for cases where individual validation is specifically needed.
 """
 import json
-from datetime import datetime, timezone
-from typing import Any
 
 from countyiq.lib.intelligence_common import (
     PARCEL_QUERY,
@@ -36,8 +34,6 @@ from countyiq.lib.intelligence_common import (
 )
 from countyiq.lib.pass2_signal_validation import (
     SIGNAL_TEMPLATES,
-    VALID_STATUSES,
-    VALID_SIGNIFICANCE,
     parse_signal_validation_output,
 )
 
@@ -172,14 +168,17 @@ def gather_parcel_batch_context(cursor, pidn: str) -> dict:
         parcel_procs = [dict(r) for r in cursor.fetchall()]
         cursor.execute(PROCEEDINGS_FOR_ENTITY_QUERY, {"names": linked_names})
         entity_procs = [dict(r) for r in cursor.fetchall()]
-        # Dedupe by (extraction_type, meeting_date, applicant_name)
+        # Dedupe by extraction_id when available so distinct same-day agenda
+        # items from the same applicant do not collapse into one record.
         seen = set()
         merged = []
         for p in parcel_procs + entity_procs:
-            key = (
+            key = p.get("extraction_id") or (
                 p.get("extraction_type"),
                 str(p.get("meeting_date", "")),
                 p.get("applicant_name"),
+                p.get("parcel_reference"),
+                p.get("decision"),
             )
             if key in seen:
                 continue
@@ -423,7 +422,7 @@ def build_batched_signal_prompt(context: dict, signals_override: list[dict] | No
 # ---------------------------------------------------------------------------
 
 def parse_batched_signal_output(
-    output: Any, expected_signals: list[dict]
+    output: object, expected_signals: list[dict]
 ) -> dict:
     """Parse and normalize the batched validation response.
 
@@ -501,247 +500,3 @@ def parse_batched_signal_output(
         "missing": missing,
     }
 
-
-# ---------------------------------------------------------------------------
-# MEGA-BATCH: 50 parcels per LLM call
-# ---------------------------------------------------------------------------
-
-MEGA_BATCH_TEMPLATE = """You are a real estate intelligence analyst validating development signals for {n_parcels} parcels in York County, PA.
-
-{parcel_blocks}
-
-TASK: Validate EVERY signal on EVERY parcel. You MUST return a validation for each of the {total_signals} signals across all {n_parcels} parcels. Do NOT skip parcels or signals.
-
-You may use systemic_rulings for signals that apply the same way across many parcels (e.g., growth_area, cdbg_investment, penndot_project). But for tax_distress, ownership_change, vacancy, and assemblage — these MUST have per-parcel validations because they depend on parcel-specific context.
-
-Consider:
-- Cross-parcel patterns (same owner across multiple parcels, corridor-level trends)
-- Whether signals are stale, misclassified, or irrelevant
-- Data quality issues (empty evidence, anomalous prices)
-- If a signal has empty/null evidence and applies identically to 80%+ of parcels, rule it irrelevant — it provides no parcel-specific intelligence.
-
-OUTPUT — return ONLY valid JSON:
-{{
-  "systemic_rulings": [
-    {{"signal_key": "...", "ruling": "confirmed|upgraded|downgraded|stale|irrelevant", "significance": "high|medium|low|none", "reasoning": "...", "affected_count": N}}
-  ],
-  "cross_parcel_insights": [
-    {{"insight": "...", "parcels_involved": ["pidn1", "pidn2"], "impact": "..."}}
-  ],
-  "per_parcel_validations": [
-    {{
-      "pidn": "...",
-      "validations": [
-        {{"signal_key": "...", "status": "confirmed|upgraded|downgraded|stale|irrelevant", "significance": "high|medium|low|none", "reasoning": "short explanation"}}
-      ]
-    }}
-  ]
-}}"""
-
-
-def _format_parcel_block(ctx: dict) -> str:
-    """Format a single parcel's context for the mega-batch prompt.
-
-    Compact format — one parcel block with all signals and optional context.
-    """
-    parcel = ctx.get("parcel", {})
-    signals = ctx.get("signals", [])
-    tax_claims = ctx.get("tax_claims", [])
-
-    lines = [
-        f"PARCEL: {parcel.get('pidn', '?')}",
-        f"  Owner: {parcel.get('owner', '?')}",
-        f"  Address: {parcel.get('address', '?')}",
-        f"  Class: {parcel.get('property_class', '?')} | Acres: {parcel.get('acres', '?')} | Assessed: ${parcel.get('assessed_value', 0):,}",
-        f"  Last sale: {parcel.get('sale_date', '?')} for ${parcel.get('sale_price', 0):,}",
-    ]
-
-    if tax_claims:
-        tax_total = sum(c.get("amount", 0) for c in tax_claims)
-        if tax_total > 0:
-            lines.append(f"  Tax delinquency: ${tax_total:,.2f} across {len(tax_claims)} claims")
-
-    lines.append(f"  Signals ({len(signals)}):")
-    for s in signals:
-        ev = s.get("evidence") or {}
-        if not isinstance(ev, dict):
-            ev = {}
-        # Compact evidence — key fields only
-        key_ev = {}
-        for k in [
-            "total_owed", "oldest_year", "years_delinquent", "price", "saledt",
-            "prev_owner", "buyer_is_llc", "plan_title", "prop_du", "prop_lots",
-            "fld_zone", "sfha_tf", "future_lu", "current_zname",
-            "structure_count", "ga_type", "cost", "status", "project_name",
-        ]:
-            v = ev.get(k)
-            if v is not None and str(v) != "None":
-                key_ev[k] = v
-        lines.append(
-            f"    - {s['signal_key']} (w={s.get('signal_weight', 0):.2f}) {json.dumps(key_ev)}"
-        )
-
-    return "\n".join(lines)
-
-
-def build_mega_batch_prompt(contexts: list[dict]) -> str:
-    """Build a mega-batch prompt for N parcels in a single LLM call.
-
-    Args:
-        contexts: List of gather_parcel_batch_context() outputs, one per parcel.
-
-    Returns:
-        Formatted prompt string.
-    """
-    parcel_blocks = "\n\n".join(_format_parcel_block(ctx) for ctx in contexts)
-    total_signals = sum(len(ctx.get("signals", [])) for ctx in contexts)
-
-    return MEGA_BATCH_TEMPLATE.format(
-        n_parcels=len(contexts),
-        total_signals=total_signals,
-        parcel_blocks=parcel_blocks,
-    )
-
-
-def parse_mega_batch_output(
-    output: Any,
-    contexts: list[dict],
-) -> dict:
-    """Parse mega-batch LLM output into per-parcel validation records.
-
-    The LLM returns systemic_rulings (applied to many parcels) and
-    per_parcel_validations (individual signal verdicts). This function
-    merges them: for each parcel, each signal gets either a per-parcel
-    verdict (if the LLM returned one) or the systemic ruling (if the
-    signal type was covered systemically).
-
-    Args:
-        output: Parsed JSON from LLM.
-        contexts: The list of parcel contexts that were sent.
-
-    Returns:
-        Dict with keys:
-          parcels: list of {pidn, validations, cross_signal_insight, missing, errors}
-          cross_parcel_insights: list from LLM
-          systemic_rulings: list from LLM
-          stats: {total_signals, validated, missing, errors}
-    """
-    if not isinstance(output, dict):
-        all_pidns = [ctx.get("pidn", "?") for ctx in contexts]
-        return {
-            "parcels": [],
-            "cross_parcel_insights": [],
-            "systemic_rulings": [],
-            "stats": {"total_signals": 0, "validated": 0, "missing": 0, "errors": 0},
-            "parse_error": "Output is not a dict",
-        }
-
-    systemic = output.get("systemic_rulings", [])
-    if not isinstance(systemic, list):
-        systemic = []
-
-    # Build systemic lookup: signal_key → (status, significance)
-    systemic_lookup: dict[str, tuple[str, str]] = {}
-    for rule in systemic:
-        if isinstance(rule, dict) and rule.get("signal_key"):
-            systemic_lookup[rule["signal_key"]] = (
-                rule.get("ruling", "confirmed"),
-                rule.get("significance", "low"),
-            )
-
-    # Build per-parcel lookup from LLM output
-    raw_per_parcel = output.get("per_parcel_validations", [])
-    if not isinstance(raw_per_parcel, list):
-        raw_per_parcel = []
-
-    per_parcel_lookup: dict[str, dict[str, dict]] = {}  # pidn → signal_key → verdict
-    for pp in raw_per_parcel:
-        if not isinstance(pp, dict):
-            continue
-        pidn = pp.get("pidn", "")
-        for v in pp.get("validations", []):
-            if isinstance(v, dict) and v.get("signal_key"):
-                per_parcel_lookup.setdefault(pidn, {})[v["signal_key"]] = v
-
-    # Merge: for each parcel/signal, prefer per-parcel verdict, fall back to systemic
-    total_signals = 0
-    total_validated = 0
-    total_missing = 0
-    total_errors = 0
-
-    parcel_results = []
-    for ctx in contexts:
-        pidn = ctx.get("pidn", "?")
-        signals = ctx.get("signals", [])
-        total_signals += len(signals)
-
-        pp_verdicts = per_parcel_lookup.get(pidn, {})
-        validations = []
-        missing = []
-
-        for sig in signals:
-            key = sig["signal_key"]
-
-            # Try per-parcel verdict first
-            raw_v = pp_verdicts.get(key)
-            if raw_v:
-                normalized = parse_signal_validation_output({
-                    "signal_key": key,
-                    "validation_status": raw_v.get("status", raw_v.get("validation_status", "confirmed")),
-                    "adjusted_significance": raw_v.get("significance", raw_v.get("adjusted_significance", "medium")),
-                    "reasoning": raw_v.get("reasoning", ""),
-                    "key_facts": raw_v.get("key_facts", []),
-                    "cross_references": raw_v.get("cross_references", []),
-                })
-                if "error" not in normalized:
-                    validations.append(normalized)
-                    total_validated += 1
-                    continue
-                else:
-                    total_errors += 1
-
-            # Fall back to systemic ruling
-            if key in systemic_lookup:
-                status, significance = systemic_lookup[key]
-                # Find the systemic reasoning
-                reasoning = ""
-                for rule in systemic:
-                    if isinstance(rule, dict) and rule.get("signal_key") == key:
-                        reasoning = rule.get("reasoning", "")
-                        break
-                normalized = parse_signal_validation_output({
-                    "signal_key": key,
-                    "validation_status": status,
-                    "adjusted_significance": significance,
-                    "reasoning": reasoning or f"Systemic ruling: {status}/{significance}",
-                    "key_facts": [],
-                    "cross_references": [],
-                })
-                if "error" not in normalized:
-                    validations.append(normalized)
-                    total_validated += 1
-                    continue
-
-            # Neither per-parcel nor systemic covered this signal
-            missing.append(key)
-            total_missing += 1
-
-        parcel_results.append({
-            "pidn": pidn,
-            "validations": validations,
-            "cross_signal_insight": "",  # mega-batch insights are at the batch level
-            "missing": missing,
-            "errors": [],
-        })
-
-    return {
-        "parcels": parcel_results,
-        "cross_parcel_insights": output.get("cross_parcel_insights", []),
-        "systemic_rulings": systemic,
-        "stats": {
-            "total_signals": total_signals,
-            "validated": total_validated,
-            "missing": total_missing,
-            "errors": total_errors,
-        },
-    }

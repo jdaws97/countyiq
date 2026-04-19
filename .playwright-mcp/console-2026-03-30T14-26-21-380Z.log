@@ -1,3 +1,0 @@
-[  706245ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5173/src/pages/SearchResults.tsx?t=1774881487610:0
-[  706246ms] [ERROR] [vite] Failed to reload /src/pages/SearchResults.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:5173/@vite/client:509
-[ 5558039ms] [ERROR] WebSocket connection to 'ws://localhost:5173/?token=J4hEuYtK6uwN' failed:  @ http://localhost:5173/@vite/client:840

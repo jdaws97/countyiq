@@ -97,6 +97,17 @@ YORK_SEEDS: tuple[ScoutSeed, ...] = (
     ),
     ScoutSeed(
         county_key="york",
+        slug="building-permit-reports",
+        name="YCPC Building Permit Reports",
+        url="https://www.ycpc.org/226/Building-Permit-Reports",
+        discovery_method="seed",
+        category_hints=("permit_activity", "development_land_use", "assessment_property"),
+        audience_hints=("builders", "realtors", "investors", "journalists"),
+        notes="Annual countywide building-permit reports compiled from municipality submissions; aggregate and not fully comprehensive.",
+        max_discovery_links=12,
+    ),
+    ScoutSeed(
+        county_key="york",
         slug="conservation",
         name="York County Conservation District Pending Plan Review",
         url="https://www.yorkccd.org/erosion-and-sediment-control/pending-plan-review-list",

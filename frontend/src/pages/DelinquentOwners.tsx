@@ -1,25 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import Nav from '../components/Nav'
-
-interface TopOwner {
-  owner_name: string
-  parcel_count: number
-  total_owed: number
-  oldest_year: number
-  newest_year: number
-  years_delinquent: number
-  districts: string[]
-}
-
-interface DelinquentParcel {
-  pidn: string
-  owner_name: string
-  address: string
-  district: string
-  years_delinquent: number
-  total_owed: number
-}
+import PageShell from '../components/PageShell'
+import { formatCurrency } from '../lib/format'
+import type {
+  TopDelinquentOwner as TopOwner,
+  DelinquentParcelSummary as DelinquentParcel,
+} from '../types/api'
 
 type Tab = 'owners' | 'parcels'
 
@@ -61,26 +47,18 @@ export default function DelinquentOwners() {
       })
   }, [])
 
-  const formatCurrency = (value: number) =>
-    '$' + value.toLocaleString('en-US', { maximumFractionDigits: 0 })
-
-  const formatYears = (oldest: number, newest: number) =>
-    oldest === newest ? `${newest}` : `${oldest}\u2013${newest}`
+  const formatYears = (oldest: number | null, newest: number | null) => {
+    if (oldest == null && newest == null) return ''
+    if (oldest == null) return `${newest}`
+    if (newest == null) return `${oldest}`
+    return oldest === newest ? `${newest}` : `${oldest}\u2013${newest}`
+  }
 
   const totalOwed = owners.reduce((sum, o) => sum + o.total_owed, 0)
   const loading = activeTab === 'owners' ? loadingOwners : loadingParcels
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <Nav />
-
-      <main
-        style={{
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '48px 32px',
-        }}
-      >
+    <PageShell maxWidth={1200}>
         {/* Back link */}
         <Link
           to="/"
@@ -595,7 +573,6 @@ export default function DelinquentOwners() {
             )}
           </div>
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

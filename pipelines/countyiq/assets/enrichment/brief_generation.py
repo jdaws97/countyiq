@@ -1,19 +1,8 @@
-"""Pass 3 — Brief Generation Dagster Asset.
-
-Synthesizes validated signals into intelligence briefs for parcels that have
-at least one medium- or high-significance validated signal.  For each
-eligible parcel, gathers full context, builds a brief generation prompt,
-invokes the LLM, parses the response, and upserts results to
-public.parcel_briefs.
-
-The asset is controlled by the COUNTYIQ_TEXT_MODEL environment variable.
-If that variable is not set, the asset returns immediately with
-status="skipped", allowing it to exist in the Dagster graph without
-failing on machines that have no model configured.
-"""
+"""Generate parcel briefs from validated signals."""
 
 import json
 import os
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from dagster import (
@@ -24,6 +13,7 @@ from dagster import (
 )
 
 from countyiq.lib.intelligence_common import compute_input_hash
+from countyiq.lib.pass_llm_config import PassHarnessUnavailable, resolve_pass_harness
 from countyiq.lib.pass3_brief_generation import (
     build_brief_generation_prompt,
     gather_brief_context,
@@ -31,11 +21,6 @@ from countyiq.lib.pass3_brief_generation import (
     should_generate_brief,
 )
 from countyiq.resources.database import DatabaseResource
-
-
-# ---------------------------------------------------------------------------
-# SQL constants
-# ---------------------------------------------------------------------------
 
 PARCELS_NEEDING_BRIEFS_QUERY = """
     -- Selects parcels that need a brief for any of these reasons:
@@ -76,11 +61,6 @@ UPSERT_BRIEF_QUERY = """
         generated_at = EXCLUDED.generated_at
 """
 
-
-# ---------------------------------------------------------------------------
-# Dagster Asset
-# ---------------------------------------------------------------------------
-
 @asset(
     group_name="enrichment",
     description=(
@@ -96,52 +76,17 @@ def brief_generation(
 ) -> MaterializeResult:
     log = context.log
 
-    # ------------------------------------------------------------------
-    # Resolve backend and model (same pattern as Pass 1/2)
-    # ------------------------------------------------------------------
-    openrouter_model = os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
-    local_model = os.environ.get("COUNTYIQ_TEXT_MODEL")
-
-    if openrouter_model:
-        backend = "openrouter"
-        model_path = openrouter_model
-    elif local_model:
-        backend = "llama_cpp"
-        model_path = local_model
-    else:
-        log.info(
-            "Neither COUNTYIQ_OPENROUTER_MODEL nor COUNTYIQ_TEXT_MODEL is set — "
-            "skipping Pass 3 brief generation."
-        )
-        return _skipped_result("no model configured")
-
-    log.info(f"Pass 3: backend={backend} model={model_path}")
-
     try:
-        from countyiq.lib.llm_harness import (
-            HarnessConfig, get_preset_for_model, invoke_with_retry,
+        config, invoke_with_retry = resolve_pass_harness(
+            log,
+            pass_number=3,
+            archive_label="pass3_briefs",
+            default_max_tokens=2048,
         )
-    except ImportError as exc:
-        log.warning("llm_harness import failed (%s) — skipping", exc)
-        return _skipped_result("llm_harness import failed")
+    except PassHarnessUnavailable as exc:
+        return _skipped_result(exc.reason)
+    config = replace(config, temperature=min(config.temperature, 0.3))
 
-    thinking_enabled = os.environ.get("COUNTYIQ_THINKING", "true").lower() in ("1", "true", "yes")
-    preset = get_preset_for_model(model_path, thinking=thinking_enabled, reasoning_task=True)
-    # Override temperature for briefs (slightly more creative than validation)
-    preset["temperature"] = min(preset.get("temperature", 0.7), 0.3)
-
-    config = HarnessConfig(
-        model_path=model_path,
-        backend=backend,
-        max_tokens=2048,
-        thinking=thinking_enabled,
-        archive_label="pass3_briefs",
-        **preset,
-    )
-
-    # ------------------------------------------------------------------
-    # Find eligible parcels (medium+ signals, no existing brief)
-    # ------------------------------------------------------------------
     log.info("Querying parcels eligible for brief generation")
     rows = database.execute(PARCELS_NEEDING_BRIEFS_QUERY)
 
@@ -164,25 +109,20 @@ def brief_generation(
 
     log.info("Found %d parcels eligible for briefs", parcels_eligible)
 
-    conn = database._get_conn()
-
     for row in rows:
         pidn = row[0] if isinstance(row, (tuple, list)) else row.get("pidn", row)
+        input_hash: str | None = None
 
         try:
-            # Gather full context
-            import psycopg2.extras
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            with database.dict_cursor() as cur:
                 ctx = gather_brief_context(cur, pidn)
 
-            # Check eligibility (should_generate_brief)
             validated_signals = ctx.get("validated_signals", [])
             if not should_generate_brief(validated_signals):
                 log.debug("Parcel %s has no medium+ signals after context gather, skipping", pidn)
                 skipped += 1
                 continue
 
-            # Change detection
             input_hash = compute_input_hash(ctx)
 
             existing = database.execute(
@@ -200,9 +140,8 @@ def brief_generation(
                 skipped += 1
                 continue
 
-            # Build prompt and invoke LLM
             prompt = build_brief_generation_prompt(ctx)
-            result = invoke_with_retry(config, prompt, retries=1)
+            result = invoke_with_retry(config, prompt, retries=1, archive_key=pidn)
 
             if not result.success:
                 log.warning(
@@ -214,7 +153,6 @@ def brief_generation(
                 errors += 1
                 continue
 
-            # Parse and validate output
             parsed = parse_brief_output(result.parsed or {})
             if "error" in parsed:
                 log.warning(
@@ -226,17 +164,15 @@ def brief_generation(
                 errors += 1
                 continue
 
-            # Upsert to public.parcel_briefs
             now = datetime.now(timezone.utc).isoformat()
             pass_metadata = {
-                "model": os.path.basename(model_path),
+                "model": os.path.basename(config.model_path),
                 "pass_version": "3.0",
-                "temperature": 0.2,
+                "temperature": config.temperature,
+                "thinking": config.thinking,
             }
 
-            # key_questions: LLM returns a JSON list of strings, but the
-            # schema defines TEXT[]. Postgres accepts a Python list directly
-            # as an array parameter — no json.dumps or ::jsonb cast needed.
+            # Postgres accepts Python lists directly for text[] parameters.
             key_questions_raw = parsed.get("key_questions", [])
             if isinstance(key_questions_raw, str):
                 try:
@@ -263,7 +199,6 @@ def brief_generation(
                 },
             )
 
-            # Update pass tracking
             _update_pass_status(database, pidn, 3, "complete", input_hash)
             briefs_created += 1
 
@@ -274,6 +209,14 @@ def brief_generation(
 
         except Exception as exc:
             log.warning("Error generating brief for %s: %s", pidn, exc)
+            _update_pass_status(
+                database,
+                pidn,
+                3,
+                "error",
+                input_hash or "",
+                str(exc),
+            )
             errors += 1
 
     log.info(
@@ -290,11 +233,6 @@ def brief_generation(
             "errors": MetadataValue.int(errors),
         }
     )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _update_pass_status(
     database: DatabaseResource,

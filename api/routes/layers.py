@@ -3,10 +3,11 @@
 from fastapi import APIRouter, HTTPException
 
 from api.lib.database import get_cursor
+from api.lib.response_types import LayerConfig
 
 router = APIRouter(tags=["layers"])
 
-LAYER_CONFIG = {
+LAYER_CONFIG: dict[str, LayerConfig] = {
     "municipalities": {
         "table": "staging.municipalities",
         "properties": ["name", "muni_type", "county"],

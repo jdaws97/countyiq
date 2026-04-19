@@ -1,36 +1,46 @@
 # Open Items
 
-## Open Items
+This is the working backlog for the repo as it exists now, not the original MVP build sheet.
+
+## Highest Priority
+
+Driven by the RE investor/developer lane — see `docs/products/real-estate-intelligence.md`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Docker Postgres PostGIS extension | Pending | Verify `CREATE EXTENSION IF NOT EXISTS postgis;` in `init.sql` runs on container startup |
-| R2 bucket + rclone config | Pending | Create R2 bucket in Cloudflare dashboard; configure rclone with R2 API credentials for pipeline uploads |
-| Cloudflare Pages project setup | Pending | Connect GitHub repo to Cloudflare Pages; configure build command (`cd frontend && npm run build`) and output directory |
-| Docker Compose production config | Pending | Dockerfiles for api + dagster services; production `docker-compose.yml` on VPS |
-| Watchtower GHCR auth | Pending | Configure Watchtower with GHCR token so it can pull private container images |
-| Verify `inmatelocator.yorkcountypa.gov` | Pending | DNS failed during testing — check from local browser. Marked ❌ in daily schedule table. |
-| Verify sheriff sales URLs | Pending | County website reorganized, old URLs redirect incorrectly. Marked ⚠️ in daily schedule table. |
-| Live-test PennDOT Open Data (#5) | Pending | Same ArcGIS REST API pattern as GIS Portal (#1) but not live-tested. Marked ⚠️ in weekly schedule table. Should work — verify during Phase 3 Step 3.2 (source #6 in build order). |
-| Schema migrations strategy | **Decided: Alembic** | Versioned migrations, local Docker Postgres for testing, LLM-generated migration files |
-| Pipeline code repository structure | **Decided: Monorepo, assets by source type** | See Pipeline Code Structure section |
-| Frontend | **Decided: React + MapLibre + Deck.gl, Cloudflare Pages, FastAPI** | See Frontend Architecture section |
-| Entity resolution approach | **Decided: Deterministic PostgreSQL (pg_trgm)** | Tiered matching, source-agnostic schema, Zingg upgrade path documented |
-| Deployment pipeline (CI/CD) | **Decided: GitHub Actions + GHCR** | Path-filtered workflows; Watchtower pulls new images from GHCR; see CI/CD section |
-| Neon account | Not needed | Was considered early on; Docker Postgres on VPS is the production database |
+| Surface cross-signal insight + linked proceedings on property page | In progress | Phase A, this branch. Data already exists in `meta.intelligence_passes` and `staging.proceeding_extractions`. |
+| County feed page (`/feed`) over Pass 4 narratives | In progress | Phase A, this branch. |
+| Entity profile page (`/entity/:id`) over `public.entity_graph` | Designed | Phase A, next plan. The moat — must ship before outreach. |
+| Clerk auth + watchlists + alerts + weekly email | Blocked | Phase B. The retention loop. Blocked on auth decision and SMTP vendor. |
+| 10 investor interviews for price discovery | Not started | Phase C. Target YBA, PA REIA local chapter. |
+| Finalize VPS provider | Open | Hostinger is the current preferred option to evaluate. Hetzner remains the historical baseline. |
+| Resolve legacy infra path | Done | The AWS/Terraform tree has been moved to `archives/infrastructure/aws-terraform/` so it no longer competes with the active VPS docs. |
+| Sweep remaining stale docs | In progress | The core source-of-truth docs are being consolidated, but older deep docs still need a second pass for terminology cleanup. |
+| Tighten `.env` / deployment defaults | Open | Make the production model lineup, archive path, and host expectations explicit in deploy scripts and ops docs. |
+| `COUNTYIQ_ARCHIVE_DIR` volume-mounted in production | Open | Archives are currently lost on container restart unless the env var is set and the path is mounted. |
 
-## Build-Time Decisions (resolve during implementation, not planning)
+## Intelligence Platform
 
-These items are intentionally deferred — they require hands-on-keyboard work to resolve correctly.
-
-| Item | Phase | Notes |
+| Item | Status | Notes |
 |---|---|---|
-| Staging table DDLs | Phase 2–3 | Exact columns depend on what each source API returns. Write Alembic migrations as each pipeline is built. The SCD2 pattern (`valid_from`/`valid_to`) is defined in `docs/schema/strategy.md`. |
-| `scd2_upsert()` implementation | Phase 3 | Shared lib function. Needs: (1) expire changed records via `UPDATE SET valid_to = NOW()`, (2) insert new/changed records with `valid_from = NOW()`, (3) skip unchanged records (compare non-key columns), (4) detect deletes (record in DB not in source). Write during framework setup (Step 3.1). |
-| API response schemas (Pydantic) | Phase 4 | Define as you build each route. Key decisions: pagination for `/api/parcels/bbox` (cursor or offset?), error format (`{"error": "...", "status": 404}`), search ranking weights. |
-| Enrichment sensor | Phase 3 | Dagster `multi_asset_sensor` watching weekly source assets. Fires when all MVP deps have fresh materializations. Write alongside `enrichment/owners.py`. |
-| `dagster.yaml` + `workspace.yaml` | Phase 3 | Generated during Dagster init. Standard config pointing at Postgres for storage, `pipelines/` as code location. |
-| `init.sql` consolidation | Phase 1 | Combine schema creation (`CREATE SCHEMA staging/public/meta`), PostGIS extension, `pg_trgm` extension, and meta DDL from `docs/schema/meta.md` into one script. |
-| CORS lockdown | Phase 5 | Replace `allow_origins=["*"]` with `countyiq.com` domain. Track in go-live checklist. |
-| `meta.query_audit_log` DDL | Phase 2 | Define when auth gate is implemented. Not needed for MVP. |
-| Staging table partial indexes | Phase 3 | Add `CREATE INDEX ... WHERE valid_to IS NULL` on each staging table after initial data load confirms query patterns. |
+| Evaluate Qwen 3.5 against current passes | Open | Current working defaults are Grok 4.1 Fast for Pass 0 and MiMo V2 Flash for Passes 1-4. Qwen remains worth re-testing. |
+| Decide per-pass production model policy | Open | Keep "one model for all later passes" vs per-pass specialization under explicit operator control. |
+| Harden archive retention strategy | Open | Runtime archives currently exist, but retention and cleanup policy should be standardized. |
+| Verify pass docs against code | Open | Pass 0-4 are live in code; deeper docs should match actual env vars and current job wiring. |
+
+## Product And Pipeline Hardening
+
+| Item | Status | Notes |
+|---|---|---|
+| CORS lockdown | Open | Replace `allow_origins=["*"]` once the final production domains are known. |
+| Reconcile schedules docs with actual jobs | Open | Jobs and schedules evolved significantly; docs still lag in a few places. |
+| Verify flaky / changing public sources | Open | Sheriff sales, recorder flows, and other fragile sources still need ongoing live verification. |
+| Revisit AWS/Lambda leftovers in code | In progress | The dead Lambda adapter is gone and the Terraform stack is archived; keep trimming any remaining stale references in executable code. |
+
+## Repository Cleanup
+
+| Item | Status | Notes |
+|---|---|---|
+| Remove generated artifacts from version control | In progress | Playwright screenshots/logs and ad hoc screenshots should stay out of git. |
+| Decide fate of root Playwright-only package files | Open | The repo root has a minimal Node package used for tooling; keep only if still needed. |
+| Standardize archive locations | Open | Historical docs and runtime archives should stay clearly separated. |

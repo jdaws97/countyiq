@@ -21,7 +21,9 @@ from dagster import (
 )
 
 from countyiq.lib.arcgis_client import iterate_feature_pages
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
+from countyiq.lib.geometry import rings_to_multipolygon_geojson
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -89,8 +91,10 @@ def structures_arcgis(
                 ]
                 geom = feat.get("geometry")
                 geom_json = None
-                if geom and geom.get("rings"):
-                    geom_json = json.dumps(_arcgis_rings_to_geojson(geom["rings"]))
+                if geom:
+                    geojson = rings_to_multipolygon_geojson(geom.get("rings"))
+                    if geojson:
+                        geom_json = json.dumps(geojson)
                 row.extend([geom_json, geom_json])
                 batch.append(row)
 
@@ -106,6 +110,25 @@ def structures_arcgis(
 
         if total_staged < county.arcgis_structures_min_records:
             raise RuntimeError(f"Only {total_staged} structures (expected >= {county.arcgis_structures_min_records})")
+
+        # ── DATA LOSS GUARD ──────────────────────────────────────────
+        # Mirrors the guard in lib/scd.py:scd2_upsert_geom — refuse to
+        # expire if the incoming dataset is suspiciously smaller than
+        # what's already current. Prevents partial fetches (network
+        # errors, rate limits) from wiping existing records.
+        cur.execute("SELECT COUNT(*) FROM staging.structures WHERE valid_to IS NULL")
+        existing_count = cur.fetchone()[0]
+        if existing_count > 100 and total_staged < existing_count * 0.5:
+            cur.execute("DROP TABLE IF EXISTS _tmp_structures")
+            conn.commit()
+            msg = (
+                f"DATA LOSS GUARD on staging.structures: incoming {total_staged:,} "
+                f"vs {existing_count:,} existing "
+                f"({total_staged / existing_count * 100:.0f}%). "
+                f"Refusing to expire — likely a partial fetch."
+            )
+            context.log.error(msg)
+            raise RuntimeError(msg)
 
         # SCD2 expire + insert
         key_join = "c.objectid = t.objectid"
@@ -153,37 +176,9 @@ def structures_arcgis(
     )
 
 
-def _arcgis_rings_to_geojson(rings: list) -> dict:
-    polygons = []
-    current_polygon = []
-    for ring in rings:
-        if not current_polygon:
-            current_polygon.append(ring)
-        elif _is_clockwise(ring):
-            polygons.append(current_polygon)
-            current_polygon = [ring]
-        else:
-            current_polygon.append(ring)
-    if current_polygon:
-        polygons.append(current_polygon)
-    return {"type": "MultiPolygon", "coordinates": polygons}
-
-
-def _is_clockwise(ring: list[list[float]]) -> bool:
-    total = 0.0
-    for i in range(len(ring) - 1):
-        x1, y1 = ring[i][0], ring[i][1]
-        x2, y2 = ring[i + 1][0], ring[i + 1][1]
-        total += (x2 - x1) * (y2 + y1)
-    return total > 0
-
-
-@asset_check(asset=structures_arcgis)
-def structures_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
-    result = database.execute("SELECT COUNT(*) FROM staging.structures WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(passed=count > 0, severity=AssetCheckSeverity.ERROR,
-                            metadata={"current_record_count": MetadataValue.int(count)})
+structures_record_count_nonzero = make_row_count_check(
+    structures_arcgis, table="structures"
+)
 
 
 @asset_check(asset=structures_arcgis)

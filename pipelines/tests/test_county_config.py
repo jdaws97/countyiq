@@ -1,4 +1,4 @@
-from countyiq.lib.county_config import CountyConfig, get_county_config, COUNTY_CONFIGS
+from countyiq.lib.county_config import get_county_config, COUNTY_CONFIGS
 
 
 def test_york_config_exists():
@@ -7,6 +7,8 @@ def test_york_config_exists():
     assert config.plcb_filter == "York County"
     assert config.plcb_min_records == 500
     assert "arcweb1.ycpc.org" in config.arcgis_parcels_url
+    assert "webrecorders.yorkcountypa.gov" in config.recorder_base_url
+    assert config.recorder_parcel_search_id == "DOCSEARCH41S1"
 
 
 def test_default_county_is_york():
@@ -25,3 +27,4 @@ def test_all_configs_have_required_fields():
         assert config.name, f"{key} missing name"
         assert config.plcb_filter, f"{key} missing plcb_filter"
         assert config.arcgis_parcels_url, f"{key} missing arcgis_parcels_url"
+        assert config.recorder_base_url, f"{key} missing recorder_base_url"

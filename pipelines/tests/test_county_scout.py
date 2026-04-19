@@ -16,6 +16,7 @@ def test_york_seed_catalog_covers_core_domains():
     assert "tax-sale" in slugs
     assert "commissioners" in slugs
     assert "efacts" in slugs
+    assert "building-permit-reports" in slugs
 
 
 def test_infer_categories_detects_priority_signal_terms():

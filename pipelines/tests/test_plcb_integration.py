@@ -3,7 +3,6 @@
 
 Requires: docker compose up -d postgres-test && alembic upgrade head
 """
-import os
 import pytest
 import psycopg2
 

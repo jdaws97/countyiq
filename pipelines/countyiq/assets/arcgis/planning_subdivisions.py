@@ -12,15 +12,13 @@ import json
 from psycopg2.extras import execute_batch
 from dagster import (
     asset,
-    asset_check,
-    AssetCheckResult,
-    AssetCheckSeverity,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
 )
 
 from countyiq.lib.arcgis_client import iterate_feature_pages
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.planning_subdivisions import parse_planning_subdivision_features
 from countyiq.resources.database import DatabaseResource
@@ -192,14 +190,10 @@ def _find_feature_by_sequ_num(features: list[dict], sequ_num) -> dict | None:
     return None
 
 
-@asset_check(asset=planning_subdivisions_arcgis)
-def planning_subdivisions_record_count(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.planning_subdivisions has records above threshold."""
-    county = get_county_config()
-    result = database.execute("SELECT COUNT(*) FROM staging.planning_subdivisions WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count >= county.arcgis_planning_subdivisions_min_records,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+planning_subdivisions_record_count = make_row_count_check(
+    planning_subdivisions_arcgis,
+    table="planning_subdivisions",
+    threshold_fn=lambda: get_county_config().arcgis_planning_subdivisions_min_records,
+    name="planning_subdivisions_record_count",
+    description="Verify staging.planning_subdivisions has records above threshold.",
+)

@@ -1,18 +1,8 @@
-"""Pass 4 — County Narratives Dagster Asset.
+"""Generate county-level narratives from cross-parcel signal patterns."""
 
-Detects cross-parcel patterns via 4 scan types (corridor activity, owner
-portfolio, municipal trends, distress migration) and synthesizes narratives
-using LLM prompts.  Results are inserted to public.county_narratives with a
-14-day expiration.  Expired narratives are cleaned up on each run.
-
-The asset is controlled by the COUNTYIQ_TEXT_MODEL environment variable.
-If that variable is not set, the asset returns immediately with
-status="skipped", allowing it to exist in the Dagster graph without
-failing on machines that have no model configured.
-"""
-
+import hashlib
 import json
-import os
+import re
 from datetime import datetime, timezone
 
 from dagster import (
@@ -22,33 +12,43 @@ from dagster import (
     asset,
 )
 
+from countyiq.lib.intelligence_common import compute_input_hash
+from countyiq.lib.pass_llm_config import PassHarnessUnavailable, resolve_pass_harness
 from countyiq.lib.pass4_county_narratives import (
     CORRIDOR_SCAN_QUERY,
-    PORTFOLIO_SCAN_QUERY,
-    MUNICIPAL_SCAN_QUERY,
     DISTRESS_SCAN_QUERY,
+    MUNICIPAL_SCAN_QUERY,
+    PORTFOLIO_SCAN_QUERY,
     build_corridor_prompt,
-    build_portfolio_prompt,
-    build_municipal_prompt,
     build_distress_prompt,
+    build_municipal_prompt,
+    build_portfolio_prompt,
     parse_narrative_output,
 )
 from countyiq.resources.database import DatabaseResource
 
+PASS_NUMBER = 4
+PASS_VERSION = "4.1"
 
-# ---------------------------------------------------------------------------
-# SQL constants
-# ---------------------------------------------------------------------------
-
-INSERT_NARRATIVE_QUERY = """
+UPSERT_NARRATIVE_QUERY = """
     INSERT INTO public.county_narratives
-        (title, body, narrative_type, trajectory,
-         affected_pidns, key_entities, citations,
-         generated_at, expires_at)
+        (narrative_key, title, body, narrative_type, trajectory,
+         affected_pidns, key_entities, citations, generated_at, expires_at)
     VALUES
-        (%(title)s, %(body)s, %(narrative_type)s, %(trajectory)s,
+        (%(narrative_key)s, %(title)s, %(body)s, %(narrative_type)s, %(trajectory)s,
          %(affected_pidns)s, %(key_entities)s, %(citations)s::jsonb,
          %(generated_at)s, NOW() + INTERVAL '14 days')
+    ON CONFLICT (narrative_key)
+    DO UPDATE SET
+        title = EXCLUDED.title,
+        body = EXCLUDED.body,
+        narrative_type = EXCLUDED.narrative_type,
+        trajectory = EXCLUDED.trajectory,
+        affected_pidns = EXCLUDED.affected_pidns,
+        key_entities = EXCLUDED.key_entities,
+        citations = EXCLUDED.citations,
+        generated_at = EXCLUDED.generated_at,
+        expires_at = EXCLUDED.expires_at
 """
 
 CLEANUP_EXPIRED_QUERY = """
@@ -56,14 +56,18 @@ CLEANUP_EXPIRED_QUERY = """
     WHERE expires_at < NOW()
 """
 
-# Delete existing narratives of a given type before inserting fresh ones.
-# This prevents duplicate accumulation across weekly runs.
-DEDUPE_NARRATIVE_TYPE_QUERY = """
-    DELETE FROM public.county_narratives
-    WHERE narrative_type = %(narrative_type)s
+TOUCH_NARRATIVE_QUERY = """
+    UPDATE public.county_narratives
+    SET expires_at = NOW() + INTERVAL '14 days'
+    WHERE narrative_key = %(narrative_key)s
 """
 
-# Gather briefs for a list of PIDNs
+DELETE_STALE_NARRATIVES_QUERY = """
+    DELETE FROM public.county_narratives
+    WHERE narrative_type = %(narrative_type)s
+      AND NOT (narrative_key = ANY(%(keep_keys)s::text[]))
+"""
+
 BRIEFS_FOR_PIDNS_QUERY = """
     SELECT
         pb.pidn,
@@ -75,7 +79,6 @@ BRIEFS_FOR_PIDNS_QUERY = """
     WHERE pb.pidn = ANY(%(pidns)s)
 """
 
-# Gather proceedings for a list of PIDNs
 PROCEEDINGS_FOR_PIDNS_QUERY = """
     SELECT
         pe.extraction_type AS type,
@@ -98,7 +101,6 @@ PROCEEDINGS_FOR_PIDNS_QUERY = """
     LIMIT 20
 """
 
-# Gather deeds for an entity's linked names
 DEEDS_FOR_ENTITY_QUERY = """
     SELECT
         rd.pidn,
@@ -114,7 +116,6 @@ DEEDS_FOR_ENTITY_QUERY = """
     LIMIT 20
 """
 
-# ZHB decisions per municipality — matches by PIDN or address
 ZHB_DECISIONS_QUERY = """
     SELECT
         pe.decision,
@@ -137,10 +138,6 @@ ZHB_DECISIONS_QUERY = """
 """
 
 
-# ---------------------------------------------------------------------------
-# Dagster Asset
-# ---------------------------------------------------------------------------
-
 @asset(
     group_name="enrichment",
     description=(
@@ -156,76 +153,113 @@ def county_narratives(
 ) -> MaterializeResult:
     log = context.log
 
-    # ------------------------------------------------------------------
-    # Resolve backend and model (same pattern as Pass 1/2/3)
-    # ------------------------------------------------------------------
-    openrouter_model = os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
-    local_model = os.environ.get("COUNTYIQ_TEXT_MODEL")
-
-    if openrouter_model:
-        backend = "openrouter"
-        model_path = openrouter_model
-    elif local_model:
-        backend = "llama_cpp"
-        model_path = local_model
-    else:
-        log.info(
-            "Neither COUNTYIQ_OPENROUTER_MODEL nor COUNTYIQ_TEXT_MODEL is set — "
-            "skipping Pass 4 county narratives."
-        )
-        return _skipped_result("no model configured")
-
-    log.info(f"Pass 4: backend={backend} model={model_path}")
-
     try:
-        from countyiq.lib.llm_harness import (
-            HarnessConfig, get_preset_for_model, invoke_with_retry,
+        config, invoke_with_retry = resolve_pass_harness(
+            log,
+            pass_number=PASS_NUMBER,
+            archive_label="pass4_narratives",
+            default_max_tokens=2048,
         )
-    except ImportError as exc:
-        log.warning("llm_harness import failed (%s) — skipping", exc)
-        return _skipped_result("llm_harness import failed")
+    except PassHarnessUnavailable as exc:
+        return _skipped_result(exc.reason)
 
-    thinking_enabled = os.environ.get("COUNTYIQ_THINKING", "true").lower() in ("1", "true", "yes")
-    preset = get_preset_for_model(model_path, thinking=thinking_enabled, reasoning_task=True)
-
-    config = HarnessConfig(
-        model_path=model_path,
-        backend=backend,
-        max_tokens=2048,
-        thinking=thinking_enabled,
-        archive_label="pass4_narratives",
-        **preset,
-    )
-
-    # ------------------------------------------------------------------
-    # Cleanup: remove expired narratives AND delete all current narratives
-    # for each type we're about to regenerate. This prevents duplicate
-    # accumulation across weekly runs.
-    # ------------------------------------------------------------------
     database.execute(CLEANUP_EXPIRED_QUERY)
-    for ntype in ("corridor", "municipality", "owner_portfolio", "market_segment"):
-        database.execute(DEDUPE_NARRATIVE_TYPE_QUERY, {"narrative_type": ntype})
-    log.info("Cleaned up expired + stale narratives")
+    log.info("Cleaned up expired narratives")
 
     counts = {
-        "corridor": 0,
-        "portfolio": 0,
-        "municipal": 0,
-        "distress": 0,
+        "corridor_generated": 0,
+        "corridor_skipped": 0,
+        "portfolio_generated": 0,
+        "portfolio_skipped": 0,
+        "municipal_generated": 0,
+        "municipal_skipped": 0,
+        "distress_generated": 0,
+        "distress_skipped": 0,
         "errors": 0,
     }
 
-    # ------------------------------------------------------------------
-    # Scan A: Corridor Activity
-    # ------------------------------------------------------------------
+    corridor_generated, corridor_skipped, corridor_errors = _run_corridor_scan(
+        database, log, config, invoke_with_retry
+    )
+    counts["corridor_generated"] = corridor_generated
+    counts["corridor_skipped"] = corridor_skipped
+    counts["errors"] += corridor_errors
+
+    portfolio_generated, portfolio_skipped, portfolio_errors = _run_portfolio_scan(
+        database, log, config, invoke_with_retry
+    )
+    counts["portfolio_generated"] = portfolio_generated
+    counts["portfolio_skipped"] = portfolio_skipped
+    counts["errors"] += portfolio_errors
+
+    municipal_generated, municipal_skipped, municipal_errors = _run_municipal_scan(
+        database, log, config, invoke_with_retry
+    )
+    counts["municipal_generated"] = municipal_generated
+    counts["municipal_skipped"] = municipal_skipped
+    counts["errors"] += municipal_errors
+
+    distress_generated, distress_skipped, distress_errors = _run_distress_scan(
+        database, log, config, invoke_with_retry
+    )
+    counts["distress_generated"] = distress_generated
+    counts["distress_skipped"] = distress_skipped
+    counts["errors"] += distress_errors
+
+    total_generated = (
+        counts["corridor_generated"]
+        + counts["portfolio_generated"]
+        + counts["municipal_generated"]
+        + counts["distress_generated"]
+    )
+    total_skipped = (
+        counts["corridor_skipped"]
+        + counts["portfolio_skipped"]
+        + counts["municipal_skipped"]
+        + counts["distress_skipped"]
+    )
+
+    log.info(
+        "Pass 4 complete: %d generated, %d unchanged, %d errors",
+        total_generated,
+        total_skipped,
+        counts["errors"],
+    )
+
+    return MaterializeResult(
+        metadata={
+            "status": MetadataValue.text("complete"),
+            "model": MetadataValue.text(config.model_path),
+            "thinking": MetadataValue.bool(config.thinking),
+            "corridor_narratives": MetadataValue.int(counts["corridor_generated"]),
+            "corridor_skipped": MetadataValue.int(counts["corridor_skipped"]),
+            "portfolio_narratives": MetadataValue.int(counts["portfolio_generated"]),
+            "portfolio_skipped": MetadataValue.int(counts["portfolio_skipped"]),
+            "municipal_narratives": MetadataValue.int(counts["municipal_generated"]),
+            "municipal_skipped": MetadataValue.int(counts["municipal_skipped"]),
+            "distress_narratives": MetadataValue.int(counts["distress_generated"]),
+            "distress_skipped": MetadataValue.int(counts["distress_skipped"]),
+            "total_narratives": MetadataValue.int(total_generated),
+            "total_skipped": MetadataValue.int(total_skipped),
+            "errors": MetadataValue.int(counts["errors"]),
+        }
+    )
+
+
+def _run_corridor_scan(database, log, config, invoke_with_retry):
+    generated = 0
+    skipped = 0
+    errors = 0
+    seen_keys: list[str] = []
+
     log.info("Running corridor activity scan")
     try:
-        corridor_rows = database.execute(CORRIDOR_SCAN_QUERY) or []
-        log.info("Found %d corridor clusters", len(corridor_rows))
+        rows = database.execute(CORRIDOR_SCAN_QUERY) or []
+        log.info("Found %d corridor clusters", len(rows))
 
-        for row in corridor_rows:
+        for row in rows:
+            signal_key = ""
             try:
-                # CORRIDOR_SCAN_QUERY returns: signal_key, municipality, cluster_pidns, cluster_size
                 if isinstance(row, (tuple, list)):
                     signal_key = row[0]
                     municipality = row[1]
@@ -237,56 +271,81 @@ def county_narratives(
                     cluster_pidns = row.get("cluster_pidns")
                     cluster_size = row.get("cluster_size")
 
-                # Gather briefs and proceedings for the cluster
-                briefs_rows = database.execute(BRIEFS_FOR_PIDNS_QUERY, {"pidns": cluster_pidns}) or []
+                briefs_rows = database.execute(
+                    BRIEFS_FOR_PIDNS_QUERY,
+                    {"pidns": cluster_pidns or []},
+                ) or []
                 parcels = _rows_to_dicts(briefs_rows, ["pidn", "address", "assessment", "brief_excerpt"])
 
-                proc_rows = database.execute(PROCEEDINGS_FOR_PIDNS_QUERY, {"pidns": cluster_pidns}) or []
+                proc_rows = database.execute(
+                    PROCEEDINGS_FOR_PIDNS_QUERY,
+                    {"pidns": cluster_pidns or []},
+                ) or []
                 proceedings = _rows_to_dicts(proc_rows, ["type", "applicant", "decision", "meeting_date", "body"])
 
-                cluster_data = {
+                narrative_data = {
                     "signal_key": signal_key,
+                    "municipality": municipality,
                     "cluster_size": cluster_size,
-                    "cluster_pidns": cluster_pidns,
+                    "cluster_pidns": cluster_pidns or [],
                     "parcels": parcels,
                     "proceedings": proceedings,
                 }
+                narrative_key = _build_narrative_key(
+                    "corridor",
+                    municipality,
+                    signal_key,
+                    ",".join(sorted(cluster_pidns or [])),
+                )
+                seen_keys.append(narrative_key)
 
-                prompt = build_corridor_prompt(cluster_data)
-                result = invoke_with_retry(config, prompt, retries=1)
-
-                if not result.success:
-                    log.warning("LLM failed for corridor %s: %s", signal_key, result.error)
-                    counts["errors"] += 1
-                    continue
-
-                parsed = parse_narrative_output(result.parsed or {})
-                if "error" in parsed:
-                    log.warning("Invalid corridor output for %s: %s", signal_key, parsed["error"])
-                    counts["errors"] += 1
-                    continue
-
-                _insert_narrative(database, parsed)
-                counts["corridor"] += 1
-                log.info("Generated corridor narrative: %s", parsed["title"])
+                status = _generate_or_refresh_narrative(
+                    database=database,
+                    log=log,
+                    config=config,
+                    invoke_with_retry=invoke_with_retry,
+                    narrative_key=narrative_key,
+                    narrative_type="corridor",
+                    prompt=build_corridor_prompt(narrative_data),
+                    narrative_data=narrative_data,
+                    archive_key=_narrative_archive_key(
+                        "corridor",
+                        municipality,
+                        signal_key,
+                        cluster_size,
+                    ),
+                )
+                if status == "generated":
+                    generated += 1
+                elif status == "skipped":
+                    skipped += 1
+                else:
+                    errors += 1
 
             except Exception as exc:
                 log.warning("Error in corridor scan for %s: %s", signal_key, exc)
-                counts["errors"] += 1
+                errors += 1
 
     except Exception as exc:
         log.warning("Corridor scan query failed: %s", exc)
-        counts["errors"] += 1
+        return 0, 0, errors + 1
 
-    # ------------------------------------------------------------------
-    # Scan B: Owner Portfolio
-    # ------------------------------------------------------------------
+    _delete_stale_narratives(database, "corridor", seen_keys)
+    return generated, skipped, errors
+
+
+def _run_portfolio_scan(database, log, config, invoke_with_retry):
+    generated = 0
+    skipped = 0
+    errors = 0
+    seen_keys: list[str] = []
+
     log.info("Running owner portfolio scan")
     try:
-        portfolio_rows = database.execute(PORTFOLIO_SCAN_QUERY) or []
-        log.info("Found %d portfolio entities", len(portfolio_rows))
+        rows = database.execute(PORTFOLIO_SCAN_QUERY) or []
+        log.info("Found %d portfolio entities", len(rows))
 
-        for row in portfolio_rows:
+        for row in rows:
             entity_name = ""
             try:
                 if isinstance(row, (tuple, list)):
@@ -302,70 +361,85 @@ def county_narratives(
                     total_acres = row.get("total_acres")
                     pidns = row.get("pidns")
 
-                entity_name = canonical_name
+                entity_name = canonical_name or ""
+                names = [canonical_name] if canonical_name else []
 
-                # Gather briefs
-                briefs_rows = database.execute(BRIEFS_FOR_PIDNS_QUERY, {"pidns": pidns}) or []
+                briefs_rows = database.execute(
+                    BRIEFS_FOR_PIDNS_QUERY,
+                    {"pidns": pidns or []},
+                ) or []
                 briefs = _rows_to_dicts(briefs_rows, ["pidn", "address", "assessment", "brief_excerpt"])
 
-                # Gather deeds
-                names = [canonical_name]
                 deeds = []
-                try:
-                    deed_rows = database.execute(
-                        DEEDS_FOR_ENTITY_QUERY, {"names": names}
-                    ) or []
-                    deeds = _rows_to_dicts(deed_rows, ["pidn", "grantor", "grantee", "date", "price"])
-                except Exception:
-                    pass  # recorder_documents table may not exist yet
+                if names:
+                    try:
+                        deed_rows = database.execute(DEEDS_FOR_ENTITY_QUERY, {"names": names}) or []
+                        deeds = _rows_to_dicts(deed_rows, ["pidn", "grantor", "grantee", "date", "price"])
+                    except Exception:
+                        deeds = []
 
-                portfolio_data = {
+                narrative_data = {
                     "entity_id": entity_id,
                     "canonical_name": canonical_name,
                     "entity_type": entity_type,
                     "briefed_parcels": briefed_parcels,
                     "municipalities": municipalities or [],
                     "total_acres": total_acres or 0,
-                    "pidns": pidns,
+                    "pidns": pidns or [],
                     "briefs": briefs,
                     "deeds": deeds,
                 }
+                narrative_key = _build_narrative_key(
+                    "owner_portfolio",
+                    entity_id if entity_id is not None else canonical_name,
+                )
+                seen_keys.append(narrative_key)
 
-                prompt = build_portfolio_prompt(portfolio_data)
-                result = invoke_with_retry(config, prompt, retries=1)
-
-                if not result.success:
-                    log.warning("LLM failed for portfolio %s: %s", canonical_name, result.error)
-                    counts["errors"] += 1
-                    continue
-
-                parsed = parse_narrative_output(result.parsed or {})
-                if "error" in parsed:
-                    log.warning("Invalid portfolio output for %s: %s", canonical_name, parsed["error"])
-                    counts["errors"] += 1
-                    continue
-
-                _insert_narrative(database, parsed)
-                counts["portfolio"] += 1
-                log.info("Generated portfolio narrative: %s", parsed["title"])
+                status = _generate_or_refresh_narrative(
+                    database=database,
+                    log=log,
+                    config=config,
+                    invoke_with_retry=invoke_with_retry,
+                    narrative_key=narrative_key,
+                    narrative_type="owner_portfolio",
+                    prompt=build_portfolio_prompt(narrative_data),
+                    narrative_data=narrative_data,
+                    archive_key=_narrative_archive_key(
+                        "portfolio",
+                        entity_id if entity_id is not None else canonical_name,
+                    ),
+                )
+                if status == "generated":
+                    generated += 1
+                elif status == "skipped":
+                    skipped += 1
+                else:
+                    errors += 1
 
             except Exception as exc:
                 log.warning("Error in portfolio scan for %s: %s", entity_name, exc)
-                counts["errors"] += 1
+                errors += 1
 
     except Exception as exc:
         log.warning("Portfolio scan query failed: %s", exc)
-        counts["errors"] += 1
+        return 0, 0, errors + 1
 
-    # ------------------------------------------------------------------
-    # Scan C: Municipal Trends
-    # ------------------------------------------------------------------
+    _delete_stale_narratives(database, "owner_portfolio", seen_keys)
+    return generated, skipped, errors
+
+
+def _run_municipal_scan(database, log, config, invoke_with_retry):
+    generated = 0
+    skipped = 0
+    errors = 0
+    seen_keys: list[str] = []
+
     log.info("Running municipal trends scan")
     try:
-        municipal_rows = database.execute(MUNICIPAL_SCAN_QUERY) or []
-        log.info("Found %d municipalities with briefs", len(municipal_rows))
+        rows = database.execute(MUNICIPAL_SCAN_QUERY) or []
+        log.info("Found %d municipalities with briefs", len(rows))
 
-        for row in municipal_rows:
+        for row in rows:
             municipality = ""
             try:
                 if isinstance(row, (tuple, list)):
@@ -405,67 +479,74 @@ def county_narratives(
                         "total_owed": row.get("total_owed", 0) or 0,
                     }
 
-                # Gather ZHB decisions
                 zhb_decisions = {}
                 try:
-                    zhb_rows = database.execute(
-                        ZHB_DECISIONS_QUERY, {"municipality": municipality}
-                    ) or []
-                    for zr in zhb_rows:
-                        if isinstance(zr, (tuple, list)):
-                            zhb_decisions[zr[0] or "unknown"] = zr[1] or 0
+                    zhb_rows = database.execute(ZHB_DECISIONS_QUERY, {"municipality": municipality}) or []
+                    for zhb_row in zhb_rows:
+                        if isinstance(zhb_row, (tuple, list)):
+                            zhb_decisions[zhb_row[0] or "unknown"] = zhb_row[1] or 0
                         else:
-                            zhb_decisions[zr.get("decision", "unknown")] = zr.get("cnt", 0)
+                            zhb_decisions[zhb_row.get("decision", "unknown")] = zhb_row.get("cnt", 0)
                 except Exception:
-                    pass  # proceeding_extractions may be empty
+                    zhb_decisions = {}
 
-                municipal_data = {
+                narrative_data = {
                     "municipality": municipality,
                     "assessment_distribution": assessment_distribution,
                     "signal_distribution": signal_distribution,
                     "zhb_decisions": zhb_decisions,
                     "distress_summary": distress_summary,
                 }
+                narrative_key = _build_narrative_key("municipality", municipality)
+                seen_keys.append(narrative_key)
 
-                prompt = build_municipal_prompt(municipal_data)
-                result = invoke_with_retry(config, prompt, retries=1)
-
-                if not result.success:
-                    log.warning("LLM failed for municipal %s: %s", municipality, result.error)
-                    counts["errors"] += 1
-                    continue
-
-                parsed = parse_narrative_output(result.parsed or {})
-                if "error" in parsed:
-                    log.warning("Invalid municipal output for %s: %s", municipality, parsed["error"])
-                    counts["errors"] += 1
-                    continue
-
-                _insert_narrative(database, parsed)
-                counts["municipal"] += 1
-                log.info("Generated municipal narrative: %s", parsed["title"])
+                status = _generate_or_refresh_narrative(
+                    database=database,
+                    log=log,
+                    config=config,
+                    invoke_with_retry=invoke_with_retry,
+                    narrative_key=narrative_key,
+                    narrative_type="municipality",
+                    prompt=build_municipal_prompt(narrative_data),
+                    narrative_data=narrative_data,
+                    archive_key=_narrative_archive_key("municipality", municipality),
+                )
+                if status == "generated":
+                    generated += 1
+                elif status == "skipped":
+                    skipped += 1
+                else:
+                    errors += 1
 
             except Exception as exc:
                 log.warning("Error in municipal scan for %s: %s", municipality, exc)
-                counts["errors"] += 1
+                errors += 1
 
     except Exception as exc:
         log.warning("Municipal scan query failed: %s", exc)
-        counts["errors"] += 1
+        return 0, 0, errors + 1
 
-    # ------------------------------------------------------------------
-    # Scan D: Distress Migration
-    # ------------------------------------------------------------------
+    _delete_stale_narratives(database, "municipality", seen_keys)
+    return generated, skipped, errors
+
+
+def _run_distress_scan(database, log, config, invoke_with_retry):
+    generated = 0
+    skipped = 0
+    errors = 0
+    seen_keys: list[str] = []
+
     log.info("Running distress migration scan")
     try:
-        distress_rows = database.execute(DISTRESS_SCAN_QUERY) or []
-        log.info("Found %d municipalities with significant distress changes", len(distress_rows))
+        rows = database.execute(DISTRESS_SCAN_QUERY) or []
+        log.info("Found %d municipalities with significant distress changes", len(rows))
 
-        for row in distress_rows:
+        for row in rows:
             municipality = ""
+            school_dis = ""
             try:
                 if isinstance(row, (tuple, list)):
-                    distress_data = {
+                    narrative_data = {
                         "municipality": row[0] or "",
                         "school_dis": row[1] or "",
                         "current_count": row[2] or 0,
@@ -476,7 +557,7 @@ def county_narratives(
                         "total_delta": row[7] or 0,
                     }
                 else:
-                    distress_data = {
+                    narrative_data = {
                         "municipality": row.get("municipality", ""),
                         "school_dis": row.get("school_dis", ""),
                         "current_count": row.get("current_count", 0) or 0,
@@ -487,83 +568,167 @@ def county_narratives(
                         "total_delta": row.get("total_delta", 0) or 0,
                     }
 
-                municipality = distress_data["municipality"]
+                municipality = narrative_data["municipality"]
+                school_dis = narrative_data["school_dis"]
+                narrative_key = _build_narrative_key("market_segment", municipality, school_dis)
+                seen_keys.append(narrative_key)
 
-                prompt = build_distress_prompt(distress_data)
-                result = invoke_with_retry(config, prompt, retries=1)
-
-                if not result.success:
-                    log.warning("LLM failed for distress %s: %s", municipality, result.error)
-                    counts["errors"] += 1
-                    continue
-
-                parsed = parse_narrative_output(result.parsed or {})
-                if "error" in parsed:
-                    log.warning("Invalid distress output for %s: %s", municipality, parsed["error"])
-                    counts["errors"] += 1
-                    continue
-
-                _insert_narrative(database, parsed)
-                counts["distress"] += 1
-                log.info("Generated distress narrative: %s", parsed["title"])
+                status = _generate_or_refresh_narrative(
+                    database=database,
+                    log=log,
+                    config=config,
+                    invoke_with_retry=invoke_with_retry,
+                    narrative_key=narrative_key,
+                    narrative_type="market_segment",
+                    prompt=build_distress_prompt(narrative_data),
+                    narrative_data=narrative_data,
+                    archive_key=_narrative_archive_key("distress", municipality, school_dis),
+                )
+                if status == "generated":
+                    generated += 1
+                elif status == "skipped":
+                    skipped += 1
+                else:
+                    errors += 1
 
             except Exception as exc:
-                log.warning("Error in distress scan for %s: %s", municipality, exc)
-                counts["errors"] += 1
+                log.warning("Error in distress scan for %s / %s: %s", municipality, school_dis, exc)
+                errors += 1
 
     except Exception as exc:
         log.warning("Distress scan query failed: %s", exc)
-        counts["errors"] += 1
+        return 0, 0, errors + 1
 
-    # ------------------------------------------------------------------
-    # Summary
-    # ------------------------------------------------------------------
-    total = counts["corridor"] + counts["portfolio"] + counts["municipal"] + counts["distress"]
-    log.info(
-        "Pass 4 complete: %d narratives (%d corridor, %d portfolio, %d municipal, %d distress), %d errors",
-        total, counts["corridor"], counts["portfolio"],
-        counts["municipal"], counts["distress"], counts["errors"],
-    )
+    _delete_stale_narratives(database, "market_segment", seen_keys)
+    return generated, skipped, errors
 
-    return MaterializeResult(
-        metadata={
-            "status": MetadataValue.text("complete"),
-            "corridor_narratives": MetadataValue.int(counts["corridor"]),
-            "portfolio_narratives": MetadataValue.int(counts["portfolio"]),
-            "municipal_narratives": MetadataValue.int(counts["municipal"]),
-            "distress_narratives": MetadataValue.int(counts["distress"]),
-            "total_narratives": MetadataValue.int(total),
-            "errors": MetadataValue.int(counts["errors"]),
+
+def _generate_or_refresh_narrative(
+    *,
+    database: DatabaseResource,
+    log,
+    config,
+    invoke_with_retry,
+    narrative_key: str,
+    narrative_type: str,
+    prompt: str,
+    narrative_data: dict,
+    archive_key: str,
+) -> str:
+    input_hash = compute_input_hash(
+        {
+            "pass_version": PASS_VERSION,
+            "narrative_type": narrative_type,
+            "data": narrative_data,
         }
     )
 
+    prior_hash = _get_prior_hash(database, narrative_key)
+    if prior_hash == input_hash:
+        _touch_narrative(database, narrative_key)
+        _update_pass_status(database, narrative_key, "complete", input_hash)
+        return "skipped"
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+    result = invoke_with_retry(
+        config,
+        prompt,
+        retries=1,
+        archive_key=archive_key,
+    )
+    if not result.success:
+        log.warning("LLM failed for %s: %s", narrative_key, result.error)
+        _update_pass_status(database, narrative_key, "error", input_hash, result.error)
+        return "error"
+
+    parsed = parse_narrative_output(result.parsed or {})
+    if "error" in parsed:
+        log.warning("Invalid narrative output for %s: %s", narrative_key, parsed["error"])
+        _update_pass_status(database, narrative_key, "error", input_hash, parsed["error"])
+        return "error"
+
+    parsed["narrative_type"] = narrative_type
+    _upsert_narrative(database, narrative_key, parsed)
+    _update_pass_status(database, narrative_key, "complete", input_hash)
+    return "generated"
+
 
 def _rows_to_dicts(rows: list, keys: list[str]) -> list[dict]:
-    """Convert tuple rows to dicts using the given key names."""
     result = []
     for row in rows:
         if isinstance(row, dict):
             result.append(row)
         elif isinstance(row, (tuple, list)):
-            d = {}
-            for i, key in enumerate(keys):
-                d[key] = row[i] if i < len(row) else None
-            result.append(d)
+            result.append({key: row[i] if i < len(row) else None for i, key in enumerate(keys)})
         else:
             result.append(row)
     return result
 
 
-def _insert_narrative(database: DatabaseResource, parsed: dict) -> None:
-    """Insert a parsed narrative into public.county_narratives."""
-    now = datetime.now(timezone.utc).isoformat()
+def _normalize_key_part(part: object) -> str:
+    text = str(part or "").strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    return text[:48] or "blank"
+
+
+def _build_narrative_key(kind: str, *parts: object) -> str:
+    normalized = [_normalize_key_part(part) for part in parts if part not in (None, "", [], ())]
+    digest_source = "|".join([kind, *normalized]).encode("utf-8")
+    digest = hashlib.sha256(digest_source).hexdigest()[:16]
+    prefix = ":".join([kind, *normalized[:2]])
+    return f"{prefix}:{digest}" if prefix else f"{kind}:{digest}"
+
+
+def _narrative_archive_key(kind: str, *parts) -> str:
+    cleaned_parts = [str(part).strip() for part in parts if part not in (None, "")]
+    return ":".join([kind, *cleaned_parts]) if cleaned_parts else kind
+
+
+def _get_prior_hash(database: DatabaseResource, narrative_key: str) -> str | None:
+    rows = database.execute(
+        """
+        SELECT input_hash
+        FROM meta.intelligence_passes
+        WHERE pidn = %(pidn)s
+          AND pass_number = %(pass_number)s
+          AND status = 'complete'
+        """,
+        {"pidn": narrative_key, "pass_number": PASS_NUMBER},
+    ) or []
+    if not rows:
+        return None
+    row = rows[0]
+    if isinstance(row, dict):
+        return row.get("input_hash")
+    return row[0] if row else None
+
+
+def _touch_narrative(database: DatabaseResource, narrative_key: str) -> None:
+    database.execute(TOUCH_NARRATIVE_QUERY, {"narrative_key": narrative_key})
+
+
+def _delete_stale_narratives(
+    database: DatabaseResource,
+    narrative_type: str,
+    keep_keys: list[str],
+) -> None:
     database.execute(
-        INSERT_NARRATIVE_QUERY,
+        DELETE_STALE_NARRATIVES_QUERY,
         {
+            "narrative_type": narrative_type,
+            "keep_keys": keep_keys,
+        },
+    )
+
+
+def _upsert_narrative(
+    database: DatabaseResource,
+    narrative_key: str,
+    parsed: dict,
+) -> None:
+    database.execute(
+        UPSERT_NARRATIVE_QUERY,
+        {
+            "narrative_key": narrative_key,
             "title": parsed["title"],
             "body": parsed["narrative"],
             "narrative_type": parsed["narrative_type"],
@@ -571,22 +736,56 @@ def _insert_narrative(database: DatabaseResource, parsed: dict) -> None:
             "affected_pidns": parsed.get("affected_pidns", []),
             "key_entities": parsed.get("key_entities", []),
             "citations": json.dumps(parsed.get("citations", [])),
-            "generated_at": now,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+
+def _update_pass_status(
+    database: DatabaseResource,
+    narrative_key: str,
+    status: str,
+    input_hash: str,
+    error_message: str | None = None,
+) -> None:
+    database.execute(
+        """
+        INSERT INTO meta.intelligence_passes
+            (pidn, pass_number, status, last_run_at, input_hash, error_message)
+        VALUES
+            (%(pidn)s, %(pass_number)s, %(status)s, NOW(), %(input_hash)s, %(error_message)s)
+        ON CONFLICT (pidn, pass_number)
+        DO UPDATE SET
+            status = EXCLUDED.status,
+            last_run_at = EXCLUDED.last_run_at,
+            input_hash = EXCLUDED.input_hash,
+            error_message = EXCLUDED.error_message
+        """,
+        {
+            "pidn": narrative_key,
+            "pass_number": PASS_NUMBER,
+            "status": status,
+            "input_hash": input_hash,
+            "error_message": error_message,
         },
     )
 
 
 def _skipped_result(reason: str) -> MaterializeResult:
-    """Return a MaterializeResult indicating the asset was skipped."""
     return MaterializeResult(
         metadata={
             "status": MetadataValue.text("skipped"),
             "reason": MetadataValue.text(reason),
             "corridor_narratives": MetadataValue.int(0),
+            "corridor_skipped": MetadataValue.int(0),
             "portfolio_narratives": MetadataValue.int(0),
+            "portfolio_skipped": MetadataValue.int(0),
             "municipal_narratives": MetadataValue.int(0),
+            "municipal_skipped": MetadataValue.int(0),
             "distress_narratives": MetadataValue.int(0),
+            "distress_skipped": MetadataValue.int(0),
             "total_narratives": MetadataValue.int(0),
+            "total_skipped": MetadataValue.int(0),
             "errors": MetadataValue.int(0),
         }
     )

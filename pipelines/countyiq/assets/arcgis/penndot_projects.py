@@ -7,7 +7,6 @@ Schedule: Weekly (Sunday 02:00)
 import json
 
 import requests
-from psycopg2.extras import execute_batch
 from dagster import (
     asset,
     asset_check,
@@ -19,8 +18,11 @@ from dagster import (
 )
 
 from countyiq.lib.arcgis_client import query_all_features
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
+from countyiq.lib.geometry import point_to_geojson
 from countyiq.lib.parsers.penndot_projects import parse_penndot_projects_features
+from countyiq.lib.scd import scd2_upsert_geom
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -86,9 +88,22 @@ def penndot_projects_arcgis(
             f"Possible truncated response — aborting."
         )
 
+    geom_lookup = _build_geom_lookup(all_features)
+
     cur = database.cursor()
     try:
-        stats = _geom_scd2_upsert(cur, records, all_features)
+        # `data` is a jsonb column; scd2_upsert_geom JSON-encodes dict/list
+        # values automatically and psycopg2 + JSONB accept the resulting text.
+        stats = scd2_upsert_geom(
+            cursor=cur,
+            schema="staging",
+            table="penndot_projects",
+            records=records,
+            key_columns=KEY_COLUMNS,
+            value_columns=VALUE_COLUMNS,
+            geom_lookup=geom_lookup,
+            geom_kind="point",
+        )
     finally:
         cur.close()
 
@@ -102,111 +117,24 @@ def penndot_projects_arcgis(
     )
 
 
-def _geom_scd2_upsert(cursor, records: list[dict], raw_features: list[dict]) -> dict:
-    """SCD2 upsert with PostGIS geometry for staging.penndot_projects (POINT)."""
-    conn = cursor.connection
-    was_autocommit = conn.autocommit
-    if was_autocommit:
-        conn.autocommit = False
-
-    try:
-        all_cols = KEY_COLUMNS + VALUE_COLUMNS
-        fqn = "staging.penndot_projects"
-
-        cursor.execute("DROP TABLE IF EXISTS _tmp_penndot_projects")
-        cursor.execute(f"CREATE TEMP TABLE _tmp_penndot_projects (LIKE {fqn} INCLUDING DEFAULTS)")
-
-        # Build geometry lookup by project_id
-        geom_lookup = {}
-        for feat in raw_features:
-            attrs = feat.get("attributes", {})
-            proj_id = attrs.get("PROJ_ID")
-            geom = feat.get("geometry")
-            if proj_id is not None and geom:
-                geojson = _arcgis_point_to_geojson(geom)
-                if geojson:
-                    geom_lookup[str(proj_id)] = json.dumps(geojson)
-
-        insert_sql = f"""
-            INSERT INTO _tmp_penndot_projects ({', '.join(all_cols)}, geom)
-            VALUES ({', '.join(['%s' if c != 'data' else '%s::jsonb' for c in all_cols])},
-                    CASE WHEN %s IS NOT NULL
-                         THEN ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)
-                         ELSE NULL END)
-        """
-        rows = []
-        for rec in records:
-            row = []
-            for c in all_cols:
-                if c == "data":
-                    row.append(json.dumps(rec.get("data")) if rec.get("data") is not None else None)
-                else:
-                    row.append(rec.get(c))
-            geom_json = geom_lookup.get(rec["project_id"])
-            row.extend([geom_json, geom_json])
-            rows.append(row)
-        execute_batch(cursor, insert_sql, rows, page_size=500)
-
-        # Expire changed/deleted
-        key_join = "c.project_id = t.project_id"
-        value_diff = " OR ".join(
-            f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS
-        )
-        cursor.execute(f"""
-            UPDATE {fqn} c SET valid_to = NOW()
-            WHERE c.valid_to IS NULL
-            AND (
-                EXISTS (SELECT 1 FROM _tmp_penndot_projects t WHERE {key_join} AND ({value_diff}))
-                OR NOT EXISTS (SELECT 1 FROM _tmp_penndot_projects t WHERE {key_join})
-            )
-        """)
-        expired = cursor.rowcount
-
-        # Insert new/changed
-        col_list = ', '.join(all_cols)
-        cursor.execute(f"""
-            INSERT INTO {fqn} ({col_list}, geom, valid_from)
-            SELECT {', '.join(f't.{c}' for c in all_cols)}, t.geom, NOW()
-            FROM _tmp_penndot_projects t
-            WHERE NOT EXISTS (
-                SELECT 1 FROM {fqn} c WHERE c.valid_to IS NULL AND {key_join}
-            )
-        """)
-        inserted = cursor.rowcount
-
-        cursor.execute("DROP TABLE IF EXISTS _tmp_penndot_projects")
-        conn.commit()
-
-        if was_autocommit:
-            conn.autocommit = True
-
-        return {"inserted": inserted, "expired": expired, "unchanged": len(records) - inserted}
-    except Exception:
-        conn.rollback()
-        if was_autocommit:
-            conn.autocommit = True
-        raise
+def _build_geom_lookup(raw_features: list[dict]) -> dict:
+    """Build project_id -> JSON-encoded GeoJSON Point lookup."""
+    lookup: dict = {}
+    for feat in raw_features:
+        attrs = feat.get("attributes", {})
+        proj_id = attrs.get("PROJ_ID")
+        geom = feat.get("geometry") or {}
+        if proj_id is None:
+            continue
+        geojson = point_to_geojson(geom.get("x"), geom.get("y"))
+        if geojson:
+            lookup[str(proj_id)] = json.dumps(geojson)
+    return lookup
 
 
-def _arcgis_point_to_geojson(geom: dict) -> dict | None:
-    """Convert ArcGIS point geometry to GeoJSON Point."""
-    x = geom.get("x")
-    y = geom.get("y")
-    if x is None or y is None:
-        return None
-    return {"type": "Point", "coordinates": [x, y]}
-
-
-@asset_check(asset=penndot_projects_arcgis)
-def penndot_projects_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.penndot_projects has at least one current record."""
-    result = database.execute("SELECT COUNT(*) FROM staging.penndot_projects WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count > 0,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+penndot_projects_record_count_nonzero = make_row_count_check(
+    penndot_projects_arcgis, table="penndot_projects"
+)
 
 
 @asset_check(asset=penndot_projects_arcgis)

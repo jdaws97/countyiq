@@ -19,6 +19,7 @@ from dagster import (
     MetadataValue,
 )
 
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.plcb import parse_plcb_csv, EXPECTED_HEADERS
 from countyiq.lib.scd import scd2_upsert
@@ -113,18 +114,9 @@ def plcb_licenses(
     )
 
 
-@asset_check(asset=plcb_licenses)
-def plcb_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.plcb_licenses has at least one current record."""
-    result = database.execute(
-        "SELECT COUNT(*) FROM staging.plcb_licenses WHERE valid_to IS NULL"
-    )
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count > 0,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+plcb_record_count_nonzero = make_row_count_check(
+    plcb_licenses, table="plcb_licenses"
+)
 
 
 @asset_check(asset=plcb_licenses)

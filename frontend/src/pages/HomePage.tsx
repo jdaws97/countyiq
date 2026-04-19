@@ -3,36 +3,9 @@ import { Link } from 'react-router-dom'
 import Nav from '../components/Nav'
 import SearchBar from '../components/SearchBar'
 import StatCard from '../components/StatCard'
+import { formatCurrencyCompact } from '../lib/format'
+import type { HealthData, StatsData } from '../types/ops'
 
-interface StatsData {
-  total_records: number
-  municipality_count: number
-  delinquent_parcels: number
-  total_delinquent: number
-  flood_zone_count: number
-  liquor_license_count: number
-  address_point_count: number
-  structure_count: number
-  total_assessed: number
-  county_tax_owed: number
-  school_tax_owed: number
-  municipal_tax_owed: number
-  oldest_delinquent_year: number | null
-  districts_affected: number
-}
-
-interface SourceInfo {
-  status: string
-  record_count: number
-}
-
-interface HealthData {
-  overall: string
-  sources: Record<string, SourceInfo>
-  summary: string
-}
-
-/* Pretty names for source keys */
 const SOURCE_DISPLAY: Record<string, string> = {
   structures: 'Building Structures',
   address_points: 'Address Points',
@@ -48,9 +21,10 @@ const SOURCE_DISPLAY: Record<string, string> = {
   penndot_projects: 'PennDOT Projects',
 }
 
-/* Active tiles config */
 const ACTIVE_TILES = [
   { icon: '\u25CE', name: 'Explore Map', desc: 'Interactive map view', color: 'var(--accent-blue)', to: '/map' },
+  { icon: '\u25C9', name: 'Dev Radar', desc: 'Development momentum', color: '#22c55e', to: '/radar' },
+  { icon: '\u25FC', name: 'County Feed', desc: 'Corridor, distress, and portfolio narratives', color: 'var(--accent-gold)', to: '/feed' },
   { icon: '\u25C6', name: 'Distressed Parcels', desc: 'Acquisition opportunities', color: 'var(--accent-red)', to: '/distressed' },
   { icon: '\u25C8', name: 'Flood Risk', desc: '', color: 'var(--accent-purple)', to: '/map?layer=flood' },
   { icon: '\u25C7', name: 'Municipalities', desc: '', color: 'var(--accent-green)', to: '/municipalities' },
@@ -61,41 +35,55 @@ const ACTIVE_TILES = [
   { icon: '\u25C6', name: 'Delinquent Taxes', desc: '', color: 'var(--accent-gold)', to: '/delinquent' },
 ]
 
-/* Disabled tiles config */
 const DISABLED_TILES: { icon: string; name: string; desc: string }[] = []
 
-function formatCurrency(value: number): string {
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`
-  return `$${value.toLocaleString()}`
-}
+const formatCurrency = (value: number) =>
+  formatCurrencyCompact(value, { allowBillions: true, allowThousands: true })
 
 export default function HomePage() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [health, setHealth] = useState<HealthData | null>(null)
+  const [statsError, setStatsError] = useState<string | null>(null)
+  const [healthError, setHealthError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/stats')
-      .then((r) => r.json())
-      .then(setStats)
-      .catch(() => setStats(null))
+      .then((r) => {
+        if (!r.ok) throw new Error(`Stats request failed (${r.status})`)
+        return r.json()
+      })
+      .then((data) => {
+        setStats(data)
+        setStatsError(null)
+      })
+      .catch((error) => {
+        console.error('Failed to load homepage stats', error)
+        setStats(null)
+        setStatsError('Stats unavailable')
+      })
 
     fetch('/api/ops/health')
-      .then((r) => r.json())
-      .then(setHealth)
-      .catch(() => setHealth(null))
+      .then((r) => {
+        if (!r.ok) throw new Error(`Health request failed (${r.status})`)
+        return r.json()
+      })
+      .then((data) => {
+        setHealth(data)
+        setHealthError(null)
+      })
+      .catch((error) => {
+        console.error('Failed to load homepage health summary', error)
+        setHealth(null)
+        setHealthError('Source health unavailable')
+      })
   }, [])
 
-  /* Derived values */
-  const totalRecords = stats?.total_records ?? 0
   const delinquentParcels = stats?.delinquent_parcels ?? 0
   const totalDelinquent = stats?.total_delinquent ?? 0
   const municipalityCount = stats?.municipality_count ?? 0
   const floodZoneCount = stats?.flood_zone_count ?? 0
   const penndotProjectCount = health?.sources?.penndot_projects?.record_count ?? 0
 
-  /* Source count for "across N data sources" */
   const greenSources = health
     ? Object.values(health.sources).filter((s) => s.status === 'green').length
     : 0
@@ -105,9 +93,9 @@ export default function HomePage() {
 
   const parcelCount = stats?.parcel_count ?? 0
 
-  /* Dynamic tile descriptions */
   const activeTileDescs = [
     `${parcelCount.toLocaleString()} parcels`,
+    'Scored by development signals',
     'Ranked by distress score',
     `${floodZoneCount.toLocaleString()} FEMA zones`,
     `${municipalityCount} jurisdictions`,
@@ -119,7 +107,6 @@ export default function HomePage() {
   ]
   const disabledTileDescs: string[] = []
 
-  /* Sort sources: green first, then red; by record count descending within each group */
   const sortedSources = health
     ? Object.entries(health.sources)
         .sort(([, a], [, b]) => {
@@ -133,10 +120,26 @@ export default function HomePage() {
       <Nav />
 
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: 32 }}>
-        {/* Search */}
         <SearchBar />
 
-        {/* Stats Grid */}
+        {(statsError || healthError) && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '10px 14px',
+              border: '1px solid rgba(220, 76, 76, 0.35)',
+              borderRadius: 8,
+              background: 'rgba(220, 76, 76, 0.08)',
+              color: 'var(--accent-red)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              letterSpacing: 0.3,
+            }}
+          >
+            {[statsError, healthError].filter(Boolean).join(' • ')}
+          </div>
+        )}
+
         <div
           style={{
             display: 'grid',
@@ -149,7 +152,7 @@ export default function HomePage() {
           <StatCard
             label="Parcels Tracked"
             value={parcelCount.toLocaleString()}
-            detail={`across ${greenSources} data sources`}
+            detail={healthError ?? `across ${greenSources} data sources`}
             color="var(--accent-blue)"
           />
           <StatCard
@@ -166,7 +169,6 @@ export default function HomePage() {
           />
         </div>
 
-        {/* Quick Access */}
         <SectionHeader title="Quick Access" />
         <div
           style={{
@@ -203,7 +205,6 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* Intelligence Briefing */}
         <SectionHeader title="Intelligence Briefing" />
         <div
           style={{
@@ -213,7 +214,6 @@ export default function HomePage() {
             animation: 'fadeUp 0.6s ease-out 0.3s both',
           }}
         >
-          {/* Tax Delinquency Panel */}
           <IntelPanel
             title="Tax Delinquency"
             badge="Report: Mar 27"
@@ -228,7 +228,6 @@ export default function HomePage() {
             <IntelRow label="Districts affected" value={stats?.districts_affected?.toString() ?? '--'} valueClass="default" />
           </IntelPanel>
 
-          {/* Data Sources Panel */}
           <IntelPanel
             title="Data Sources"
             badge={downSources > 0 ? `${downSources} down` : 'All green'}
@@ -246,7 +245,6 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer
         style={{
           maxWidth: 1200,
@@ -268,8 +266,6 @@ export default function HomePage() {
     </>
   )
 }
-
-/* ─── Sub-components ─── */
 
 function SectionHeader({ title }: { title: string }) {
   return (

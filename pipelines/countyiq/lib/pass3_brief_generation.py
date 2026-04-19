@@ -15,7 +15,6 @@ Plus helpers:
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from countyiq.lib.intelligence_common import (
     PARCEL_QUERY,
@@ -362,7 +361,7 @@ def gather_brief_context(cursor, pidn: str) -> dict:
     }
 
 
-def parse_brief_output(output: Any) -> dict:
+def parse_brief_output(output: object) -> dict:
     """Validate and normalize LLM brief generation output.
 
     Clamps assessment to VALID_ASSESSMENTS (default: "speculative").
@@ -409,122 +408,3 @@ def parse_brief_output(output: Any) -> dict:
         "citations": citations,
     }
 
-
-# =============================================================================
-# MEGA-BATCH: N parcels per LLM call
-# =============================================================================
-
-MEGA_BRIEF_TEMPLATE = """You are a county intelligence analyst writing development briefs for {n_parcels} parcels in York County, PA.
-
-{parcel_blocks}
-
-For EACH parcel above, write a concise intelligence brief based on its validated signals.
-
-RULES:
-1. Every claim MUST cite its source signal using [Signal: signal_key].
-2. Do not invent numbers not present in the data.
-3. If signals conflict, acknowledge the tension.
-
-OUTPUT — return ONLY valid JSON:
-{{
-  "briefs": [
-    {{
-      "pidn": "...",
-      "brief": "2-4 paragraph narrative with [Signal: signal_key] citations",
-      "assessment": "strong_opportunity|emerging|speculative|constrained|not_actionable",
-      "assessment_reasoning": "1-2 sentence explanation",
-      "key_questions": ["q1", "q2", "q3"],
-      "citations": ["signal_key_1", "signal_key_2"]
-    }}
-  ]
-}}"""
-
-
-def _format_brief_parcel_block(context: dict) -> str:
-    """Format one parcel's context for the mega-brief prompt."""
-    parcel = context.get("parcel", {})
-    entity = context.get("entity", {})
-    portfolio = context.get("portfolio", {})
-    signals = context.get("validated_signals", [])
-
-    lines = [
-        f"PARCEL: {parcel.get('pidn', '?')}",
-        f"  Address: {parcel.get('address', '?')} | Owner: {parcel.get('owner', '?')}",
-        f"  Class: {parcel.get('property_class', '?')} | Acres: {parcel.get('acres', 0)} | Assessed: ${parcel.get('assessed_value', 0):,.0f}",
-        f"  Last sale: {parcel.get('sale_date', '?')} for ${parcel.get('sale_price', 0):,.0f}",
-    ]
-
-    if entity.get("found"):
-        lines.append(f"  Entity: {entity.get('canonical_name', '?')} ({entity.get('entity_type', '?')})")
-    if portfolio.get("portfolio_count", 0) > 1:
-        lines.append(f"  Portfolio: {portfolio['portfolio_count']} parcels, ${portfolio.get('portfolio_value', 0):,.0f}")
-
-    lines.append(f"  Validated signals ({len(signals)}):")
-    for s in signals:
-        lines.append(
-            f"    - {s.get('signal_key', '?')} [{s.get('validation_status', '?')}/{s.get('adjusted_significance', '?')}]: "
-            f"{s.get('reasoning', '')[:100]}"
-        )
-
-    return "\n".join(lines)
-
-
-def build_mega_brief_prompt(contexts: list[dict]) -> str:
-    """Build a mega-batch prompt for N parcels' briefs in a single LLM call.
-
-    Args:
-        contexts: List of gather_brief_context() outputs.
-
-    Returns:
-        Formatted prompt string.
-    """
-    parcel_blocks = "\n\n".join(_format_brief_parcel_block(ctx) for ctx in contexts)
-    return MEGA_BRIEF_TEMPLATE.format(
-        n_parcels=len(contexts),
-        parcel_blocks=parcel_blocks,
-    )
-
-
-def parse_mega_brief_output(output: Any, contexts: list[dict]) -> dict:
-    """Parse mega-batch brief output into per-parcel records.
-
-    Args:
-        output: Parsed JSON from LLM.
-        contexts: The contexts that were sent.
-
-    Returns:
-        Dict with keys: briefs (list of normalized per-parcel dicts), missing, errors.
-    """
-    if not isinstance(output, dict):
-        return {"briefs": [], "missing": [c["pidn"] for c in contexts], "errors": [], "parse_error": "not a dict"}
-
-    raw_briefs = output.get("briefs", [])
-    if not isinstance(raw_briefs, list):
-        return {"briefs": [], "missing": [c["pidn"] for c in contexts], "errors": [], "parse_error": "missing briefs array"}
-
-    # Index by pidn
-    by_pidn = {}
-    for b in raw_briefs:
-        if isinstance(b, dict) and b.get("pidn"):
-            by_pidn[b["pidn"]] = b
-
-    briefs = []
-    missing = []
-    errors = []
-
-    for ctx in contexts:
-        pidn = ctx["pidn"]
-        raw = by_pidn.get(pidn)
-        if not raw:
-            missing.append(pidn)
-            continue
-
-        parsed = parse_brief_output(raw)
-        if "error" in parsed:
-            errors.append(pidn)
-            continue
-
-        parsed["pidn"] = pidn
-        briefs.append(parsed)
-
-    return {"briefs": briefs, "missing": missing, "errors": errors}

@@ -6,6 +6,7 @@ load_dotenv()  # Load .env file (OPENROUTER_API_KEY, etc.)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.lib.response_types import HealthResponse
 from api.routes.scout import router as scout_router
 from api.routes.stats import router as stats_router
 from api.routes.layers import router as layers_router
@@ -17,7 +18,9 @@ from api.routes.delinquent import router as delinquent_router
 from api.routes.licenses import router as licenses_router
 from api.routes.projects import router as projects_router
 from api.routes.scores import router as scores_router
+from api.routes.radar import router as radar_router
 from api.routes.ops import router as ops_router
+from api.routes.feed import router as feed_router
 
 app = FastAPI(
     title="CountyIQ API",
@@ -33,8 +36,8 @@ app.add_middleware(
 
 
 @app.get("/api/health")
-def health() -> dict:
-    """Minimal health route for Lambda and smoke tests."""
+def health() -> HealthResponse:
+    """Minimal health route for smoke tests and container health checks."""
     return {"status": "ok"}
 
 
@@ -49,4 +52,6 @@ app.include_router(delinquent_router, prefix="/api/delinquent")
 app.include_router(licenses_router, prefix="/api/licenses")
 app.include_router(projects_router, prefix="/api/projects")
 app.include_router(scores_router, prefix="/api/scores")
+app.include_router(radar_router, prefix="/api/scores", tags=["radar"])
 app.include_router(ops_router, prefix="/api/ops")
+app.include_router(feed_router, prefix="/api/feed")

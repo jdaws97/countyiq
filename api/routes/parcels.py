@@ -3,18 +3,20 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from api.lib.database import get_cursor
+from api.lib.development_radar import build_reason_signals, compute_headline_signal
+from api.lib.response_types import ParcelBboxResponse, PropertyReportResponse
 
 router = APIRouter(tags=["parcels"])
 
 
-@router.get("/bbox")
+@router.get("/bbox", response_model=None)
 def parcels_bbox(
     west: float = Query(...),
     south: float = Query(...),
     east: float = Query(...),
     north: float = Query(...),
     layer: str | None = Query(default=None),
-) -> dict:
+) -> ParcelBboxResponse:
     """Return parcels within a bounding box as GeoJSON.
 
     Optional layer=delinquent adds tax delinquency status.
@@ -98,10 +100,9 @@ def parcels_bbox(
 
 
 @router.get("/{pidn}")
-def parcel_detail(pidn: str) -> dict:
+def parcel_detail(pidn: str) -> PropertyReportResponse:
     """Full property report card for a single parcel."""
     with get_cursor() as cur:
-        # Core parcel data + centroid for map linking
         cur.execute("""
             SELECT pidn, owner_full, own_name1, own_name2, prev_owner,
                    propadr, mail_addr_full, municipality, school_dis,
@@ -118,7 +119,6 @@ def parcel_detail(pidn: str) -> dict:
         if not parcel:
             raise HTTPException(status_code=404, detail=f"Parcel not found: {pidn}")
 
-        # Tax delinquency
         cur.execute("""
             SELECT tax_year, authority_name, tax_owed, penalty_owed,
                    interest_owed, fees_owed, total, owner_name, property_address
@@ -128,7 +128,6 @@ def parcel_detail(pidn: str) -> dict:
         """, {"pidn": pidn})
         tax_claims = cur.fetchall()
 
-        # Flood zone check
         cur.execute("""
             SELECT fld_zone, zone_subty, sfha_tf
             FROM staging.flood_zones
@@ -141,7 +140,6 @@ def parcel_detail(pidn: str) -> dict:
         """, {"pidn": pidn})
         flood = cur.fetchone()
 
-        # Building footprints with detail
         cur.execute("""
             SELECT s.building_type,
                    ROUND(ST_Area(ST_Transform(s.geom, 32617))::numeric) AS sqm
@@ -155,19 +153,92 @@ def parcel_detail(pidn: str) -> dict:
         """, {"pidn": pidn})
         structure_rows = cur.fetchall()
 
-        # Backward compat
         cur.execute("""
-            SELECT COUNT(*) AS structure_count
-            FROM staging.structures
-            WHERE valid_to IS NULL
-              AND geom IS NOT NULL
-              AND ST_Intersects(geom, (
-                  SELECT geom FROM staging.parcels WHERE pidn = %(pidn)s AND valid_to IS NULL
-              ))
+            SELECT score, opportunity_score, has_active_plan, eligible,
+                   exclusion_reasons, signals, top_signal,
+                   signal_count, score_version, computed_at
+            FROM public.development_momentum WHERE pidn = %(pidn)s
         """, {"pidn": pidn})
-        structures = cur.fetchone()
+        momentum_row = cur.fetchone()
 
-    # Build response
+        # Parcel brief (Pass 3)
+        cur.execute("""
+            SELECT
+                brief_text,
+                assessment,
+                assessment_reasoning,
+                key_questions,
+                signal_count,
+                citations,
+                brief_version,
+                generated_at
+            FROM public.parcel_briefs
+            WHERE pidn = %(pidn)s
+        """, {"pidn": pidn})
+        brief_row = cur.fetchone()
+
+        # County narratives that explicitly reference this parcel (Pass 4)
+        cur.execute("""
+            SELECT
+                narrative_id,
+                title,
+                body,
+                narrative_type,
+                trajectory,
+                key_entities,
+                citations,
+                generated_at
+            FROM public.county_narratives
+            WHERE (expires_at IS NULL OR expires_at > NOW())
+              AND affected_pidns IS NOT NULL
+              AND %(pidn)s = ANY(affected_pidns)
+            ORDER BY generated_at DESC NULLS LAST, narrative_id DESC
+            LIMIT 5
+        """, {"pidn": pidn})
+        related_narratives = cur.fetchall()
+
+        # Pass 2 cross-signal insight for this parcel
+        cur.execute("""
+            SELECT cross_signal_insight, last_run_at, signals_validated_count
+            FROM meta.intelligence_passes
+            WHERE pidn = %(pidn)s AND pass_number = 2 AND status = 'complete'
+        """, {"pidn": pidn})
+        intelligence_row = cur.fetchone()
+
+        # Pass 0 proceeding extractions linked by PIDN or property address.
+        # parcel_reference is free-text: Pass 0 writes whatever the PDF said,
+        # which is usually an address, occasionally a PIDN. Match both.
+        match_refs = [pidn]
+        if parcel["propadr"]:
+            match_refs.append(parcel["propadr"])
+        cur.execute("""
+            SELECT
+                pe.proceeding_id,
+                pp.body_name,
+                pp.meeting_date,
+                pp.proceeding_type,
+                pe.extraction_type,
+                pe.applicant_name,
+                pe.decision,
+                pe.current_zoning,
+                pe.proposed_zoning,
+                pe.supporting_text,
+                pp.document_url,
+                pe.extraction_confidence,
+                CASE
+                    WHEN pe.parcel_reference = %(pidn)s THEN 'pidn'
+                    ELSE 'address'
+                END AS match_type
+            FROM staging.proceeding_extractions pe
+            JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
+            WHERE pp.valid_to IS NULL
+              AND pe.extraction_type NOT IN ('_complete', '_no_extractions')
+              AND pe.parcel_reference = ANY(%(match_refs)s)
+            ORDER BY pp.meeting_date DESC NULLS LAST, pe.proceeding_id DESC
+            LIMIT 20
+        """, {"pidn": pidn, "match_refs": match_refs})
+        proceeding_rows = cur.fetchall()
+
     p = dict(parcel)
     for key in ("aprland", "aprbldg", "aprtotal", "price", "prev_price", "acres", "lat", "lng"):
         if p.get(key):
@@ -175,13 +246,39 @@ def parcel_detail(pidn: str) -> dict:
 
     delinquent_total = sum(float(r["total"]) for r in tax_claims)
 
-    structure_count = structures["structure_count"] if structures else 0
+    structure_count = len(structure_rows)
     # Multi-signal vacancy: no footprint + not high-value residential
     likely_vacant = (
         structure_count == 0
         and (p.get("class") not in ("R",) or not p.get("aprtotal") or float(p.get("aprtotal") or 0) < 50000)
         and (not p.get("price") or float(p.get("price") or 0) < 100000)
     )
+    momentum = dict(momentum_row) if momentum_row else None
+    if momentum:
+        momentum["reason_signals"] = build_reason_signals(momentum.get("signals"))
+        momentum["top_signal"] = compute_headline_signal(
+            momentum.get("signals"),
+            fallback=momentum.get("top_signal"),
+        )
+
+    brief = dict(brief_row) if brief_row else None
+    if brief:
+        brief["key_questions"] = brief.get("key_questions") or []
+        brief["citations"] = brief.get("citations") or []
+
+    narratives = [dict(row) for row in related_narratives]
+    for narrative in narratives:
+        narrative["key_entities"] = narrative.get("key_entities") or []
+        narrative["citations"] = narrative.get("citations") or []
+
+    intelligence_summary = dict(intelligence_row) if intelligence_row else None
+
+    linked_proceedings = []
+    for row in proceeding_rows:
+        record = dict(row)
+        if record.get("extraction_confidence") is not None:
+            record["extraction_confidence"] = float(record["extraction_confidence"])
+        linked_proceedings.append(record)
 
     return {
         "parcel": p,
@@ -207,4 +304,9 @@ def parcel_detail(pidn: str) -> dict:
                 for r in structure_rows
             ],
         },
+        "development_momentum": momentum,
+        "parcel_brief": brief,
+        "related_narratives": narratives,
+        "intelligence_summary": intelligence_summary,
+        "linked_proceedings": linked_proceedings,
     }

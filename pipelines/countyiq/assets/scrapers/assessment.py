@@ -485,11 +485,10 @@ def _save_checkpoint(database: DatabaseResource, source_name: str, data: dict):
 
 
 def _load_tier1_results_from_staging(database: DatabaseResource) -> list[dict]:
-    """Load all PARIDs from staging.assessment_properties for Tier 2 processing.
+    """Load PARIDs from staging for Tier 2 input.
 
-    This replaces storing Tier 1 results in the checkpoint JSONB (which would
-    be 20+ MB for 176K properties). The staging table is the source of truth
-    after Tier 1 upsert completes.
+    Checkpoint holds only prefixes/counts (~kB) rather than full Tier 1
+    results (20+ MB for 176K properties); staging is the source of truth.
     """
     rows = database.execute(
         "SELECT parid, owner_name, address, property_class "

@@ -2,7 +2,6 @@
 
 import os
 
-import pytest
 
 from countyiq.lib.parsers.public_proceedings import (
     classify_proceeding_type,

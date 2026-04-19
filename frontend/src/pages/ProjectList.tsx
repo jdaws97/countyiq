@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import Nav from '../components/Nav'
+import PageShell from '../components/PageShell'
+import { formatCurrencyCompact } from '../lib/format'
 
 interface Project {
   project_id: string
@@ -66,12 +67,8 @@ function getStatusStyle(status: string) {
   return STATUS_STYLE[status] ?? DEFAULT_STYLE
 }
 
-function formatCost(cost: number | null): string {
-  if (cost == null) return '—'
-  if (cost >= 1_000_000) return `$${(cost / 1_000_000).toFixed(1)}M`
-  if (cost >= 1_000) return `$${Math.round(cost / 1_000)}K`
-  return '$' + Math.round(cost).toLocaleString('en-US')
-}
+const formatCost = (cost: number | null) =>
+  formatCurrencyCompact(cost, { allowThousands: true })
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—'
@@ -114,10 +111,7 @@ export default function ProjectList() {
   const totalCost = projects.reduce((sum, p) => sum + (p.cost ?? 0), 0)
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <Nav />
-
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 32px' }}>
+    <PageShell maxWidth={1200}>
         {/* Page header */}
         <div style={{ marginBottom: 40, animation: 'fadeUp 0.4s ease both' }}>
           <div
@@ -536,7 +530,6 @@ export default function ProjectList() {
             <span style={{ fontSize: 14 }}>&larr;</span> Back to Home
           </Link>
         </div>
-      </main>
-    </div>
+    </PageShell>
   )
 }

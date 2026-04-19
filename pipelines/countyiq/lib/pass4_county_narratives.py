@@ -18,7 +18,6 @@ Shared:
 
 from __future__ import annotations
 
-from typing import Any
 
 
 # =============================================================================
@@ -55,51 +54,41 @@ VALID_TRAJECTORIES = {
 # =============================================================================
 
 CORRIDOR_SCAN_QUERY = """
-    WITH adjacent_pairs AS (
-        -- Find pairs of parcels with the SAME signal type within 500m
+    WITH signal_parcels AS (
+        -- One geometry-bearing parcel row per signal type. Use DBSCAN over a
+        -- projected geometry so separate same-signal pockets in the same
+        -- municipality become distinct clusters instead of one merged bucket.
         SELECT
-            e1.signal_key,
-            e1.pidn AS pidn_a,
-            e2.pidn AS pidn_b,
-            p1.municipality
-        FROM public.evidence e1
-        JOIN staging.parcels p1
-            ON p1.pidn = e1.pidn AND p1.valid_to IS NULL AND p1.geom IS NOT NULL
-        JOIN public.evidence e2
-            ON e1.signal_key = e2.signal_key AND e1.pidn < e2.pidn
-        JOIN staging.parcels p2
-            ON p2.pidn = e2.pidn AND p2.valid_to IS NULL AND p2.geom IS NOT NULL
-        WHERE ST_DWithin(p1.geom::geography, p2.geom::geography, 500)
+            e.signal_key,
+            e.pidn,
+            p.municipality,
+            ST_Transform(p.geom, 3857) AS geom_3857
+        FROM public.evidence e
+        JOIN staging.parcels p
+            ON p.pidn = e.pidn
+           AND p.valid_to IS NULL
+           AND p.geom IS NOT NULL
+           AND p.municipality IS NOT NULL
     ),
-    signal_clusters AS (
-        -- Group by signal_key AND municipality to avoid merging
-        -- geographically distant parcels that share a signal type.
-        -- Collect BOTH sides of each pair to avoid dropping PIDNs.
+    clustered AS (
         SELECT
             signal_key,
             municipality,
-            ARRAY(
-                SELECT DISTINCT unnest
-                FROM unnest(
-                    ARRAY_AGG(pidn_a) || ARRAY_AGG(pidn_b)
-                )
-                ORDER BY unnest
-            ) AS cluster_pidns
-        FROM adjacent_pairs
-        GROUP BY signal_key, municipality
+            pidn,
+            ST_ClusterDBSCAN(geom_3857, eps := 500, minpoints := 3)
+                OVER (PARTITION BY signal_key, municipality) AS cluster_id
+        FROM signal_parcels
     )
     SELECT
         signal_key,
         municipality,
-        cluster_pidns,
-        array_length(cluster_pidns, 1) AS cluster_size
-    FROM signal_clusters
-    -- NOTE: This groups by (signal_key, municipality) which can merge
-    -- spatially disconnected clusters within the same municipality.
-    -- Cap at 30 parcels to limit false-merge damage. True connected-
-    -- component clustering (ST_ClusterDBSCAN) lives in pass2_spatial_validation.
-    WHERE array_length(cluster_pidns, 1) BETWEEN 3 AND 30
-    ORDER BY array_length(cluster_pidns, 1) DESC
+        ARRAY_AGG(pidn ORDER BY pidn) AS cluster_pidns,
+        COUNT(*) AS cluster_size
+    FROM clustered
+    WHERE cluster_id IS NOT NULL
+    GROUP BY signal_key, municipality, cluster_id
+    HAVING COUNT(*) <= 30
+    ORDER BY COUNT(*) DESC
 """
 
 CORRIDOR_TEMPLATE = """You are a county intelligence analyst identifying corridor-level development patterns in York County, PA.
@@ -630,7 +619,7 @@ def build_distress_prompt(data: dict) -> str:
 # SHARED: OUTPUT PARSER
 # =============================================================================
 
-def parse_narrative_output(output: Any) -> dict:
+def parse_narrative_output(output: object) -> dict:
     """Validate and normalize LLM narrative output.
 
     Required: title, narrative.

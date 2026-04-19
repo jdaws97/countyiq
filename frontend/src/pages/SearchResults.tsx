@@ -1,26 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import Nav from '../components/Nav'
-
-interface SearchResult {
-  result_type?: string
-  title?: string
-  subtitle?: string
-  lat?: number | null
-  lng?: number | null
-  score?: number
-  [key: string]: any
-}
-
-interface SearchResponse {
-  mode: 'fuzzy' | 'smart' | 'redirect' | 'aggregate'
-  description?: string
-  redirect_path?: string
-  results: SearchResult[]
-  label?: string
-  value?: string
-  format?: string
-}
+import PageShell from '../components/PageShell'
+import type { SearchMode, SearchResponse, SearchResult } from '../types/api'
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   address: { label: 'Address', color: 'var(--accent-blue)' },
@@ -30,14 +11,22 @@ const TYPE_LABELS: Record<string, { label: string; color: string }> = {
 }
 
 // Simple cache to avoid re-querying on back navigation
-const searchCache: Record<string, { mode: string; description: string; results: SearchResult[] }> = {}
+type SearchCacheEntry = {
+  mode: SearchMode
+  description: string
+  results: SearchResult[]
+  label?: string
+  value?: string
+}
+
+const searchCache: Record<string, SearchCacheEntry> = {}
 
 export default function SearchResults() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const query = searchParams.get('q') || ''
   const [results, setResults] = useState<SearchResult[]>([])
-  const [mode, setMode] = useState<string>('fuzzy')
+  const [mode, setMode] = useState<SearchMode>('fuzzy')
   const [description, setDescription] = useState<string>('')
   const [aggLabel, setAggLabel] = useState<string>('')
   const [aggValue, setAggValue] = useState<string>('')
@@ -64,7 +53,10 @@ export default function SearchResults() {
 
     setLoading(true)
     fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Search failed (${r.status})`)
+        return r.json()
+      })
       .then((data: SearchResponse) => {
         if (data.mode === 'redirect' && data.redirect_path) {
           navigate(data.redirect_path)
@@ -78,13 +70,16 @@ export default function SearchResults() {
         setLoading(false)
         searchCache[query] = { mode: data.mode, description: data.description || '', results: data.results || [], label: data.label, value: data.value }
       })
-      .catch(() => setLoading(false))
+      .catch((error) => {
+        console.error('Search request failed', error)
+        setResults([])
+        setDescription('Search is temporarily unavailable.')
+        setLoading(false)
+      })
   }, [query])
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <Nav />
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 32px' }}>
+    <PageShell maxWidth={1200}>
 
         {/* Header */}
         <div style={{ marginBottom: 32, animation: 'fadeUp 0.4s ease both' }}>
@@ -155,12 +150,9 @@ export default function SearchResults() {
             animation: 'fadeUp 0.5s ease both', animationDelay: '0.1s', opacity: 0,
           }}>
             {results.map((r, idx) => {
-              const link = r._link as string | undefined
+              const link = r._link
               const entries = Object.entries(r).filter(([k, v]) => v !== null && v !== '' && !k.startsWith('_'))
-              const Wrapper = link ? Link : 'div' as any
-              const wrapperProps = link ? { to: link, style: { textDecoration: 'none', color: 'inherit', display: 'block' } } : {}
-              return (
-                <Wrapper key={idx} {...wrapperProps}>
+              const content = (
                 <div style={{
                   padding: '20px 24px',
                   background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
@@ -192,7 +184,11 @@ export default function SearchResults() {
                     ))}
                   </div>
                 </div>
-                </Wrapper>
+              )
+              return (
+                link
+                  ? <Link key={idx} to={link} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>{content}</Link>
+                  : <div key={idx}>{content}</div>
               )
             })}
           </div>
@@ -222,79 +218,80 @@ export default function SearchResults() {
 
             {/* Result rows */}
             {results.map((r, idx) => {
-              const pidn = r.pidn as string | undefined
+              const pidn = r.pidn
               const hasLink = pidn || (r.lat && r.lng)
               const linkTo = pidn ? `/property/${pidn}` : (r.lat && r.lng ? `/map?lat=${r.lat}&lng=${r.lng}&zoom=17` : undefined)
-              const Wrapper = linkTo ? Link : 'div' as any
-              const wrapProps = linkTo ? { to: linkTo, style: { textDecoration: 'none', color: 'inherit' } } : {}
+              const score = r.score ?? 0
+              const content = (
+                <div
+                  style={{
+                    display: 'grid', gridTemplateColumns: '100px 1fr 1fr 80px 80px',
+                    padding: '14px 24px', alignItems: 'center',
+                    background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
+                    borderBottom: idx < results.length - 1 ? '1px solid var(--border)' : 'none',
+                    transition: 'background 0.15s',
+                    cursor: hasLink ? 'pointer' : 'default',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
+                >
+                  <div>
+                    {(() => {
+                      const t = TYPE_LABELS[r.result_type || ''] || { label: r.result_type || 'result', color: 'var(--text-muted)' }
+                      return (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 3, fontSize: 9,
+                          letterSpacing: 1, textTransform: 'uppercase' as const,
+                          fontFamily: 'var(--font-mono)',
+                          color: t.color, background: `${t.color}15`, border: `1px solid ${t.color}30`,
+                        }}>
+                          {t.label}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 500,
+                    color: 'var(--text-primary)',
+                  }}>
+                    {r.title}
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)',
+                  }}>
+                    {r.subtitle}
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 12,
+                    color: 'var(--text-muted)', textAlign: 'right',
+                  }}>
+                    {(score * 100).toFixed(0)}%
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {r.lat && r.lng && (
+                      <Link
+                        to={`/map?lat=${r.lat}&lng=${r.lng}&zoom=16`}
+                        style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 10,
+                          color: 'var(--accent-blue)', textDecoration: 'none',
+                          padding: '4px 8px', border: '1px solid var(--border)',
+                          borderRadius: 4,
+                        }}
+                      >
+                        Map
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )
               return (
-              <Wrapper key={`${r.title}-${r.subtitle}-${idx}`} {...wrapProps}>
-              <div
-                style={{
-                  display: 'grid', gridTemplateColumns: '100px 1fr 1fr 80px 80px',
-                  padding: '14px 24px', alignItems: 'center',
-                  background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
-                  borderBottom: idx < results.length - 1 ? '1px solid var(--border)' : 'none',
-                  transition: 'background 0.15s',
-                  cursor: hasLink ? 'pointer' : 'default',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
-              >
-                <div>
-                  {(() => {
-                    const t = TYPE_LABELS[r.result_type || ''] || { label: r.result_type || 'result', color: 'var(--text-muted)' }
-                    return (
-                      <span style={{
-                        padding: '2px 8px', borderRadius: 3, fontSize: 9,
-                        letterSpacing: 1, textTransform: 'uppercase' as const,
-                        fontFamily: 'var(--font-mono)',
-                        color: t.color, background: `${t.color}15`, border: `1px solid ${t.color}30`,
-                      }}>
-                        {t.label}
-                      </span>
-                    )
-                  })()}
-                </div>
-                <div style={{
-                  fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 500,
-                  color: 'var(--text-primary)',
-                }}>
-                  {r.title}
-                </div>
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)',
-                }}>
-                  {r.subtitle}
-                </div>
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 12,
-                  color: 'var(--text-muted)', textAlign: 'right',
-                }}>
-                  {(r.score * 100).toFixed(0)}%
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  {r.lat && r.lng && (
-                    <Link
-                      to={`/map?lat=${r.lat}&lng=${r.lng}&zoom=16`}
-                      style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 10,
-                        color: 'var(--accent-blue)', textDecoration: 'none',
-                        padding: '4px 8px', border: '1px solid var(--border)',
-                        borderRadius: 4,
-                      }}
-                    >
-                      Map
-                    </Link>
-                  )}
-                </div>
-              </div>
-              </Wrapper>
+                linkTo
+                  ? <Link key={`${r.title}-${r.subtitle}-${idx}`} to={linkTo} style={{ textDecoration: 'none', color: 'inherit' }}>{content}</Link>
+                  : <div key={`${r.title}-${r.subtitle}-${idx}`}>{content}</div>
               )
             })}
           </div>
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

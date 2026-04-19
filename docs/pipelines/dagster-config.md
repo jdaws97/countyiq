@@ -1,6 +1,6 @@
 # Dagster Configuration
 
-## Components (all in Docker containers on Hetzner VPS)
+## Components (all in Docker containers on the production VPS)
 
 | Component | Purpose | Runs as |
 |---|---|---|
@@ -8,7 +8,7 @@
 | `dagster-daemon` | Scheduler + sensor evaluation | Docker container (same image, different entrypoint) |
 | Run workers | Execute pipeline code in-process | Execute within the Dagster container |
 
-## Memory Budget (4 GB total on Hetzner VPS — CX23)
+## Memory Budget (current working assumption: 4 GB VPS baseline)
 
 | Component | Memory |
 |---|---|

@@ -18,8 +18,6 @@ import hashlib
 import random
 import re
 import time
-from datetime import datetime, timezone
-from urllib.parse import urlparse
 
 import requests
 from dagster import (
@@ -30,6 +28,7 @@ from dagster import (
 )
 
 from countyiq.lib.county_config import get_county_config
+from countyiq.lib.pdf_text import extract_text_from_pdf_bytes
 from countyiq.lib.parsers.public_proceedings import (
     classify_proceeding_type,
     extract_pdf_links,
@@ -113,15 +112,9 @@ class _PlaywrightFetcher:
 
     def close(self) -> None:
         if self._browser is not None:
-            try:
-                self._browser.close()
-            except Exception:
-                pass
+            self._browser.close()
         if self._playwright is not None:
-            try:
-                self._playwright.stop()
-            except Exception:
-                pass
+            self._playwright.stop()
         self._browser = None
         self._playwright = None
 
@@ -288,10 +281,6 @@ def public_proceedings_scrape(
 
             # --- Archive to R2 ---
             safe_body = _safe_name(body_name)
-            r2_path = (
-                f"{county.s3_prefix}/proceedings/{safe_body}/"
-                f"{meeting_date}/{filename}"
-            )
             try:
                 s3.archive(
                     f"{county.s3_prefix}/proceedings/{safe_body}/{meeting_date}",
@@ -306,6 +295,16 @@ def public_proceedings_scrape(
                     body_name, filename, exc,
                 )
 
+            # --- Extract text for local Pass 0 use ---
+            raw_text = None
+            try:
+                raw_text = extract_text_from_pdf_bytes(pdf_bytes) or None
+            except Exception as exc:
+                log.warning(
+                    "'%s': PDF text extraction failed for '%s': %s",
+                    body_name, filename, exc,
+                )
+
             # --- Insert metadata row into staging.public_proceedings ---
             try:
                 _insert_proceeding(
@@ -316,6 +315,7 @@ def public_proceedings_scrape(
                     source_url=minutes_url,
                     document_url=document_url,
                     content_hash=content_hash,
+                    raw_text=raw_text,
                 )
                 pdfs_new += 1
                 log.info(
@@ -402,17 +402,18 @@ def _insert_proceeding(
     source_url: str,
     document_url: str,
     content_hash: str | None = None,
+    raw_text: str | None = None,
 ) -> None:
     """Insert a new public proceedings row with SCD2 valid_from."""
     database.execute(
         """
         INSERT INTO staging.public_proceedings
             (body_name, meeting_date, proceeding_type, source_url, document_url,
-             content_hash, valid_from)
-        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+             content_hash, raw_text, valid_from)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
         """,
         (body_name, meeting_date, proceeding_type, source_url, document_url,
-         content_hash),
+         content_hash, raw_text),
     )
 
 

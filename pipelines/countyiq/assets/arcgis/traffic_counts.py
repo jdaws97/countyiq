@@ -10,14 +10,12 @@ import json
 import requests
 from dagster import (
     asset,
-    asset_check,
-    AssetCheckResult,
-    AssetCheckSeverity,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
 )
 
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
@@ -113,12 +111,10 @@ def traffic_counts_arcgis(
     )
 
 
-@asset_check(asset=traffic_counts_arcgis)
-def traffic_counts_record_count(database: DatabaseResource) -> AssetCheckResult:
-    county = get_county_config()
-    result = database.execute("SELECT COUNT(*) FROM staging.traffic_counts WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count >= county.traffic_counts_min_records,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"count": MetadataValue.int(count)})
+traffic_counts_record_count = make_row_count_check(
+    traffic_counts_arcgis,
+    table="traffic_counts",
+    threshold_fn=lambda: get_county_config().traffic_counts_min_records,
+    metadata_key="count",
+    name="traffic_counts_record_count",
+)

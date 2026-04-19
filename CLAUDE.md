@@ -40,6 +40,7 @@ export DATABASE_URL="postgresql://dagster_admin:localtest@localhost:5433/countyi
 
 ## Project Conventions
 
+- **Target buyer: real-estate investors and developers in South-Central PA.** Product direction lives in `docs/products/real-estate-intelligence.md`. Every new surface should answer a concrete buyer job; if it doesn't, it's a portfolio project, not this product.
 - **York County first, built to expand.** We are building for York County PA. But all pipeline code must be county-agnostic — no hardcoded county names, URLs, or thresholds in assets or parsers. Use `county_config.py` instead.
 - **County config pattern:** Every pipeline asset calls `get_county_config()` from `countyiq/lib/county_config.py` to get URLs, filter strings, and thresholds. Parsers accept county-specific params (e.g., `county_filter`) rather than hardcoding values. Never hardcode `"York County"`, ArcGIS URLs, or record count thresholds directly in asset or parser code.
 - **PIDN** (13-char string) is the canonical parcel identifier everywhere. Not PARID, not `parcel_id`.

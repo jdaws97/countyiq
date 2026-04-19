@@ -1,28 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import Nav from '../components/Nav'
-
-interface License {
-  licensee: string
-  premises_name: string
-  premises_address: string
-  license_type: string
-  status: string
-  municipality: string
-  last_issue_date: string
-  expiration_date: string
-}
-
-interface TypeSummary {
-  license_type: string
-  count: number
-}
-
-interface LicenseResponse {
-  licenses: License[]
-  type_summary: TypeSummary[]
-  total: number
-}
+import PageShell from '../components/PageShell'
+import type { LicenseListResponse as LicenseResponse } from '../types/api'
 
 const STATUS_COLORS: Record<string, string> = {
   Active: 'var(--accent-green)',
@@ -87,16 +66,7 @@ export default function LicenseBrowser() {
   })
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <Nav />
-
-      <main
-        style={{
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '48px 32px',
-        }}
-      >
+    <PageShell maxWidth={1200}>
         {/* Page header */}
         <div style={{ marginBottom: 32, animation: 'fadeUp 0.4s ease both' }}>
           <div
@@ -513,7 +483,6 @@ export default function LicenseBrowser() {
             </div>
           </>
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

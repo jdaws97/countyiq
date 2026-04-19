@@ -1,15 +1,16 @@
-"""Database helpers for the FastAPI Lambda API."""
+"""Database helpers for the FastAPI API service."""
 
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 
-def _connection_kwargs() -> dict:
+def _connection_kwargs() -> dict[str, str | int]:
     return {
         "host": os.environ.get("DATABASE_HOST", "localhost"),
         "port": int(os.environ.get("DATABASE_PORT", "5432")),
@@ -21,7 +22,7 @@ def _connection_kwargs() -> dict:
 
 
 @contextmanager
-def get_cursor():
+def get_cursor() -> Iterator[RealDictCursor]:
     """Yield a RealDictCursor for one request."""
     conn = psycopg2.connect(**_connection_kwargs())
     try:

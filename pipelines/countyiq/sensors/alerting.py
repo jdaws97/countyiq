@@ -16,7 +16,7 @@ from countyiq.lib.slack import send_slack_message
 
 
 @run_status_sensor(run_status=DagsterRunStatus.SUCCESS)
-def success_reporter(context: RunStatusSensorContext):
+def success_reporter(context: RunStatusSensorContext) -> None:
     """Post successful run summary to #pipeline-runs."""
     run = context.dagster_run
     duration = (run.end_time - run.start_time) if run.end_time and run.start_time else 0
@@ -31,7 +31,7 @@ def success_reporter(context: RunStatusSensorContext):
 
 
 @run_failure_sensor
-def failure_alerter(context: RunFailureSensorContext):
+def failure_alerter(context: RunFailureSensorContext) -> None:
     """Post failures to #alerts-critical after all retries exhausted."""
     run = context.dagster_run
     error = (

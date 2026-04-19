@@ -1,29 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-// @ts-ignore — Link already imported
-import Nav from '../components/Nav'
-
-const CLASS_NAMES: Record<string, string> = {
-  'R': 'Residential', 'C': 'Commercial', 'I': 'Industrial',
-  'F': 'Farm', 'E': 'Exempt', 'A': 'Agricultural', 'U': 'Utility',
-}
-
-const SCHOOL_DISTRICTS: Record<string, string> = {
-  '002': 'Central York', '004': 'Dallastown', '006': 'Dover',
-  '008': 'Eastern York', '010': 'Hanover', '012': 'Northeastern',
-  '014': 'Northern York', '016': 'Red Lion', '018': 'South Eastern',
-  '020': 'South Western', '022': 'Southern York', '024': 'Spring Grove',
-  '026': 'West Shore', '028': 'West York', '030': 'York Suburban',
-  '17F': 'York City', '17G': 'York City', '17L': 'York City', '17N': 'York City',
-}
-
-function fmtDollar(v: any): string {
-  if (!v) return '--'
-  const n = typeof v === 'number' ? v : parseFloat(v)
-  if (isNaN(n)) return '--'
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
-  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-}
+import BackButton from '../components/BackButton'
+import PageShell from '../components/PageShell'
+import { formatCurrencyCompact } from '../lib/format'
+import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
+import type {
+  DistressedParcel,
+  DistressedResponse,
+} from '../types/api'
 
 function scoreColor(s: number): string {
   if (s >= 0.7) return 'var(--accent-red)'
@@ -46,18 +30,19 @@ function scoreBar(s: number) {
 
 export default function DistressedParcels() {
   const navigate = useNavigate()
-  const [parcels, setParcels] = useState<any[]>([])
+  const [parcels, setParcels] = useState<DistressedParcel[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
+  const [, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [classFilter, setClassFilter] = useState('')
   const [minAcres, setMinAcres] = useState('')
-  const [page, setPage] = useState(0)
+  const [, setPage] = useState(0)
   const PAGE_SIZE = 200
 
   // Cache results to avoid re-fetching on back navigation
   const cacheKey = `distressed_${classFilter}_${minAcres}`
   const fetchPage = (pageNum: number, append: boolean) => {
-    const cached = (window as any).__distressedCache?.[cacheKey]
+    const cached = window.__distressedCache?.[cacheKey]
     if (cached && !append) {
       setParcels(cached)
       setLoading(false)
@@ -69,21 +54,28 @@ export default function DistressedParcels() {
     if (minAcres) params.set('min_acres', minAcres)
 
     fetch(`/api/scores/distressed?${params}`)
-      .then(r => r.json())
-      .then(d => {
+      .then(r => {
+        if (!r.ok) throw new Error(`Distressed request failed (${r.status})`)
+        return r.json()
+      })
+      .then((d: DistressedResponse) => {
         const items = d.parcels || []
         if (append) {
           setParcels(prev => [...prev, ...items])
         } else {
           setParcels(items)
-          // Cache
-          if (!(window as any).__distressedCache) (window as any).__distressedCache = {}
-          ;(window as any).__distressedCache[cacheKey] = items
+          if (!window.__distressedCache) window.__distressedCache = {}
+          window.__distressedCache[cacheKey] = items
         }
         setLoading(false)
         setLoadingMore(false)
       })
-      .catch(() => { setLoading(false); setLoadingMore(false) })
+      .catch((err) => {
+        console.error('Failed to load distressed parcels', err)
+        setError(err.message)
+        setLoading(false)
+        setLoadingMore(false)
+      })
   }
 
   useEffect(() => {
@@ -92,11 +84,8 @@ export default function DistressedParcels() {
   }, [classFilter, minAcres])
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <Nav />
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 32px' }}>
-
-        <button onClick={() => navigate(-1)} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 24 }}>&larr; Back</button>
+    <PageShell maxWidth={1100}>
+      <BackButton onClick={() => navigate(-1)} />
 
         <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-red)', marginBottom: 8 }}>Intelligence</div>
@@ -137,6 +126,16 @@ export default function DistressedParcels() {
           </div>
         </div>
 
+        {error && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-red)',
+            padding: 24, background: 'rgba(224, 82, 82, 0.08)',
+            border: '1px solid rgba(224, 82, 82, 0.2)', borderRadius: 6, marginBottom: 24,
+          }}>
+            Failed to load data: {error}
+          </div>
+        )}
+
         {/* Results */}
         {!loading && parcels.length > 0 && (
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', animation: 'fadeUp 0.4s ease 0.2s both' }}>
@@ -161,25 +160,24 @@ export default function DistressedParcels() {
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{p.propadr || p.pidn}</div>
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)' }}>
-                  {SCHOOL_DISTRICTS[p.school_dis] || p.school_dis}
+                  {getSchoolDistrictLabel(p.school_dis)}
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-red)', textAlign: 'right', fontWeight: 600 }}>
-                  {fmtDollar(p.total_owed)}
+                  {formatCurrencyCompact(p.total_owed)}
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                  {fmtDollar(p.aprtotal)}
+                  {formatCurrencyCompact(p.aprtotal)}
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
                   {p.acres ? Number(p.acres).toFixed(1) : '--'}
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>
-                  {CLASS_NAMES[p.class] || p.class}
+                  {getPropertyClassLabel(p.class)}
                 </div>
               </Link>
             ))}
           </div>
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

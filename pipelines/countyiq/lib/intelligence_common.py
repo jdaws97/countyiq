@@ -11,7 +11,7 @@ clean, typed context dicts suitable for LLM prompt injection.
 import datetime
 import hashlib
 import json
-from typing import Any
+from decimal import Decimal
 
 
 # =============================================================================
@@ -50,6 +50,7 @@ TAX_CLAIMS_QUERY = """
 
 PROCEEDINGS_FOR_PARCEL_QUERY = """
     SELECT
+        pe.id AS extraction_id,
         pe.extraction_type,
         pe.applicant_name,
         pe.parcel_reference,
@@ -76,6 +77,7 @@ PROCEEDINGS_FOR_PARCEL_QUERY = """
 
 PROCEEDINGS_FOR_ENTITY_QUERY = """
     SELECT
+        pe.id AS extraction_id,
         pe.extraction_type,
         pe.applicant_name,
         pe.parcel_reference,
@@ -170,7 +172,7 @@ PORTFOLIO_QUERY = """
 # PRIVATE HELPERS
 # =============================================================================
 
-def _format_date(val: Any) -> str:
+def _format_date(val: object) -> str:
     """Convert a date or datetime to ISO-format string.
 
     Returns an empty string for None or any unrecognised value type.
@@ -184,18 +186,30 @@ def _format_date(val: Any) -> str:
     return str(val)
 
 
-def _str(val: Any) -> str:
+def _str(val: object) -> str:
     """Return val as a string, or '' for None."""
     if val is None:
         return ""
     return str(val)
 
 
-def _num(val: Any) -> float | int:
+def _num(val: object) -> float | int:
     """Return val as a number, or 0 for None."""
     if val is None:
         return 0
-    return val
+    if isinstance(val, bool):
+        return int(val)
+    if isinstance(val, (int, float)):
+        return val
+    if isinstance(val, Decimal):
+        return float(val)
+    if isinstance(val, str):
+        try:
+            parsed = float(val)
+        except ValueError:
+            return 0
+        return int(parsed) if parsed.is_integer() else parsed
+    return 0
 
 
 # =============================================================================

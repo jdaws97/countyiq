@@ -1,11 +1,17 @@
 """LLM-first unified search across all data sources."""
 
+import logging
+import sys
+
 from fastapi import APIRouter, Query
+from psycopg2 import Error as PsycopgError
+from psycopg2.errors import UndefinedTable
 
 from api.lib.database import get_cursor
-from api.lib.llm_search import parse_query_with_llm, ALLOWED_TABLES
+from api.lib.llm_search import ALLOWED_TABLES, parse_query_with_llm
 
 router = APIRouter(tags=["search"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("")
@@ -13,7 +19,7 @@ def search(
     q: str = Query(..., min_length=2, description="Search query"),
     limit: int = Query(default=20, le=100),
 ) -> dict:
-    """Smart search — fast-path for name/address lookups, LLM for natural language."""
+    """Smart search - fast path for name/address lookups, LLM for natural language."""
     search_term = q.strip()
 
     # Fast path: if it looks like a name (2-3 short words, no special keywords),
@@ -90,7 +96,7 @@ def _is_name_lookup(query: str) -> bool:
     """
     words = query.lower().split()
 
-    # Single word — could be a name or a keyword
+    # Single word - could be a name or a keyword
     if len(words) == 1:
         return words[0] not in NL_WORDS
 
@@ -102,21 +108,21 @@ def _is_name_lookup(query: str) -> bool:
     if any(w.isdigit() and len(w) == 5 for w in words):
         return False
 
-    # Any NL keyword present → not a name
+    # Any NL keyword present -> not a name
     for w in words:
         if w in NL_WORDS:
             return False
 
-    # "X in Y" pattern → natural language
+    # "X in Y" pattern -> natural language
     if "in" in words[1:]:
         return False
 
-    # 2-3 words with no keywords → probably a name
+    # 2-3 words with no keywords -> probably a name
     return True
 
 
 def _trgm_search_with_reversal(search_term: str, limit: int) -> list[dict]:
-    """Run pg_trgm search with automatic name reversal (FIRST LAST → LAST FIRST)."""
+    """Run pg_trgm search with automatic name reversal (FIRST LAST -> LAST FIRST)."""
     results = _trgm_search(search_term, limit)
 
     # Also try reversed name order
@@ -127,11 +133,11 @@ def _trgm_search_with_reversal(search_term: str, limit: int) -> list[dict]:
 
         # Merge, deduplicate by title, keep highest score
         seen: dict[str, dict] = {}
-        for r in results + reversed_results:
-            key = r.get("title", "")
-            if key not in seen or (r.get("score") or 0) > (seen[key].get("score") or 0):
-                seen[key] = r
-        results = sorted(seen.values(), key=lambda x: x.get("score", 0), reverse=True)[:limit]
+        for result in results + reversed_results:
+            key = result.get("title", "")
+            if key not in seen or (result.get("score") or 0) > (seen[key].get("score") or 0):
+                seen[key] = result
+        results = sorted(seen.values(), key=lambda item: item.get("score", 0), reverse=True)[:limit]
 
     return results
 
@@ -139,11 +145,11 @@ def _trgm_search_with_reversal(search_term: str, limit: int) -> list[dict]:
 def _trgm_search(search_term: str, limit: int) -> list[dict]:
     """Standard pg_trgm fuzzy matching across all sources."""
     with get_cursor() as cur:
-        # Exact PIDN lookup (if search looks like a PIDN)
         pidn_results: list = []
         stripped = search_term.replace("-", "").replace(".", "").replace(" ", "")
         if len(stripped) >= 10 and stripped[:2].isdigit():
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT 'parcel' AS result_type,
                        owner_full AS title,
                        pidn || ' · ' || COALESCE(propadr, '') AS subtitle,
@@ -152,13 +158,15 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
                 FROM staging.parcels
                 WHERE valid_to IS NULL AND pidn = %(q)s
                 LIMIT 1
-            """, {"q": stripped})
+                """,
+                {"q": stripped},
+            )
             pidn_results = cur.fetchall()
 
-        # Parcel address search (if search contains a number — likely an address)
         address_parcel_results: list = []
-        if any(c.isdigit() for c in search_term) and not pidn_results:
-            cur.execute("""
+        if any(char.isdigit() for char in search_term) and not pidn_results:
+            cur.execute(
+                """
                 SELECT 'parcel' AS result_type,
                        owner_full AS title,
                        pidn || ' · ' || propadr AS subtitle,
@@ -168,11 +176,13 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
                 WHERE valid_to IS NULL AND propadr %% %(q)s
                 ORDER BY similarity(propadr, %(q)s) DESC
                 LIMIT %(limit)s
-            """, {"q": search_term.upper(), "limit": limit})
+                """,
+                {"q": search_term.upper(), "limit": limit},
+            )
             address_parcel_results = cur.fetchall()
 
-        # Owner name search
-        cur.execute("""
+        cur.execute(
+            """
             SELECT result_type, title, subtitle, lat, lng, score, pidn FROM (
                 SELECT DISTINCT ON (owner_full)
                     'parcel' AS result_type,
@@ -192,14 +202,15 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
             ) sub
             ORDER BY score DESC
             LIMIT %(limit)s
-        """, {"q": search_term, "limit": limit})
-        parcel_owners = cur.fetchall()
-        parcel_owners = [dict(r) for r in pidn_results + address_parcel_results + parcel_owners]
+            """,
+            {"q": search_term, "limit": limit},
+        )
+        parcel_owners = [dict(row) for row in pidn_results + address_parcel_results + cur.fetchall()]
 
-        # Each source wrapped in try/except — missing tables degrade gracefully
-        addresses: list = []
-        try:
-            cur.execute("""
+        addresses = _fetch_optional_results(
+            cur,
+            source_name="address_points",
+            query="""
                 SELECT
                     'address' AS result_type,
                     CONCAT_WS(' ', add_number, street_name, st_pos_typ) AS title,
@@ -211,14 +222,14 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
                   AND CONCAT_WS(' ', add_number, street_name, st_pos_typ) %% %(q)s
                 ORDER BY score DESC
                 LIMIT %(limit)s
-            """, {"q": search_term, "limit": limit})
-            addresses = cur.fetchall()
-        except Exception:
-            cur.execute("ROLLBACK")
+            """,
+            params={"q": search_term, "limit": limit},
+        )
 
-        tax_owners: list = []
-        try:
-            cur.execute("""
+        tax_owners = _fetch_optional_results(
+            cur,
+            source_name="tax_claims",
+            query="""
                 SELECT
                     'tax_claim' AS result_type,
                     owner_name AS title,
@@ -231,14 +242,14 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
                 GROUP BY owner_name, tax_district_name
                 ORDER BY score DESC
                 LIMIT %(limit)s
-            """, {"q": search_term, "limit": limit})
-            tax_owners = cur.fetchall()
-        except Exception:
-            cur.execute("ROLLBACK")
+            """,
+            params={"q": search_term, "limit": limit},
+        )
 
-        licenses: list = []
-        try:
-            cur.execute("""
+        licenses = _fetch_optional_results(
+            cur,
+            source_name="plcb_licenses",
+            query="""
                 SELECT DISTINCT ON (COALESCE(premises_name, licensee))
                     'license' AS result_type,
                     COALESCE(premises_name, licensee) AS title,
@@ -250,14 +261,24 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
                   AND (premises_name %% %(q)s OR licensee %% %(q)s)
                 ORDER BY COALESCE(premises_name, licensee), score DESC
                 LIMIT %(limit)s
-            """, {"q": search_term, "limit": limit})
-            licenses = cur.fetchall()
-        except Exception:
-            cur.execute("ROLLBACK")
+            """,
+            params={"q": search_term, "limit": limit},
+        )
 
-    all_results = [dict(r) for r in parcel_owners + addresses + tax_owners + licenses]
-    all_results.sort(key=lambda r: r["score"], reverse=True)
+    all_results = [dict(row) for row in parcel_owners + addresses + tax_owners + licenses]
+    all_results.sort(key=lambda row: row["score"], reverse=True)
     return all_results[:limit]
+
+
+def _fetch_optional_results(cur, source_name: str, query: str, params: dict) -> list:
+    """Fetch rows from an optional source table without hiding other SQL bugs."""
+    try:
+        cur.execute(query, params)
+        return cur.fetchall()
+    except UndefinedTable:
+        cur.connection.rollback()
+        logger.info("Search source unavailable; skipping %s", source_name)
+        return []
 
 
 def _execute_llm_aggregate(intent: dict) -> str | None:
@@ -271,7 +292,6 @@ def _execute_llm_aggregate(intent: dict) -> str | None:
     sql_where = intent.get("sql_where", "valid_to IS NULL")
     fmt = intent.get("format", "number")
 
-    # Safety checks
     for fragment in (sql_select, sql_where):
         upper = fragment.upper()
         for pattern in _DANGEROUS_PATTERNS:
@@ -291,7 +311,11 @@ def _execute_llm_aggregate(intent: dict) -> str | None:
             row = cur.fetchone()
             if not row or row["result"] is None:
                 return "0"
-            val = float(row["result"])
+            try:
+                val = float(row["result"])
+            except (TypeError, ValueError) as exc:
+                logger.warning("LLM aggregate returned non-numeric result for %s: %s", table_key, exc)
+                return None
             if fmt == "currency":
                 if val >= 1e9:
                     return f"${val / 1e9:.1f}B"
@@ -301,9 +325,8 @@ def _execute_llm_aggregate(intent: dict) -> str | None:
             if fmt == "percent":
                 return f"{val:.1f}%"
             return f"{val:,.0f}"
-    except Exception as e:
-        import sys
-        print(f"LLM aggregate error: {e}", file=sys.stderr)
+    except PsycopgError as exc:
+        logger.warning("LLM aggregate query failed for %s: %s", table_key, exc)
         return None
 
 
@@ -334,17 +357,21 @@ def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
     sql_order = intent.get("sql_order", "")
     sql_limit = min(intent.get("sql_limit", limit), limit)
 
-    # Reject dangerous SQL patterns
     for fragment in (sql_where, sql_order):
         upper = fragment.upper()
         for pattern in _DANGEROUS_PATTERNS:
             if pattern.upper() in upper:
-                import sys
                 print(f"LLM query blocked: dangerous pattern '{pattern}' in: {fragment[:80]}", file=sys.stderr)
                 return None
 
     if "valid_to IS NULL" not in sql_where:
         sql_where = f"valid_to IS NULL AND ({sql_where})"
+
+    # Reject unbalanced parentheses - common LLM generation error
+    for fragment in (sql_where, sql_order):
+        if fragment.count("(") != fragment.count(")"):
+            print(f"LLM query rejected: unbalanced parens in: {fragment[:120]}", file=sys.stderr)
+            return None
 
     query = f"SELECT * FROM {fqn} WHERE {sql_where}"
     if sql_order:
@@ -353,15 +380,13 @@ def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
 
     try:
         with get_cursor() as cur:
-            # Set statement timeout to prevent expensive scans
             cur.execute("SET LOCAL statement_timeout = '5s'")
             cur.execute("SET TRANSACTION READ ONLY")
             cur.execute(query)
             rows = cur.fetchall()
-        return [_clean_row(dict(r)) for r in rows]
-    except Exception as e:
-        import sys
-        print(f"LLM query error: {e}", file=sys.stderr)
+        return [_clean_row(dict(row)) for row in rows]
+    except PsycopgError as exc:
+        logger.warning("LLM query failed for %s: %s", table_key, exc)
         return None
 
 
@@ -417,39 +442,66 @@ FRIENDLY_NAMES = {
 }
 
 
+PARCEL_KEY_FIELDS = ["pidn", "owner_full", "propadr", "class", "acres", "aprtotal", "school_dis"]
+TAX_KEY_FIELDS = ["pidn", "owner_name", "property_address", "tax_district_name", "tax_year", "authority_name", "total"]
+LICENSE_KEY_FIELDS = ["licensee", "premises_name", "premises_address", "license_type", "status", "municipality"]
+
+# Friendly names for key fields that are normally hidden (used as title/subtitle in fuzzy mode)
+_KEY_FIELD_NAMES = {
+    "owner_full": "Owner",
+    "propadr": "Address",
+    "owner_name": "Owner",
+    "property_address": "Address",
+    "premises_name": "Premises",
+    "premises_address": "Address",
+    "licensee": "Licensee",
+}
+
+
 def _clean_row(row: dict) -> dict:
     """Clean a database row for JSON serialization with friendly names."""
     for key in ("geom", "valid_from", "valid_to"):
         row.pop(key, None)
 
+    # Determine which key fields to always show based on table
+    always_show = set()
+    if "pidn" in row and "tax_year" not in row and "license_type" not in row:
+        always_show = set(PARCEL_KEY_FIELDS)
+    elif "tax_year" in row:
+        always_show = set(TAX_KEY_FIELDS)
+    elif "license_type" in row:
+        always_show = set(LICENSE_KEY_FIELDS)
+
     cleaned = {}
     for key, val in row.items():
-        # Skip hidden fields
+        # Skip hidden fields unless they're key fields for this result type
         if FRIENDLY_NAMES.get(key) is None and key in FRIENDLY_NAMES:
-            continue
+            if key not in always_show:
+                continue
 
-        # Convert Decimal
         if hasattr(val, "as_tuple"):
             val = float(val)
 
-        # Map school district codes to names
         if key == "school_dis" and val:
             val = SCHOOL_DISTRICTS.get(str(val), str(val))
 
-        # Map class codes to names
         if key == "class" and val:
             val = CLASS_NAMES.get(str(val), str(val))
 
-        # Format currency fields
         if key in ("aprtotal", "price", "prev_price", "aprland", "aprbldg", "total", "tax_owed", "penalty_owed", "interest_owed", "fees_owed") and val:
             val = f"${float(val):,.0f}"
 
-        # Use friendly name
-        friendly = FRIENDLY_NAMES.get(key, key.replace("_", " ").title())
+        if key in always_show and key in _KEY_FIELD_NAMES:
+            friendly = _KEY_FIELD_NAMES[key]
+        else:
+            friendly = FRIENDLY_NAMES.get(key, key.replace("_", " ").title())
+
+        # Always show key fields (use "--" for missing), skip other empty fields
         if val is not None and str(val).strip():
             cleaned[friendly] = val
+        elif key in always_show:
+            cleaned[friendly] = "--"
 
-    # Add link for parcels
     if "pidn" in row:
         cleaned["_link"] = f"/property/{row['pidn']}"
     elif "Parcel ID" in cleaned:

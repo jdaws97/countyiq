@@ -1,18 +1,28 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import type { HealthData } from '../types/ops'
 
 export default function Nav() {
   const [sourcesActive, setSourcesActive] = useState<number | null>(null)
+  const [healthAvailable, setHealthAvailable] = useState(true)
 
   useEffect(() => {
     fetch('/api/ops/health')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`Health request failed (${r.status})`)
+        return r.json() as Promise<HealthData>
+      })
       .then((data) => {
-        const green = Object.values(data.sources as Record<string, { status: string }>)
+        const green = Object.values(data.sources)
           .filter((s) => s.status === 'green').length
         setSourcesActive(green)
+        setHealthAvailable(true)
       })
-      .catch(() => setSourcesActive(null))
+      .catch((error) => {
+        console.error('Failed to load nav health summary', error)
+        setSourcesActive(null)
+        setHealthAvailable(false)
+      })
   }, [])
 
   return (
@@ -91,12 +101,12 @@ export default function Nav() {
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: 'var(--accent-green)',
-            boxShadow: '0 0 6px rgba(61, 189, 111, 0.5)',
+            background: healthAvailable ? 'var(--accent-green)' : 'var(--accent-red)',
+            boxShadow: healthAvailable ? '0 0 6px rgba(61, 189, 111, 0.5)' : '0 0 6px rgba(220, 76, 76, 0.5)',
             animation: 'pulse 3s ease-in-out infinite',
           }}
         />
-        <span>{sourcesActive !== null ? `${sourcesActive} sources active` : 'loading...'}</span>
+        <span>{sourcesActive !== null ? `${sourcesActive} sources active` : healthAvailable ? 'loading...' : 'sources unavailable'}</span>
       </div>
     </nav>
   )

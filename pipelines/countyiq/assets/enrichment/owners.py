@@ -180,7 +180,7 @@ def owner_resolution(
 
         # Step 5: Match PLCB licensees — municipality-scoped + higher threshold
         # Only match PLCB licenses where the municipality overlaps with the owner's
-        # parcel locations AND name similarity is > 0.6 (stricter than before)
+        # parcel locations AND name similarity is > 0.6
         cur.execute("""
             INSERT INTO public.owner_source_links (owner_id, source_type, source_id, source_name, source_address, match_tier, confidence)
             SELECT DISTINCT ON (p.lid)
@@ -203,8 +203,7 @@ def owner_resolution(
         plcb_scoped = cur.rowcount
         context.log.info(f"Linked {plcb_scoped} PLCB licenses via municipality-scoped name matching (>0.6)")
 
-        # Step 5b: Fallback — unscoped PLCB matching at even higher threshold (0.75)
-        # for licenses that didn't match in the scoped pass
+        # Fallback: unscoped PLCB match at higher threshold for licenses not matched above
         cur.execute("""
             INSERT INTO public.owner_source_links (owner_id, source_type, source_id, source_name, source_address, match_tier, confidence)
             SELECT DISTINCT ON (p.lid)

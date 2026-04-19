@@ -1,39 +1,54 @@
 # Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Cloudflare                         │
-│  DNS + CDN + DDoS + WAF (free tier)                 │
-│                                                      │
-│  /* (default) ──→ Cloudflare Pages (React SPA)      │
-│  /tiles/*     ──→ Cloudflare R2 (vector tiles)      │
-│  /api/*       ──→ Hetzner VPS (proxied)             │
-└──────────────────────┬──────────────────────────────┘
-                       │ HTTPS
-┌──────────────────────▼──────────────────────────────┐
-│            Hetzner VPS (Docker Compose)              │
-│                                                      │
-│  ┌──────────┐  ┌───────────┐  ┌──────────────────┐  │
-│  │  Caddy   │  │  FastAPI   │  │     Dagster      │  │
-│  │  :80/443 ├──▶  :8000    │  │  webserver+daemon │  │
-│  └──────────┘  └─────┬─────┘  └────────┬─────────┘  │
-│                      │                  │            │
-│                ┌─────▼──────────────────▼─────┐     │
-│                │  PostgreSQL 16 + PostGIS      │     │
-│                │  :5432 (internal only)        │     │
-│                └──────────────────────────────┘     │
-│                                                      │
-│  Watchtower (polls GHCR, auto-restarts containers)  │
-│  Cron: pg_dump → R2 daily                           │
-└─────────────────────────────────────────────────────┘
+CountyIQ is currently a containerized civic intelligence stack with Cloudflare in front, a React frontend, a FastAPI API, and Dagster pipelines feeding PostgreSQL/PostGIS.
+
+## System Shape
+
+```text
+Users
+  |
+  v
+Cloudflare
+  - DNS / CDN / TLS / WAF
+  - Cloudflare Pages for the frontend (current preferred setup)
+  - Cloudflare R2 for raw archives and tile/object storage
+  |
+  v
+Ubuntu VPS (current target: generic container host, likely Hostinger)
+  - Caddy
+  - FastAPI
+  - Dagster
+  - PostgreSQL 16 + PostGIS
 ```
 
-## Access Patterns
+## Request Flow
 
-**Public path:** Users reach CountyIQ through Cloudflare. Static frontend assets (React + MapLibre + Deck.gl) are served directly from Cloudflare Pages -- the VPS is never involved for page loads. API calls (`/api/*`) are proxied through Cloudflare to the VPS, where Caddy routes them to the FastAPI container. Vector tiles load from Cloudflare R2. The frontend is fully decoupled from the backend.
+- `/*`: frontend, ideally served from Cloudflare Pages
+- `/api/*`: proxied to FastAPI behind Caddy
+- raw archives and tile-like artifacts: stored outside Postgres, primarily in Cloudflare R2
 
-**Private path:** Developers access the VPS via SSH. The Dagster UI is not publicly exposed -- use an SSH tunnel (`ssh -L 3000:localhost:3000 countyiq`) to access it locally. Postgres is also internal-only, accessible via SSH tunnel for ad hoc queries.
+## Data Flow
 
-**Resource isolation:** All services run on one box, but in separate Docker containers. FastAPI serves API requests in its own container with dedicated resources. Pipeline jobs (Dagster + Playwright scrapers) run in a separate container. A scraper running at 3am doesn't affect API response times. With 4 GB RAM, there is ample headroom for concurrent Playwright browsers, Dagster scheduling, and API serving -- eliminating the memory contention that constrained the original 1 GB design.
+1. Dagster assets ingest county source data into `staging.*`.
+2. Enrichment assets derive `public.*` outputs such as signals, evidence, briefs, and narratives.
+3. The API reads PostgreSQL/PostGIS and serves parcel, owner, search, radar, and ops endpoints.
+4. The frontend renders those surfaces for map, search, intelligence, and monitoring workflows.
 
-**Data flow:** Dagster scrapes public data sources (GIS, tax records, court records) on schedule. Raw responses are archived to Cloudflare R2 for replay and audit. Parsers extract structured data into staging tables (SCD Type 2). Entity resolution links records by PIDN into `public.properties` (a VIEW). The FastAPI container reads from Postgres to serve the frontend. The frontend calls the API and loads vector tiles from R2.
+## Intelligence Pipeline
+
+The current repo is no longer just an MVP property browser. It includes an LLM-backed intelligence pipeline:
+
+- Pass 0: proceeding extraction from PDFs
+- Pass 1: entity verification
+- Pass 2: batched signal validation
+- Pass 3: parcel brief generation
+- Pass 4: county narrative generation
+
+OpenRouter is the primary remote inference backend. Local GGUF support remains in the harness for evaluation and fallback.
+
+## Deployment Reality
+
+- The current deployment story is containerized VPS plus Cloudflare, not AWS Lambda.
+- Hostinger is the current preferred VPS option to evaluate.
+- Hetzner references in older materials are historical, not architectural requirements.
+- The old AWS/Terraform stack has been archived under `archives/infrastructure/aws-terraform/` and should not be treated as an active deployment path.

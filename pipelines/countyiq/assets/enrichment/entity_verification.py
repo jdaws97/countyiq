@@ -10,15 +10,13 @@ Two stages:
      entity, identifying relationship structures, and flagging rejected
      matches.
 
-Controlled by COUNTYIQ_OPENROUTER_MODEL (API slug) or COUNTYIQ_TEXT_MODEL
-(local GGUF path). If neither is set, returns status="skipped".
+Controlled by COUNTYIQ_PASS1_MODEL or COUNTYIQ_OPENROUTER_MODEL.
+If neither is set, returns status="skipped".
 """
 
 import json
-import os
 import traceback
 from datetime import datetime, timezone
-from pathlib import Path
 
 from dagster import (
     AssetExecutionContext,
@@ -28,11 +26,13 @@ from dagster import (
 )
 
 from countyiq.lib.intelligence_common import compute_input_hash
+from countyiq.lib.pass_llm_config import PassHarnessUnavailable, resolve_pass_harness
 from countyiq.lib.pass1_entity_verification import (
     CANDIDATE_CLUSTERS_QUERY,
     build_entity_cluster_prompt,
     gather_cluster_records,
     parse_entity_verification_output,
+    stable_cluster_key,
 )
 from countyiq.resources.database import DatabaseResource
 
@@ -99,51 +99,16 @@ def entity_verification(
 ) -> MaterializeResult:
     log = context.log
 
-    # ------------------------------------------------------------------
-    # Resolve backend and model (same pattern as signal_validation_batched)
-    # ------------------------------------------------------------------
-    openrouter_model = os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
-    local_model = os.environ.get("COUNTYIQ_TEXT_MODEL")
-
-    if openrouter_model:
-        backend = "openrouter"
-        model_path = openrouter_model
-    elif local_model:
-        backend = "llama_cpp"
-        model_path = local_model
-    else:
-        log.info(
-            "Neither COUNTYIQ_OPENROUTER_MODEL nor COUNTYIQ_TEXT_MODEL is set — "
-            "skipping Pass 1 entity verification."
-        )
-        return _skipped_result("no model configured")
-
-    log.info(f"Pass 1: backend={backend} model={model_path}")
-
-    # ------------------------------------------------------------------
-    # Guard: llm_harness must be importable
-    # ------------------------------------------------------------------
     try:
-        from countyiq.lib.llm_harness import (
-            HarnessConfig,
-            get_preset_for_model,
-            invoke_with_retry,
+        config, invoke_with_retry = resolve_pass_harness(
+            log,
+            pass_number=1,
+            archive_label="pass1_entity",
+            default_max_tokens=8192,
+            default_thinking=True,
         )
-    except ImportError as exc:
-        log.warning("llm_harness import failed (%s) — skipping", exc)
-        return _skipped_result("llm_harness import failed")
-
-    thinking_enabled = os.environ.get("COUNTYIQ_THINKING", "true").lower() in ("1", "true", "yes")
-    preset = get_preset_for_model(model_path, thinking=thinking_enabled, reasoning_task=True)
-
-    config = HarnessConfig(
-        model_path=model_path,
-        backend=backend,
-        max_tokens=8192,  # Entity resolution needs more output for large portfolios
-        thinking=thinking_enabled,
-        archive_label="pass1_entity",
-        **preset,
-    )
+    except PassHarnessUnavailable as exc:
+        return _skipped_result(exc.reason)
 
     # ------------------------------------------------------------------
     # Stage A: Find candidate clusters
@@ -175,7 +140,7 @@ def entity_verification(
 
     for i, cluster_names in enumerate(clusters, 1):
         input_hash: str | None = None
-        cluster_key = cluster_names[0]  # first name in cluster is the tracking key
+        cluster_key = stable_cluster_key(cluster_names)
         try:
             # Gather records for this cluster using the public dict_cursor
             with database.dict_cursor() as cur:
@@ -239,9 +204,16 @@ def entity_verification(
             # Inject cluster_names so _upsert_entity can include the original
             # name variants (the SQL candidate cluster) in linked_names for
             # downstream entity lookup.
+            matched_entity_ids: set[int] = set()
             for entity in parsed.get("entities", []):
                 entity["cluster_names"] = cluster_names
-                _upsert_entity(database, entity, Path(model_path).name)
+                entity_id = _upsert_entity(
+                    database,
+                    entity,
+                    exclude_entity_ids=matched_entity_ids,
+                )
+                if entity_id is not None:
+                    matched_entity_ids.add(entity_id)
                 entities_created += 1
 
             # Update pass tracking
@@ -267,13 +239,10 @@ def entity_verification(
                 f"Error processing cluster {cluster_names[:2]}: {exc}\n"
                 f"{traceback.format_exc()}"
             )
-            try:
-                _update_pass_status(
-                    database, cluster_key, 1, "error",
-                    input_hash or "", str(exc),
-                )
-            except Exception:
-                pass  # don't let status-write failure break the loop
+            _update_pass_status(
+                database, cluster_key, 1, "error",
+                input_hash or "", str(exc),
+            )
             errors += 1
 
     log.info(
@@ -285,9 +254,8 @@ def entity_verification(
     return MaterializeResult(
         metadata={
             "status": MetadataValue.text("complete"),
-            "backend": MetadataValue.text(backend),
-            "model": MetadataValue.text(model_path),
-            "thinking": MetadataValue.bool(thinking_enabled),
+            "model": MetadataValue.text(config.model_path),
+            "thinking": MetadataValue.bool(config.thinking),
             "total_clusters": MetadataValue.int(len(clusters)),
             "clusters_processed": MetadataValue.int(clusters_processed),
             "clusters_skipped": MetadataValue.int(skipped),
@@ -301,9 +269,174 @@ def entity_verification(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _upsert_entity(database: DatabaseResource, entity: dict, model_name: str) -> None:
+def _merge_unique_strings(*groups) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for item in group or []:
+            if not isinstance(item, str):
+                continue
+            cleaned = item.strip()
+            if not cleaned:
+                continue
+            if cleaned in seen:
+                continue
+            seen.add(cleaned)
+            merged.append(cleaned)
+    return merged
+
+
+def _merge_linked_sources(existing: dict | None, incoming: dict | None) -> dict:
+    merged: dict[str, list[str]] = {}
+    for payload in (existing or {}, incoming or {}):
+        if not isinstance(payload, dict):
+            continue
+        for key, values in payload.items():
+            if isinstance(values, list):
+                merged[key] = _merge_unique_strings(merged.get(key, []), values)
+    return merged
+
+
+def _merge_relationships(existing, incoming) -> list[dict]:
+    merged: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for rel_list in (existing or [], incoming or []):
+        if not isinstance(rel_list, list):
+            continue
+        for rel in rel_list:
+            if not isinstance(rel, dict):
+                continue
+            key = (
+                str(rel.get("relationship_type", "")).strip(),
+                str(rel.get("related_entity", "")).strip(),
+            )
+            if not key[0] or not key[1] or key in seen:
+                continue
+            seen.add(key)
+            merged.append(rel)
+    return merged
+
+
+def _candidate_names(entity: dict) -> list[str]:
+    linked_records = entity.get("linked_records", {})
+    return _merge_unique_strings(
+        [entity.get("canonical_name", "")],
+        linked_records.get("corporate_entities", []),
+        linked_records.get("proceedings", []),
+        entity.get("cluster_names", []),
+    )
+
+
+def _find_existing_entity_row(
+    database: DatabaseResource,
+    names: list[str],
+    preferred_name: str,
+    exclude_entity_ids: set[int] | None = None,
+):
+    if not names:
+        return None
+
+    exclude = list(exclude_entity_ids or [])
+    with database.dict_cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                entity_id,
+                canonical_name,
+                entity_type,
+                linked_names,
+                linked_sources,
+                relationships,
+                verification_status,
+                verification_reasoning,
+                verified_at
+            FROM public.entity_graph
+            WHERE (
+                canonical_name = ANY(%(names)s)
+                OR COALESCE(linked_names, ARRAY[]::text[]) && %(names)s::text[]
+            )
+              AND (
+                %(exclude_entity_ids)s::int[] = ARRAY[]::int[]
+                OR entity_id <> ALL(%(exclude_entity_ids)s::int[])
+              )
+            ORDER BY
+                (canonical_name = %(preferred_name)s) DESC,
+                verified_at DESC NULLS LAST,
+                entity_id
+            LIMIT 1
+            """,
+            {
+                "names": names,
+                "preferred_name": preferred_name,
+                "exclude_entity_ids": exclude,
+            },
+        )
+        return cur.fetchone()
+
+
+def _upsert_entity(
+    database: DatabaseResource,
+    entity: dict,
+    exclude_entity_ids: set[int] | None = None,
+) -> int | None:
     """Insert or update an entity in public.entity_graph."""
-    database.execute(
+    linked_records = entity.get("linked_records", {})
+    candidate_names = _candidate_names(entity)
+    existing = _find_existing_entity_row(
+        database,
+        candidate_names,
+        entity.get("canonical_name", ""),
+        exclude_entity_ids=exclude_entity_ids,
+    )
+
+    canonical_name = (
+        existing.get("canonical_name")
+        if existing and existing.get("canonical_name")
+        else entity.get("canonical_name", "")
+    )
+    linked_names = _merge_unique_strings(
+        existing.get("linked_names") if existing else [],
+        candidate_names,
+    ) or None
+    linked_sources = _merge_linked_sources(
+        existing.get("linked_sources") if existing else {},
+        linked_records,
+    )
+    relationships = _merge_relationships(
+        existing.get("relationships") if existing else [],
+        entity.get("relationships", []),
+    )
+
+    params = {
+        "canonical_name": canonical_name,
+        "entity_type": entity.get("entity_type", "unknown"),
+        "linked_names": linked_names,
+        "linked_sources": json.dumps(linked_sources),
+        "relationships": json.dumps(relationships),
+        "verification_status": "verified" if entity.get("confidence", 0) >= 0.7 else "tentative",
+        "verification_reasoning": entity.get("reasoning", ""),
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if existing:
+        database.execute(
+            """
+            UPDATE public.entity_graph
+            SET canonical_name = %(canonical_name)s,
+                entity_type = %(entity_type)s,
+                linked_names = %(linked_names)s,
+                linked_sources = %(linked_sources)s::jsonb,
+                relationships = %(relationships)s::jsonb,
+                verification_status = %(verification_status)s,
+                verification_reasoning = %(verification_reasoning)s,
+                verified_at = %(verified_at)s
+            WHERE entity_id = %(entity_id)s
+            """,
+            {**params, "entity_id": existing["entity_id"]},
+        )
+        return existing["entity_id"]
+
+    rows = database.execute(
         """
         INSERT INTO public.entity_graph
             (canonical_name, entity_type, linked_names, linked_sources,
@@ -312,44 +445,11 @@ def _upsert_entity(database: DatabaseResource, entity: dict, model_name: str) ->
             (%(canonical_name)s, %(entity_type)s, %(linked_names)s,
              %(linked_sources)s::jsonb, %(relationships)s::jsonb,
              %(verification_status)s, %(verification_reasoning)s, %(verified_at)s)
-        ON CONFLICT (canonical_name)
-        DO UPDATE SET
-            entity_type = EXCLUDED.entity_type,
-            linked_names = EXCLUDED.linked_names,
-            linked_sources = EXCLUDED.linked_sources,
-            relationships = EXCLUDED.relationships,
-            verification_status = EXCLUDED.verification_status,
-            verification_reasoning = EXCLUDED.verification_reasoning,
-            verified_at = EXCLUDED.verified_at
+        RETURNING entity_id
         """,
-        {
-            "canonical_name": entity.get("canonical_name", ""),
-            "entity_type": entity.get("entity_type", "unknown"),
-            # linked_names must contain OWNER NAME ALIASES so that
-            # ENTITY_GRAPH_QUERY (WHERE %(name)s = ANY(linked_names))
-            # resolves entity lookups by name. The old code put PIDNs here
-            # which would never match an owner_full string.
-            #
-            # Sources of name aliases:
-            #   - corporate_entities: actual entity name strings
-            #   - proceedings: applicant name strings
-            #   - cluster_names: the original name variants from the SQL
-            #     candidate cluster (the names that were similar enough to
-            #     group together in the first place)
-            "linked_names": list(
-                set(
-                    entity.get("linked_records", {}).get("corporate_entities", [])
-                    + entity.get("linked_records", {}).get("proceedings", [])
-                    + entity.get("cluster_names", [])
-                )
-            ) or None,
-            "linked_sources": json.dumps(entity.get("linked_records", {})),
-            "relationships": json.dumps(entity.get("relationships", [])),
-            "verification_status": "verified" if entity.get("confidence", 0) >= 0.7 else "tentative",
-            "verification_reasoning": entity.get("reasoning", ""),
-            "verified_at": datetime.now(timezone.utc).isoformat(),
-        },
-    )
+        params,
+    ) or []
+    return rows[0][0] if rows else None
 
 
 def _update_pass_status(

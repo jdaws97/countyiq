@@ -82,8 +82,8 @@ entity_verification_refresh = define_asset_job(
 
 signal_validation_refresh = define_asset_job(
     name="signal_validation_refresh",
-    selection=AssetSelection.assets("signal_validation"),
-    description="Pass 2: validate each signal on each parcel",
+    selection=AssetSelection.assets("signal_validation_batched"),
+    description="Pass 2: validate all signals per parcel via batched LLM call",
 )
 
 brief_generation_refresh = define_asset_job(
@@ -101,8 +101,8 @@ county_narratives_refresh = define_asset_job(
 intelligence_full_pipeline = define_asset_job(
     name="intelligence_full_pipeline",
     selection=AssetSelection.assets(
-        "entity_verification", "signal_validation",
-        "brief_generation", "county_narratives",
+        "entity_verification", "signal_validation_batched",
+        "development_momentum", "brief_generation", "county_narratives",
     ),
-    description="Full intelligence pipeline: Passes 1-4",
+    description="Full intelligence pipeline: validated signals, product scoring, and Passes 1-4",
 )

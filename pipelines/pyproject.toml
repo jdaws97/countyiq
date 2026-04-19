@@ -7,27 +7,19 @@ dependencies = [
     # Dagster core
     "dagster",
     "dagster-webserver",
-    "dagster-postgres",
 
     # Database
     "psycopg2-binary",
     "sqlalchemy>=2.0",
     "alembic",
-    "geoalchemy2",
 
     # Scraping
     "requests",
     "beautifulsoup4",
-    "lxml",
     "playwright",
     "pdfplumber",
 
-    # Data processing
-    "geojson",
-    "shapely",
-    "pyproj",
-
-    # AWS
+    # AWS / Cloudflare R2 (S3-compatible)
     "boto3",
 
     # Utilities

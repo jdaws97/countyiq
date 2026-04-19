@@ -12,14 +12,12 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from dagster import (
     asset,
-    asset_check,
-    AssetCheckResult,
-    AssetCheckSeverity,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
 )
 
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.playwright_utils import browser_context
 from countyiq.lib.scd import scd2_upsert
@@ -166,12 +164,10 @@ def sheriff_sales_scrape(
     )
 
 
-@asset_check(asset=sheriff_sales_scrape)
-def sheriff_sales_record_count(database: DatabaseResource) -> AssetCheckResult:
-    county = get_county_config()
-    result = database.execute("SELECT COUNT(*) FROM staging.sheriff_sales WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count >= county.sheriff_sales_min_records,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"count": MetadataValue.int(count)})
+sheriff_sales_record_count = make_row_count_check(
+    sheriff_sales_scrape,
+    table="sheriff_sales",
+    threshold_fn=lambda: get_county_config().sheriff_sales_min_records,
+    metadata_key="count",
+    name="sheriff_sales_record_count",
+)

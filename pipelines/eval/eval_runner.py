@@ -2,13 +2,13 @@
 """Model evaluation runner for CountyIQ intelligence passes.
 
 Runs Pass 2 (signal validation) or Pass 3 (brief generation) against a
-sample of test parcels using a specified GGUF model and stores the results
+sample of test parcels using a specified OpenRouter model and stores the results
 as JSON for later comparison with eval_report.py.
 
 Usage:
-    python eval_runner.py --model /path/to/model.gguf --pass 2 --limit 10
-    python eval_runner.py --model /path/to/model.gguf --pass 3 --limit 10
-    python eval_runner.py --model /path/to/model.gguf --pass 2 --limit 50 --output /tmp/eval_results
+    python eval_runner.py --model xiaomi/mimo-v2-flash --pass 2 --limit 10
+    python eval_runner.py --model xiaomi/mimo-v2-flash --pass 3 --limit 10
+    python eval_runner.py --model x-ai/grok-4.1-fast --pass 2 --limit 50 --output /tmp/eval_results
 """
 
 from __future__ import annotations
@@ -32,11 +32,16 @@ if str(_PIPELINES_DIR) not in sys.path:
 import psycopg2
 import psycopg2.extras
 
-from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry
+from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry, get_preset_for_model, detect_model_family
 from countyiq.lib.pass2_signal_validation import (
     build_signal_validation_prompt,
     gather_signal_context,
     parse_signal_validation_output,
+)
+from countyiq.lib.pass2_batched_validation import (
+    build_batched_signal_prompt,
+    gather_parcel_batch_context,
+    parse_batched_signal_output,
 )
 from countyiq.lib.pass3_brief_generation import (
     build_brief_generation_prompt,
@@ -110,14 +115,16 @@ assemblage AS (
     ORDER BY RANDOM()
     LIMIT 20
 )
-SELECT * FROM high_signal
-UNION ALL
-SELECT * FROM tax_distress
-UNION ALL
-SELECT * FROM exclusion
-UNION ALL
-SELECT * FROM assemblage
-ORDER BY category, pidn
+SELECT * FROM (
+    SELECT * FROM high_signal
+    UNION ALL
+    SELECT * FROM tax_distress
+    UNION ALL
+    SELECT * FROM exclusion
+    UNION ALL
+    SELECT * FROM assemblage
+) combined
+ORDER BY RANDOM()
 """
 
 # Query to fetch all signals for a parcel (needed for Pass 2 iteration)
@@ -205,7 +212,8 @@ def run_pass2(cursor, config: HarnessConfig, pidn: str, top_signal: str) -> dict
     try:
         context = gather_signal_context(cursor, pidn, signal)
         prompt = build_signal_validation_prompt(context)
-        result = invoke_with_retry(config, prompt)
+        archive_key = f"{pidn}:{signal['signal_key']}"
+        result = invoke_with_retry(config, prompt, archive_key=archive_key)
         elapsed = time.perf_counter() - t0
 
         if result.success:
@@ -214,7 +222,7 @@ def run_pass2(cursor, config: HarnessConfig, pidn: str, top_signal: str) -> dict
             return {
                 "success": success,
                 "elapsed_seconds": round(elapsed, 2),
-                "raw_output": result.raw_output[:2000],  # truncate for storage
+                "raw_output": (result.raw_output or "")[:2000],  # truncate for storage
                 "parsed_output": parsed,
                 "error": parsed.get("error") if not success else None,
             }
@@ -222,10 +230,104 @@ def run_pass2(cursor, config: HarnessConfig, pidn: str, top_signal: str) -> dict
             return {
                 "success": False,
                 "elapsed_seconds": round(elapsed, 2),
-                "raw_output": result.raw_output[:2000],
+                "raw_output": (result.raw_output or "")[:2000],
                 "parsed_output": None,
                 "error": result.error,
             }
+    except Exception as exc:
+        elapsed = time.perf_counter() - t0
+        return {
+            "success": False,
+            "elapsed_seconds": round(elapsed, 2),
+            "raw_output": "",
+            "parsed_output": None,
+            "error": str(exc),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Pass 2 BATCHED evaluation — one LLM call validates ALL signals on a parcel
+# ---------------------------------------------------------------------------
+
+def run_pass2_batched(cursor, config: HarnessConfig, pidn: str) -> dict:
+    """Run batched Pass 2 validation for all signals on a parcel.
+
+    Includes retry path for dropped signals: if the first LLM call returns
+    fewer validations than signals sent, makes a second call with only the
+    missing signals to recover them.
+    """
+    t0 = time.perf_counter()
+    try:
+        ctx = gather_parcel_batch_context(cursor, pidn)
+        if not ctx.get("signals"):
+            return {
+                "success": False,
+                "elapsed_seconds": 0.0,
+                "raw_output": "",
+                "parsed_output": None,
+                "error": f"No signals found for pidn={pidn}",
+            }
+
+        prompt = build_batched_signal_prompt(ctx)
+        archive_key = f"batch:{pidn}"
+        result = invoke_with_retry(config, prompt, archive_key=archive_key)
+
+        if not result.success:
+            elapsed = time.perf_counter() - t0
+            return {
+                "success": False,
+                "elapsed_seconds": round(elapsed, 2),
+                "raw_output": (result.raw_output or "")[:4000],
+                "parsed_output": None,
+                "error": result.error,
+                "n_signals": len(ctx["signals"]),
+            }
+
+        parsed = parse_batched_signal_output(result.parsed or {}, ctx["signals"])
+        all_validations = list(parsed.get("validations", []))
+        retry_attempted = 0
+        retry_recovered = 0
+
+        # Retry path: recover signals the LLM dropped or failed to parse
+        retry_keys = set(parsed.get("missing", [])) | set(parsed.get("errors", []))
+        if retry_keys:
+            retry_signals = [
+                s for s in ctx["signals"] if s["signal_key"] in retry_keys
+            ]
+            retry_attempted = len(retry_signals)
+            retry_prompt = build_batched_signal_prompt(
+                ctx, signals_override=retry_signals
+            )
+            retry_result = invoke_with_retry(
+                config, retry_prompt, archive_key=f"batch:{pidn}:retry"
+            )
+            if retry_result.success:
+                retry_parsed = parse_batched_signal_output(
+                    retry_result.parsed or {}, retry_signals
+                )
+                retry_vals = retry_parsed.get("validations", [])
+                all_validations.extend(retry_vals)
+                retry_recovered = len(retry_vals)
+
+        elapsed = time.perf_counter() - t0
+        success = len(all_validations) > 0
+
+        return {
+            "success": success,
+            "elapsed_seconds": round(elapsed, 2),
+            "raw_output": (result.raw_output or "")[:4000],
+            "parsed_output": {
+                "validations": all_validations,
+                "cross_signal_insight": parsed.get("cross_signal_insight", ""),
+            },
+            "error": parsed.get("parse_error") if not success else None,
+            "n_signals": len(ctx["signals"]),
+            "n_validations": len(all_validations),
+            "n_missing_initial": len(parsed.get("missing", [])),
+            "retry_attempted": retry_attempted,
+            "retry_recovered": retry_recovered,
+            "cross_signal_insight": parsed.get("cross_signal_insight", ""),
+        }
     except Exception as exc:
         elapsed = time.perf_counter() - t0
         return {
@@ -251,7 +353,7 @@ def run_pass3(cursor, config: HarnessConfig, pidn: str) -> dict:
     try:
         context = gather_brief_context(cursor, pidn)
         prompt = build_brief_generation_prompt(context)
-        result = invoke_with_retry(config, prompt)
+        result = invoke_with_retry(config, prompt, archive_key=pidn)
         elapsed = time.perf_counter() - t0
 
         if result.success:
@@ -260,7 +362,7 @@ def run_pass3(cursor, config: HarnessConfig, pidn: str) -> dict:
             return {
                 "success": success,
                 "elapsed_seconds": round(elapsed, 2),
-                "raw_output": result.raw_output[:2000],
+                "raw_output": (result.raw_output or "")[:2000],
                 "parsed_output": parsed,
                 "error": parsed.get("error") if not success else None,
             }
@@ -268,7 +370,7 @@ def run_pass3(cursor, config: HarnessConfig, pidn: str) -> dict:
             return {
                 "success": False,
                 "elapsed_seconds": round(elapsed, 2),
-                "raw_output": result.raw_output[:2000],
+                "raw_output": (result.raw_output or "")[:2000],
                 "parsed_output": None,
                 "error": result.error,
             }
@@ -323,50 +425,115 @@ Examples:
         help="Directory to write result JSON files (default: pipelines/eval/results).",
     )
     parser.add_argument(
-        "--n-ctx",
-        type=int,
-        default=4096,
-        help="Context window size for the model (default: 4096).",
-    )
-    parser.add_argument(
-        "--n-gpu-layers",
-        type=int,
-        default=-1,
-        help="GPU layers to offload: -1=all, 0=CPU-only (default: -1).",
-    )
-    parser.add_argument(
         "--temperature",
         type=float,
-        default=0.1,
-        help="Sampling temperature (default: 0.1).",
+        default=None,
+        help="Sampling temperature. If not set, uses model's recommended preset.",
+    )
+    parser.add_argument(
+        "--top-p",
+        type=float,
+        default=None,
+        help="Top-p sampling. If not set, uses model's recommended preset.",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="Top-k sampling. If not set, uses model's recommended preset.",
+    )
+    parser.add_argument(
+        "--min-p",
+        type=float,
+        default=None,
+        help="Min-p sampling. If not set, uses model's recommended preset.",
+    )
+    parser.add_argument(
+        "--presence-penalty",
+        type=float,
+        default=None,
+        help="Presence penalty. If not set, uses model's recommended preset.",
+    )
+    parser.add_argument(
+        "--repeat-penalty",
+        type=float,
+        default=None,
+        help="Repeat penalty. If not set, uses model's recommended preset.",
+    )
+    parser.add_argument(
+        "--thinking",
+        action="store_true",
+        help="Enable thinking mode (Gemma <|think|>, Qwen3.5 /think). Default: off. For Mistral, use the Reasoning model variant.",
+    )
+    parser.add_argument(
+        "--batched",
+        action="store_true",
+        help="Pass 2 only: use batched validation (all signals per parcel in one LLM call).",
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        help="Max output tokens. Default: 2048 (per-signal) or 4096 (batched). Reasoning models may need 8192+.",
     )
     args = parser.parse_args()
 
-    model_path = Path(args.model)
-    if not model_path.exists():
-        print(f"ERROR: Model file not found: {model_path}", file=sys.stderr)
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        print("ERROR: OPENROUTER_API_KEY not set in environment", file=sys.stderr)
         sys.exit(1)
+    model_path_str = args.model
+    model_name = args.model.replace("/", "_").replace(":", "_")
 
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    model_name = model_path.stem  # e.g., "mistral-7b-instruct-v0.2.Q4_K_M"
+    # Load the model's recommended preset and apply any CLI overrides
+    family = detect_model_family(model_path_str)
+    preset = get_preset_for_model(model_path_str, thinking=args.thinking, reasoning_task=True)
+
+    resolved_params = {
+        "temperature": args.temperature if args.temperature is not None else preset["temperature"],
+        "top_p": args.top_p if args.top_p is not None else preset["top_p"],
+        "top_k": args.top_k if args.top_k is not None else preset["top_k"],
+        "min_p": args.min_p if args.min_p is not None else preset["min_p"],
+        "presence_penalty": args.presence_penalty if args.presence_penalty is not None else preset["presence_penalty"],
+        "repeat_penalty": args.repeat_penalty if args.repeat_penalty is not None else preset["repeat_penalty"],
+    }
 
     print(f"Model:      {model_name}")
+    print(f"Family:     {family}")
     print(f"Pass:       {args.pass_num}")
     print(f"Limit:      {args.limit}")
+    print(f"Thinking:   {'ON' if args.thinking else 'OFF'}")
+    print(f"Sampling:   temp={resolved_params['temperature']}  top_p={resolved_params['top_p']}  top_k={resolved_params['top_k']}  min_p={resolved_params['min_p']}  pres_pen={resolved_params['presence_penalty']}  rep_pen={resolved_params['repeat_penalty']}")
     print(f"Output dir: {output_dir}")
     print()
 
     # ------------------------------------------------------------------
-    # Load model
+    # Build harness config
     # ------------------------------------------------------------------
+    # Archive every LLM call so results survive process death.
+    # Label includes model + mode so archives don't collide across runs.
+    mode_tag_for_archive = "thinking" if args.thinking else "nothink"
+    archive_label = f"eval_{model_name}_{mode_tag_for_archive}_pass{args.pass_num}"
+
+    # Default max_tokens: 4096 for batched (multi-signal output), 2048 for per-signal.
+    # Reasoning models (Mercury, GPT-OSS) may need 8192+ because reasoning
+    # tokens count against the output budget before the JSON answer.
+    if args.max_tokens is not None:
+        max_tokens = args.max_tokens
+    elif args.batched:
+        max_tokens = 4096
+    else:
+        max_tokens = 2048
+
     config = HarnessConfig(
-        model_path=str(model_path),
-        n_ctx=args.n_ctx,
-        n_gpu_layers=args.n_gpu_layers,
-        temperature=args.temperature,
-        max_tokens=2048,
+        model_path=model_path_str,
+        max_tokens=max_tokens,
+        thinking=args.thinking,
+        model_family=family,
+        archive_label=archive_label,
+        **resolved_params,
     )
 
     # ------------------------------------------------------------------
@@ -425,7 +592,10 @@ Examples:
                 )
 
                 if args.pass_num == 2:
-                    outcome = run_pass2(cursor, config, pidn, top_signal)
+                    if args.batched:
+                        outcome = run_pass2_batched(cursor, config, pidn)
+                    else:
+                        outcome = run_pass2(cursor, config, pidn, top_signal)
                 else:
                     outcome = run_pass3(cursor, config, pidn)
 
@@ -453,19 +623,27 @@ Examples:
     # ------------------------------------------------------------------
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe_model_name = model_name.replace(" ", "_")
-    output_file = output_dir / f"eval_{safe_model_name}_pass{args.pass_num}_{timestamp}.json"
+
+    # Tag the model name with thinking state + batched flag for filename + metadata
+    mode_parts = []
+    if args.batched:
+        mode_parts.append("batched")
+    mode_parts.append("thinking" if args.thinking else "nothink")
+    mode_tag = "_".join(mode_parts)
+    output_file = output_dir / f"eval_{safe_model_name}_{mode_tag}_pass{args.pass_num}_{timestamp}.json"
 
     with open(output_file, "w") as f:
         json.dump(
             {
                 "meta": {
                     "model_name": model_name,
-                    "model_path": str(model_path),
+                    "model_path": model_path_str,
+                    "model_family": family,
                     "pass_num": args.pass_num,
                     "limit": args.limit,
-                    "n_ctx": args.n_ctx,
-                    "n_gpu_layers": args.n_gpu_layers,
-                    "temperature": args.temperature,
+                    "thinking": args.thinking,
+                    "mode_tag": mode_tag,
+                    "sampling": resolved_params,
                     "evaluated_at": timestamp,
                     "parcels_evaluated": len(results),
                 },
@@ -509,7 +687,6 @@ Examples:
             if not r["success"]:
                 print(f"  pidn={r['pidn']}  error={r.get('error', '')[:80]}")
         print()
-
 
 if __name__ == "__main__":
     main()

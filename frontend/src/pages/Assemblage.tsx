@@ -1,63 +1,51 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import Nav from '../components/Nav'
-
-const SCHOOL_DISTRICTS: Record<string, string> = {
-  '002': 'Central York', '004': 'Dallastown', '006': 'Dover',
-  '008': 'Eastern York', '010': 'Hanover', '012': 'Northeastern',
-  '014': 'Northern York', '016': 'Red Lion', '018': 'South Eastern',
-  '020': 'South Western', '022': 'Southern York', '024': 'Spring Grove',
-  '026': 'West Shore', '028': 'West York', '030': 'York Suburban',
-  '17F': 'York City', '17G': 'York City', '17L': 'York City', '17N': 'York City',
-}
-
-const CLASS_NAMES: Record<string, string> = {
-  'R': 'Residential', 'C': 'Commercial', 'I': 'Industrial',
-  'F': 'Farm', 'E': 'Exempt', 'A': 'Agricultural', 'U': 'Utility',
-}
-
-function fmtDollar(v: any): string {
-  if (!v) return '--'
-  const n = typeof v === 'number' ? v : parseFloat(v)
-  if (isNaN(n)) return '--'
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
-  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-}
+import BackButton from '../components/BackButton'
+import PageShell from '../components/PageShell'
+import { formatCurrencyCompact } from '../lib/format'
+import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
+import type { AssemblageCluster, AssemblageResponse } from '../types/api'
 
 export default function Assemblage() {
   const navigate = useNavigate()
-  const [clusters, setClusters] = useState<any[]>([])
+  const [clusters, setClusters] = useState<AssemblageCluster[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [minParcels, setMinParcels] = useState('3')
   const [expanded, setExpanded] = useState<string | null>(null)
 
   useEffect(() => {
     const cacheKey = `assemblage_${minParcels}`
-    const cached = (window as any).__assemblageCache?.[cacheKey]
+    const cached = window.__assemblageCache?.[cacheKey]
     if (cached) {
       setClusters(cached)
       setLoading(false)
       return
     }
     setLoading(true)
+    setError(null)
     fetch(`/api/scores/assemblage?min_parcels=${minParcels}&min_acres=0.5&limit=50`)
-      .then(r => r.json())
-      .then(d => {
+      .then(r => {
+        if (!r.ok) throw new Error(`Assemblage request failed (${r.status})`)
+        return r.json()
+      })
+      .then((d: AssemblageResponse) => {
         const items = d.clusters || []
         setClusters(items)
-        if (!(window as any).__assemblageCache) (window as any).__assemblageCache = {}
-        ;(window as any).__assemblageCache[cacheKey] = items
+        if (!window.__assemblageCache) window.__assemblageCache = {}
+        window.__assemblageCache[cacheKey] = items
         setLoading(false)
       })
-      .catch(() => setLoading(false))
+      .catch((err) => {
+        console.error('Failed to load assemblage clusters', err)
+        setError(err.message)
+        setLoading(false)
+      })
   }, [minParcels])
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <Nav />
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 32px' }}>
-
-        <button onClick={() => navigate(-1)} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 24 }}>&larr; Back</button>
+    <PageShell maxWidth={1100}>
+      <BackButton onClick={() => navigate(-1)} />
 
         <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-purple)', marginBottom: 8 }}>Intelligence</div>
@@ -83,6 +71,16 @@ export default function Assemblage() {
             {loading ? 'Loading...' : `${clusters.length} clusters found`}
           </span>
         </div>
+
+        {error && (
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-red)',
+            padding: 24, background: 'rgba(224, 82, 82, 0.08)',
+            border: '1px solid rgba(224, 82, 82, 0.2)', borderRadius: 6, marginBottom: 24,
+          }}>
+            Failed to load data: {error}
+          </div>
+        )}
 
         {/* Results */}
         {!loading && clusters.map((c, i) => {
@@ -112,7 +110,7 @@ export default function Assemblage() {
                     {c.seed_owner}
                   </div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {c.seed_address || c.seed_pidn} · {SCHOOL_DISTRICTS[c.school_dis] || c.school_dis} · {CLASS_NAMES[c.seed_class] || c.seed_class}
+                    {c.seed_address || c.seed_pidn} · {getSchoolDistrictLabel(c.school_dis)} · {getPropertyClassLabel(c.seed_class)}
                   </div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
@@ -135,7 +133,7 @@ export default function Assemblage() {
                   {c.total_acres?.toFixed(1)} ac
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-green)', textAlign: 'right' }}>
-                  {fmtDollar(c.total_assessed)}
+                  {formatCurrencyCompact(c.total_assessed)}
                 </div>
               </div>
 
@@ -146,7 +144,7 @@ export default function Assemblage() {
                     View Seed Property
                   </Link>
                   {c.lat && c.lng && (() => {
-                    const allPidns = [c.seed_pidn, ...(c.neighbors || []).map((n: any) => n.pidn)].join(',')
+                    const allPidns = [c.seed_pidn, ...(c.neighbors || []).map(n => n.pidn)].join(',')
                     return (
                       <Link to={`/map?cluster=${allPidns}&seed=${c.seed_pidn}&zoom=18&lat=${c.lat}&lng=${c.lng}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-purple)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 4 }}>
                         View Cluster on Map ({(c.neighbors || []).length + 1} parcels)
@@ -157,7 +155,7 @@ export default function Assemblage() {
               )}
               {isExpanded && (() => {
                 // Compute ownership breakdown
-                const allParcels = [{ owner: c.seed_owner, pidn: c.seed_pidn }, ...(c.neighbors || []).map((n: any) => ({ owner: n.owner, pidn: n.pidn }))]
+                const allParcels = [{ owner: c.seed_owner, pidn: c.seed_pidn }, ...(c.neighbors || []).map(n => ({ owner: n.owner, pidn: n.pidn }))]
                 const ownerCounts: Record<string, number> = {}
                 allParcels.forEach(p => { ownerCounts[p.owner] = (ownerCounts[p.owner] || 0) + 1 })
                 const totalInCluster = allParcels.length
@@ -189,12 +187,12 @@ export default function Assemblage() {
                   <Link to={`/property/${c.seed_pidn}`} style={{ textDecoration: 'none', color: 'inherit', display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px', padding: '10px 20px', background: 'rgba(224,82,82,0.08)', borderBottom: '1px solid var(--border)' }}>
                     <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{c.seed_owner}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{c.seed_address}</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{fmtDollar(c.seed_assessed)}</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{formatCurrencyCompact(c.seed_assessed)}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, textAlign: 'right' }}>{c.seed_acres?.toFixed(1)}</div>
                     <div style={{ display: 'flex', gap: 4 }}><Badge color="var(--accent-red)">Delinquent</Badge> <Badge color="var(--accent-blue)">Seed</Badge></div>
                   </Link>
                   {/* Neighbors */}
-                  {(c.neighbors || []).map((n: any, j: number) => (
+                  {(c.neighbors || []).map((n, j: number) => (
                     <Link key={n.pidn} to={`/property/${n.pidn}`} style={{
                       textDecoration: 'none', color: 'inherit',
                       display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px',
@@ -208,7 +206,7 @@ export default function Assemblage() {
                     >
                       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>{n.owner}</div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{n.address}</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{fmtDollar(n.assessed)}</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{formatCurrencyCompact(n.assessed)}</div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, textAlign: 'right' }}>{n.acres ? Number(n.acres).toFixed(1) : '--'}</div>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {n.delinquent && <Badge color="var(--accent-red)">Delq</Badge>}
@@ -223,8 +221,7 @@ export default function Assemblage() {
             </div>
           )
         })}
-      </main>
-    </div>
+    </PageShell>
   )
 }
 

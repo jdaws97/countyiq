@@ -7,11 +7,10 @@ lets the LLM reason about cross-signal patterns.
 This is the production-recommended asset. The per-signal version
 (signal_validation.py) is retained for A/B comparison.
 
-The asset is controlled by COUNTYIQ_TEXT_MODEL (local path) or
-COUNTYIQ_OPENROUTER_MODEL (API slug). If neither is set, returns skipped.
+The asset is controlled by COUNTYIQ_PASS2_MODEL or COUNTYIQ_OPENROUTER_MODEL.
+If neither is set, returns skipped.
 """
 import json
-import os
 import traceback
 from datetime import datetime, timezone
 
@@ -23,6 +22,7 @@ from dagster import (
 )
 
 from countyiq.lib.intelligence_common import compute_input_hash
+from countyiq.lib.pass_llm_config import PassHarnessUnavailable, resolve_pass_harness
 from countyiq.lib.pass2_batched_validation import (
     build_batched_signal_prompt,
     gather_parcel_batch_context,
@@ -53,36 +53,74 @@ def _row_value(row, key: str, index: int = 0):
 PARCELS_NEEDING_VALIDATION_QUERY = """
     -- Selects parcels that need (re-)validation for any of these reasons:
     --   1. Has at least one signal with no corresponding evidence row (new signal)
-    --   2. Was never fully validated (no complete pass-2 record)
-    --   3. Was validated but the context has since changed (hash mismatch —
-    --      new signals added, entity data updated, etc.)
+    --   2. Upstream context changed since last validation (tax claims, entity
+    --      graph, parcels, or proceedings updated more recently than the pass record)
     --
-    -- The input-hash check inside the main loop handles (3) at the parcel
-    -- level, but the parcel has to be SELECTED first — this query ensures it is.
+    -- The input-hash check inside the main loop is the final guard — if the
+    -- hash matches despite being selected here, the LLM call is skipped.
+    -- This query is intentionally broad to avoid missing stale parcels.
+
+    -- Reason 1: new/unmatched signal
     SELECT DISTINCT ds.pidn
     FROM public.development_signals ds
-    WHERE
-        -- Reason 1: new/unmatched signal
-        NOT EXISTS (
-            SELECT 1
-            FROM public.evidence e
-            WHERE e.pidn = ds.pidn
-              AND e.signal_key = ds.signal_key
-        )
+    WHERE NOT EXISTS (
+        SELECT 1 FROM public.evidence e
+        WHERE e.pidn = ds.pidn AND e.signal_key = ds.signal_key
+    )
+
     UNION
-    SELECT DISTINCT ds2.pidn
-    FROM public.development_signals ds2
-    JOIN meta.intelligence_passes ip
-        ON ip.pidn = ds2.pidn
-       AND ip.pass_number = 2
-       AND ip.status = 'complete'
-    WHERE
-        -- Reason 3: previously validated, but the pass record exists and
-        -- hash may be stale. The actual hash comparison happens in the
-        -- Python loop; this just ensures the parcel enters the candidate set.
-        -- We re-check periodically by selecting any parcel whose last
-        -- validation is older than 7 days.
-        ip.last_run_at < NOW() - INTERVAL '7 days'
+
+    -- Reason 2: upstream data changed since last validation
+    SELECT DISTINCT ip.pidn
+    FROM meta.intelligence_passes ip
+    WHERE ip.pass_number = 2 AND ip.status = 'complete'
+      AND (
+          -- Tax claims changed
+          EXISTS (
+              SELECT 1 FROM staging.tax_claims tc
+              WHERE tc.pidn = ip.pidn AND tc.valid_from > ip.last_run_at
+          )
+          -- Parcel record changed (sale, owner, assessment)
+          OR EXISTS (
+              SELECT 1 FROM staging.parcels p
+              WHERE p.pidn = ip.pidn AND p.valid_from > ip.last_run_at
+          )
+          -- Entity graph updated
+          OR EXISTS (
+              SELECT 1 FROM public.entity_graph eg
+              WHERE eg.verified_at > ip.last_run_at
+                AND (
+                    eg.canonical_name IN (
+                        SELECT owner_full FROM staging.parcels
+                        WHERE pidn = ip.pidn AND valid_to IS NULL
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM staging.parcels sp
+                        WHERE sp.pidn = ip.pidn AND sp.valid_to IS NULL
+                          AND sp.owner_full = ANY(eg.linked_names)
+                    )
+                )
+          )
+          -- New proceeding extractions mentioning this parcel (by PIDN or address).
+          -- Use extraction timestamp, not public_proceedings.valid_from, so
+          -- backfilled or retried extractions on older meeting records still
+          -- trigger revalidation.
+          OR EXISTS (
+              SELECT 1 FROM staging.proceeding_extractions pe
+              JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
+              WHERE pe.extraction_type NOT IN ('_complete', '_no_extractions')
+                AND pp.valid_to IS NULL
+                AND pe.extracted_at > ip.last_run_at
+                AND (
+                    pe.parcel_reference = ip.pidn
+                    OR pe.parcel_reference IN (
+                        SELECT propadr FROM staging.parcels
+                        WHERE pidn = ip.pidn AND valid_to IS NULL AND propadr IS NOT NULL
+                    )
+                )
+          )
+      )
+
     ORDER BY pidn
 """
 
@@ -130,52 +168,16 @@ def signal_validation_batched(
 ) -> MaterializeResult:
     log = context.log
 
-    # ------------------------------------------------------------------
-    # Resolve backend and model
-    # ------------------------------------------------------------------
-    openrouter_model = os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
-    local_model = os.environ.get("COUNTYIQ_TEXT_MODEL")
-
-    if openrouter_model:
-        backend = "openrouter"
-        model_path = openrouter_model
-    elif local_model:
-        backend = "llama_cpp"
-        model_path = local_model
-    else:
-        log.info(
-            "Neither COUNTYIQ_OPENROUTER_MODEL nor COUNTYIQ_TEXT_MODEL is set — "
-            "skipping Pass 2 batched validation."
-        )
-        return _skipped_result("no model configured")
-
-    log.info(f"Pass 2 batched: backend={backend} model={model_path}")
-
-    # ------------------------------------------------------------------
-    # Guard: llm_harness importable
-    # ------------------------------------------------------------------
     try:
-        from countyiq.lib.llm_harness import (
-            HarnessConfig,
-            get_preset_for_model,
-            invoke_with_retry,
+        config, invoke_with_retry = resolve_pass_harness(
+            log,
+            pass_number=2,
+            archive_label="pass2_batched",
+            default_max_tokens=4096,
+            default_thinking=True,
         )
-    except ImportError as exc:
-        log.warning("llm_harness import failed (%s) — skipping", exc)
-        return _skipped_result("llm_harness import failed")
-
-    # Default to thinking=True for batched validation since we saw quality wins
-    thinking_enabled = os.environ.get("COUNTYIQ_THINKING", "true").lower() in ("1", "true", "yes")
-    preset = get_preset_for_model(model_path, thinking=thinking_enabled, reasoning_task=True)
-
-    config = HarnessConfig(
-        model_path=model_path,
-        backend=backend,
-        max_tokens=4096,  # Larger budget for multi-signal batch output
-        thinking=thinking_enabled,
-        archive_label="pass2_batched",
-        **preset,
-    )
+    except PassHarnessUnavailable as exc:
+        return _skipped_result(exc.reason)
 
     # ------------------------------------------------------------------
     # Find parcels with unvalidated signals
@@ -258,11 +260,11 @@ def signal_validation_batched(
                 continue
 
             all_validations = list(parsed["validations"])
+            unresolved_error_keys = set(parsed.get("errors") or [])
 
             # Retry path: if any signals were missing or failed to parse,
             # make a second call with just those signals to recover them.
             retry_keys = set(parsed.get("missing", [])) | set(parsed.get("errors", []))
-            retry_attempted = 0
             if retry_keys:
                 retry_signals = [
                     s for s in ctx["signals"] if s["signal_key"] in retry_keys
@@ -271,7 +273,6 @@ def signal_validation_batched(
                     f"{pidn}: retrying {len(retry_signals)} dropped signal(s): "
                     f"{sorted(retry_keys)}"
                 )
-                retry_attempted = len(retry_signals)
 
                 retry_prompt = build_batched_signal_prompt(
                     ctx, signals_override=retry_signals
@@ -286,6 +287,13 @@ def signal_validation_batched(
                     )
                     # Take whatever validations the retry produced
                     all_validations.extend(retry_parsed.get("validations", []))
+                    recovered_retry_keys = {
+                        v["signal_key"] for v in retry_parsed.get("validations", [])
+                    }
+                    unresolved_error_keys = (
+                        (unresolved_error_keys - retry_keys)
+                        | set(retry_parsed.get("errors", []))
+                    ) - recovered_retry_keys
                     if retry_parsed.get("missing"):
                         log.warning(
                             f"{pidn}: still missing after retry: "
@@ -347,7 +355,7 @@ def signal_validation_batched(
                 input_hash,
                 cross_signal_insight=parsed.get("cross_signal_insight") or None,
                 missing_signal_keys=final_missing or None,
-                error_signal_keys=list(parsed.get("errors") or []) or None,
+                error_signal_keys=sorted(unresolved_error_keys) or None,
                 signals_validated_count=len(written_keys),
             )
             parcels_validated += 1
@@ -389,9 +397,8 @@ def signal_validation_batched(
     return MaterializeResult(
         metadata={
             "status": MetadataValue.text("complete"),
-            "backend": MetadataValue.text(backend),
-            "model": MetadataValue.text(model_path),
-            "thinking": MetadataValue.bool(thinking_enabled),
+            "model": MetadataValue.text(config.model_path),
+            "thinking": MetadataValue.bool(config.thinking),
             "parcels_total": MetadataValue.int(total_parcels),
             "parcels_validated": MetadataValue.int(parcels_validated),
             "signals_validated": MetadataValue.int(signals_validated),

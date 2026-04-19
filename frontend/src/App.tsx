@@ -10,8 +10,10 @@ import PropertyDetail from './pages/PropertyDetail'
 import OwnerProfile from './pages/OwnerProfile'
 import DistressedParcels from './pages/DistressedParcels'
 import Assemblage from './pages/Assemblage'
+import DevelopmentRadar from './pages/DevelopmentRadar'
 import SearchResults from './pages/SearchResults'
 import OpsHealth from './pages/OpsHealth'
+import CountyFeed from './pages/CountyFeed'
 
 export default function App() {
   return (
@@ -28,8 +30,10 @@ export default function App() {
         <Route path="/owner/:id" element={<OwnerProfile />} />
         <Route path="/distressed" element={<DistressedParcels />} />
         <Route path="/assemblage" element={<Assemblage />} />
+        <Route path="/radar" element={<DevelopmentRadar />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/ops/health" element={<OpsHealth />} />
+        <Route path="/feed" element={<CountyFeed />} />
       </Routes>
     </BrowserRouter>
   )

@@ -9,6 +9,7 @@
 __pycache__/
 *.pyc
 .venv/
+api/.venv/
 *.egg-info/
 dist/
 
@@ -19,6 +20,7 @@ frontend/dist/
 # IDE
 .vscode/
 .idea/
+.claude/
 
 # Environment
 .env
@@ -27,3 +29,21 @@ frontend/dist/
 # OS
 .DS_Store
 .superpowers/
+models/
+.codex
+
+# Generated test / browser artifacts
+.playwright-mcp/
+.tmp_playwright/
+test-results/
+pipelines/eval/results/
+pipelines/archives/
+archives/eval_*/
+archives/smoke_test/
+
+# Ad hoc repo-root screenshots
+homepage-current.png
+property-detail-momentum.png
+radar-header-detail.png
+radar-loaded.png
+radar-page.png

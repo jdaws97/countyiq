@@ -7,7 +7,6 @@ Schedule: Weekly (Sunday 02:00)
 import json
 
 import requests
-from psycopg2.extras import execute_batch
 from dagster import (
     asset,
     asset_check,
@@ -19,8 +18,11 @@ from dagster import (
 )
 
 from countyiq.lib.arcgis_client import query_all_features
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
+from countyiq.lib.geometry import paths_to_multilinestring_geojson
 from countyiq.lib.parsers.roads import parse_roads_features
+from countyiq.lib.scd import scd2_upsert_geom
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -81,9 +83,20 @@ def roads_arcgis(
             f"Possible truncated response — aborting."
         )
 
+    geom_lookup = _build_geom_lookup(raw_features)
+
     cur = database.cursor()
     try:
-        stats = _geom_scd2_upsert(cur, records, raw_features)
+        stats = scd2_upsert_geom(
+            cursor=cur,
+            schema="staging",
+            table="roads",
+            records=records,
+            key_columns=KEY_COLUMNS,
+            value_columns=VALUE_COLUMNS,
+            geom_lookup=geom_lookup,
+            geom_kind="multilinestring",
+        )
     finally:
         cur.close()
 
@@ -97,103 +110,22 @@ def roads_arcgis(
     )
 
 
-def _geom_scd2_upsert(cursor, records: list[dict], raw_features: list[dict]) -> dict:
-    """SCD2 upsert with PostGIS geometry for staging.roads (MULTILINESTRING)."""
-    conn = cursor.connection
-    was_autocommit = conn.autocommit
-    if was_autocommit:
-        conn.autocommit = False
-
-    try:
-        all_cols = KEY_COLUMNS + VALUE_COLUMNS
-        fqn = "staging.roads"
-
-        cursor.execute("DROP TABLE IF EXISTS _tmp_roads")
-        cursor.execute(f"CREATE TEMP TABLE _tmp_roads (LIKE {fqn} INCLUDING DEFAULTS)")
-
-        # Build geometry lookup by rcl_nguid
-        geom_lookup = {}
-        for feat in raw_features:
-            attrs = feat.get("attributes", {})
-            nguid = attrs.get("RCL_NGUID")
-            geom = feat.get("geometry")
-            if nguid and geom:
-                geojson = _arcgis_polyline_to_geojson(geom)
-                if geojson:
-                    geom_lookup[nguid] = json.dumps(geojson)
-
-        insert_sql = f"""
-            INSERT INTO _tmp_roads ({', '.join(all_cols)}, geom)
-            VALUES ({', '.join(['%s'] * len(all_cols))},
-                    CASE WHEN %s IS NOT NULL
-                         THEN ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326)
-                         ELSE NULL END)
-        """
-        rows = []
-        for rec in records:
-            row = [rec.get(c) for c in all_cols]
-            geom_json = geom_lookup.get(rec["rcl_nguid"])
-            row.extend([geom_json, geom_json])
-            rows.append(row)
-        execute_batch(cursor, insert_sql, rows, page_size=500)
-
-        # Expire changed/deleted
-        key_join = "c.rcl_nguid = t.rcl_nguid"
-        value_diff = " OR ".join(f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS)
-        cursor.execute(f"""
-            UPDATE {fqn} c SET valid_to = NOW()
-            WHERE c.valid_to IS NULL
-            AND (
-                EXISTS (SELECT 1 FROM _tmp_roads t WHERE {key_join} AND ({value_diff}))
-                OR NOT EXISTS (SELECT 1 FROM _tmp_roads t WHERE {key_join})
-            )
-        """)
-        expired = cursor.rowcount
-
-        # Insert new/changed
-        col_list = ', '.join(all_cols)
-        cursor.execute(f"""
-            INSERT INTO {fqn} ({col_list}, geom, valid_from)
-            SELECT {', '.join(f't.{c}' for c in all_cols)}, t.geom, NOW()
-            FROM _tmp_roads t
-            WHERE NOT EXISTS (
-                SELECT 1 FROM {fqn} c WHERE c.valid_to IS NULL AND {key_join}
-            )
-        """)
-        inserted = cursor.rowcount
-
-        cursor.execute("DROP TABLE IF EXISTS _tmp_roads")
-        conn.commit()
-
-        if was_autocommit:
-            conn.autocommit = True
-
-        return {"inserted": inserted, "expired": expired, "unchanged": len(records) - inserted}
-    except Exception:
-        conn.rollback()
-        if was_autocommit:
-            conn.autocommit = True
-        raise
+def _build_geom_lookup(raw_features: list[dict]) -> dict:
+    """Build rcl_nguid -> JSON-encoded GeoJSON MultiLineString lookup."""
+    lookup: dict = {}
+    for feat in raw_features:
+        attrs = feat.get("attributes", {})
+        nguid = attrs.get("RCL_NGUID")
+        geom = feat.get("geometry")
+        if not (nguid and geom):
+            continue
+        geojson = paths_to_multilinestring_geojson(geom.get("paths"))
+        if geojson:
+            lookup[nguid] = json.dumps(geojson)
+    return lookup
 
 
-def _arcgis_polyline_to_geojson(geom: dict) -> dict | None:
-    """Convert ArcGIS polyline geometry to GeoJSON MultiLineString."""
-    paths = geom.get("paths")
-    if not paths:
-        return None
-    return {"type": "MultiLineString", "coordinates": paths}
-
-
-@asset_check(asset=roads_arcgis)
-def roads_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.roads has at least one current record."""
-    result = database.execute("SELECT COUNT(*) FROM staging.roads WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count > 0,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+roads_record_count_nonzero = make_row_count_check(roads_arcgis, table="roads")
 
 
 @asset_check(asset=roads_arcgis)

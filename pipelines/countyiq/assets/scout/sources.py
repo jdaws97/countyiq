@@ -37,7 +37,7 @@ from countyiq.resources.storage import S3StorageResource
     kinds={"postgres", "requests"},
 )
 def county_scout_discovery(
-    context,
+    context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
 ) -> MaterializeResult:
@@ -92,7 +92,7 @@ def county_scout_discovery(
     kinds={"postgres", "requests"},
 )
 def county_scout_monitor(
-    context,
+    context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
 ) -> MaterializeResult:

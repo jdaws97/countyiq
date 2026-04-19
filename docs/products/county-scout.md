@@ -68,6 +68,7 @@ The initial York County seed catalog includes:
 - York County tax-sale information
 - York County commissioners meetings
 - York County Planning Commission
+- YCPC building permit reports
 - YCPC subdivision activity reports
 - York County Conservation District pending plan review list
 - PA DEP eFACTS

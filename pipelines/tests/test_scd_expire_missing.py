@@ -41,7 +41,8 @@ def test_table(db_conn):
     cur.close()
 
 
-def test_expire_missing_false_preserves_absent_records(db_conn, test_table):
+@pytest.mark.usefixtures("test_table")
+def test_expire_missing_false_preserves_absent_records(db_conn):
     """When expire_missing=False, records NOT in the incoming batch stay current."""
     cur = db_conn.cursor()
 

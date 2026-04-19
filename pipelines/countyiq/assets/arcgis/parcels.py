@@ -21,9 +21,11 @@ from dagster import (
     MetadataValue,
 )
 
-from countyiq.lib.arcgis_client import iterate_feature_pages
+from countyiq.lib.arcgis_client import fetch_all_features_parallel
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.parsers.arcgis_parcels import parse_parcels_features, FIELD_MAP
+from countyiq.lib.geometry import rings_to_multipolygon_geojson
+from countyiq.lib.parsers.arcgis_parcels import parse_parcels_features
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -70,22 +72,29 @@ def parcels_arcgis(
         cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
         cur.execute("CREATE TEMP TABLE _tmp_parcels (LIKE staging.parcels INCLUDING DEFAULTS)")
 
-        # Stream pages directly into temp table
-        total_staged = 0
-        insert_sql = f"INSERT INTO _tmp_parcels ({', '.join(ALL_COLUMNS)}) VALUES ({', '.join(['%s'] * len(ALL_COLUMNS))})"
-        geom_updates = []
-
-        for page_features in iterate_feature_pages(
+        # Fetch ALL pages in parallel (8 concurrent HTTP requests)
+        # ~5-8x faster than sequential for 176K parcels
+        context.log.info("Fetching all parcel pages in parallel (4 workers)...")
+        all_features = fetch_all_features_parallel(
             url=county.arcgis_parcels_url,
             where="1=1",
             out_fields="*",
             out_sr=4326,
             batch_size=2000,
-        ):
-            # Parse this page's features
-            records = parse_parcels_features(page_features)
+            max_workers=4,  # 4 workers to avoid ArcGIS rate limiting
+        )
+        context.log.info(f"Fetched {len(all_features):,} features total")
 
-            # Insert records into temp table (no geometry yet)
+        # Parse and insert in batches
+        total_staged = 0
+        insert_sql = f"INSERT INTO _tmp_parcels ({', '.join(ALL_COLUMNS)}) VALUES ({', '.join(['%s'] * len(ALL_COLUMNS))})"
+        geom_updates = []
+
+        CHUNK = 5000
+        for i in range(0, len(all_features), CHUNK):
+            chunk_features = all_features[i:i + CHUNK]
+            records = parse_parcels_features(chunk_features)
+
             rows = []
             for rec in records:
                 rec["source_url"] = county.arcgis_parcels_url
@@ -94,28 +103,25 @@ def parcels_arcgis(
             execute_batch(cur, insert_sql, rows, page_size=1000)
             total_staged += len(rows)
 
-            # Collect geometry updates for this page
-            for feat in page_features:
+            for feat in chunk_features:
                 geom = feat.get("geometry")
                 attrs = feat.get("attributes", {})
                 pidn = attrs.get("PIDN")
-                if geom and pidn and geom.get("rings"):
-                    geojson = _arcgis_rings_to_geojson(geom["rings"])
-                    geom_updates.append((json.dumps(geojson), pidn))
+                if geom and pidn:
+                    geojson = rings_to_multipolygon_geojson(geom.get("rings"))
+                    if geojson:
+                        geom_updates.append((json.dumps(geojson), pidn))
 
-            # Flush geometry in batches to avoid accumulating
             if len(geom_updates) >= 5000:
                 _flush_geometries(cur, geom_updates)
                 geom_updates = []
 
-            context.log.info(f"  Staged {total_staged} records")
+            context.log.info(f"  Staged {total_staged:,} records")
 
-        # Flush remaining geometries
         if geom_updates:
             _flush_geometries(cur, geom_updates)
-            geom_updates = []
 
-        context.log.info(f"Total staged: {total_staged}")
+        context.log.info(f"Total staged: {total_staged:,}")
 
         # Index temp table for fast SCD2 expire query
         cur.execute("CREATE INDEX ON _tmp_parcels (pidn)")
@@ -124,7 +130,43 @@ def parcels_arcgis(
         if total_staged == 0:
             cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
             conn.commit()
+            context.log.warning("Zero features fetched — aborting to protect existing data")
             return MaterializeResult(metadata={"record_count": MetadataValue.int(0)})
+
+        # ── DATA LOSS GUARD ──────────────────────────────────────────
+        # If the fetch returned significantly fewer records than what's
+        # already in the table, something went wrong (network error,
+        # rate limiting, partial fetch). Abort WITHOUT running SCD2
+        # expire — otherwise the "missing" records get wiped.
+        cur.execute("SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL")
+        existing_count = cur.fetchone()[0]
+
+        if existing_count > 0 and total_staged < existing_count * 0.5:
+            cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
+            conn.commit()
+            msg = (
+                f"DATA LOSS GUARD: fetched {total_staged:,} but {existing_count:,} "
+                f"exist ({total_staged / existing_count * 100:.0f}% of current). "
+                f"Aborting SCD2 to prevent mass expire. Check ArcGIS connectivity."
+            )
+            context.log.error(msg)
+            raise RuntimeError(msg)
+
+        min_records = county.arcgis_parcels_min_records or 150000
+        if total_staged < min_records:
+            cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
+            conn.commit()
+            msg = (
+                f"DATA LOSS GUARD: fetched {total_staged:,} but minimum is "
+                f"{min_records:,}. Aborting. Possible truncation or API error."
+            )
+            context.log.error(msg)
+            raise RuntimeError(msg)
+
+        context.log.info(
+            f"Data loss guard passed: {total_staged:,} staged vs "
+            f"{existing_count:,} existing ({total_staged / max(existing_count, 1) * 100:.0f}%)"
+        )
 
         # SCD2 expire + insert (using temp table directly)
         key_join = "c.pidn = t.pidn"
@@ -195,41 +237,9 @@ def _flush_geometries(cursor, geom_updates: list[tuple]):
     execute_batch(cursor, update_sql, geom_updates, page_size=500)
 
 
-def _arcgis_rings_to_geojson(rings: list) -> dict:
-    """Convert ArcGIS rings to GeoJSON MultiPolygon."""
-    polygons = []
-    current_polygon = []
-    for ring in rings:
-        if not current_polygon:
-            current_polygon.append(ring)
-        elif _is_clockwise(ring):
-            polygons.append(current_polygon)
-            current_polygon = [ring]
-        else:
-            current_polygon.append(ring)
-    if current_polygon:
-        polygons.append(current_polygon)
-    return {"type": "MultiPolygon", "coordinates": polygons}
-
-
-def _is_clockwise(ring: list[list[float]]) -> bool:
-    total = 0.0
-    for i in range(len(ring) - 1):
-        x1, y1 = ring[i][0], ring[i][1]
-        x2, y2 = ring[i + 1][0], ring[i + 1][1]
-        total += (x2 - x1) * (y2 + y1)
-    return total > 0
-
-
-@asset_check(asset=parcels_arcgis)
-def parcels_record_count(database: DatabaseResource) -> AssetCheckResult:
-    result = database.execute("SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count > 150000,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+parcels_record_count = make_row_count_check(
+    parcels_arcgis, table="parcels", min_count=150001, name="parcels_record_count"
+)
 
 
 @asset_check(asset=parcels_arcgis)

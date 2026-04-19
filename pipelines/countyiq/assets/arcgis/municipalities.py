@@ -7,7 +7,6 @@ Schedule: Weekly (Sunday 02:00) via arcgis_refresh
 import json
 
 import requests
-from psycopg2.extras import execute_batch
 from dagster import (
     asset,
     asset_check,
@@ -19,8 +18,11 @@ from dagster import (
 )
 
 from countyiq.lib.arcgis_client import query_all_features
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
+from countyiq.lib.geometry import rings_to_multipolygon_geojson
 from countyiq.lib.parsers.municipalities import parse_municipalities_features
+from countyiq.lib.scd import scd2_upsert_geom
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -71,9 +73,20 @@ def municipalities_arcgis(
             f"Possible truncated response — aborting."
         )
 
+    geom_lookup = _build_geom_lookup(raw_features)
+
     cur = database.cursor()
     try:
-        stats = _geom_scd2_upsert(cur, records, raw_features)
+        stats = scd2_upsert_geom(
+            cursor=cur,
+            schema="staging",
+            table="municipalities",
+            records=records,
+            key_columns=KEY_COLUMNS,
+            value_columns=VALUE_COLUMNS,
+            geom_lookup=geom_lookup,
+            geom_kind="multipolygon",
+        )
     finally:
         cur.close()
 
@@ -87,123 +100,24 @@ def municipalities_arcgis(
     )
 
 
-def _geom_scd2_upsert(cursor, records: list[dict], raw_features: list[dict]) -> dict:
-    """SCD2 upsert with PostGIS geometry for staging.municipalities."""
-    conn = cursor.connection
-    was_autocommit = conn.autocommit
-    if was_autocommit:
-        conn.autocommit = False
-
-    try:
-        all_cols = KEY_COLUMNS + VALUE_COLUMNS
-        fqn = "staging.municipalities"
-
-        cursor.execute("DROP TABLE IF EXISTS _tmp_municipalities")
-        cursor.execute(f"CREATE TEMP TABLE _tmp_municipalities (LIKE {fqn} INCLUDING DEFAULTS)")
-
-        # Build geometry lookup by name
-        geom_lookup = {}
-        for feat in raw_features:
-            attrs = feat.get("attributes", {})
-            name = attrs.get("MUNI_NAME")
-            geom = feat.get("geometry")
-            if name and geom:
-                geojson = _arcgis_polygon_to_geojson(geom)
-                if geojson:
-                    geom_lookup[str(name)] = json.dumps(geojson)
-
-        insert_sql = f"""
-            INSERT INTO _tmp_municipalities ({', '.join(all_cols)}, geom)
-            VALUES ({', '.join(['%s'] * len(all_cols))},
-                    CASE WHEN %s IS NOT NULL
-                         THEN ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326)
-                         ELSE NULL END)
-        """
-        rows = []
-        for rec in records:
-            row = [rec.get(c) for c in all_cols]
-            geom_json = geom_lookup.get(rec["name"])
-            row.extend([geom_json, geom_json])
-            rows.append(row)
-        execute_batch(cursor, insert_sql, rows, page_size=500)
-
-        key_join = "c.name = t.name"
-        value_diff = " OR ".join(f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS)
-        cursor.execute(f"""
-            UPDATE {fqn} c SET valid_to = NOW()
-            WHERE c.valid_to IS NULL
-            AND (
-                EXISTS (SELECT 1 FROM _tmp_municipalities t WHERE {key_join} AND ({value_diff}))
-                OR NOT EXISTS (SELECT 1 FROM _tmp_municipalities t WHERE {key_join})
-            )
-        """)
-        expired = cursor.rowcount
-
-        col_list = ', '.join(all_cols)
-        cursor.execute(f"""
-            INSERT INTO {fqn} ({col_list}, geom, valid_from)
-            SELECT {', '.join(f't.{c}' for c in all_cols)}, t.geom, NOW()
-            FROM _tmp_municipalities t
-            WHERE NOT EXISTS (
-                SELECT 1 FROM {fqn} c WHERE c.valid_to IS NULL AND {key_join}
-            )
-        """)
-        inserted = cursor.rowcount
-
-        cursor.execute("DROP TABLE IF EXISTS _tmp_municipalities")
-        conn.commit()
-
-        if was_autocommit:
-            conn.autocommit = True
-
-        return {"inserted": inserted, "expired": expired, "unchanged": len(records) - inserted}
-    except Exception:
-        conn.rollback()
-        if was_autocommit:
-            conn.autocommit = True
-        raise
+def _build_geom_lookup(raw_features: list[dict]) -> dict:
+    """Build muni_name -> JSON-encoded GeoJSON MultiPolygon lookup."""
+    lookup: dict = {}
+    for feat in raw_features:
+        attrs = feat.get("attributes", {})
+        name = attrs.get("MUNI_NAME")
+        geom = feat.get("geometry")
+        if not (name and geom):
+            continue
+        geojson = rings_to_multipolygon_geojson(geom.get("rings"))
+        if geojson:
+            lookup[str(name)] = json.dumps(geojson)
+    return lookup
 
 
-def _arcgis_polygon_to_geojson(geom: dict) -> dict | None:
-    """Convert ArcGIS polygon geometry to GeoJSON MultiPolygon."""
-    rings = geom.get("rings")
-    if not rings:
-        return None
-    polygons = []
-    current_polygon = []
-    for ring in rings:
-        if not current_polygon:
-            current_polygon.append(ring)
-        elif _is_clockwise(ring):
-            polygons.append(current_polygon)
-            current_polygon = [ring]
-        else:
-            current_polygon.append(ring)
-    if current_polygon:
-        polygons.append(current_polygon)
-    return {"type": "MultiPolygon", "coordinates": polygons}
-
-
-def _is_clockwise(ring: list[list[float]]) -> bool:
-    """Shoelace formula to determine ring orientation."""
-    total = 0.0
-    for i in range(len(ring) - 1):
-        x1, y1 = ring[i][0], ring[i][1]
-        x2, y2 = ring[i + 1][0], ring[i + 1][1]
-        total += (x2 - x1) * (y2 + y1)
-    return total > 0
-
-
-@asset_check(asset=municipalities_arcgis)
-def municipalities_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.municipalities has at least one current record."""
-    result = database.execute("SELECT COUNT(*) FROM staging.municipalities WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count > 0,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+municipalities_record_count_nonzero = make_row_count_check(
+    municipalities_arcgis, table="municipalities"
+)
 
 
 @asset_check(asset=municipalities_arcgis)

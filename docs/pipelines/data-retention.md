@@ -114,7 +114,7 @@ CREATE TABLE staging.parcels (
 | Year 3 | ~8-12 GB | Court records and incidents are the main growth drivers |
 | Year 5 | ~15-18 GB | Well within VPS disk allocation |
 
-VPS disk is included in the Hetzner plan. If more space is needed, additional volumes cost ~EUR 0.052/GB/mo. The second lever is partitioning historical data by year. But at these growth rates, the base VPS disk should last 5+ years.
+VPS disk is included in the host plan. If more space is needed, either move to a larger VPS tier or attach additional storage. The second lever is partitioning historical data by year. But at these growth rates, the base VPS disk should last 5+ years.
 
 ## What This Enables
 

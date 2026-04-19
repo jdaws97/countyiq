@@ -7,7 +7,6 @@ import datetime
 import hashlib
 import json
 
-import pytest
 
 from countyiq.lib.intelligence_common import (
     compute_input_hash,

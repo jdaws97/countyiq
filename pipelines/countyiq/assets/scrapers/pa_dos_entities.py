@@ -9,23 +9,23 @@ Strategy:
   - Archive raw responses to R2
 """
 
-import json
 import re
 import time
 from datetime import datetime, timezone
 
+from playwright.sync_api import Error as PlaywrightError
+
 from dagster import (
-    AssetCheckResult,
     AssetCheckSeverity,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
     asset,
-    asset_check,
 )
 
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.parsers.pa_dos_entities import parse_filing_detail, parse_search_results
+from countyiq.lib.parsers.pa_dos_entities import parse_search_results
 from countyiq.lib.playwright_utils import browser_context, take_screenshot
 from countyiq.lib.scd import scd2_upsert
 from countyiq.resources.database import DatabaseResource
@@ -215,15 +215,11 @@ def _lookup_entity(page, entity_name: str, log) -> dict | None | str:
         return _do_search(page, entity_name, log)
     except Exception as err:
         log.warning("Error looking up entity '%s': %s", entity_name, err)
-        try:
-            take_screenshot(page, f"/tmp/pa_dos_err_{_safe_filename(entity_name)}.png")
-        except Exception:
-            pass
-        # Attempt page reload to recover from broken state
+        take_screenshot(page, f"/tmp/pa_dos_err_{_safe_filename(entity_name)}.png")
         try:
             page.reload(wait_until="networkidle", timeout=20_000)
             page.wait_for_selector(_SEARCH_INPUT_SELECTOR, timeout=15_000)
-        except Exception:
+        except PlaywrightError:
             pass
         return None
 
@@ -429,12 +425,11 @@ def _get_current_count(database: DatabaseResource) -> int:
 # Asset check
 # ---------------------------------------------------------------------------
 
-@asset_check(asset=pa_dos_entities)
-def pa_dos_entities_record_count(database: DatabaseResource) -> AssetCheckResult:
-    count = _get_current_count(database)
-    county = get_county_config()
-    return AssetCheckResult(
-        passed=count >= county.pa_dos_min_records,
-        severity=AssetCheckSeverity.WARN,
-        metadata={"current_records": MetadataValue.int(count)},
-    )
+pa_dos_entities_record_count = make_row_count_check(
+    pa_dos_entities,
+    table="corporate_entities",
+    threshold_fn=lambda: get_county_config().pa_dos_min_records,
+    severity=AssetCheckSeverity.WARN,
+    metadata_key="current_records",
+    name="pa_dos_entities_record_count",
+)

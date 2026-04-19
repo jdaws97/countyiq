@@ -244,7 +244,7 @@ The frontend should check for null/empty responses and hide sections rather than
 - **No user accounts or login** — fully public, read-only
 - **No editing or data entry** — read-only intelligence platform
 - **No real-time updates** — data refreshes weekly; frontend serves cached responses
-- **No LLM/AI features** — all summaries are template-rendered from structured data. Natural language search and AI-generated narratives are Phase 2 (see `docs/implementation/expansion-roadmap.md`).
+- **No LLM/AI features** — all summaries are template-rendered from structured data. Natural language search and AI-generated narratives have since become part of the broader intelligence-platform direction; see `docs/current-state.md` for the up-to-date repo status.
 
 ---
 
@@ -307,7 +307,7 @@ Cloudflare sits in front of everything and routes requests:
 |---|---|---|
 | `/*` (default) | Cloudflare Pages (React SPA) | Cloudflare edge cache |
 | `/tiles/*` | Cloudflare R2 | 7-day cache (Cache-Control header) |
-| `/api/*` | Hetzner VPS via Cloudflare proxy | No cache (dynamic) |
+| `/api/*` | CountyIQ VPS via Cloudflare proxy | No cache (dynamic) |
 
 This means a single domain serves both the React app and the API. No CORS issues between frontend and backend since they share the same domain.
 

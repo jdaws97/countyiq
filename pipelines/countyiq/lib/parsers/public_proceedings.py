@@ -7,6 +7,7 @@ All functions are pure — HTML / filename string in, structured dicts out.
 """
 
 import re
+from collections.abc import Callable
 from urllib.parse import urljoin, urlparse
 
 # ---------------------------------------------------------------------------
@@ -19,14 +20,13 @@ _MONTH_MAP = {
     "september": "09", "october": "10", "november": "11", "december": "12",
 }
 
-# Patterns tried in order inside parse_meeting_date_from_filename.
-# Each tuple: (compiled_regex, handler_fn(match) -> "YYYY-MM-DD")
-_DATE_PATTERNS: list[tuple[re.Pattern, object]] = []
+_DateHandler = Callable[[re.Match[str]], str]
+_DATE_PATTERNS: list[tuple[re.Pattern[str], _DateHandler]] = []
 
 
-def _register(pattern: str):
+def _register(pattern: str) -> Callable[[_DateHandler], _DateHandler]:
     """Decorator that registers a date-extraction handler."""
-    def decorator(fn):
+    def decorator(fn: _DateHandler) -> _DateHandler:
         _DATE_PATTERNS.append((re.compile(pattern, re.IGNORECASE), fn))
         return fn
     return decorator

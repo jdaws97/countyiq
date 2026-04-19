@@ -1,9 +1,0 @@
-[     254ms] TypeError: Cannot read properties of undefined (reading 'maxTextureDimension2D')
-    at WebGLCanvasContext.getMaxDrawingBufferSize (http://localhost:5173/node_modules/.vite/deps/webgl-device-DS1fI8Wr.js?v=2782c2dc:1999:50)
-    at WebGLCanvasContext._handleResize (http://localhost:5173/node_modules/.vite/deps/webgl-device-DS1fI8Wr.js?v=2782c2dc:2078:60)
-    at ResizeObserver.<anonymous> (http://localhost:5173/node_modules/.vite/deps/webgl-device-DS1fI8Wr.js?v=2782c2dc:1954:64)
-[  531927ms] [ERROR] WebSocket connection to 'ws://localhost:5173/?token=2RV4XydgZx8_' failed:  @ http://localhost:5173/@vite/client:840
-[  614497ms] TypeError: Cannot read properties of undefined (reading 'maxTextureDimension2D')
-    at WebGLCanvasContext.getMaxDrawingBufferSize (http://localhost:5173/node_modules/.vite/deps/webgl-device-DS1fI8Wr.js?v=2782c2dc:1999:50)
-    at WebGLCanvasContext._handleResize (http://localhost:5173/node_modules/.vite/deps/webgl-device-DS1fI8Wr.js?v=2782c2dc:2078:60)
-    at ResizeObserver.<anonymous> (http://localhost:5173/node_modules/.vite/deps/webgl-device-DS1fI8Wr.js?v=2782c2dc:1954:64)

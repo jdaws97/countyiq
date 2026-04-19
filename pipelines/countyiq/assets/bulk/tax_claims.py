@@ -6,7 +6,6 @@ Records: ~9,000 delinquent parcels (~37K authority-year rows)
 Schedule: Weekly (Sunday, bulk_refresh job via group_name="bulk")
 """
 
-import io
 from datetime import date
 
 import pdfplumber
@@ -21,6 +20,7 @@ from dagster import (
     MetadataValue,
 )
 
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.tax_claims import parse_tax_claims_text
 from countyiq.lib.scd import scd2_upsert
@@ -162,22 +162,16 @@ def tax_claims(
     )
 
 
-@asset_check(asset=tax_claims)
-def tax_claims_record_count(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.tax_claims has enough current records."""
-    county = get_county_config()
-    result = database.execute(
-        "SELECT COUNT(DISTINCT pidn) FROM staging.tax_claims WHERE valid_to IS NULL"
-    )
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count >= county.tax_claims_min_records,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={
-            "unique_pidns": MetadataValue.int(count),
-            "threshold": MetadataValue.int(county.tax_claims_min_records),
-        },
-    )
+tax_claims_record_count = make_row_count_check(
+    tax_claims,
+    table="tax_claims",
+    count_expr="DISTINCT pidn",
+    threshold_fn=lambda: get_county_config().tax_claims_min_records,
+    metadata_key="unique_pidns",
+    include_threshold_metadata=True,
+    name="tax_claims_record_count",
+    description="Verify staging.tax_claims has enough current records.",
+)
 
 
 @asset_check(asset=tax_claims)

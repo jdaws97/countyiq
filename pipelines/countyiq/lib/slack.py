@@ -10,10 +10,10 @@ Channels:
   - pipeline: /countyiq/slack-webhook-pipeline   (#pipeline-runs)
 """
 
-import json
 import os
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 import requests
 from dagster import get_dagster_logger
 
@@ -56,7 +56,7 @@ def get_slack_webhook_url(channel: str = "pipeline") -> str | None:
         url = response["Parameter"]["Value"]
         _webhook_cache[channel] = url
         return url
-    except Exception as e:
+    except (BotoCoreError, ClientError) as e:
         log.warning(f"Could not fetch Slack webhook from SSM ({param_name}): {e}")
         return None
 
@@ -85,5 +85,5 @@ def send_slack_message(channel: str, text: str, emoji: str = ":bell:"):
     try:
         resp = requests.post(webhook_url, json=payload, timeout=10)
         resp.raise_for_status()
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         log.warning(f"Slack post failed ({channel}): {e}")

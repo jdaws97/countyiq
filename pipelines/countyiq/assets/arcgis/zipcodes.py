@@ -10,14 +10,12 @@ import json
 import requests
 from dagster import (
     asset,
-    asset_check,
-    AssetCheckResult,
-    AssetCheckSeverity,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
 )
 
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
@@ -97,9 +95,10 @@ def zipcodes_arcgis(
     )
 
 
-@asset_check(asset=zipcodes_arcgis)
-def zipcodes_record_count(database: DatabaseResource) -> AssetCheckResult:
-    result = database.execute("SELECT COUNT(*) FROM staging.zipcodes WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(passed=count > 10, severity=AssetCheckSeverity.ERROR,
-                            metadata={"count": MetadataValue.int(count)})
+zipcodes_record_count = make_row_count_check(
+    zipcodes_arcgis,
+    table="zipcodes",
+    min_count=11,
+    metadata_key="count",
+    name="zipcodes_record_count",
+)

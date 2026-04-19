@@ -8,7 +8,7 @@ import json
 with open('/tmp/zhb_pc_survey.json') as f:
     data = json.load(f)
 
-# Manual overrides/additions based on user research + Playwright investigation
+# Manual overrides (not available via SDK scan).
 MANUAL_ENTRIES = {
     "York Twp": {
         "board_of_commissioners": "https://yorktownshippa.gov/boards/boc/",

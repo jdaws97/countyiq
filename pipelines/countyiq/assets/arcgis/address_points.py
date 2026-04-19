@@ -21,6 +21,7 @@ from dagster import (
 )
 
 from countyiq.lib.arcgis_client import iterate_feature_pages
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.address_points import parse_address_point_feature
 from countyiq.resources.database import DatabaseResource
@@ -236,15 +237,9 @@ def _stage_address_points_page(cursor, insert_sql: str, all_cols: list[str], raw
     return record_count
 
 
-@asset_check(asset=address_points_arcgis)
-def address_points_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
-    result = database.execute("SELECT COUNT(*) FROM staging.address_points WHERE valid_to IS NULL")
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count > 0,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+address_points_record_count_nonzero = make_row_count_check(
+    address_points_arcgis, table="address_points"
+)
 
 
 @asset_check(asset=address_points_arcgis)

@@ -3,12 +3,13 @@
 from fastapi import APIRouter
 
 from api.lib.database import get_cursor
+from api.lib.response_types import HomepageStatsResponse
 
 router = APIRouter(tags=["stats"])
 
 
 @router.get("")
-def get_stats() -> dict:
+def get_stats() -> HomepageStatsResponse:
     """Aggregate stats for homepage cards."""
     with get_cursor() as cur:
         cur.execute("""
@@ -25,7 +26,6 @@ def get_stats() -> dict:
         """)
         row = cur.fetchone()
 
-        # Tax delinquency breakdown by authority
         cur.execute("""
             SELECT
                 COALESCE(SUM(CASE WHEN authority_name = 'COUNTY' AND total > 0 THEN total ELSE 0 END), 0) AS county_tax_owed,

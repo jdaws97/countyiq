@@ -1,13 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Nav from '../components/Nav'
-
-interface Municipality {
-  name: string
-  muni_type: string
-  delinquent_parcels: number
-  total_delinquent: number
-}
+import PageShell from '../components/PageShell'
+import { formatCurrency } from '../lib/format'
+import type { MunicipalitySummary as Municipality } from '../types/api'
 
 export default function MunicipalityList() {
   const [municipalities, setMunicipalities] = useState<Municipality[]>([])
@@ -32,20 +27,8 @@ export default function MunicipalityList() {
       })
   }, [])
 
-  const formatCurrency = (value: number) =>
-    '$' + value.toLocaleString('en-US', { maximumFractionDigits: 0 })
-
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <Nav />
-
-      <main
-        style={{
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '48px 32px',
-        }}
-      >
+    <PageShell maxWidth={1200}>
         {/* Page header */}
         <div style={{ marginBottom: 40, animation: 'fadeUp 0.4s ease both' }}>
           <div
@@ -293,7 +276,6 @@ export default function MunicipalityList() {
             )}
           </div>
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

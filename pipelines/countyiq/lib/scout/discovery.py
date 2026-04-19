@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import re
 import time
-from collections import Counter
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import requests
@@ -858,12 +857,3 @@ def _health_from_probe(probe: ProbeResult) -> str:
     if probe.status_code == 200:
         return "healthy"
     return "degraded"
-
-
-def summarize_registry_categories(rows: list[dict]) -> dict[str, int]:
-    """Count registry sources by category for the API."""
-    counts: Counter[str] = Counter()
-    for row in rows:
-        for category in row.get("categories") or []:
-            counts[category] += 1
-    return dict(sorted(counts.items()))

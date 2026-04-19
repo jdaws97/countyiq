@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException
 
 from api.lib.database import get_cursor
+from api.lib.response_types import MunicipalitySummary
 
 router = APIRouter(tags=["municipalities"])
 
@@ -23,11 +24,10 @@ def _muni_name_to_pattern(name: str) -> str:
     return name + "%"
 
 
-@router.get("")
-def list_municipalities() -> list[dict]:
+@router.get("", response_model=None)
+def list_municipalities() -> list[MunicipalitySummary]:
     """List all municipalities with delinquency stats."""
     with get_cursor() as cur:
-        # First get all municipalities
         cur.execute("""
             SELECT name, muni_type
             FROM staging.municipalities
@@ -36,7 +36,6 @@ def list_municipalities() -> list[dict]:
         """)
         munis = cur.fetchall()
 
-        # Get delinquency stats per tax district
         cur.execute("""
             SELECT
                 tax_district_name,
@@ -48,7 +47,6 @@ def list_municipalities() -> list[dict]:
         """)
         district_stats = {row["tax_district_name"]: row for row in cur.fetchall()}
 
-    # Match municipalities to districts
     results = []
     for muni in munis:
         pattern = _muni_name_to_pattern(muni["name"])

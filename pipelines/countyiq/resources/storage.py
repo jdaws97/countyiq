@@ -2,9 +2,14 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Union
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from dagster import ConfigurableResource, get_dagster_logger
+
+
+ArchivePayload = Union[bytes, str, dict, list]
 
 
 class S3StorageResource(ConfigurableResource):
@@ -17,7 +22,12 @@ class S3StorageResource(ConfigurableResource):
     bucket: str = "countyiq-raw"
     region: str = "us-east-1"
 
-    def archive(self, source_path: str, data, filename: str = "response.json"):
+    def archive(
+        self,
+        source_path: str,
+        data: ArchivePayload,
+        filename: str = "response.json",
+    ) -> None:
         """Archive raw data to S3.
 
         Args:
@@ -40,10 +50,15 @@ class S3StorageResource(ConfigurableResource):
             client = boto3.client("s3", region_name=self.region)
             client.put_object(Bucket=self.bucket, Key=key, Body=body)
             log.info(f"Archived to s3://{self.bucket}/{key} ({len(body)} bytes)")
-        except Exception as e:
+        except (BotoCoreError, ClientError) as e:
             log.warning(f"S3 archive skipped ({e}). Data not persisted to S3.")
 
-    def archive_file(self, source_path: str, local_path: str, filename: str | None = None):
+    def archive_file(
+        self,
+        source_path: str,
+        local_path: str,
+        filename: str | None = None,
+    ) -> None:
         """Archive a local file to S3 without loading it fully into memory."""
         log = get_dagster_logger()
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -55,7 +70,7 @@ class S3StorageResource(ConfigurableResource):
             client.upload_file(local_path, self.bucket, key)
             size = os.path.getsize(local_path)
             log.info(f"Archived to s3://{self.bucket}/{key} ({size} bytes)")
-        except Exception as e:
+        except (BotoCoreError, ClientError) as e:
             log.warning(f"S3 archive skipped ({e}). File not persisted to S3.")
 
 

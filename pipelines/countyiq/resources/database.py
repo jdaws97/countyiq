@@ -44,11 +44,6 @@ class DatabaseResource(ConfigurableResource):
                 return cur.fetchall()
             return None
 
-    def execute_many(self, sql: str, params_list):
-        conn = self._get_conn()
-        with conn.cursor() as cur:
-            cur.executemany(sql, params_list)
-
     def cursor(self):
         return self._get_conn().cursor()
 
@@ -68,6 +63,23 @@ class DatabaseResource(ConfigurableResource):
             yield cur
         finally:
             cur.close()
+
+    @contextmanager
+    def transaction(self):
+        """Yield a cursor inside an explicit transaction."""
+        conn = self._get_conn()
+        prior_autocommit = conn.autocommit
+        conn.autocommit = False
+        cur = conn.cursor()
+        try:
+            yield cur
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+            conn.autocommit = prior_autocommit
 
     def teardown_after_execution(self, context: InitResourceContext) -> None:
         if self._conn and not self._conn.closed:

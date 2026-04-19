@@ -29,7 +29,6 @@ TIMEOUT = 15
 # All 72 municipalities with known website URLs and committee page hints.
 # Format: (name, base_url, {committee_type: path_or_url})
 MUNICIPALITIES = [
-    # === Already have all URLs from user research ===
     ("York Twp", "https://yorktownshippa.gov/", {
         "board_of_commissioners": "/boards/boc/",
         "planning_commission": "/boards/pc/",
@@ -168,7 +167,6 @@ MUNICIPALITIES = [
     ("Winterstown Boro", "https://www.winterstownborough.com/", {}),
     ("Loganville Boro", "https://loganvilleborough.com/", {}),
 
-    # === User-provided URLs for previously missing municipalities ===
     ("Glen Rock Boro", "https://www.glenrockpa.org/", {
         "borough_council": "/borough-government/council-meeting-minutes-agendas/",
     }),

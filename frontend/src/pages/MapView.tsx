@@ -4,45 +4,30 @@ import { Map } from 'react-map-gl/maplibre'
 import { DeckGL } from '@deck.gl/react'
 import { GeoJsonLayer } from '@deck.gl/layers'
 import type { PickingInfo, MapViewState } from '@deck.gl/core'
+import type { Feature, Geometry } from 'geojson'
 import Nav from '../components/Nav'
 import LayerToggle, { type LayerConfig } from '../components/LayerToggle'
+import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
+import type {
+  FloodZoneProperties,
+  MunicipalityProperties,
+  ParcelFeatureCollection,
+  ParcelFeatureProperties,
+  PenndotProjectProperties,
+  PropertyReport,
+  ZoningProperties,
+} from '../types/api'
 
-// ---------- Types ----------
+type ParcelFeature = Feature<Geometry, ParcelFeatureProperties>
+type ZoningFeature = Feature<Geometry, ZoningProperties>
+type TooltipProperties =
+  | ParcelFeatureProperties
+  | PenndotProjectProperties
+  | ZoningProperties
+  | MunicipalityProperties
+  | FloodZoneProperties
 
-interface ParcelProperties {
-  pidn: string
-  owner_full: string
-  propadr: string
-  aprtotal: number | null
-  municipality: string
-  class: string
-  saledt: string | null
-  price: number | null
-  delinquent_total: number | null
-  years_delinquent: number | null
-}
-
-interface PropertyReport {
-  parcel: Record<string, any>
-  tax_delinquency: {
-    is_delinquent: boolean
-    total_owed: number
-    records: Array<{ year: number; amount: number; status: string }>
-  }
-  flood_zone: {
-    in_flood_zone: boolean
-    zone: string | null
-    sfha: boolean
-  }
-  structures: {
-    count: number
-    likely_vacant: boolean
-  }
-}
-
-// ---------- Constants ----------
-
-// Zoning color map by gen_zcode
 const ZONING_COLORS: Record<string, [number, number, number, number]> = {
   'LDR':   [72, 187, 120, 100],   // green — low density residential
   'MDR':   [129, 178, 210, 100],   // light blue — medium density
@@ -77,7 +62,6 @@ const LAYER_DEFS: { id: string; name: string; color: string; defaultOn: boolean 
   { id: 'penndot_projects', name: 'PennDOT Projects', color: '#ffa500', defaultOn: false },
 ]
 
-// Layers that come from static /api/layers/ endpoint (not parcels)
 const STATIC_LAYER_IDS = ['municipalities', 'flood_zones', 'zoning', 'penndot_projects']
 
 const URL_LAYER_MAP: Record<string, string> = {
@@ -86,8 +70,6 @@ const URL_LAYER_MAP: Record<string, string> = {
   vacant: 'parcels',
   delinquent: 'parcels',
 }
-
-// ---------- Component ----------
 
 export default function MapView() {
   const [searchParams] = useSearchParams()
@@ -105,7 +87,6 @@ export default function MapView() {
         zoom: zoom ? parseFloat(zoom) : 16,
       }
     }
-    // Auto-zoom in for parcel-dependent layers
     if (layer === 'vacant' || layer === 'delinquent') {
       return { ...DEFAULT_VIEW, zoom: 14 }
     }
@@ -124,7 +105,6 @@ export default function MapView() {
     }))
   })
 
-  // Highlight parcels from URL params
   const [highlightPidn, setHighlightPidn] = useState<string | null>(
     () => searchParams.get('highlight')
   )
@@ -153,21 +133,18 @@ export default function MapView() {
   )
 
   const [geoData, setGeoData] = useState<Record<string, GeoJSON.FeatureCollection>>({})
-  const [parcelData, setParcelData] = useState<GeoJSON.FeatureCollection | null>(null)
+  const [parcelData, setParcelData] = useState<ParcelFeatureCollection | null>(null)
   const [currentZoom, setCurrentZoom] = useState(initialViewState.zoom)
   const [hoverInfo, setHoverInfo] = useState<PickingInfo | null>(null)
 
-  // Property report card
   const [selectedPidn, setSelectedPidn] = useState<string | null>(null)
   const [propertyReport, setPropertyReport] = useState<PropertyReport | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
 
-  // Debounce refs for parcel fetching
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewStateRef = useRef<MapViewState | null>(null)
 
-  // Load static layers
   useEffect(() => {
     STATIC_LAYER_IDS.forEach((id) => {
       fetch(`/api/layers/${id}`)
@@ -184,17 +161,13 @@ export default function MapView() {
     })
   }, [])
 
-  // Fetch parcels on viewport change (debounced)
   const fetchParcels = useCallback((vs: MapViewState) => {
     if (!vs || vs.zoom < MIN_PARCEL_ZOOM) {
       setParcelData(null)
       return
     }
 
-    // Approximate bbox from center + zoom
-    // At zoom 13, roughly 0.05 degrees visible; scale by zoom level
     const degPerPixel = 360 / (512 * Math.pow(2, vs.zoom))
-    // Assume ~1000px viewport width/height as reasonable estimate
     const halfW = degPerPixel * 600
     const halfH = degPerPixel * 400
 
@@ -211,10 +184,10 @@ export default function MapView() {
         if (!r.ok) throw new Error(`${r.status}`)
         return r.json()
       })
-      .then((data: GeoJSON.FeatureCollection) => {
+      .then((data: ParcelFeatureCollection) => {
         if (parcelFilter === 'vacant_delinquent') {
           data.features = data.features.filter(
-            (f: any) => f.properties?.delinquent_total && parseFloat(f.properties.delinquent_total) > 0
+            (f) => (f.properties?.delinquent_total ?? 0) > 0
           )
         }
         setParcelData(data)
@@ -229,7 +202,6 @@ export default function MapView() {
       viewStateRef.current = viewState
       setCurrentZoom(viewState.zoom)
 
-      // Clear hover/selection when zooming out past parcel threshold
       if (viewState.zoom < MIN_PARCEL_ZOOM) {
         setHoverInfo(null)
         setSelectedPidn(null)
@@ -247,7 +219,6 @@ export default function MapView() {
     [fetchParcels, layers]
   )
 
-  // Fetch parcels on mount and when filter changes
   useEffect(() => {
     const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
     const vs = viewStateRef.current || initialViewState
@@ -256,7 +227,6 @@ export default function MapView() {
     }
   }, [parcelFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch property report when a parcel is clicked
   useEffect(() => {
     if (!selectedPidn) {
       setPanelOpen(false)
@@ -303,44 +273,41 @@ export default function MapView() {
   const deckLayers = useMemo(() => {
     const result = []
 
-    // Parcels layer (rendered first so it's below other layers)
     const parcelsLayer = layers.find((l) => l.id === 'parcels')
     if (parcelsLayer?.enabled && parcelData && currentZoom >= MIN_PARCEL_ZOOM) {
       result.push(
-        new GeoJsonLayer({
+        new GeoJsonLayer<ParcelFeatureProperties>({
           id: 'parcels',
           data: parcelData,
           stroked: true,
           filled: true,
-          getFillColor: (f: any) => {
+          getFillColor: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
-            // Cluster mode: seed = gold, adjacent = purple, others dimmed
             if (isClusterMode) {
               if (pidn === seedPidn) return [255, 215, 0, 220]
-              if (clusterPidns.has(pidn)) return [124, 92, 191, 160]
+              if (pidn && clusterPidns.has(pidn)) return [124, 92, 191, 160]
               return [40, 40, 60, 30]
             }
-            // Single highlight
             if (highlightPidn && pidn === highlightPidn) return [255, 215, 0, 200]
             if (parcelFilter === 'vacant') return [61, 189, 111, 120]
-            const delinquent = f.properties?.delinquent_total
-            if (delinquent && delinquent > 0) return [224, 82, 82, 120]
+            const delinquent = f.properties?.delinquent_total ?? 0
+            if (delinquent > 0) return [224, 82, 82, 120]
             return [96, 165, 250, 40]
           },
-          getLineColor: (f: any) => {
+          getLineColor: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
             if (isClusterMode) {
               if (pidn === seedPidn) return [255, 215, 0, 255]
-              if (clusterPidns.has(pidn)) return [124, 92, 191, 255]
+              if (pidn && clusterPidns.has(pidn)) return [124, 92, 191, 255]
               return [40, 40, 60, 50]
             }
             if (highlightPidn && pidn === highlightPidn) return [255, 215, 0, 255]
             if (parcelFilter === 'vacant') return [61, 189, 111, 150]
             return [96, 165, 250, 100]
           },
-          getLineWidth: (f: any) => {
+          getLineWidth: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
-            if (isClusterMode && (pidn === seedPidn || clusterPidns.has(pidn))) return 3
+            if (isClusterMode && pidn && (pidn === seedPidn || clusterPidns.has(pidn))) return 3
             if (highlightPidn && pidn === highlightPidn) return 3
             return 1
           },
@@ -397,12 +364,12 @@ export default function MapView() {
     const zoningLayer = layers.find((l) => l.id === 'zoning')
     if (zoningLayer?.enabled && geoData.zoning) {
       result.push(
-        new GeoJsonLayer({
+        new GeoJsonLayer<ZoningProperties>({
           id: 'zoning',
           data: geoData.zoning,
           stroked: true,
           filled: true,
-          getFillColor: (f: any) => {
+          getFillColor: (f: ZoningFeature) => {
             const code = f.properties?.gen_zcode ?? ''
             return ZONING_COLORS[code] ?? ZONING_DEFAULT
           },
@@ -492,7 +459,6 @@ export default function MapView() {
 
         <LayerToggle layers={layers} onToggle={handleToggle} />
 
-        {/* Parcel Filter Bar */}
         {currentZoom >= MIN_PARCEL_ZOOM && (
           <div style={{
             position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
@@ -520,7 +486,6 @@ export default function MapView() {
           </div>
         )}
 
-        {/* Legend */}
         {currentZoom >= MIN_PARCEL_ZOOM && (
           <div style={{
             position: 'absolute', bottom: 24, left: 16, zIndex: 10,
@@ -543,7 +508,7 @@ export default function MapView() {
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(40,40,60,0.3)' }} />
                   Other
                 </div>
-                <button onClick={() => { setClusterPidns(new Set()); setSeedPidn(null); setParcelData(null); if (viewStateRef.current) fetchParcels(viewStateRef.current as any) }} style={{
+                <button onClick={() => { setClusterPidns(new Set()); setSeedPidn(null); setParcelData(null); if (viewStateRef.current) fetchParcels(viewStateRef.current) }} style={{
                   fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)',
                   background: 'none', border: '1px solid var(--border)', borderRadius: 3,
                   padding: '2px 8px', cursor: 'pointer',
@@ -570,7 +535,6 @@ export default function MapView() {
           </div>
         )}
 
-        {/* Zoom-in message */}
         {showZoomMessage && (
           <div
             style={{
@@ -598,7 +562,7 @@ export default function MapView() {
           initialViewState={initialViewState}
           controller={true}
           layers={deckLayers}
-          onViewStateChange={onViewStateChange as any}
+          onViewStateChange={onViewStateChange as never}
           style={{ position: 'absolute', inset: 0 }}
         >
           <Map
@@ -607,7 +571,6 @@ export default function MapView() {
           />
         </DeckGL>
 
-        {/* Hover tooltip */}
         {hoverInfo?.object && hoverInfo.x != null && hoverInfo.y != null && (
           <div
             style={{
@@ -624,11 +587,10 @@ export default function MapView() {
               boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             }}
           >
-            <MapTooltip properties={hoverInfo.object.properties} />
+            <MapTooltip properties={hoverInfo.object.properties as TooltipProperties} />
           </div>
         )}
 
-        {/* Property Report Card Side Panel */}
         <div
           style={{
             position: 'absolute',
@@ -657,22 +619,6 @@ export default function MapView() {
       </div>
     </div>
   )
-}
-
-// ---------- Property Report Card Panel ----------
-
-const SCHOOL_DISTRICTS: Record<string, string> = {
-  '002': 'Central York', '004': 'Dallastown', '006': 'Dover',
-  '008': 'Eastern York', '010': 'Hanover', '012': 'Northeastern',
-  '014': 'Northern York', '016': 'Red Lion', '018': 'South Eastern',
-  '020': 'South Western', '022': 'Southern York', '024': 'Spring Grove',
-  '026': 'West Shore', '028': 'West York', '030': 'York Suburban',
-  '17F': 'York City', '17G': 'York City', '17L': 'York City', '17N': 'York City',
-}
-
-const CLASS_NAMES: Record<string, string> = {
-  'R': 'Residential', 'C': 'Commercial', 'I': 'Industrial',
-  'F': 'Farm', 'E': 'Exempt', 'A': 'Agricultural', 'U': 'Utility',
 }
 
 function PropertyPanel({
@@ -731,7 +677,6 @@ function PropertyPanel({
 
   return (
     <div style={{ padding: 20 }}>
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
@@ -781,24 +726,22 @@ function PropertyPanel({
 
       <Divider />
 
-      {/* Assessment & Sale */}
       <SectionTitle>Assessment & Sale</SectionTitle>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-        <DataField label="Assessed Total" value={fmtDollar(p.aprtotal)} accent />
+        <DataField label="Assessed Total" value={formatCurrency(p.aprtotal)} accent />
         <DataField label="Acres" value={p.acres ? Number(p.acres).toFixed(2) : '--'} />
         <DataField label="Sale Date" value={p.saledt || '--'} />
-        <DataField label="Sale Price" value={fmtDollar(p.price)} />
-        {p.prev_price && <DataField label="Prev Price" value={fmtDollar(p.prev_price)} />}
-        <DataField label="Class" value={CLASS_NAMES[p.class] || p.class || '--'} />
+        <DataField label="Sale Price" value={formatCurrency(p.price)} />
+        {p.prev_price && <DataField label="Prev Price" value={formatCurrency(p.prev_price)} />}
+        <DataField label="Class" value={getPropertyClassLabel(p.class) || '--'} />
       </div>
       {(p.aprland || p.aprbldg) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: 8 }}>
-          <DataField label="Land" value={fmtDollar(p.aprland)} />
-          <DataField label="Building" value={fmtDollar(p.aprbldg)} />
+          <DataField label="Land" value={formatCurrency(p.aprland)} />
+          <DataField label="Building" value={formatCurrency(p.aprbldg)} />
         </div>
       )}
 
-      {/* Property Details — only show if we have data beyond the basics */}
       {(p.yrblt || p.style || p.num_stories || p.res_living_area || p.luc) && (
         <>
           <Divider />
@@ -814,12 +757,11 @@ function PropertyPanel({
         </>
       )}
 
-      {/* School District + Deed */}
       {(p.school_dis || p.deed_bk) && (
         <>
           <Divider />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-            {p.school_dis && <DataField label="School District" value={SCHOOL_DISTRICTS[p.school_dis] || p.school_dis} />}
+            {p.school_dis && <DataField label="School District" value={getSchoolDistrictLabel(p.school_dis)} />}
             {p.deed_bk && <DataField label="Deed" value={`${p.deed_bk}/${p.deed_pg}`} />}
           </div>
         </>
@@ -827,7 +769,6 @@ function PropertyPanel({
 
       <Divider />
 
-      {/* Tax Status */}
       <SectionTitle>Tax Status</SectionTitle>
       {tax.is_delinquent ? (
         <div>
@@ -844,13 +785,13 @@ function PropertyPanel({
               color: 'var(--accent-red)',
             }}
           >
-            Delinquent &mdash; {fmtDollar(tax.total_owed)}
+            Delinquent &mdash; {formatCurrency(tax.total_owed)}
           </span>
           {tax.records && tax.records.length > 0 && (
             <div style={{ marginTop: 10 }}>
               {tax.records.map((rec) => (
                 <div
-                  key={rec.year}
+                  key={rec.tax_year ?? ''}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -860,8 +801,8 @@ function PropertyPanel({
                     fontSize: 11,
                   }}
                 >
-                  <span style={{ color: 'var(--text-secondary)' }}>{rec.year}</span>
-                  <span style={{ color: 'var(--accent-red)' }}>{fmtDollar(rec.amount)}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{rec.tax_year}</span>
+                  <span style={{ color: 'var(--accent-red)' }}>{formatCurrency(rec.total)}</span>
                 </div>
               ))}
             </div>
@@ -887,7 +828,6 @@ function PropertyPanel({
 
       <Divider />
 
-      {/* Flood Risk */}
       <SectionTitle>Flood Risk</SectionTitle>
       {flood.in_flood_zone ? (
         <div>
@@ -934,7 +874,6 @@ function PropertyPanel({
 
       <Divider />
 
-      {/* Structures */}
       <SectionTitle>Structures</SectionTitle>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <DataField label="Count" value={String(structures.count)} />
@@ -956,7 +895,6 @@ function PropertyPanel({
         )}
       </div>
 
-      {/* PIDN footer */}
       <div
         style={{
           marginTop: 20,
@@ -982,8 +920,6 @@ function PropertyPanel({
     </div>
   )
 }
-
-// ---------- Panel Sub-components ----------
 
 function CloseButton({ onClick }: { onClick: () => void }) {
   return (
@@ -1078,30 +1014,8 @@ function Divider() {
   )
 }
 
-// ---------- Formatters ----------
-
-function fmtDollar(val: number | string | null | undefined): string {
-  if (val == null) return '--'
-  const n = typeof val === 'string' ? parseFloat(val) : val
-  if (isNaN(n)) return '--'
-  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
-}
-
-function fmtDate(d: string | null | undefined): string {
-  if (!d) return '--'
-  try {
-    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  } catch {
-    return d
-  }
-}
-
-function formatCost(cost: number | null): string {
-  if (!cost) return ''
-  if (cost >= 1_000_000) return `$${(cost / 1_000_000).toFixed(1)}M`
-  if (cost >= 1_000) return `$${(cost / 1_000).toFixed(0)}K`
-  return `$${cost.toLocaleString()}`
-}
+const formatCost = (cost: number | null) =>
+  formatCurrencyCompact(cost, { allowThousands: true })
 
 function formatDate(d: string | null): string {
   if (!d) return ''
@@ -1110,27 +1024,25 @@ function formatDate(d: string | null): string {
   } catch { return d }
 }
 
-// ---------- Map Tooltip ----------
-
-function MapTooltip({ properties }: { properties: Record<string, any> }) {
-  // Parcel tooltip
-  if (properties.pidn) {
-    const schoolName = properties.school_dis ? (SCHOOL_DISTRICTS[properties.school_dis] || properties.school_dis) : ''
-    const className = properties.class ? (CLASS_NAMES[properties.class] || properties.class) : ''
+function MapTooltip({ properties }: { properties: TooltipProperties }) {
+  if ('pidn' in properties && properties.pidn) {
+    const p = properties
+    const schoolName = getSchoolDistrictLabel(p.school_dis ?? null)
+    const className = getPropertyClassLabel(p.class)
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>{properties.owner_full || 'Unknown Owner'}</div>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{p.owner_full || 'Unknown Owner'}</div>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
-          {properties.propadr || 'No address'}
+          {p.propadr || 'No address'}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-          {properties.aprtotal != null && <span style={{ color: 'var(--accent-blue)' }}>{fmtDollar(properties.aprtotal)}</span>}
+          {p.aprtotal != null && <span style={{ color: 'var(--accent-blue)' }}>{formatCurrency(p.aprtotal)}</span>}
           {className && <span style={{ color: 'var(--text-muted)' }}>{className}</span>}
           {schoolName && <span style={{ color: 'var(--text-muted)' }}>{schoolName}</span>}
         </div>
-        {properties.delinquent_total > 0 && (
+        {(p.delinquent_total ?? 0) > 0 && (
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent-red)', marginTop: 4 }}>
-            Delinquent: {fmtDollar(properties.delinquent_total)}
+            Delinquent: {formatCurrency(p.delinquent_total ?? null)}
           </div>
         )}
         <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>Click for details</div>
@@ -1138,72 +1050,72 @@ function MapTooltip({ properties }: { properties: Record<string, any> }) {
     )
   }
 
-  // PennDOT project
-  if (properties.project_name) {
-    const statusColor = properties.under_construction === 'Y' ? 'var(--accent-gold)' : 'var(--accent-green)'
-    const statusLabel = properties.act89_status || properties.status || ''
+  if ('project_name' in properties && properties.project_name) {
+    const p = properties
+    const statusColor = p.under_construction === 'Y' ? 'var(--accent-gold)' : 'var(--accent-green)'
+    const statusLabel = p.act89_status || p.status || ''
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>{properties.project_name}</div>
-        {properties.location_desc && (
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>{p.project_name}</div>
+        {p.location_desc && (
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.4 }}>
-            {properties.location_desc}
+            {p.location_desc}
           </div>
         )}
-        {!properties.location_desc && properties.description && (
+        {!p.location_desc && p.description && (
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.4 }}>
-            {properties.description}
+            {p.description}
           </div>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginBottom: 4 }}>
           <span style={{ color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
-          {properties.project_type && <span>{properties.project_type}</span>}
+          {p.project_type && <span>{p.project_type}</span>}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-          {properties.start_date && <span>Start: {formatDate(properties.start_date)}</span>}
-          {properties.end_date && <span>End: {formatDate(properties.end_date)}</span>}
-          {properties.cost && <span style={{ color: 'var(--accent-blue)' }}>{formatCost(properties.cost)}</span>}
+          {p.start_date && <span>Start: {formatDate(p.start_date)}</span>}
+          {p.end_date && <span>End: {formatDate(p.end_date)}</span>}
+          {p.cost != null && <span style={{ color: 'var(--accent-blue)' }}>{formatCost(p.cost)}</span>}
         </div>
-        {properties.project_manager && (
+        {p.project_manager && (
           <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginTop: 6, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
-            PM: {properties.project_manager}
+            PM: {p.project_manager}
           </div>
         )}
       </div>
     )
   }
 
-  // Zoning
-  if (properties.gen_zname || properties.zname) {
+  if ('gen_zname' in properties || 'zname' in properties) {
+    const p = properties as ZoningProperties
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>{properties.zname || properties.gen_zname}</div>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{p.zname || p.gen_zname}</div>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-          {properties.gen_zcode && <span style={{ marginRight: 8 }}>{properties.gen_zcode}</span>}
-          {properties.muni_name && <span>{properties.muni_name}</span>}
+          {p.gen_zcode && <span style={{ marginRight: 8 }}>{p.gen_zcode}</span>}
+          {p.muni_name && <span>{p.muni_name}</span>}
         </div>
       </div>
     )
   }
 
-  // Municipality
-  if (properties.muni_type) {
+  if ('muni_type' in properties && properties.muni_type) {
+    const p = properties
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
-        <div style={{ fontWeight: 600 }}>{properties.name}</div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{properties.muni_type}</div>
+        <div style={{ fontWeight: 600 }}>{p.name}</div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{p.muni_type}</div>
       </div>
     )
   }
 
-  // Flood zone
-  if (properties.fld_zone) {
+  if ('fld_zone' in properties && properties.fld_zone) {
+    const p = properties
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
-        <div style={{ fontWeight: 600 }}>Zone {properties.fld_zone}</div>
-        {properties.zone_subty && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{properties.zone_subty}</div>}
+        <div style={{ fontWeight: 600 }}>Zone {p.fld_zone}</div>
+        {p.zone_subty && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.zone_subty}</div>}
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-          SFHA: {properties.sfha_tf === 'T' ? 'Yes' : 'No'}
+          SFHA: {p.sfha_tf === 'T' ? 'Yes' : 'No'}
         </div>
       </div>
     )

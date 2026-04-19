@@ -10,7 +10,6 @@ import json
 import time
 
 import requests
-from psycopg2.extras import execute_batch
 from dagster import (
     asset,
     asset_check,
@@ -21,8 +20,10 @@ from dagster import (
     MetadataValue,
 )
 
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.fema import parse_fema_geojson
+from countyiq.lib.scd import scd2_upsert_geom
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -133,10 +134,17 @@ def fema_flood_zones(
         filename="flood_zones.geojson",
     )
 
-    # 3. Parse features
+    # 3. Parse features. Each record carries a "geojson" key holding the
+    # raw Polygon coords; pop it out into geom_lookup and let scd2_upsert_geom
+    # wrap with ST_Multi() so the column type (MultiPolygon) is satisfied.
     records = parse_fema_geojson(geojson)
+    geom_lookup: dict[str, str] = {}
     for rec in records:
         rec["source_url"] = county.fema_nfhl_url
+        if "geojson" in rec:
+            geom = rec.pop("geojson")
+            if geom and rec.get("fld_ar_id"):
+                geom_lookup[rec["fld_ar_id"]] = json.dumps(geom)
     context.log.info(f"Parsed {len(records)} flood zone records")
 
     if not records:
@@ -151,10 +159,22 @@ def fema_flood_zones(
             f"Possible truncated response — aborting."
         )
 
-    # 4. Upsert with PostGIS geometry handling (scoped to this county's DFIRM)
+    # 4. Upsert with PostGIS geometry, scoped by dfirm_id so running for
+    # one county does not expire another county's records in the same table.
     cur = database.cursor()
     try:
-        stats = _geom_scd2_upsert(cur, records, dfirm_id=county.fema_dfirm_id)
+        stats = scd2_upsert_geom(
+            cursor=cur,
+            schema="staging",
+            table="flood_zones",
+            records=records,
+            key_columns=KEY_COLUMNS,
+            value_columns=VALUE_COLUMNS,
+            geom_lookup=geom_lookup,
+            geom_kind="multipolygon",
+            scope_column="dfirm_id",
+            scope_value=county.fema_dfirm_id,
+        )
     finally:
         cur.close()
 
@@ -168,107 +188,9 @@ def fema_flood_zones(
     )
 
 
-def _geom_scd2_upsert(cursor, records: list[dict], dfirm_id: str) -> dict:
-    """SCD2 upsert with PostGIS geometry support, scoped by DFIRM ID.
-
-    Uses the same expire/insert pattern as lib/scd.py but handles
-    geometry via ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON()), 4326).
-    Uses execute_batch for performance with 5K+ geometry rows.
-
-    The expire query is scoped to dfirm_id so that running for one county
-    does not expire another county's records in the same table.
-    """
-    conn = cursor.connection
-    was_autocommit = conn.autocommit
-    if was_autocommit:
-        conn.autocommit = False
-
-    try:
-        all_cols = KEY_COLUMNS + VALUE_COLUMNS
-        fqn = "staging.flood_zones"
-
-        # Create temp table
-        cursor.execute("DROP TABLE IF EXISTS _tmp_flood_zones")
-        cursor.execute(f"CREATE TEMP TABLE _tmp_flood_zones (LIKE {fqn} INCLUDING DEFAULTS)")
-
-        # Bulk insert into temp table with geometry — execute_batch for performance
-        # CASE handles null geometry safely across PostGIS versions
-        insert_sql = f"""
-            INSERT INTO _tmp_flood_zones ({', '.join(all_cols)}, geom)
-            VALUES ({', '.join(['%s'] * len(all_cols))},
-                    CASE WHEN %s IS NOT NULL
-                         THEN ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326)
-                         ELSE NULL END)
-        """
-        rows = []
-        for rec in records:
-            row = [rec.get(c) for c in all_cols]
-            geom_json = json.dumps(rec["geojson"]) if "geojson" in rec else None
-            row.extend([geom_json, geom_json])  # passed twice: once for NULL check, once for ST_GeomFromGeoJSON
-            rows.append(row)
-        execute_batch(cursor, insert_sql, rows, page_size=500)
-
-        # Expire changed/deleted — scoped to this county's DFIRM ID
-        key_join = "c.fld_ar_id = t.fld_ar_id"
-        value_diff = " OR ".join(
-            f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS
-        )
-        cursor.execute(f"""
-            UPDATE {fqn} c SET valid_to = NOW()
-            WHERE c.valid_to IS NULL
-            AND c.dfirm_id = %s
-            AND (
-                EXISTS (
-                    SELECT 1 FROM _tmp_flood_zones t
-                    WHERE {key_join} AND ({value_diff})
-                )
-                OR NOT EXISTS (
-                    SELECT 1 FROM _tmp_flood_zones t WHERE {key_join}
-                )
-            )
-        """, (dfirm_id,))
-        expired = cursor.rowcount
-
-        # Insert new/changed — also scoped by dfirm_id for multi-county safety
-        col_list = ', '.join(all_cols)
-        cursor.execute(f"""
-            INSERT INTO {fqn} ({col_list}, geom, valid_from)
-            SELECT {', '.join(f't.{c}' for c in all_cols)}, t.geom, NOW()
-            FROM _tmp_flood_zones t
-            WHERE NOT EXISTS (
-                SELECT 1 FROM {fqn} c
-                WHERE c.valid_to IS NULL AND c.dfirm_id = %s AND {key_join}
-            )
-        """, (dfirm_id,))
-        inserted = cursor.rowcount
-
-        cursor.execute("DROP TABLE IF EXISTS _tmp_flood_zones")
-        conn.commit()
-
-        if was_autocommit:
-            conn.autocommit = True
-
-        unchanged = len(records) - inserted
-        return {"inserted": inserted, "expired": expired, "unchanged": unchanged}
-    except Exception:
-        conn.rollback()
-        if was_autocommit:
-            conn.autocommit = True
-        raise
-
-
-@asset_check(asset=fema_flood_zones)
-def fema_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.flood_zones has at least one current record."""
-    result = database.execute(
-        "SELECT COUNT(*) FROM staging.flood_zones WHERE valid_to IS NULL"
-    )
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count > 0,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+fema_record_count_nonzero = make_row_count_check(
+    fema_flood_zones, table="flood_zones", name="fema_record_count_nonzero"
+)
 
 
 @asset_check(asset=fema_flood_zones)

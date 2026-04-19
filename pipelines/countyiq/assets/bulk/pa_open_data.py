@@ -6,7 +6,6 @@ Records: ~2,000+ York County businesses
 Schedule: Monthly (1st of month, 05:00) via bulk_refresh job
 """
 
-import json
 import time
 
 import requests
@@ -20,6 +19,7 @@ from dagster import (
     MetadataValue,
 )
 
+from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.pa_open_data import parse_soda_records, EXPECTED_BUSINESS_FIELDS
 from countyiq.lib.scd import scd2_upsert
@@ -169,18 +169,9 @@ def pa_open_data(
     )
 
 
-@asset_check(asset=pa_open_data)
-def pa_open_data_record_count_nonzero(database: DatabaseResource) -> AssetCheckResult:
-    """Verify staging.pa_open_data has at least one current record."""
-    result = database.execute(
-        "SELECT COUNT(*) FROM staging.pa_open_data WHERE valid_to IS NULL"
-    )
-    count = result[0][0] if result else 0
-    return AssetCheckResult(
-        passed=count > 0,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"current_record_count": MetadataValue.int(count)},
-    )
+pa_open_data_record_count_nonzero = make_row_count_check(
+    pa_open_data, table="pa_open_data"
+)
 
 
 @asset_check(asset=pa_open_data)
