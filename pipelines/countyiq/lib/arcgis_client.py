@@ -27,6 +27,7 @@ def iterate_feature_pages(
     batch_size: int = DEFAULT_BATCH_SIZE,
     return_geometry: bool = True,
     delay: float = 0.5,
+    extra_params: dict[str, object] | None = None,
 ) -> Iterator[list[dict]]:
     """Yield ArcGIS feature pages one request at a time.
 
@@ -47,6 +48,8 @@ def iterate_feature_pages(
             "resultOffset": offset,
             "returnGeometry": str(return_geometry).lower(),
         }
+        if extra_params:
+            params.update(extra_params)
 
         resp = requests.get(f"{url}/query", params=params, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
@@ -78,6 +81,7 @@ def query_all_features(
     batch_size: int = DEFAULT_BATCH_SIZE,
     return_geometry: bool = True,
     delay: float = 0.5,
+    extra_params: dict[str, object] | None = None,
 ) -> list[dict]:
     """Fetch all features from an ArcGIS REST API endpoint with pagination.
 
@@ -102,6 +106,7 @@ def query_all_features(
         batch_size=batch_size,
         return_geometry=return_geometry,
         delay=delay,
+        extra_params=extra_params,
     ):
         all_features.extend(features)
     return all_features
@@ -116,8 +121,13 @@ def _get_feature_count(url: str, where: str = "1=1") -> int:
 
 
 def _fetch_page(url: str, where: str, out_fields: str, out_sr: int,
-                batch_size: int, offset: int, return_geometry: bool) -> list[dict]:
-    """Fetch a single page — called by the thread pool workers."""
+                batch_size: int, offset: int, return_geometry: bool,
+                retries: int = 3) -> list[dict]:
+    """Fetch a single page — called by the thread pool workers.
+
+    Retries transient failures (5xx, timeouts, connection errors) with
+    exponential backoff before giving up.
+    """
     params = {
         "where": where,
         "outFields": out_fields,
@@ -127,12 +137,25 @@ def _fetch_page(url: str, where: str, out_fields: str, out_sr: int,
         "resultOffset": offset,
         "returnGeometry": str(return_geometry).lower(),
     }
-    resp = requests.get(f"{url}/query", params=params, timeout=REQUEST_TIMEOUT)
-    resp.raise_for_status()
-    data = resp.json()
-    if "error" in data:
-        raise RuntimeError(f"ArcGIS API error at offset {offset}: {data['error']}")
-    return data.get("features", [])
+    last_exc: Exception | None = None
+    for attempt in range(retries):
+        try:
+            resp = requests.get(f"{url}/query", params=params, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+            if "error" in data:
+                raise RuntimeError(f"ArcGIS API error at offset {offset}: {data['error']}")
+            return data.get("features", [])
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError) as exc:
+            last_exc = exc
+        except requests.exceptions.HTTPError as exc:
+            last_exc = exc
+            if exc.response is not None and exc.response.status_code < 500:
+                raise  # 4xx won't heal on retry
+        if attempt < retries - 1:
+            time.sleep(2 ** attempt)
+    raise RuntimeError(f"Page at offset {offset} failed after {retries} attempts: {last_exc}")
 
 
 def fetch_all_features_parallel(
@@ -198,10 +221,21 @@ def fetch_all_features_parallel(
                 log.warning(f"  Page at offset {offset} failed: {exc}")
                 errors += 1
 
+    # A partial fetch is worse than a failed fetch: the SCD2 loaders treat
+    # missing rows as deletions and expire them, and the 50% data-loss guard
+    # only catches catastrophic shortfalls. Any page failure (already retried
+    # 3x in _fetch_page) fails the whole fetch.
+    if errors:
+        raise RuntimeError(
+            f"Parallel fetch incomplete: {errors}/{len(offsets)} pages failed "
+            f"after retries. Refusing to return a partial feature set — "
+            f"downstream SCD2 would expire the missing records."
+        )
+
     # Reassemble in order
     all_features = []
     for offset in sorted(results_by_offset.keys()):
         all_features.extend(results_by_offset[offset])
 
-    log.info(f"Parallel fetch complete: {len(all_features):,} features, {errors} page errors")
+    log.info(f"Parallel fetch complete: {len(all_features):,} features, 0 page errors")
     return all_features

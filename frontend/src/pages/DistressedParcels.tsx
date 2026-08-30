@@ -31,56 +31,56 @@ function scoreBar(s: number) {
 export default function DistressedParcels() {
   const navigate = useNavigate()
   const [parcels, setParcels] = useState<DistressedParcel[]>([])
-  const [loading, setLoading] = useState(true)
-  const [, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [classFilter, setClassFilter] = useState('')
   const [minAcres, setMinAcres] = useState('')
-  const [, setPage] = useState(0)
   const PAGE_SIZE = 200
 
-  // Cache results to avoid re-fetching on back navigation
+  // Cache results to avoid re-fetching on back navigation. Loading is
+  // derived (resolved key vs requested key) so the effect never sets state
+  // synchronously; cache hits resolve through the same promise chain.
   const cacheKey = `distressed_${classFilter}_${minAcres}`
-  const fetchPage = (pageNum: number, append: boolean) => {
-    const cached = window.__distressedCache?.[cacheKey]
-    if (cached && !append) {
-      setParcels(cached)
-      setLoading(false)
-      return
-    }
-    append ? setLoadingMore(true) : setLoading(true)
-    const params = new URLSearchParams({ limit: String(PAGE_SIZE), min_score: '0.2' })
-    if (classFilter) params.set('parcel_class', classFilter)
-    if (minAcres) params.set('min_acres', minAcres)
-
-    fetch(`/api/scores/distressed?${params}`)
-      .then(r => {
-        if (!r.ok) throw new Error(`Distressed request failed (${r.status})`)
-        return r.json()
-      })
-      .then((d: DistressedResponse) => {
-        const items = d.parcels || []
-        if (append) {
-          setParcels(prev => [...prev, ...items])
-        } else {
-          setParcels(items)
-          if (!window.__distressedCache) window.__distressedCache = {}
-          window.__distressedCache[cacheKey] = items
-        }
-        setLoading(false)
-        setLoadingMore(false)
-      })
-      .catch((err) => {
-        console.error('Failed to load distressed parcels', err)
-        setError(err.message)
-        setLoading(false)
-        setLoadingMore(false)
-      })
-  }
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null)
+  const loading = resolvedKey !== cacheKey
 
   useEffect(() => {
-    setPage(0)
-    fetchPage(0, false)
+    const key = `distressed_${classFilter}_${minAcres}`
+    let cancelled = false
+    const cached = window.__distressedCache?.[key]
+    const load: Promise<DistressedParcel[]> = cached
+      ? Promise.resolve(cached)
+      : (() => {
+          const params = new URLSearchParams({ limit: String(PAGE_SIZE), min_score: '0.2' })
+          if (classFilter) params.set('parcel_class', classFilter)
+          if (minAcres) params.set('min_acres', minAcres)
+          return fetch(`/api/scores/distressed?${params}`)
+            .then(r => {
+              if (!r.ok) throw new Error(`Distressed request failed (${r.status})`)
+              return r.json()
+            })
+            .then((d: DistressedResponse) => {
+              const items = d.parcels || []
+              if (!window.__distressedCache) window.__distressedCache = {}
+              window.__distressedCache[key] = items
+              return items
+            })
+        })()
+    load
+      .then((items) => {
+        if (cancelled) return
+        setParcels(items)
+        setError(null)
+        setResolvedKey(key)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('Failed to load distressed parcels', err)
+        setError(err.message)
+        setResolvedKey(key)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [classFilter, minAcres])
 
   return (
@@ -141,7 +141,7 @@ export default function DistressedParcels() {
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', animation: 'fadeUp 0.4s ease 0.2s both' }}>
             {/* Header */}
             <div style={{ display: 'grid', gridTemplateColumns: '55px 1fr 120px 100px 100px 70px 90px', padding: '12px 20px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-              <div>Score</div><div>Owner / Address</div><div>District</div><div style={{ textAlign: 'right' }}>Owed</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div style={{ textAlign: 'right' }}>Class</div>
+              <div>Score</div><div>Parcel / Address</div><div>District</div><div style={{ textAlign: 'right' }}>Distress</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div style={{ textAlign: 'right' }}>Class</div>
             </div>
 
             {parcels.map((p, i) => (
@@ -156,14 +156,14 @@ export default function DistressedParcels() {
               >
                 <div>{scoreBar(p.distress_score)}</div>
                 <div>
-                  <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.owner_full}</div>
+                  <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.pidn}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{p.propadr || p.pidn}</div>
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)' }}>
                   {getSchoolDistrictLabel(p.school_dis)}
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-red)', textAlign: 'right', fontWeight: 600 }}>
-                  {formatCurrencyCompact(p.total_owed)}
+                  {Math.round((p.delinquency_score ?? 0) * 100)}%
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
                   {formatCurrencyCompact(p.aprtotal)}

@@ -18,6 +18,7 @@ from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.geometry import rings_to_multipolygon_geojson
 from countyiq.lib.scd import scd2_upsert_geom
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -33,8 +34,8 @@ VALUE_COLUMNS = [
 
 
 @asset(
-    group_name="radar",
-    description="Economic development candidate parcels from ArcGIS -> staging.ecodev_candidates",
+    group_name="paused_sources",
+    description="PAUSED pending reuse approval: economic development candidate parcels",
     kinds={"postgres", "arcgis"},
 )
 def ecodev_candidates_arcgis(
@@ -45,6 +46,15 @@ def ecodev_candidates_arcgis(
     """Fetch ecodev candidate polygons, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
+    authorization = authorize_source(
+        database,
+        source_key="ecodev_candidates",
+        acquisition_method="arcgis_rest",
+        asset_key="ecodev_candidates_arcgis",
+        dagster_run_id=context.run_id,
+    )
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     context.log.info(f"Querying ArcGIS ecodev candidates for {county.name}: {county.arcgis_ecodev_candidates_url}")
 
     raw_features = query_all_features(

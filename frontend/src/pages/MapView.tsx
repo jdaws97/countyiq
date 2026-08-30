@@ -139,8 +139,10 @@ export default function MapView() {
 
   const [selectedPidn, setSelectedPidn] = useState<string | null>(null)
   const [propertyReport, setPropertyReport] = useState<PropertyReport | null>(null)
-  const [reportLoading, setReportLoading] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(false)
+  // Panel visibility and report-loading are derived from the selection —
+  // they were always toggled in lockstep with selectedPidn anyway.
+  const panelOpen = selectedPidn !== null
+  const reportLoading = selectedPidn !== null && propertyReport?.parcel?.pidn !== selectedPidn
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewStateRef = useRef<MapViewState | null>(null)
@@ -176,7 +178,7 @@ export default function MapView() {
     const south = vs.latitude - halfH
     const north = vs.latitude + halfH
 
-    const bboxLayer = (parcelFilter === 'vacant' || parcelFilter === 'vacant_delinquent') ? 'vacant' : 'delinquent'
+    const bboxLayer = parcelFilter === 'vacant' ? 'vacant' : parcelFilter === 'vacant_delinquent' ? 'vacant_delinquent' : 'delinquent'
     const url = `/api/parcels/bbox?west=${west.toFixed(6)}&south=${south.toFixed(6)}&east=${east.toFixed(6)}&north=${north.toFixed(6)}&layer=${bboxLayer}`
 
     fetch(url)
@@ -187,7 +189,7 @@ export default function MapView() {
       .then((data: ParcelFeatureCollection) => {
         if (parcelFilter === 'vacant_delinquent') {
           data.features = data.features.filter(
-            (f) => (f.properties?.delinquent_total ?? 0) > 0
+            (f) => f.properties?.has_tax_delinquency === true
           )
         }
         setParcelData(data)
@@ -222,33 +224,31 @@ export default function MapView() {
   useEffect(() => {
     const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
     const vs = viewStateRef.current || initialViewState
-    if (parcelsEnabled && (vs.zoom ?? 0) >= MIN_PARCEL_ZOOM) {
-      fetchParcels(vs as MapViewState)
-    }
+    if (!parcelsEnabled || (vs.zoom ?? 0) < MIN_PARCEL_ZOOM) return
+    // Deferred a tick: fetchParcels sets state, which must not happen
+    // synchronously inside the effect; the timer also coalesces rapid
+    // filter flips.
+    const timer = setTimeout(() => fetchParcels(vs as MapViewState), 0)
+    return () => clearTimeout(timer)
   }, [parcelFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!selectedPidn) {
-      setPanelOpen(false)
-      setPropertyReport(null)
-      return
-    }
-
-    setReportLoading(true)
-    setPanelOpen(true)
-
+    if (!selectedPidn) return
+    let cancelled = false
     fetch(`/api/parcels/${selectedPidn}`)
       .then((r) => {
         if (!r.ok) throw new Error(`${r.status}`)
         return r.json()
       })
       .then((data: PropertyReport) => {
-        setPropertyReport(data)
-        setReportLoading(false)
+        if (!cancelled) setPropertyReport(data)
       })
       .catch(() => {
-        setReportLoading(false)
+        if (!cancelled) setPropertyReport(null)
       })
+    return () => {
+      cancelled = true
+    }
   }, [selectedPidn])
 
   const handleToggle = useCallback((id: string) => {
@@ -266,7 +266,6 @@ export default function MapView() {
 
   const closePanel = useCallback(() => {
     setSelectedPidn(null)
-    setPanelOpen(false)
     setPropertyReport(null)
   }, [])
 
@@ -290,8 +289,7 @@ export default function MapView() {
             }
             if (highlightPidn && pidn === highlightPidn) return [255, 215, 0, 200]
             if (parcelFilter === 'vacant') return [61, 189, 111, 120]
-            const delinquent = f.properties?.delinquent_total ?? 0
-            if (delinquent > 0) return [224, 82, 82, 120]
+            if (f.properties?.has_tax_delinquency) return [224, 82, 82, 120]
             return [96, 165, 250, 40]
           },
           getLineColor: (f: ParcelFeature) => {
@@ -563,7 +561,7 @@ export default function MapView() {
           controller={true}
           layers={deckLayers}
           onViewStateChange={onViewStateChange as never}
-          style={{ position: 'absolute', inset: 0 }}
+          style={{ position: 'absolute', inset: '0' }}
         >
           <Map
             mapStyle={BASEMAP}
@@ -689,7 +687,7 @@ function PropertyPanel({
               marginBottom: 4,
             }}
           >
-            {p.owner_full || 'Unknown Owner'}
+            {p.owner_full || 'Owner not displayed'}
           </div>
           <div
             style={{
@@ -747,9 +745,9 @@ function PropertyPanel({
           <Divider />
           <SectionTitle>Property Details</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-            {p.yrblt && <DataField label="Year Built" value={p.yrblt} />}
+            {p.yrblt && <DataField label="Year Built" value={String(p.yrblt)} />}
             {p.style && <DataField label="Style" value={p.style} />}
-            {p.num_stories && <DataField label="Stories" value={p.num_stories} />}
+            {p.num_stories && <DataField label="Stories" value={String(p.num_stories)} />}
             {p.res_living_area && <DataField label="Living Area" value={`${Number(p.res_living_area).toLocaleString()} sf`} />}
             {p.luc && <DataField label="LUC" value={p.luc} />}
             {p.heatsys && <DataField label="Heat" value={p.heatsys} />}
@@ -785,7 +783,7 @@ function PropertyPanel({
               color: 'var(--accent-red)',
             }}
           >
-            Delinquent &mdash; {formatCurrency(tax.total_owed)}
+            Delinquency signal detected
           </span>
           {tax.records && tax.records.length > 0 && (
             <div style={{ marginTop: 10 }}>
@@ -1031,7 +1029,7 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
     const className = getPropertyClassLabel(p.class)
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>{p.owner_full || 'Unknown Owner'}</div>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{p.owner_full || 'Owner not displayed'}</div>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
           {p.propadr || 'No address'}
         </div>
@@ -1040,9 +1038,9 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
           {className && <span style={{ color: 'var(--text-muted)' }}>{className}</span>}
           {schoolName && <span style={{ color: 'var(--text-muted)' }}>{schoolName}</span>}
         </div>
-        {(p.delinquent_total ?? 0) > 0 && (
+        {p.has_tax_delinquency && (
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent-red)', marginTop: 4 }}>
-            Delinquent: {formatCurrency(p.delinquent_total ?? null)}
+            Delinquency signal detected
           </div>
         )}
         <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>Click for details</div>

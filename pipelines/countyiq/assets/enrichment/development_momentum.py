@@ -10,12 +10,16 @@ fallback so the score path still works when the LLM layer is unavailable.
 
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
 
+from countyiq.lib.county_config import county_open_data_source_key, get_county_config
+from countyiq.lib.source_rights import authorize_source_uses
 from countyiq.resources.database import DatabaseResource
 
 
 @asset(
     group_name="enrichment",
-    deps=["signal_validation_batched"],
+    # development_signals is a real (transitive) input; declaring it directly
+    # keeps partial selections from running momentum before signals exist.
+    deps=["signal_validation_batched", "development_signals"],
     description="Aggregate validated development signals → public.development_momentum (0-100 score)",
     kinds={"postgres"},
 )
@@ -24,6 +28,22 @@ def development_momentum(
     database: DatabaseResource,
 ) -> MaterializeResult:
     """Aggregate development signals per PIDN into momentum and opportunity scores."""
+
+    county = get_county_config()
+    source_keys = [county_open_data_source_key()]
+    if county.penndot_projects_url:
+        source_keys.append("penndot_open_data")
+    if county.fema_nfhl_url and county.fema_dfirm_id:
+        source_keys.append("fema_nfhl")
+    if county.pa_dep_query_bbox:
+        source_keys.append("pa_dep_open_data")
+    authorize_source_uses(
+        database,
+        source_keys=tuple(source_keys),
+        use="derived_product",
+        asset_key="development_momentum",
+        dagster_run_id=context.run_id,
+    )
 
     cur = database.cursor()
     conn = cur.connection
@@ -46,7 +66,7 @@ def development_momentum(
                     ds.evidence,
                     ds.observed_at,
                     e.claim,
-                    e.source_url,
+                    COALESCE(e.source_url, ds.evidence->>'source_url') AS source_url,
                     e.internal_url,
                     e.validation_status,
                     e.adjusted_significance,
@@ -134,7 +154,7 @@ def development_momentum(
                     ), 0)                                     AS raw_score,
                     COALESCE(SUM(effective_weight) FILTER (
                         WHERE signal_key IN (
-                            'ecodev_candidate',
+                            'economic_development_park',
                             'ownership_change',
                             'tax_distress'
                         )
@@ -146,17 +166,21 @@ def development_momentum(
                         WHERE signal_key IN (
                             'zoning_mismatch',
                             'penndot_project',
-                            'cdbg_investment',
+                            'development_overlay',
+                            'local_traffic_activity',
                             'growth_area'
                         )
                     ), 0)                                     AS opportunity_context_raw,
                     COALESCE(SUM(effective_weight) FILTER (
-                        WHERE signal_key = 'flood_zone'
+                        WHERE signal_key IN (
+                            'flood_zone', 'soil_constraint', 'zoning_constraint',
+                            'environmental_diligence'
+                        )
                     ), 0)                                     AS opportunity_negative_raw,
                     BOOL_OR(signal_key = 'active_subdivision' AND effective_weight > 0)
                                                               AS has_active_plan,
                     BOOL_OR(signal_key IN (
-                        'ecodev_candidate',
+                        'economic_development_park',
                         'ownership_change',
                         'tax_distress'
                     ) AND effective_weight > 0)               AS has_strong_opportunity,
@@ -168,7 +192,24 @@ def development_momentum(
                                                               AS has_exclusion,
                     jsonb_agg(signal_key)
                         FILTER (WHERE signal_key IN ('conservation_easement', 'ag_security'))
-                                                              AS exclusion_reasons
+                                                              AS exclusion_reasons,
+                    BOOL_OR(signal_key = 'economic_development_park' AND effective_weight > 0)
+                                                              AS in_economic_park,
+                    BOOL_OR(signal_key = 'growth_area' AND effective_weight > 0)
+                                                              AS in_growth_area,
+                    BOOL_OR(signal_key = 'development_overlay' AND effective_weight > 0)
+                                                              AS in_development_overlay,
+                    BOOL_OR(signal_key = 'local_traffic_activity' AND effective_weight > 0)
+                                                              AS has_local_traffic,
+                    BOOL_OR(signal_key = 'penndot_project' AND effective_weight > 0)
+                                                              AS near_penndot_project,
+                    BOOL_OR(signal_key = 'vacancy' AND effective_weight > 0)
+                                                              AS is_lightly_improved,
+                    BOOL_OR(signal_key = 'soil_constraint')   AS has_soil_constraint,
+                    BOOL_OR(signal_key = 'zoning_constraint') AS has_zoning_constraint,
+                    BOOL_OR(signal_key = 'flood_zone')        AS has_flood_constraint,
+                    BOOL_OR(signal_key = 'environmental_diligence')
+                                                              AS has_environmental_diligence
                 FROM scored_signals
                 GROUP BY pidn
             ),
@@ -184,15 +225,16 @@ def development_momentum(
                     pidn,
                     CASE signal_key
                         WHEN 'active_subdivision' THEN 1
-                        WHEN 'ecodev_candidate' THEN 2
+                        WHEN 'economic_development_park' THEN 2
                         WHEN 'tax_distress' THEN 3
                         WHEN 'ownership_change' THEN 4
                         WHEN 'vacancy' THEN 5
                         WHEN 'assemblage' THEN 6
                         WHEN 'zoning_mismatch' THEN 7
                         WHEN 'penndot_project' THEN 8
-                        WHEN 'cdbg_investment' THEN 9
-                        WHEN 'growth_area' THEN 10
+                        WHEN 'development_overlay' THEN 9
+                        WHEN 'local_traffic_activity' THEN 10
+                        WHEN 'growth_area' THEN 11
                         WHEN 'flood_zone' THEN 99
                         ELSE 50
                     END,
@@ -202,6 +244,7 @@ def development_momentum(
                 pidn,
                 score,
                 opportunity_score,
+                site_readiness_score,
                 has_active_plan,
                 eligible,
                 signal_count,
@@ -231,14 +274,31 @@ def development_momentum(
                         0
                     ) * 100)::int, 100)
                 END                                           AS opportunity_score,
+                CASE
+                    WHEN a.has_exclusion THEN 0
+                    ELSE LEAST(GREATEST(
+                        50
+                        + CASE WHEN a.in_economic_park THEN 25 ELSE 0 END
+                        + CASE WHEN a.in_growth_area THEN 10 ELSE 0 END
+                        + CASE WHEN a.in_development_overlay THEN 5 ELSE 0 END
+                        + CASE WHEN a.has_local_traffic THEN 5 ELSE 0 END
+                        + CASE WHEN a.near_penndot_project THEN 5 ELSE 0 END
+                        + CASE WHEN a.is_lightly_improved THEN 5 ELSE 0 END
+                        - CASE WHEN a.has_soil_constraint THEN 15 ELSE 0 END
+                        - CASE WHEN a.has_zoning_constraint THEN 15 ELSE 0 END
+                        - CASE WHEN a.has_flood_constraint THEN 20 ELSE 0 END
+                        - CASE WHEN a.has_environmental_diligence THEN 10 ELSE 0 END,
+                        0
+                    ), 100)
+                END                                           AS site_readiness_score,
                 COALESCE(a.has_active_plan, FALSE),
                 NOT a.has_exclusion                           AS eligible,
                 a.signal_count,
                 CASE t.signal_key
                     WHEN 'active_subdivision'
                         THEN 'Active subdivision: ' || COALESCE(t.evidence->>'plan_title', 'Unknown')
-                    WHEN 'ecodev_candidate'
-                        THEN 'YCPC underutilized parcel (' || COALESCE(t.evidence->>'percent_underutilized', '?') || '% underutilized)'
+                    WHEN 'economic_development_park'
+                        THEN 'Designated economic-development park'
                     WHEN 'zoning_mismatch'
                         THEN 'Zoned ' || COALESCE(t.evidence->>'current_zname', t.evidence->>'current_ztype') || ' → planned ' || COALESCE(t.evidence->>'future_lu', '?')
                     WHEN 'ownership_change'
@@ -255,17 +315,21 @@ def development_momentum(
                         THEN 'Assemblage edge: ' || COALESCE(t.evidence->>'different_owner_neighbors', '?') || ' differently owned neighbors'
                     WHEN 'penndot_project'
                         THEN 'Near ' || COALESCE(t.evidence->>'project_name', 'PennDOT project')
-                    WHEN 'cdbg_investment'
-                        THEN 'Near CDBG housing: ' || COALESCE(t.evidence->>'name', t.evidence->>'address', 'project')
+                    WHEN 'development_overlay'
+                        THEN 'In ' || COALESCE(t.evidence->>'overlay_name', 'development overlay')
+                    WHEN 'local_traffic_activity'
+                        THEN COALESCE(t.evidence->>'volume', '?') || ' vehicles at a nearby ' || COALESCE(t.evidence->>'count_year', '?') || ' count'
                     WHEN 'growth_area'
                         THEN 'In ' || CASE WHEN t.evidence->>'ga_type' = 'PGA' THEN 'Primary' ELSE 'Secondary' END || ' Growth Area'
                     WHEN 'flood_zone'
                         THEN 'In SFHA flood zone (' || COALESCE(t.evidence->>'fld_zone', '?') || ')'
+                    WHEN 'environmental_diligence'
+                        THEN 'PA DEP diligence record within screening radius'
                     ELSE t.signal_key
                 END                                           AS top_signal,
                 a.signals,
                 COALESCE(a.exclusion_reasons, '[]'::jsonb)    AS exclusion_reasons,
-                3                                             AS score_version,
+                5                                             AS score_version,
                 NOW()                                         AS computed_at
             FROM aggregated a
             LEFT JOIN top_signals t USING (pidn)
@@ -288,14 +352,26 @@ def development_momentum(
             COUNT(*) FILTER (WHERE eligible)                AS eligible,
             COUNT(*) FILTER (WHERE NOT eligible)            AS excluded,
             ROUND(AVG(score)::numeric, 1)                   AS avg_score,
-            MAX(score)                                      AS max_score
+            MAX(score)                                      AS max_score,
+            ROUND(AVG(site_readiness_score)::numeric, 1)    AS avg_site_readiness,
+            MAX(site_readiness_score)                       AS max_site_readiness
         FROM public.development_momentum
     """)
-    total, eligible, excluded, avg_score, max_score = result[0] if result else (0, 0, 0, 0, 0)
+    (
+        total,
+        eligible,
+        excluded,
+        avg_score,
+        max_score,
+        avg_site_readiness,
+        max_site_readiness,
+    ) = result[0] if result else (0, 0, 0, 0, 0, 0, 0)
 
     context.log.info(
         f"Stats — total: {total}, eligible: {eligible}, excluded: {excluded}, "
-        f"avg_score: {avg_score}, max_score: {max_score}"
+        f"avg_score: {avg_score}, max_score: {max_score}, "
+        f"avg_site_readiness: {avg_site_readiness}, "
+        f"max_site_readiness: {max_site_readiness}"
     )
 
     return MaterializeResult(
@@ -306,5 +382,7 @@ def development_momentum(
             "excluded": MetadataValue.int(excluded),
             "avg_score": MetadataValue.float(float(avg_score or 0)),
             "max_score": MetadataValue.int(max_score or 0),
+            "avg_site_readiness": MetadataValue.float(float(avg_site_readiness or 0)),
+            "max_site_readiness": MetadataValue.int(max_site_readiness or 0),
         }
     )

@@ -8,7 +8,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ScoutSeed:
-    """A curated York County discovery entry point."""
+    """A curated or manifest-derived county discovery entry point."""
 
     county_key: str
     slug: str

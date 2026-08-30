@@ -3,6 +3,8 @@
 from fastapi import APIRouter, Query
 
 from api.lib.database import get_cursor
+from api.lib.settings import open_data_source_key
+from api.lib.source_policy import require_source_use
 
 router = APIRouter(tags=["scores"])
 
@@ -13,7 +15,7 @@ def distressed_parcels(
     municipality: str | None = Query(default=None),
     min_acres: float | None = Query(default=None),
     parcel_class: str | None = Query(default=None),
-    limit: int = Query(default=100, le=500),
+    limit: int = Query(default=100, ge=1, le=500),
 ) -> dict:
     """Rank parcels by distressed acquisition opportunity score.
 
@@ -42,6 +44,14 @@ def distressed_parcels(
         params["parcel_class"] = parcel_class
 
     with get_cursor() as cur:
+        for source_key in (
+            open_data_source_key(),
+            "tax_claims",
+            "sheriff_sales",
+            "penndot_open_data",
+            "fema_nfhl",
+        ):
+            require_source_use(cur, source_key, "derived_product", conceal=False)
         cur.execute(f"""
             WITH delinquency AS (
                 SELECT pidn,
@@ -191,6 +201,13 @@ def distressed_parcels(
                   "traffic_score", "sale_stage_score", "value_score"):
             if d.get(k) is not None:
                 d[k] = float(d[k])
+        for sensitive_key in (
+            "owner_full",
+            "total_owed",
+            "years_delinquent",
+            "sheriff_judgment",
+        ):
+            d.pop(sensitive_key, None)
         results.append(d)
 
     return {"count": len(results), "parcels": results}
@@ -200,7 +217,7 @@ def distressed_parcels(
 def assemblage_opportunities(
     min_parcels: int = Query(default=3, ge=2, le=20),
     min_acres: float = Query(default=1.0),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
     """Find clusters of adjacent parcels that could be assembled.
 
@@ -208,6 +225,8 @@ def assemblage_opportunities(
     vacant, or share fragmented ownership. Ranked by total cluster value.
     """
     with get_cursor() as cur:
+        require_source_use(cur, open_data_source_key(), "derived_product", conceal=False)
+        require_source_use(cur, "tax_claims", "derived_product", conceal=False)
         cur.execute("""
             WITH delinquent_parcels AS (
                 SELECT DISTINCT pidn
@@ -318,6 +337,11 @@ def assemblage_opportunities(
                   "lat", "lng"):
             if d.get(k) is not None:
                 d[k] = float(d[k])
+        d.pop("seed_owner", None)
+        d["neighbors"] = [
+            {key: value for key, value in neighbor.items() if key != "owner"}
+            for neighbor in (d.get("neighbors") or [])
+        ]
         results.append(d)
 
     return {"count": len(results), "clusters": results}

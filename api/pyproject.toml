@@ -1,0 +1,18 @@
+[project]
+name = "countyiq-api"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi",
+    "psycopg2-binary",
+    "python-dotenv",
+    "requests",
+    "typing-extensions",
+    "uvicorn",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.12,<3",
+    "pytest>=8",
+]

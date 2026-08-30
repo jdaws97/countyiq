@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "rolling_window": 20,
+  "work_kinds": ["read_only", "code", "docs", "policy"],
+  "pre_run_verdicts": ["probation", "trusted", "suspended"],
+  "trust_thresholds": {
+    "min_samples": 10,
+    "min_wilson_lower_bound": 0.70,
+    "min_claim_precision": 0.95,
+    "min_scope_rate": 0.98,
+    "max_rework_rate": 0.05,
+    "max_escape_rate": 0.02
+  },
+  "routes": {
+    "direct_tool": {
+      "description": "Simple searches, reads, inventories, commands, and test execution"
+    },
+    "luna": {
+      "model": "gpt-5.6-luna",
+      "default_effort": "low",
+      "task_classes": ["atomic_change", "bounded_extraction"],
+      "normal_max_owned_files": 3,
+      "normal_max_output_tokens": 1200,
+      "requires_deterministic_oracle": true
+    },
+    "terra": {
+      "model": "gpt-5.6-terra",
+      "default_effort": "low",
+      "task_classes": ["discovery", "failure_triage", "scoped_implementation", "checklist_review"],
+      "normal_max_output_tokens": 2000,
+      "requires_bounded_evidence": true
+    },
+    "root": {
+      "description": "Scope, risk, architecture, migrations, security, integration, and final acceptance"
+    }
+  },
+  "hard_root_domains": [
+    "schema_migration",
+    "data_loss",
+    "identity_resolution",
+    "security_privacy",
+    "external_side_effect",
+    "llm_policy",
+    "cross_surface_contract",
+    "judgment_only_acceptance"
+  ]
+}

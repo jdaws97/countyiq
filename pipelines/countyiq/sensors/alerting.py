@@ -1,7 +1,7 @@
 """Dagster sensors that post run outcomes to Slack.
 
 - Success → #pipeline-runs
-- Failure (after all retries exhausted) → #alerts-critical
+- Failure → #alerts-critical
 """
 
 from dagster import (
@@ -32,7 +32,7 @@ def success_reporter(context: RunStatusSensorContext) -> None:
 
 @run_failure_sensor
 def failure_alerter(context: RunFailureSensorContext) -> None:
-    """Post failures to #alerts-critical after all retries exhausted."""
+    """Post a failed run to #alerts-critical."""
     run = context.dagster_run
     error = (
         context.failure_event.message[:200]
@@ -42,6 +42,6 @@ def failure_alerter(context: RunFailureSensorContext) -> None:
 
     send_slack_message(
         channel="critical",
-        text=f":x: *{run.job_name}* failed after all retries.\n```{error}```",
+        text=f":x: *{run.job_name}* failed.\n```{error}```",
         emoji=":rotating_light:",
     )

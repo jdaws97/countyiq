@@ -7,6 +7,7 @@ from collections import Counter
 from fastapi import APIRouter, HTTPException, Query
 
 from api.lib.database import get_cursor
+from api.lib.source_policy import require_source_use
 
 router = APIRouter(tags=["scout"])
 
@@ -17,6 +18,7 @@ def scout_summary(
 ) -> dict:
     """Summarize County Scout discovery depth and registry composition."""
     with get_cursor() as cur:
+        require_source_use(cur, "county_scout", "derived_product")
         cur.execute(
             """
             SELECT
@@ -85,6 +87,7 @@ def scout_registry(
 ) -> dict:
     """List promoted sources in the monitored source registry."""
     with get_cursor() as cur:
+        require_source_use(cur, "county_scout", "derived_product")
         cur.execute(
             """
             SELECT
@@ -143,6 +146,7 @@ def scout_candidates(
 ) -> dict:
     """List current source candidates, whether promoted or not."""
     with get_cursor() as cur:
+        require_source_use(cur, "county_scout", "derived_product")
         cur.execute(
             """
             SELECT
@@ -185,6 +189,7 @@ def scout_candidates(
 def scout_source_detail(source_key: str) -> dict:
     """Return current source details with recent observations."""
     with get_cursor() as cur:
+        require_source_use(cur, "county_scout", "derived_product")
         cur.execute(
             """
             SELECT

@@ -165,9 +165,9 @@ export default function OpsHealth() {
         {/* Source grid */}
         {!loading && !error && health && (
           <div
+            className="ops-source-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
               gap: 16,
             }}
           >
@@ -260,8 +260,30 @@ export default function OpsHealth() {
                       color: 'var(--text-muted)',
                     }}
                   >
-                    records
+                    {key === 'source_governance'
+                      ? 'active source policies'
+                      : source.configured_count === undefined
+                        ? 'records'
+                        : 'documents discovered'}
                   </div>
+
+                  {key === 'source_governance' && (
+                    <div style={{ marginTop: 10, fontFamily: 'var(--font-mono)', fontSize: 10, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+                      {source.conditional_count} conditional · {source.paused_count} paused · {source.configured_count} total
+                      <br />
+                      {source.overdue_count} overdue · {source.due_soon_count} due within 30 days
+                      <br />
+                      next review {source.next_review_on ?? 'not scheduled'}
+                    </div>
+                  )}
+
+                  {source.configured_count !== undefined && key !== 'source_governance' && (
+                    <div style={{ marginTop: 10, fontFamily: 'var(--font-mono)', fontSize: 10, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+                      {source.healthy_count}/{source.active_count} active bodies healthy
+                      <br />
+                      {source.blocked_count} blocked · {source.unchecked_count} unchecked · {source.configured_count} reviewed
+                    </div>
+                  )}
 
                   {/* Status label */}
                   <div

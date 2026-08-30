@@ -4,6 +4,16 @@ export type OverallHealthStatus = SourceHealthStatus | 'yellow'
 export interface SourceStatus {
   status: SourceHealthStatus
   record_count: number
+  configured_count?: number
+  active_count?: number
+  healthy_count?: number
+  blocked_count?: number
+  unchecked_count?: number
+  conditional_count?: number
+  paused_count?: number
+  overdue_count?: number
+  due_soon_count?: number
+  next_review_on?: string | null
 }
 
 export interface HealthData {
@@ -28,4 +38,5 @@ export interface StatsData {
   municipal_tax_owed: number
   oldest_delinquent_year: number | null
   districts_affected: number
+  tax_claim_report_date: string | null
 }

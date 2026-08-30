@@ -1,23 +1,41 @@
-"""LLM-first unified search across all data sources."""
+"""Lookup-first search with optional constrained LLM intent parsing."""
 
 import logging
-import sys
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from psycopg2 import Error as PsycopgError
-from psycopg2.errors import UndefinedTable
 
 from api.lib.database import get_cursor
-from api.lib.llm_search import ALLOWED_TABLES, parse_query_with_llm
+from api.lib.llm_search import ALLOWED_REDIRECT_PATHS, parse_query_with_llm
+from api.lib.rate_limit import client_ip, llm_search_daily_budget, llm_search_limiter
+from api.lib.search_plan import InvalidSearchPlan, compile_aggregate, compile_query
+from api.lib.source_policy import require_source_use
+from api.lib.settings import llm_search_enabled, open_data_source_key
 
 router = APIRouter(tags=["search"])
 logger = logging.getLogger(__name__)
 
+_SOURCE_BY_SEARCH_TABLE = {
+    "parcels": open_data_source_key(),
+    "tax_claims": "tax_claims",
+    "plcb_licenses": "plcb_licenses",
+    "penndot_projects": "penndot_open_data",
+    "penndot_roads": "penndot_open_data",
+    "municipalities": open_data_source_key(),
+    "zipcodes": open_data_source_key(),
+}
+
+
+def _require_search_source(cur, table: str) -> None:
+    source_key = _SOURCE_BY_SEARCH_TABLE.get(table)
+    if source_key:
+        require_source_use(cur, source_key, "derived_product", conceal=False)
 
 @router.get("")
 def search(
-    q: str = Query(..., min_length=2, description="Search query"),
-    limit: int = Query(default=20, le=100),
+    request: Request,
+    q: str = Query(..., min_length=2, max_length=160, description="Search query"),
+    limit: int = Query(default=20, ge=1, le=100),
 ) -> dict:
     """Smart search - fast path for name/address lookups, LLM for natural language."""
     search_term = q.strip()
@@ -28,6 +46,24 @@ def search(
         trgm_results = _trgm_search_with_reversal(search_term, limit)
         return {"mode": "fuzzy", "results": trgm_results}
 
+    # A pipeline provider key must not silently turn a public endpoint into a
+    # metered LLM surface. Natural-language intent parsing is an explicit,
+    # separately budgeted product choice.
+    if not llm_search_enabled():
+        return {"mode": "fuzzy", "results": _trgm_search_with_reversal(search_term, limit)}
+
+    # LLM path costs real money on a public endpoint: throttle per client,
+    # and degrade to the free fuzzy path once the global daily budget is spent.
+    if not llm_search_limiter.allow(client_ip(request)):
+        raise HTTPException(
+            status_code=429,
+            detail="Search rate limit exceeded; try again shortly.",
+            headers={"Retry-After": "30"},
+        )
+    if not llm_search_daily_budget.spend():
+        logger.warning("Daily LLM search budget exhausted; serving fuzzy fallback")
+        return {"mode": "fuzzy", "results": _trgm_search_with_reversal(search_term, limit)}
+
     # Otherwise, use LLM for intent classification
     llm_intent = parse_query_with_llm(search_term)
 
@@ -36,12 +72,14 @@ def search(
         description = llm_intent.get("description", "")
 
         if intent == "redirect":
-            return {
-                "mode": "redirect",
-                "redirect_path": llm_intent.get("redirect_path", "/"),
-                "description": description,
-                "results": [],
-            }
+            redirect_path = llm_intent.get("redirect_path")
+            if redirect_path in ALLOWED_REDIRECT_PATHS:
+                return {
+                    "mode": "redirect",
+                    "redirect_path": redirect_path,
+                    "description": description,
+                    "results": [],
+                }
 
         if intent == "aggregate":
             agg_result = _execute_llm_aggregate(llm_intent)
@@ -66,6 +104,8 @@ def search(
 
         if intent == "lookup":
             cleaned = llm_intent.get("search_term", search_term)
+            if not isinstance(cleaned, str) or not 1 <= len(cleaned.strip()) <= 160:
+                cleaned = search_term
             trgm_results = _trgm_search_with_reversal(cleaned, limit)
             return {
                 "mode": "fuzzy",
@@ -145,14 +185,16 @@ def _trgm_search_with_reversal(search_term: str, limit: int) -> list[dict]:
 def _trgm_search(search_term: str, limit: int) -> list[dict]:
     """Standard pg_trgm fuzzy matching across all sources."""
     with get_cursor() as cur:
+        require_source_use(cur, open_data_source_key(), "derived_product", conceal=False)
+        require_source_use(cur, "plcb_licenses", "derived_product", conceal=False)
         pidn_results: list = []
         stripped = search_term.replace("-", "").replace(".", "").replace(" ", "")
         if len(stripped) >= 10 and stripped[:2].isdigit():
             cur.execute(
                 """
                 SELECT 'parcel' AS result_type,
-                       owner_full AS title,
-                       pidn || ' · ' || COALESCE(propadr, '') AS subtitle,
+                       COALESCE(propadr, pidn) AS title,
+                       pidn || ' · ' || COALESCE(municipality, '') AS subtitle,
                        NULL::float AS lat, NULL::float AS lng,
                        1.0 AS score, pidn
                 FROM staging.parcels
@@ -168,8 +210,8 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
             cur.execute(
                 """
                 SELECT 'parcel' AS result_type,
-                       owner_full AS title,
-                       pidn || ' · ' || propadr AS subtitle,
+                       COALESCE(propadr, pidn) AS title,
+                       pidn || ' · ' || COALESCE(municipality, '') AS subtitle,
                        NULL::float AS lat, NULL::float AS lng,
                        similarity(propadr, %(q)s) AS score, pidn
                 FROM staging.parcels
@@ -181,35 +223,10 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
             )
             address_parcel_results = cur.fetchall()
 
-        cur.execute(
-            """
-            SELECT result_type, title, subtitle, lat, lng, score, pidn FROM (
-                SELECT DISTINCT ON (owner_full)
-                    'parcel' AS result_type,
-                    owner_full AS title,
-                    pidn || ' · ' || COALESCE(propadr, '') AS subtitle,
-                    NULL::float AS lat, NULL::float AS lng,
-                    CASE
-                        WHEN UPPER(owner_full) LIKE '%%' || UPPER(%(q)s) || '%%' THEN 1.0
-                        WHEN UPPER(owner_full) LIKE UPPER(SPLIT_PART(%(q)s, ' ', 2)) || '%%' THEN 0.85
-                        ELSE similarity(owner_full, %(q)s)
-                    END AS score,
-                    pidn,
-                    owner_full
-                FROM staging.parcels
-                WHERE valid_to IS NULL AND owner_full %% %(q)s
-                ORDER BY owner_full, score DESC
-            ) sub
-            ORDER BY score DESC
-            LIMIT %(limit)s
-            """,
-            {"q": search_term, "limit": limit},
-        )
-        parcel_owners = [dict(row) for row in pidn_results + address_parcel_results + cur.fetchall()]
+        parcel_results = [dict(row) for row in pidn_results + address_parcel_results]
 
-        addresses = _fetch_optional_results(
+        addresses = _fetch_results(
             cur,
-            source_name="address_points",
             query="""
                 SELECT
                     'address' AS result_type,
@@ -226,95 +243,63 @@ def _trgm_search(search_term: str, limit: int) -> list[dict]:
             params={"q": search_term, "limit": limit},
         )
 
-        tax_owners = _fetch_optional_results(
+        licenses = _fetch_results(
             cur,
-            source_name="tax_claims",
             query="""
-                SELECT
-                    'tax_claim' AS result_type,
-                    owner_name AS title,
-                    tax_district_name || ' · ' || COUNT(DISTINCT pidn) || ' parcels · $' ||
-                        TRIM(TO_CHAR(SUM(CASE WHEN total > 0 THEN total ELSE 0 END), 'FM999,999,999')) AS subtitle,
-                    NULL::float AS lat, NULL::float AS lng,
-                    similarity(owner_name, %(q)s) AS score
-                FROM staging.tax_claims
-                WHERE valid_to IS NULL AND owner_name %% %(q)s
-                GROUP BY owner_name, tax_district_name
-                ORDER BY score DESC
-                LIMIT %(limit)s
-            """,
-            params={"q": search_term, "limit": limit},
-        )
-
-        licenses = _fetch_optional_results(
-            cur,
-            source_name="plcb_licenses",
-            query="""
-                SELECT DISTINCT ON (COALESCE(premises_name, licensee))
+                SELECT DISTINCT ON (premises_name)
                     'license' AS result_type,
-                    COALESCE(premises_name, licensee) AS title,
+                    premises_name AS title,
                     license_type || ' · ' || municipality AS subtitle,
                     NULL::float AS lat, NULL::float AS lng,
-                    similarity(COALESCE(premises_name, licensee), %(q)s) AS score
+                    similarity(premises_name, %(q)s) AS score
                 FROM staging.plcb_licenses
                 WHERE valid_to IS NULL AND UPPER(status) = 'ACTIVE'
-                  AND (premises_name %% %(q)s OR licensee %% %(q)s)
-                ORDER BY COALESCE(premises_name, licensee), score DESC
+                  AND premises_name %% %(q)s
+                ORDER BY premises_name, score DESC
                 LIMIT %(limit)s
             """,
             params={"q": search_term, "limit": limit},
         )
 
-    all_results = [dict(row) for row in parcel_owners + addresses + tax_owners + licenses]
+    all_results = [dict(row) for row in parcel_results + addresses + licenses]
     all_results.sort(key=lambda row: row["score"], reverse=True)
     return all_results[:limit]
 
 
-def _fetch_optional_results(cur, source_name: str, query: str, params: dict) -> list:
-    """Fetch rows from an optional source table without hiding other SQL bugs."""
-    try:
-        cur.execute(query, params)
-        return cur.fetchall()
-    except UndefinedTable:
-        cur.connection.rollback()
-        logger.info("Search source unavailable; skipping %s", source_name)
-        return []
+def _fetch_results(cur, query: str, params: dict) -> list:
+    """Execute one fuzzy-search branch against the migrated schema."""
+    cur.execute(query, params)
+    return cur.fetchall()
 
 
 def _execute_llm_aggregate(intent: dict) -> str | None:
-    """Execute an aggregate query and return a formatted value."""
-    table_key = intent.get("table", "")
-    fqn = ALLOWED_TABLES.get(table_key)
-    if not fqn:
+    """Compile and execute a typed aggregate plan."""
+    try:
+        compiled = compile_aggregate(intent)
+    except InvalidSearchPlan as exc:
+        logger.warning("LLM aggregate plan rejected: %s", exc)
         return None
-
-    sql_select = intent.get("sql_select", "COUNT(*)")
-    sql_where = intent.get("sql_where", "valid_to IS NULL")
     fmt = intent.get("format", "number")
-
-    for fragment in (sql_select, sql_where):
-        upper = fragment.upper()
-        for pattern in _DANGEROUS_PATTERNS:
-            if pattern.upper() in upper:
-                return None
-
-    if "valid_to IS NULL" not in sql_where:
-        sql_where = f"valid_to IS NULL AND ({sql_where})"
-
-    query = f"SELECT {sql_select} AS result FROM {fqn} WHERE {sql_where}"
+    if fmt not in {"currency", "number", "percent"}:
+        fmt = "number"
 
     try:
         with get_cursor() as cur:
+            _require_search_source(cur, compiled.table)
             cur.execute("SET LOCAL statement_timeout = '5s'")
             cur.execute("SET TRANSACTION READ ONLY")
-            cur.execute(query)
+            cur.execute(compiled.query, compiled.params)
             row = cur.fetchone()
             if not row or row["result"] is None:
                 return "0"
             try:
                 val = float(row["result"])
             except (TypeError, ValueError) as exc:
-                logger.warning("LLM aggregate returned non-numeric result for %s: %s", table_key, exc)
+                logger.warning(
+                    "LLM aggregate returned non-numeric result for %s: %s",
+                    compiled.table,
+                    exc,
+                )
                 return None
             if fmt == "currency":
                 if val >= 1e9:
@@ -326,67 +311,37 @@ def _execute_llm_aggregate(intent: dict) -> str | None:
                 return f"{val:.1f}%"
             return f"{val:,.0f}"
     except PsycopgError as exc:
-        logger.warning("LLM aggregate query failed for %s: %s", table_key, exc)
+        logger.warning("LLM aggregate query failed for %s: %s", compiled.table, exc)
         return None
 
 
-_DANGEROUS_PATTERNS = [
-    "DROP ", "DELETE ", "UPDATE ", "INSERT ", "ALTER ", "CREATE ",
-    "TRUNCATE ", "GRANT ", "REVOKE ", "EXECUTE ", "COPY ",
-    "pg_", "information_schema", "--", "/*", "*/", "\\\\",
-    "INTO OUTFILE", "LOAD_FILE", "pg_sleep", "pg_read_file",
-]
-
-
 def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
-    """Execute a structured query from LLM intent parsing.
+    """Compile and execute a typed row query from LLM intent parsing.
 
     Safety measures:
-    - Table names allowlisted (no arbitrary table access)
-    - SQL fragments scanned for dangerous patterns (DDL, DML, pg_ functions)
+    - The LLM cannot supply SQL, identifiers, expressions, or joins
+    - Tables, fields, operators, signals, locations, and sorts are allowlisted
+    - Model/user values are query parameters
     - Query wrapped in read-only transaction
     - Statement timeout of 5 seconds prevents expensive scans
     - Errors logged, never expose SQL details to client
     """
-    table_key = intent.get("table", "")
-    fqn = ALLOWED_TABLES.get(table_key)
-    if not fqn:
+    try:
+        compiled = compile_query(intent, max_limit=limit)
+    except InvalidSearchPlan as exc:
+        logger.warning("LLM query plan rejected: %s", exc)
         return None
-
-    sql_where = intent.get("sql_where", "valid_to IS NULL")
-    sql_order = intent.get("sql_order", "")
-    sql_limit = min(intent.get("sql_limit", limit), limit)
-
-    for fragment in (sql_where, sql_order):
-        upper = fragment.upper()
-        for pattern in _DANGEROUS_PATTERNS:
-            if pattern.upper() in upper:
-                print(f"LLM query blocked: dangerous pattern '{pattern}' in: {fragment[:80]}", file=sys.stderr)
-                return None
-
-    if "valid_to IS NULL" not in sql_where:
-        sql_where = f"valid_to IS NULL AND ({sql_where})"
-
-    # Reject unbalanced parentheses - common LLM generation error
-    for fragment in (sql_where, sql_order):
-        if fragment.count("(") != fragment.count(")"):
-            print(f"LLM query rejected: unbalanced parens in: {fragment[:120]}", file=sys.stderr)
-            return None
-
-    query = f"SELECT * FROM {fqn} WHERE {sql_where}"
-    if sql_order:
-        query += f" ORDER BY {sql_order}"
-    query += f" LIMIT {sql_limit}"
 
     try:
         with get_cursor() as cur:
+            _require_search_source(cur, compiled.table)
             cur.execute("SET LOCAL statement_timeout = '5s'")
             cur.execute("SET TRANSACTION READ ONLY")
-            cur.execute(query)
+            cur.execute(compiled.query, compiled.params)
             rows = cur.fetchall()
         return [_clean_row(dict(row)) for row in rows]
     except PsycopgError as exc:
-        logger.warning("LLM query failed for %s: %s", table_key, exc)
+        logger.warning("LLM query failed for %s: %s", compiled.table, exc)
         return None
 
 
@@ -442,9 +397,9 @@ FRIENDLY_NAMES = {
 }
 
 
-PARCEL_KEY_FIELDS = ["pidn", "owner_full", "propadr", "class", "acres", "aprtotal", "school_dis"]
+PARCEL_KEY_FIELDS = ["pidn", "propadr", "class", "acres", "aprtotal", "school_dis"]
 TAX_KEY_FIELDS = ["pidn", "owner_name", "property_address", "tax_district_name", "tax_year", "authority_name", "total"]
-LICENSE_KEY_FIELDS = ["licensee", "premises_name", "premises_address", "license_type", "status", "municipality"]
+LICENSE_KEY_FIELDS = ["premises_name", "premises_address", "license_type", "status", "municipality"]
 
 # Friendly names for key fields that are normally hidden (used as title/subtitle in fuzzy mode)
 _KEY_FIELD_NAMES = {

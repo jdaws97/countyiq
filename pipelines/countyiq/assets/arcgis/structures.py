@@ -22,8 +22,9 @@ from dagster import (
 
 from countyiq.lib.arcgis_client import iterate_feature_pages
 from countyiq.lib.checks import make_row_count_check
-from countyiq.lib.county_config import get_county_config
+from countyiq.lib.county_config import county_open_data_source_key, get_county_config
 from countyiq.lib.geometry import rings_to_multipolygon_geojson
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -47,6 +48,8 @@ def structures_arcgis(
 ) -> MaterializeResult:
     """Stream building footprints page-by-page into DB. Memory-efficient."""
     county = get_county_config()
+    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="structures_arcgis", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
     context.log.info(f"Querying ArcGIS structures: {county.arcgis_structures_url}")
 
     cur = database.cursor()
@@ -182,7 +185,13 @@ structures_record_count_nonzero = make_row_count_check(
 
 
 @asset_check(asset=structures_arcgis)
-def structures_schema_drift() -> AssetCheckResult:
+def structures_schema_drift(database: DatabaseResource) -> AssetCheckResult:
+    authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="structures_schema_drift",
+    )
     county = get_county_config()
     try:
         resp = requests.get(f"{county.arcgis_structures_url}?f=json", timeout=30)

@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "refreshed_at": "2026-08-30",
+  "selection": "one md5-stable live parcel for every exact two-signal combination",
+  "cases": [
+    {
+      "pidn": "4400006006700",
+      "signals": [
+        "active_subdivision",
+        "assemblage"
+      ],
+      "case_id": "p2-001"
+    },
+    {
+      "pidn": "67000060159A0",
+      "signals": [
+        "active_subdivision",
+        "ownership_change"
+      ],
+      "case_id": "p2-002"
+    },
+    {
+      "pidn": "45000BH0098A0",
+      "signals": [
+        "active_subdivision",
+        "vacancy"
+      ],
+      "case_id": "p2-003"
+    },
+    {
+      "pidn": "54000II000600",
+      "signals": [
+        "active_subdivision",
+        "zoning_mismatch"
+      ],
+      "case_id": "p2-004"
+    },
+    {
+      "pidn": "50000KD004600",
+      "signals": [
+        "assemblage",
+        "ownership_change"
+      ],
+      "case_id": "p2-005"
+    },
+    {
+      "pidn": "2600013002000",
+      "signals": [
+        "assemblage",
+        "vacancy"
+      ],
+      "case_id": "p2-006"
+    },
+    {
+      "pidn": "27000QF005300",
+      "signals": [
+        "assemblage",
+        "zoning_mismatch"
+      ],
+      "case_id": "p2-007"
+    },
+    {
+      "pidn": "8500003013900",
+      "signals": [
+        "ownership_change",
+        "vacancy"
+      ],
+      "case_id": "p2-008"
+    },
+    {
+      "pidn": "54000030011B0",
+      "signals": [
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "case_id": "p2-009"
+    },
+    {
+      "pidn": "27000RF0001E0",
+      "signals": [
+        "vacancy",
+        "zoning_mismatch"
+      ],
+      "case_id": "p2-010"
+    }
+  ]
+}

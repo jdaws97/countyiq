@@ -1,20 +1,29 @@
-"""PA Department of State corporate entity lookup -> staging.corporate_entities.
+"""PA registered-business lookup via data.pa.gov SODA -> staging.corporate_entities.
 
 Strategy:
   - Extract unique LLC/Corp/LP/etc. owner names from staging.parcels
-  - Skip entities already looked up in the last 7 days
-  - Use Playwright to search file.dos.pa.gov/search/business for each entity
-  - Intercept the underlying REST API responses (behind Cloudflare)
-  - SCD2 upsert results to staging.corporate_entities
-  - Archive raw responses to R2
+  - Process a finite alphabetical batch; persisted outcomes resume the next run
+  - Refresh found entities more often than negative-cache misses
+  - Full-text ($q) search the statewide registered-business dataset
+    (xvd7-5r2c, one row per officer/party) and match on a compacted name
+  - Record found AND not-found outcomes (negative cache) via SCD2 upsert
+  - Archive raw match results to R2
+
+Replaced the Playwright scrape of file.dos.pa.gov on 2026-08-05 (scrape-free
+source policy): the official dataset is API-accessible, statewide (so
+out-of-county registrants that own York parcels still match), and carries
+officer names. It has no operating-status field — records are labeled
+`present_in_current_dos_dataset`, never "confirmed active".
+
+Optional: set SODA_APP_TOKEN to raise data.pa.gov rate limits.
 """
 
+import os
 import re
 import time
 from datetime import datetime, timezone
 
-from playwright.sync_api import Error as PlaywrightError
-
+import requests
 from dagster import (
     AssetCheckSeverity,
     AssetExecutionContext,
@@ -25,9 +34,13 @@ from dagster import (
 
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.parsers.pa_dos_entities import parse_search_results
-from countyiq.lib.playwright_utils import browser_context, take_screenshot
+from countyiq.lib.parsers.pa_dos_entities import (
+    STATUS_NOT_FOUND,
+    make_not_found_record,
+    parse_soda_business_rows,
+)
 from countyiq.lib.scd import scd2_upsert
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -37,6 +50,7 @@ SOURCE_NAME = "pa_dos_entities"
 # SCD2 key / value column split
 KEY_COLUMNS = ["entity_name"]
 VALUE_COLUMNS = [
+    "matched_name",
     "entity_number",
     "entity_type",
     "status",
@@ -48,36 +62,40 @@ VALUE_COLUMNS = [
     "source_url",
 ]
 
-# Regex that identifies a business entity owner name (case-insensitive)
-_ENTITY_PATTERN = re.compile(
-    r"\b(LLC|L\.L\.C|INC|CORP|LP|L\.P|LTD|TRUST|PARTNERS|ASSOCIATES|"
-    r"HOLDINGS|ENTERPRISES|PROPERTIES|GROUP|VENTURES|CAPITAL|INVESTMENTS)\b",
-    re.IGNORECASE,
-)
-
 # Cap on consecutive errors before aborting the run
-_MAX_ERRORS = 50
+_MAX_ERRORS = 25
 
 # Progress log interval
-_LOG_INTERVAL = 25
+_LOG_INTERVAL = 100
 
-# Throttle between searches (seconds)
-_THROTTLE_SECONDS = 1.5
+# Throttle between SODA queries (seconds)
+_THROTTLE_SECONDS = 0.25
 
-# Cloudflare wait — how long to give the challenge to resolve
-_CF_WAIT_MS = 30_000
+_REQUEST_TIMEOUT = 30
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = 5  # seconds, multiplied by attempt number
+_QUERY_LIMIT = 500  # candidate officer rows per name; patterns can be broad
+_DEFAULT_MAX_NAMES_PER_RUN = 500
+_DEFAULT_FOUND_TTL_DAYS = 30
+_DEFAULT_NOT_FOUND_TTL_DAYS = 180
 
-# Selector starting points (adjusted to real site after Playwright inspection)
-_SEARCH_INPUT_SELECTOR = 'input[placeholder*="Search by name"], [role="textbox"]'
-_SEARCH_BUTTON_TEXT = "Execute search"
-_RESULTS_TABLE_SELECTOR = "table"
-_NO_RESULTS_INDICATOR = "No results"
+
+def _positive_int_env(name: str, default: int) -> int:
+    """Read a positive integer without allowing an unbounded zero value."""
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
 
 
 @asset(
     group_name="scrapers",
-    description="PA DOS corporate entity lookup for parcel owners -> staging.corporate_entities",
-    kinds={"postgres", "playwright"},
+    description="PA DOS registered-business lookup for parcel owners -> staging.corporate_entities",
+    kinds={"postgres", "api"},
 )
 def pa_dos_entities(
     context: AssetExecutionContext,
@@ -85,80 +103,94 @@ def pa_dos_entities(
     s3: S3StorageResource,
 ) -> MaterializeResult:
     county = get_county_config()
+    authorization = authorize_source(database, source_key="data_pa_businesses", acquisition_method="soda_api", asset_key="pa_dos_entities", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     log = context.log
 
-    # --- 1. Fetch entity names that need lookup ---
-    entity_names = _get_pending_entity_names(database)
+    # --- 1. Fetch one bounded batch of entity names that need lookup ---
+    max_names = _positive_int_env(
+        "COUNTYIQ_PA_DOS_MAX_NAMES_PER_RUN", _DEFAULT_MAX_NAMES_PER_RUN
+    )
+    found_ttl_days = _positive_int_env(
+        "COUNTYIQ_PA_DOS_FOUND_TTL_DAYS", _DEFAULT_FOUND_TTL_DAYS
+    )
+    not_found_ttl_days = _positive_int_env(
+        "COUNTYIQ_PA_DOS_NOT_FOUND_TTL_DAYS", _DEFAULT_NOT_FOUND_TTL_DAYS
+    )
+    entity_names = _get_pending_entity_names(
+        database,
+        limit=max_names,
+        found_ttl_days=found_ttl_days,
+        not_found_ttl_days=not_found_ttl_days,
+    )
     if not entity_names:
         log.info("No new business entity names to look up")
         return MaterializeResult(
             metadata={
                 "status": MetadataValue.text("no_work"),
                 "entities_queued": MetadataValue.int(0),
+                "run_limit": MetadataValue.int(max_names),
+                "found_ttl_days": MetadataValue.int(found_ttl_days),
+                "not_found_ttl_days": MetadataValue.int(not_found_ttl_days),
                 "current_records": MetadataValue.int(_get_current_count(database)),
             }
         )
 
-    log.info("Found %d entity names to look up", len(entity_names))
+    log.info(
+        "Queued %d entity names (run cap=%d, found TTL=%dd, miss TTL=%dd)",
+        len(entity_names), max_names, found_ttl_days, not_found_ttl_days,
+    )
 
-    # --- 2. Playwright scrape loop ---
+    dataset_url = f"{county.soda_base_url}/{county.pa_dos_soda_dataset}.json"
+    session = requests.Session()
+    app_token = os.environ.get("SODA_APP_TOKEN")
+    if app_token:
+        session.headers["X-App-Token"] = app_token
+
+    # --- 2. SODA lookup loop ---
     records: list[dict] = []
     raw_archive: list[dict] = []
     processed = 0
-    skipped = 0
+    found = 0
+    not_found = 0
     error_count = 0
 
-    with browser_context(timeout_ms=_CF_WAIT_MS) as page:
-        # Navigate once and wait for Cloudflare to clear
-        log.info("Navigating to PA DOS search: %s", county.pa_dos_search_url)
-        try:
-            page.goto(county.pa_dos_search_url, wait_until="networkidle")
-        except Exception as nav_err:
-            log.warning("Initial navigation error (retrying): %s", nav_err)
-            try:
-                page.goto(county.pa_dos_search_url, wait_until="domcontentloaded")
-            except Exception as retry_err:
-                log.error("Could not load PA DOS site: %s", retry_err)
-                raise
+    for entity_name in entity_names:
+        if error_count >= _MAX_ERRORS:
+            log.error("Reached max error cap (%d) — stopping run", _MAX_ERRORS)
+            break
 
-        # Wait for the search input to appear (signals CF challenge is done)
-        try:
-            page.wait_for_selector(_SEARCH_INPUT_SELECTOR, timeout=_CF_WAIT_MS)
-        except Exception:
-            take_screenshot(page, "/tmp/pa_dos_cf_failure.png")
-            raise RuntimeError(
-                "Cloudflare challenge did not resolve within %dms" % _CF_WAIT_MS
+        if processed > 0 and processed % _LOG_INTERVAL == 0:
+            log.info(
+                "Progress: %d/%d processed, %d found, %d not found, %d errors",
+                processed, len(entity_names), found, not_found, error_count,
             )
 
-        for entity_name in entity_names:
-            if error_count >= _MAX_ERRORS:
-                log.error("Reached max error cap (%d) — stopping run", _MAX_ERRORS)
-                break
-
-            if processed > 0 and processed % _LOG_INTERVAL == 0:
-                log.info(
-                    "Progress: %d/%d processed, %d records, %d errors",
-                    processed, len(entity_names), len(records), error_count,
-                )
-
-            result = _lookup_entity(page, entity_name, log)
+        try:
+            record = _lookup_entity(session, dataset_url, entity_name)
+        except requests.exceptions.RequestException as err:
+            log.warning("SODA query failed for '%s': %s", entity_name, err)
+            error_count += 1
             processed += 1
+            continue
 
-            if result is None:
-                # No results or irrecoverable error already logged
-                skipped += 1
-                error_count += 1
-                continue
+        processed += 1
+        if record is None:
+            record = make_not_found_record(entity_name)
+            not_found += 1
+        else:
+            found += 1
+            raw_archive.append({"entity_name": entity_name, "result": record})
 
-            if result == "no_results":
-                skipped += 1
-                continue
+        record["source_url"] = (
+            f"{dataset_url}?filing_number={record['entity_number']}"
+            if record["entity_number"] else dataset_url
+        )
+        records.append(record)
+        time.sleep(_THROTTLE_SECONDS)
 
-            records.append(result)
-            raw_archive.append({"entity_name": entity_name, "result": result})
-            time.sleep(_THROTTLE_SECONDS)
-
-    # --- 3. SCD2 upsert ---
+    # --- 3. SCD2 upsert (found + negative-cache rows) ---
     upsert_stats = {"inserted": 0, "expired": 0, "unchanged": 0}
     if records:
         cur = database.cursor()
@@ -175,7 +207,7 @@ def pa_dos_entities(
         finally:
             cur.close()
 
-    # --- 4. Archive raw responses to R2 ---
+    # --- 4. Archive raw match results to R2 ---
     if raw_archive:
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
         s3.archive(
@@ -188,9 +220,12 @@ def pa_dos_entities(
         metadata={
             "status": MetadataValue.text("complete"),
             "entities_queued": MetadataValue.int(len(entity_names)),
+            "run_limit": MetadataValue.int(max_names),
+            "found_ttl_days": MetadataValue.int(found_ttl_days),
+            "not_found_ttl_days": MetadataValue.int(not_found_ttl_days),
             "entities_processed": MetadataValue.int(processed),
-            "entities_skipped": MetadataValue.int(skipped),
-            "entities_found": MetadataValue.int(len(records)),
+            "entities_found": MetadataValue.int(found),
+            "entities_not_found": MetadataValue.int(not_found),
             "errors": MetadataValue.int(error_count),
             "scd2_inserted": MetadataValue.int(upsert_stats.get("inserted", 0)),
             "scd2_expired": MetadataValue.int(upsert_stats.get("expired", 0)),
@@ -200,197 +235,108 @@ def pa_dos_entities(
 
 
 # ---------------------------------------------------------------------------
-# Playwright lookup helpers
+# SODA query helpers
 # ---------------------------------------------------------------------------
 
-def _lookup_entity(page, entity_name: str, log) -> dict | None | str:
-    """Search for a single entity on the PA DOS site.
+# Tokens that end the distinctive part of an owner name. Everything from the
+# first suffix token on is dropped from the LIKE pattern — the DOS side may
+# spell it out ("Limited Partnership" for the county's "LP"), so it can't be
+# matched literally; parse_soda_business_rows normalizes suffixes when it
+# compact-compares candidates.
+_SUFFIX_TOKENS = {
+    "LLC", "LLP", "LLLP", "LP", "INC", "CORP", "LTD", "CO", "LC", "PC",
+    "LIMITED", "PARTNERSHIP", "COMPANY", "CORPORATION", "INCORPORATED",
+}
 
-    Returns:
-        dict  — parsed entity record
-        "no_results" — search returned nothing (not an error)
-        None  — error occurred
+
+def _core_tokens(entity_name: str) -> list[str]:
+    tokens = re.findall(r"[A-Za-z0-9]+", entity_name.upper())
+    core = []
+    for token in tokens:
+        if token in _SUFFIX_TOKENS:
+            break
+        core.append(token)
+    return core or tokens[:1]
+
+
+def _name_like_pattern(entity_name: str) -> str:
+    """Build a LIKE pattern from an owner string's distinctive tokens.
+
+    "S&A PROPERTIES CORP" → "S%A%PROPERTIES%" — the % between tokens absorbs
+    punctuation/spacing drift ("S & a Properties Corp."), and false hits are
+    rejected by the parser's compact-name comparison. ($q full-text was tried
+    first and silently missed exact registered names — do not go back to it.)
     """
-    try:
-        return _do_search(page, entity_name, log)
-    except Exception as err:
-        log.warning("Error looking up entity '%s': %s", entity_name, err)
-        take_screenshot(page, f"/tmp/pa_dos_err_{_safe_filename(entity_name)}.png")
-        try:
-            page.reload(wait_until="networkidle", timeout=20_000)
-            page.wait_for_selector(_SEARCH_INPUT_SELECTOR, timeout=15_000)
-        except PlaywrightError:
-            pass
-        return None
+    return "%".join(_core_tokens(entity_name)) + "%"
 
 
-def _do_search(page, entity_name: str, log) -> dict | str:
-    """Fill search form, wait for results, click first match, read detail."""
-    # Clear and fill the search box
-    search_input = page.locator(_SEARCH_INPUT_SELECTOR).first
-    search_input.click()
-    search_input.select_all()
-    search_input.type(entity_name, delay=30)
+def _loose_like_pattern(entity_name: str) -> str:
+    """Fallback pattern tolerating punctuation INSIDE tokens.
 
-    # Click Execute search
-    page.get_by_role("button", name=re.compile(_SEARCH_BUTTON_TEXT, re.IGNORECASE)).click()
-
-    # Wait for results or a "no results" indicator
-    try:
-        page.wait_for_selector(
-            f"{_RESULTS_TABLE_SELECTOR}, text={_NO_RESULTS_INDICATOR}",
-            timeout=15_000,
-        )
-    except Exception:
-        log.debug("Search timed out waiting for results for '%s'", entity_name)
-        return None
-
-    # Check for "no results"
-    page_text = page.inner_text("body")
-    if _NO_RESULTS_INDICATOR.lower() in page_text.lower():
-        log.debug("No results for '%s'", entity_name)
-        return "no_results"
-
-    # Grab raw search API response by reading the results table
-    search_api_data = _intercept_search_data(page, entity_name)
-    if not search_api_data:
-        return "no_results"
-
-    # Try to get detail by clicking the first result row
-    detail_data = _click_first_result_and_get_detail(page, entity_name, log)
-    if detail_data:
-        record = _merge_search_and_detail(search_api_data, detail_data, entity_name)
-    else:
-        # Fall back to search data only
-        parsed = parse_search_results(search_api_data)
-        record = parsed[0] if parsed else None
-
-    return record
-
-
-def _intercept_search_data(page, entity_name: str) -> dict | None:
-    """Read visible table rows into a synthetic search API response dict."""
-    try:
-        rows = page.locator(f"{_RESULTS_TABLE_SELECTOR} tbody tr").all()
-        if not rows:
-            return None
-
-        results = []
-        for row in rows[:10]:  # cap at 10 rows per search
-            try:
-                cells = row.locator("td").all()
-                cell_texts = [c.inner_text().strip() for c in cells]
-                if not cell_texts:
-                    continue
-                # Best-effort extraction from visible columns:
-                # typical order: entity name, entity number, status, type, city
-                results.append({
-                    "entityName": cell_texts[0] if len(cell_texts) > 0 else "",
-                    "entityNumber": cell_texts[1] if len(cell_texts) > 1 else "",
-                    "status": cell_texts[2] if len(cell_texts) > 2 else "",
-                    "entityType": cell_texts[3] if len(cell_texts) > 3 else "",
-                    "address": cell_texts[4] if len(cell_texts) > 4 else "",
-                })
-            except Exception:
-                continue
-
-        if not results:
-            return None
-
-        return {"results": results}
-    except Exception:
-        return None
-
-
-def _click_first_result_and_get_detail(page, entity_name: str, log) -> dict | None:
-    """Click the first table row and read the detail panel."""
-    try:
-        first_row = page.locator(f"{_RESULTS_TABLE_SELECTOR} tbody tr").first
-        first_row.click(timeout=5_000)
-
-        # Wait for a detail panel to appear — look for characteristic content
-        detail_panel = page.locator(
-            '[class*="detail"], [class*="panel"], [role="dialog"], [aria-label*="detail"]'
-        )
-        detail_panel.wait_for(state="visible", timeout=10_000)
-
-        detail_text = detail_panel.inner_text()
-        return _parse_detail_panel_text(detail_text, entity_name)
-    except Exception as e:
-        log.debug("Detail panel not available for '%s': %s", entity_name, e)
-        return None
-
-
-def _parse_detail_panel_text(text: str, entity_name: str) -> dict:
-    """Parse plain text from a detail panel into a partial entity record.
-
-    The field layout is approximate — confirmed by live inspection.
+    The county strips punctuation the DOS name keeps: "RUTTERS" vs
+    "Rutter's", "DANGELO" vs "D'angelo". Tokens of 4+ chars get wildcards
+    after the first and before the last character ("RUTTERS" → "R%UTTER%S"),
+    which the compact-name comparison then disambiguates.
     """
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-
-    def _find_after(label: str) -> str:
-        for i, line in enumerate(lines):
-            if label.lower() in line.lower() and i + 1 < len(lines):
-                return lines[i + 1]
-        return ""
-
-    return {
-        "entityName": _find_after("Entity Name") or entity_name,
-        "entityNumber": _find_after("Entity Number") or _find_after("File Number"),
-        "entityType": _find_after("Entity Type") or _find_after("Filing Type"),
-        "status": _find_after("Status"),
-        "initialFilingDate": _find_after("Filing Date") or _find_after("Formation Date"),
-        "registeredOffice": {
-            "addressLine1": _find_after("Office Address") or _find_after("Registered Address"),
-        },
-    }
+    parts = []
+    for token in _core_tokens(entity_name):
+        if len(token) >= 4:
+            parts.append(f"{token[0]}%{token[1:-1]}%{token[-1]}")
+        else:
+            parts.append(token)
+    return "%".join(parts) + "%"
 
 
-def _merge_search_and_detail(
-    search_data: dict, detail_dict: dict, entity_name: str
+def _query_pattern(
+    session: requests.Session, dataset_url: str, pattern: str, attempt: int = 1
+) -> list[dict]:
+    """Fetch candidate officer rows for one LIKE pattern, with 5xx retry."""
+    try:
+        resp = session.get(
+            dataset_url,
+            params={
+                "$where": f"upper(business_name) like '{pattern}'",
+                "$limit": _QUERY_LIMIT,
+            },
+            timeout=_REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.HTTPError as e:
+        if attempt < _MAX_RETRIES and e.response is not None and e.response.status_code >= 500:
+            time.sleep(_RETRY_BACKOFF * attempt)
+            return _query_pattern(session, dataset_url, pattern, attempt + 1)
+        raise
+
+
+def _lookup_entity(
+    session: requests.Session, dataset_url: str, entity_name: str
 ) -> dict | None:
-    """Merge search result row with detail panel data, preferring detail."""
-    # Use the parser's logic for both halves
-    search_records = parse_search_results(search_data)
-    base = search_records[0] if search_records else {}
+    """Look one owner name up: strict pattern first, loose fallback on miss."""
+    rows = _query_pattern(session, dataset_url, _name_like_pattern(entity_name))
+    record = parse_soda_business_rows(rows, entity_name)
+    if record is not None:
+        return record
 
-    # Build a mock "filing detail" response from the parsed panel text
-    from countyiq.lib.parsers.pa_dos_entities import _parse_date, _build_source_url
-
-    entity_number = detail_dict.get("entityNumber") or base.get("entity_number", "")
-    reg_office = detail_dict.get("registeredOffice") or {}
-    office_addr = reg_office.get("addressLine1", "") or base.get("office_address", "")
-
-    merged = {
-        "entity_name": detail_dict.get("entityName") or base.get("entity_name", entity_name),
-        "entity_number": entity_number or base.get("entity_number", ""),
-        "entity_type": detail_dict.get("entityType") or base.get("entity_type", ""),
-        "status": detail_dict.get("status") or base.get("status", ""),
-        "formation_date": (
-            _parse_date(detail_dict.get("initialFilingDate"))
-            or base.get("formation_date")
-        ),
-        "registered_agent_name": base.get("registered_agent_name", ""),
-        "registered_agent_address": base.get("registered_agent_address", ""),
-        "office_address": office_addr,
-        "officers": base.get("officers", []),
-        "source_url": _build_source_url(entity_number) if entity_number else base.get("source_url", ""),
-    }
-    return merged
-
-
-def _safe_filename(name: str) -> str:
-    """Convert an entity name to a safe filename fragment."""
-    return re.sub(r"[^a-z0-9]", "_", name.lower())[:40]
+    loose = _loose_like_pattern(entity_name)
+    if loose != _name_like_pattern(entity_name):
+        rows = _query_pattern(session, dataset_url, loose)
+        record = parse_soda_business_rows(rows, entity_name)
+    return record
 
 
 # ---------------------------------------------------------------------------
 # Database helpers
 # ---------------------------------------------------------------------------
 
-def _get_pending_entity_names(database: DatabaseResource) -> list[str]:
-    """Return unique business entity names from staging.parcels that haven't
-    been looked up in the last 7 days."""
+def _get_pending_entity_names(
+    database: DatabaseResource,
+    *,
+    limit: int,
+    found_ttl_days: int,
+    not_found_ttl_days: int,
+) -> list[str]:
+    """Return one deterministic, resumable batch of names due for lookup."""
     rows = database.execute(
         r"""
         SELECT DISTINCT p.owner_full
@@ -402,13 +348,20 @@ def _get_pending_entity_names(database: DatabaseResource) -> list[str]:
               FROM staging.corporate_entities ce
               WHERE ce.entity_name = p.owner_full
                 AND ce.valid_to IS NULL
-                AND ce.valid_from > NOW() - INTERVAL '7 days'
+                AND ce.valid_from > NOW() - (
+                    CASE WHEN ce.status = %s THEN %s ELSE %s END
+                ) * INTERVAL '1 day'
           )
         ORDER BY p.owner_full
+        LIMIT %s
         """,
         (
             r"(LLC|L\.L\.C|INC|CORP|LP|L\.P|LTD|TRUST|PARTNERS|ASSOCIATES|"
             r"HOLDINGS|ENTERPRISES|PROPERTIES|GROUP|VENTURES|CAPITAL|INVESTMENTS)",
+            STATUS_NOT_FOUND,
+            not_found_ttl_days,
+            found_ttl_days,
+            limit,
         ),
     )
     return [row[0] for row in rows if row and row[0]]

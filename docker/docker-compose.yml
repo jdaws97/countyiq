@@ -1,3 +1,22 @@
+x-dagster-common: &dagster-common
+  image: countyiq-dagster:local
+  build:
+    context: ..
+    dockerfile: pipelines/Dockerfile
+  restart: unless-stopped
+  env_file: ../.env
+  environment:
+    DAGSTER_HOME: /opt/dagster/home
+    DATABASE_HOST: postgres
+    DATABASE_PORT: "5432"
+    COUNTYIQ_ARCHIVE_DIR: /opt/countyiq/archives
+  depends_on:
+    postgres:
+      condition: service_healthy
+  volumes:
+    - dagster-storage:/opt/dagster/storage
+    - ../archives:/opt/countyiq/archives
+
 services:
   postgres:
     image: postgis/postgis:16-3.4
@@ -37,28 +56,23 @@ services:
       timeout: 5s
       retries: 3
 
-  dagster:
-    build:
-      context: ..
-      dockerfile: pipelines/Dockerfile
-    container_name: countyiq-dagster
-    restart: unless-stopped
-    env_file: ../.env
-    environment:
-      DAGSTER_HOME: /opt/dagster/home
-    depends_on:
-      postgres:
-        condition: service_healthy
+  dagster-webserver:
+    <<: *dagster-common
+    container_name: countyiq-dagster-webserver
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-m", "countyiq.definitions"]
     ports:
       - "127.0.0.1:3000:3000"
-    volumes:
-      - dagster-storage:/opt/dagster/storage
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/server_info"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 120s
+
+  dagster-daemon:
+    <<: *dagster-common
+    container_name: countyiq-dagster-daemon
+    command: ["dagster-daemon", "run", "-m", "countyiq.definitions"]
 
   caddy:
     image: caddy:2-alpine
@@ -73,18 +87,6 @@ services:
       - caddy-config:/config
     depends_on:
       - api
-
-  watchtower:
-    image: containrrr/watchtower
-    container_name: countyiq-watchtower
-    restart: unless-stopped
-    environment:
-      WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_POLL_INTERVAL: 300
-      WATCHTOWER_LABEL_ENABLE: "false"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /root/.docker/config.json:/config.json:ro
 
 volumes:
   postgres-data:

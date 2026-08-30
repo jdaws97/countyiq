@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "reviewed_at": "2026-08-30",
+  "review_method": "Rendered every PDF page with Poppler, visually inspected the pages, and cross-checked embedded text where available.",
+  "documents": [
+    {
+      "file": "carroll_zhb.pdf",
+      "body_name": "Carroll Twp Planning Commission",
+      "proceeding_type": "planning_commission",
+      "expected_records": [],
+      "notes": "Negative control: a 2026 municipal calendar with planning-meeting dates, not a meeting agenda or property proceeding."
+    },
+    {
+      "file": "conewago_zoning.pdf",
+      "body_name": "Conewago Twp Zoning Hearing Board",
+      "proceeding_type": "zoning_hearing",
+      "expected_records": [
+        {
+          "id": "case-03-2026-stanton",
+          "accepted_types": ["variance_request"],
+          "anchors": [
+            ["chris stanton"],
+            ["475 andersontown", "tax map ng parcel 15"],
+            ["conservation"]
+          ],
+          "field_expectations": {
+            "applicant_name": ["chris stanton"],
+            "parcel_reference": ["475 andersontown", "tax map ng parcel 15"],
+            "current_zoning": ["conservation"],
+            "what_happened": ["variance", "garage", "setback"]
+          },
+          "expected_empty_fields": ["decision"],
+          "required_nonempty_fields": ["supporting_text"]
+        }
+      ],
+      "notes": "One setback variance application for a garage."
+    },
+    {
+      "file": "westman_zhb.pdf",
+      "body_name": "West Manchester Twp Zoning Hearing Board",
+      "proceeding_type": "zoning_hearing",
+      "expected_records": [
+        {
+          "id": "zhb-25-21-mcvicar",
+          "accepted_types": ["variance_request"],
+          "anchors": [
+            ["mcvicar"],
+            ["775 bairs"],
+            ["continued"]
+          ],
+          "field_expectations": {
+            "applicant_name": ["jeffrey mcvicar", "magnuss mcvicar"],
+            "parcel_reference": ["775 bairs", "tax map hg parcel 0059"],
+            "decision": ["continued"],
+            "what_happened": ["driveway curb cut", "maximum width"]
+          },
+          "required_nonempty_fields": ["supporting_text"]
+        },
+        {
+          "id": "zhb-25-24-march",
+          "accepted_types": ["variance_request"],
+          "anchors": [
+            ["michael j march", "michael march"],
+            ["1590 taxville"],
+            ["minimum lot width"]
+          ],
+          "field_expectations": {
+            "applicant_name": ["michael j march", "michael march"],
+            "parcel_reference": ["1590 taxville", "tax map ig parcel 0066"],
+            "what_happened": ["minimum lot width", "2 lot residential subdivision"]
+          },
+          "expected_empty_fields": ["decision"],
+          "required_nonempty_fields": ["supporting_text"]
+        },
+        {
+          "id": "zhb-26-01-sprich",
+          "accepted_types": [
+            "special_exception",
+            "conditional_use",
+            "variance_request",
+            "development_proposal"
+          ],
+          "anchors": [
+            ["sprich capital", "andrew sprich"],
+            ["1231 west locust"],
+            ["tabled"]
+          ],
+          "field_expectations": {
+            "applicant_name": ["sprich capital", "andrew sprich"],
+            "parcel_reference": ["1231 west locust", "tax map 17 parcel 0060"],
+            "current_zoning": ["r 3", "r-3"],
+            "decision": ["tabled", "march 24 2026"],
+            "what_happened": ["special exception", "nonconforming use", "auto repair"]
+          },
+          "required_nonempty_fields": ["supporting_text"]
+        }
+      ],
+      "notes": "Three distinct applications. The Sprich matter includes a special exception and several variances but is one proceeding, so any one grounded compatible type is accepted and duplicate rows are penalized."
+    },
+    {
+      "file": "dillsburg.pdf",
+      "body_name": "Dillsburg Borough Council",
+      "proceeding_type": "borough_council",
+      "expected_records": [
+        {
+          "id": "stoney-run-village",
+          "accepted_types": ["subdivision_review", "development_proposal"],
+          "anchors": [
+            ["stoney run village"],
+            ["update and resubmit", "review the stoney run village plans"]
+          ],
+          "field_expectations": {
+            "project_name": ["stoney run village"],
+            "what_happened": ["update and resubmit", "reviewed the stoney run village plans"],
+            "what_happens_next": ["resubmit", "borough council", "november"]
+          },
+          "expected_empty_fields": ["applicant_name"],
+          "required_nonempty_fields": ["supporting_text"]
+        }
+      ],
+      "notes": "Scanned meeting minutes contain one Stoney Run Village plan update/review."
+    },
+    {
+      "file": "jackson_twp.pdf",
+      "body_name": "Jackson Twp Board of Supervisors",
+      "proceeding_type": "board_of_supervisors",
+      "expected_records": [],
+      "notes": "Negative control: a reorganization agenda with appointments, taxes, and routine administration but no property development proceeding."
+    },
+    {
+      "file": "springetts.pdf",
+      "body_name": "Springettsbury Twp Board of Supervisors",
+      "proceeding_type": "board_of_supervisors",
+      "expected_records": [],
+      "notes": "Negative control: an eight-page Pennsylvania tree-law brochure, not a municipal meeting document."
+    }
+  ]
+}

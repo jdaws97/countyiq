@@ -12,9 +12,20 @@ from dagster import (
     asset,
 )
 
-from countyiq.lib.intelligence_common import compute_input_hash
-from countyiq.lib.pass_llm_config import PassHarnessUnavailable, resolve_pass_harness
+from countyiq.lib.intelligence_common import (
+    compute_input_hash,
+    fetch_prior_pass_hashes,
+)
+from countyiq.lib.error_budget import check_error_budget
+from countyiq.lib.pass_llm_config import (
+    PassItemBudget,
+    PassHarnessUnavailable,
+    resolve_pass_harness,
+)
+from countyiq.lib.pass_schemas import PASS3_BRIEF_SCHEMA
 from countyiq.lib.pass3_brief_generation import (
+    BRIEF_GENERATION_SYSTEM_PROMPT,
+    PROMPT_VERSION,
     build_brief_generation_prompt,
     gather_brief_context,
     parse_brief_output,
@@ -43,11 +54,14 @@ UPSERT_BRIEF_QUERY = """
     INSERT INTO public.parcel_briefs
         (pidn, brief_text, assessment, assessment_reasoning,
          key_questions, signal_count, citations, brief_version,
-         pass_metadata, generated_at)
+         pass_metadata, generated_at,
+         model_version, prompt_version, n_trials, trial_agreement, confidence)
     VALUES
         (%(pidn)s, %(brief_text)s, %(assessment)s, %(assessment_reasoning)s,
          %(key_questions)s::text[], %(signal_count)s, %(citations)s::jsonb, 1,
-         %(pass_metadata)s::jsonb, %(generated_at)s)
+         %(pass_metadata)s::jsonb, %(generated_at)s,
+         %(model_version)s, %(prompt_version)s,
+         %(n_trials)s, %(trial_agreement)s, %(confidence)s)
     ON CONFLICT (pidn)
     DO UPDATE SET
         brief_text = EXCLUDED.brief_text,
@@ -58,7 +72,12 @@ UPSERT_BRIEF_QUERY = """
         citations = EXCLUDED.citations,
         brief_version = public.parcel_briefs.brief_version + 1,
         pass_metadata = EXCLUDED.pass_metadata,
-        generated_at = EXCLUDED.generated_at
+        generated_at = EXCLUDED.generated_at,
+        model_version = EXCLUDED.model_version,
+        prompt_version = EXCLUDED.prompt_version,
+        n_trials = EXCLUDED.n_trials,
+        trial_agreement = EXCLUDED.trial_agreement,
+        confidence = EXCLUDED.confidence
 """
 
 @asset(
@@ -82,9 +101,15 @@ def brief_generation(
             pass_number=3,
             archive_label="pass3_briefs",
             default_max_tokens=2048,
+            json_schema=PASS3_BRIEF_SCHEMA,
+            schema_name="pass3_brief",
+            # Static block goes out as a byte-identical system message so
+            # providers with implicit prompt caching can reuse it per parcel.
+            system_prompt=BRIEF_GENERATION_SYSTEM_PROMPT,
         )
     except PassHarnessUnavailable as exc:
         return _skipped_result(exc.reason)
+    item_budget = PassItemBudget(3)
     config = replace(config, temperature=min(config.temperature, 0.3))
 
     log.info("Querying parcels eligible for brief generation")
@@ -109,6 +134,10 @@ def brief_generation(
 
     log.info("Found %d parcels eligible for briefs", parcels_eligible)
 
+    # One upfront fetch of prior input hashes replaces a per-parcel SELECT
+    # inside the loop.
+    prior_hashes = fetch_prior_pass_hashes(database, pass_number=3)
+
     for row in rows:
         pidn = row[0] if isinstance(row, (tuple, list)) else row.get("pidn", row)
         input_hash: str | None = None
@@ -125,20 +154,13 @@ def brief_generation(
 
             input_hash = compute_input_hash(ctx)
 
-            existing = database.execute(
-                """
-                SELECT input_hash FROM meta.intelligence_passes
-                WHERE pidn = %(pidn)s
-                  AND pass_number = 3
-                  AND status = 'complete'
-                """,
-                {"pidn": pidn},
-            )
-            prior_hash = existing[0][0] if existing and not isinstance(existing[0], dict) else (existing[0].get("input_hash") if existing else None)
-            if prior_hash == input_hash:
+            if prior_hashes.get(pidn) == input_hash:
                 log.debug("Parcel %s context unchanged, skipping brief generation", pidn)
                 skipped += 1
                 continue
+
+            if not item_budget.claim(log, label="changed parcel briefs"):
+                break
 
             prompt = build_brief_generation_prompt(ctx)
             result = invoke_with_retry(config, prompt, retries=1, archive_key=pidn)
@@ -167,9 +189,17 @@ def brief_generation(
             now = datetime.now(timezone.utc).isoformat()
             pass_metadata = {
                 "model": os.path.basename(config.model_path),
-                "pass_version": "3.0",
+                "pass_version": "3.1-structured",
                 "temperature": config.temperature,
                 "thinking": config.thinking,
+                # Structured-first fields (experiment C). Persisted in JSONB
+                # so the front-end can render recommendation + urgency
+                # badges without a schema change per new field.
+                "recommendation":    parsed.get("recommendation"),
+                "urgency":           parsed.get("urgency"),
+                "evidence_strength": parsed.get("evidence_strength"),
+                "top_signal_key":    parsed.get("top_signal_key"),
+                "top_risk":          parsed.get("top_risk"),
             }
 
             # Postgres accepts Python lists directly for text[] parameters.
@@ -196,6 +226,13 @@ def brief_generation(
                     "citations": json.dumps(parsed.get("citations", [])),
                     "pass_metadata": json.dumps(pass_metadata),
                     "generated_at": now,
+                    "model_version": config.model_path,
+                    "prompt_version": PROMPT_VERSION,
+                    # A single unvoted sample has no agreement measurement;
+                    # writing 1.0 here would read as "3/3 unanimous" in any UI.
+                    "n_trials": 1,
+                    "trial_agreement": None,
+                    "confidence": parsed.get("confidence"),
                 },
             )
 
@@ -223,6 +260,10 @@ def brief_generation(
         "Pass 3 complete: %d eligible, %d briefs created, %d skipped, %d errors",
         parcels_eligible, briefs_created, skipped, errors,
     )
+    check_error_budget(
+        log, label="pass3_brief_generation",
+        errors=errors, total=briefs_created + errors,
+    )
 
     return MaterializeResult(
         metadata={
@@ -230,6 +271,8 @@ def brief_generation(
             "parcels_eligible": MetadataValue.int(parcels_eligible),
             "briefs_created": MetadataValue.int(briefs_created),
             "skipped": MetadataValue.int(skipped),
+            "item_limit": MetadataValue.int(item_budget.limit),
+            "items_claimed": MetadataValue.int(item_budget.claimed),
             "errors": MetadataValue.int(errors),
         }
     )

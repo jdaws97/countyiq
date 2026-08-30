@@ -5,6 +5,8 @@ import pytest
 
 from countyiq.lib.scd import scd2_upsert
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def db_conn():

@@ -7,10 +7,10 @@ lets the LLM reason about cross-signal patterns.
 This is the production-recommended asset. The per-signal version
 (signal_validation.py) is retained for A/B comparison.
 
-The asset is controlled by COUNTYIQ_PASS2_MODEL or COUNTYIQ_OPENROUTER_MODEL.
-If neither is set, returns skipped.
+The asset requires ``COUNTYIQ_PASS2_ENABLED=true``; model selection is independent.
 """
 import json
+import os
 import traceback
 from datetime import datetime, timezone
 
@@ -21,11 +21,23 @@ from dagster import (
     asset,
 )
 
-from countyiq.lib.intelligence_common import compute_input_hash
-from countyiq.lib.pass_llm_config import PassHarnessUnavailable, resolve_pass_harness
+from countyiq.lib.intelligence_common import (
+    compute_input_hash,
+    fetch_prior_pass_hashes,
+)
+from countyiq.lib.error_budget import check_error_budget
+from countyiq.lib.pass_llm_config import (
+    PassItemBudget,
+    PassHarnessUnavailable,
+    resolve_pass_harness,
+)
+from countyiq.lib.pass_schemas import PASS2_BATCHED_VALIDATION_SCHEMA
 from countyiq.lib.pass2_batched_validation import (
+    BATCHED_VALIDATION_SYSTEM_PROMPT,
+    PROMPT_VERSION,
     build_batched_signal_prompt,
     gather_parcel_batch_context,
+    merge_trial_validations,
     parse_batched_signal_output,
 )
 from countyiq.resources.database import DatabaseResource
@@ -50,77 +62,109 @@ def _row_value(row, key: str, index: int = 0):
 # SQL constants
 # ---------------------------------------------------------------------------
 
-PARCELS_NEEDING_VALIDATION_QUERY = """
+PARCELS_NEEDING_VALIDATION_QUERY = r"""
     -- Selects parcels that need (re-)validation for any of these reasons:
     --   1. Has at least one signal with no corresponding evidence row (new signal)
     --   2. Upstream context changed since last validation (tax claims, entity
     --      graph, parcels, or proceedings updated more recently than the pass record)
     --
-    -- The input-hash check inside the main loop is the final guard — if the
-    -- hash matches despite being selected here, the LLM call is skipped.
-    -- This query is intentionally broad to avoid missing stale parcels.
+    -- Selection gate: also requires either a high-alpha signal or a
+    -- plausibly-real active_subdivision (prop_du > 0, pt_land_dev = 'YES').
+    -- Parcels with only context signals (growth area, overlays, traffic and
+    -- physical constraints) or penndot_project alone are skipped — prior
+    -- 0% actionable validations. See the hybrid-LLM decision in docs/decisions.md.
+    --
+    -- Data-hygiene gate: degenerate parcels (no acres, no value, no owner)
+    -- produce "correct but worthless" briefs so we drop them upstream.
 
-    -- Reason 1: new/unmatched signal
-    SELECT DISTINCT ds.pidn
-    FROM public.development_signals ds
-    WHERE NOT EXISTS (
-        SELECT 1 FROM public.evidence e
-        WHERE e.pidn = ds.pidn AND e.signal_key = ds.signal_key
+    WITH candidates AS (
+        -- Reason 1: new/unmatched signal
+        SELECT DISTINCT ds.pidn
+        FROM public.development_signals ds
+        WHERE NOT EXISTS (
+            SELECT 1 FROM public.evidence e
+            WHERE e.pidn = ds.pidn AND e.signal_key = ds.signal_key
+        )
+
+        UNION
+
+        -- Reason 2: upstream data changed since last validation
+        SELECT DISTINCT ip.pidn
+        FROM meta.intelligence_passes ip
+        WHERE ip.pass_number = 2 AND ip.status = 'complete'
+          AND (
+              -- Tax claims changed
+              EXISTS (
+                  SELECT 1 FROM staging.tax_claims tc
+                  WHERE tc.pidn = ip.pidn AND tc.valid_from > ip.last_run_at
+              )
+              -- Parcel record changed (sale, owner, assessment)
+              OR EXISTS (
+                  SELECT 1 FROM staging.parcels p
+                  WHERE p.pidn = ip.pidn AND p.valid_from > ip.last_run_at
+              )
+              -- Entity graph updated
+              OR EXISTS (
+                  SELECT 1 FROM public.entity_graph eg
+                  WHERE eg.verified_at > ip.last_run_at
+                    AND (
+                        eg.canonical_name IN (
+                            SELECT owner_full FROM staging.parcels
+                            WHERE pidn = ip.pidn AND valid_to IS NULL
+                        )
+                        OR EXISTS (
+                            SELECT 1 FROM staging.parcels sp
+                            WHERE sp.pidn = ip.pidn AND sp.valid_to IS NULL
+                              AND sp.owner_full = ANY(eg.linked_names)
+                        )
+                    )
+              )
+              -- Subdivision plan near this parcel changed. active_subdivision
+              -- signals link by proximity (not PIDN), so a plan update or
+              -- withdrawal would otherwise keep multiplying old evidence into
+              -- the momentum score forever. Radius matches development_signals.
+              OR EXISTS (
+                  SELECT 1
+                  FROM staging.planning_subdivisions s
+                  JOIN staging.parcels pp
+                      ON pp.pidn = ip.pidn AND pp.valid_to IS NULL
+                  WHERE s.valid_from > ip.last_run_at
+                    AND ST_DWithin(
+                        ST_Centroid(pp.geom)::geography, s.geom::geography, 250)
+              )
+              -- New proceeding extractions mentioning this parcel (by PIDN or address).
+              -- Use extraction timestamp, not public_proceedings.valid_from, so
+              -- backfilled or retried extractions on older meeting records still
+              -- trigger revalidation.
+              OR EXISTS (
+                  SELECT 1 FROM staging.proceeding_extractions pe
+                  JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
+                  WHERE pe.extraction_type NOT IN ('_complete', '_no_extractions')
+                    AND pp.valid_to IS NULL
+                    AND pe.extracted_at > ip.last_run_at
+                    AND (
+                        pe.parcel_reference = ip.pidn
+                        OR pe.parcel_reference IN (
+                            SELECT propadr FROM staging.parcels
+                            WHERE pidn = ip.pidn AND valid_to IS NULL AND propadr IS NOT NULL
+                        )
+                    )
+              )
+          )
     )
-
-    UNION
-
-    -- Reason 2: upstream data changed since last validation
-    SELECT DISTINCT ip.pidn
-    FROM meta.intelligence_passes ip
-    WHERE ip.pass_number = 2 AND ip.status = 'complete'
-      AND (
-          -- Tax claims changed
-          EXISTS (
-              SELECT 1 FROM staging.tax_claims tc
-              WHERE tc.pidn = ip.pidn AND tc.valid_from > ip.last_run_at
+    -- LLM gate: Pass 2 exists for cross-signal ambiguity, not for validating
+    -- deterministic GIS or public-record facts. A parcel needs at least two
+    -- genuinely interpretive signals before it can consume a model call.
+    SELECT pidn
+    FROM candidates c
+    WHERE 2 <= (
+        SELECT COUNT(*) FROM public.development_signals ds
+        WHERE ds.pidn = c.pidn
+          AND ds.signal_key IN (
+              'active_subdivision', 'ownership_change', 'vacancy',
+              'assemblage', 'zoning_mismatch'
           )
-          -- Parcel record changed (sale, owner, assessment)
-          OR EXISTS (
-              SELECT 1 FROM staging.parcels p
-              WHERE p.pidn = ip.pidn AND p.valid_from > ip.last_run_at
-          )
-          -- Entity graph updated
-          OR EXISTS (
-              SELECT 1 FROM public.entity_graph eg
-              WHERE eg.verified_at > ip.last_run_at
-                AND (
-                    eg.canonical_name IN (
-                        SELECT owner_full FROM staging.parcels
-                        WHERE pidn = ip.pidn AND valid_to IS NULL
-                    )
-                    OR EXISTS (
-                        SELECT 1 FROM staging.parcels sp
-                        WHERE sp.pidn = ip.pidn AND sp.valid_to IS NULL
-                          AND sp.owner_full = ANY(eg.linked_names)
-                    )
-                )
-          )
-          -- New proceeding extractions mentioning this parcel (by PIDN or address).
-          -- Use extraction timestamp, not public_proceedings.valid_from, so
-          -- backfilled or retried extractions on older meeting records still
-          -- trigger revalidation.
-          OR EXISTS (
-              SELECT 1 FROM staging.proceeding_extractions pe
-              JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
-              WHERE pe.extraction_type NOT IN ('_complete', '_no_extractions')
-                AND pp.valid_to IS NULL
-                AND pe.extracted_at > ip.last_run_at
-                AND (
-                    pe.parcel_reference = ip.pidn
-                    OR pe.parcel_reference IN (
-                        SELECT propadr FROM staging.parcels
-                        WHERE pidn = ip.pidn AND valid_to IS NULL AND propadr IS NOT NULL
-                    )
-                )
-          )
-      )
-
+    )
     ORDER BY pidn
 """
 
@@ -128,13 +172,16 @@ UPSERT_EVIDENCE_QUERY = """
     INSERT INTO public.evidence
         (pidn, signal_key, claim, evidence_data, source_url, internal_url,
          validation_status, adjusted_significance, validation_reasoning,
-         cross_references, validated_at)
+         cross_references, validated_at,
+         model_version, prompt_version, n_trials, trial_agreement, confidence)
     VALUES
         (%(pidn)s, %(signal_key)s, %(claim)s, %(evidence_data)s::jsonb,
          %(source_url)s, %(internal_url)s,
          %(validation_status)s, %(adjusted_significance)s,
          %(validation_reasoning)s, %(cross_references)s::jsonb,
-         %(validated_at)s)
+         %(validated_at)s,
+         %(model_version)s, %(prompt_version)s,
+         %(n_trials)s, %(trial_agreement)s, %(confidence)s)
     ON CONFLICT (pidn, signal_key)
     DO UPDATE SET
         claim = EXCLUDED.claim,
@@ -145,7 +192,12 @@ UPSERT_EVIDENCE_QUERY = """
         adjusted_significance = EXCLUDED.adjusted_significance,
         validation_reasoning = EXCLUDED.validation_reasoning,
         cross_references = EXCLUDED.cross_references,
-        validated_at = EXCLUDED.validated_at
+        validated_at = EXCLUDED.validated_at,
+        model_version = EXCLUDED.model_version,
+        prompt_version = EXCLUDED.prompt_version,
+        n_trials = EXCLUDED.n_trials,
+        trial_agreement = EXCLUDED.trial_agreement,
+        confidence = EXCLUDED.confidence
 """
 
 
@@ -173,11 +225,17 @@ def signal_validation_batched(
             log,
             pass_number=2,
             archive_label="pass2_batched",
+            json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
+            schema_name="pass2_validations",
             default_max_tokens=4096,
             default_thinking=True,
+            # Static block goes out as a byte-identical system message so
+            # providers with implicit prompt caching can reuse it per parcel.
+            system_prompt=BATCHED_VALIDATION_SYSTEM_PROMPT,
         )
     except PassHarnessUnavailable as exc:
         return _skipped_result(exc.reason)
+    item_budget = PassItemBudget(2)
 
     # ------------------------------------------------------------------
     # Find parcels with unvalidated signals
@@ -202,6 +260,10 @@ def signal_validation_batched(
 
     log.info(f"Found {total_parcels} parcels with unvalidated signals")
 
+    # One upfront fetch of prior input hashes replaces a per-parcel SELECT
+    # inside the loop (thousands of round trips on a full run).
+    prior_hashes = fetch_prior_pass_hashes(database, pass_number=2)
+
     parcels_validated = 0
     signals_validated = 0
     parcels_skipped = 0
@@ -225,39 +287,60 @@ def signal_validation_batched(
             input_hash = compute_input_hash(ctx)
 
             # Check if already processed with same hash
-            existing = database.execute(
-                """
-                SELECT input_hash FROM meta.intelligence_passes
-                WHERE pidn = %(pidn)s
-                  AND pass_number = 2
-                  AND status = 'complete'
-                """,
-                {"pidn": pidn},
-            )
-            if existing and _row_value(existing[0], "input_hash") == input_hash:
+            if prior_hashes.get(pidn) == input_hash:
                 parcels_skipped += 1
                 continue
 
-            # Build prompt and invoke LLM (first attempt — all signals)
+            if not item_budget.claim(log, label="changed parcels"):
+                break
+
+            # Build prompt and invoke LLM N times (N=1 by default for
+            # backward compat; N>1 enables trial voting — see experiment A
+            # in the evaluation summarized by docs/decisions.md). Temperature=0 is not
+            # deterministic across trials on shared APIs, so agreement
+            # across N trials becomes the persisted confidence score.
+            n_trials = max(1, int(os.environ.get("COUNTYIQ_PASS2_TRIALS", "1")))
             prompt = build_batched_signal_prompt(ctx)
-            result = invoke_with_retry(config, prompt, archive_key=pidn, retries=1)
 
-            if not result.success:
-                log.warning(f"LLM failed for {pidn}: {result.error}")
-                _update_pass_status(database, pidn, 2, "error", input_hash, result.error)
-                errors += 1
-                continue
-
-            # Parse batched output into per-signal validations
-            parsed = parse_batched_signal_output(result.parsed or {}, ctx["signals"])
-
-            if parsed.get("parse_error"):
-                log.warning(f"Parse error for {pidn}: {parsed['parse_error']}")
-                _update_pass_status(
-                    database, pidn, 2, "error", input_hash, parsed["parse_error"]
+            trial_parses: list[dict] = []
+            trial_result = None
+            for trial_idx in range(n_trials):
+                archive_key = pidn if n_trials == 1 else f"{pidn}:trial-{trial_idx}"
+                trial_result = invoke_with_retry(
+                    config, prompt, archive_key=archive_key, retries=1
                 )
+                if not trial_result.success:
+                    log.warning(
+                        f"LLM failed for {pidn} (trial {trial_idx + 1}/{n_trials}): "
+                        f"{trial_result.error}"
+                    )
+                    continue
+                tp = parse_batched_signal_output(trial_result.parsed or {}, ctx["signals"])
+                if tp.get("parse_error"):
+                    log.warning(
+                        f"Parse error on {pidn} trial {trial_idx + 1}/{n_trials}: "
+                        f"{tp['parse_error']}"
+                    )
+                    continue
+                trial_parses.append(tp)
+
+            if not trial_parses:
+                # All N trials failed — escalate as a parcel-level error.
+                err_msg = trial_result.error if trial_result else "all trials failed"
+                _update_pass_status(database, pidn, 2, "error", input_hash, err_msg)
                 errors += 1
                 continue
+
+            # Merge trials into single set with trial_agreement + confidence.
+            if n_trials == 1:
+                # Single-trial mode: preserve legacy shape, annotate metadata.
+                parsed = trial_parses[0]
+                for v in parsed.get("validations", []):
+                    v.setdefault("n_trials", 1)
+                    v.setdefault("trial_agreement", 1.0)
+                    v.setdefault("confidence", None)
+            else:
+                parsed = merge_trial_validations(trial_parses, ctx["signals"])
 
             all_validations = list(parsed["validations"])
             unresolved_error_keys = set(parsed.get("errors") or [])
@@ -331,6 +414,11 @@ def signal_validation_batched(
                             validation.get("cross_references", [])
                         ),
                         "validated_at": now_iso,
+                        "model_version": config.model_path,
+                        "prompt_version": PROMPT_VERSION,
+                        "n_trials": validation.get("n_trials"),
+                        "trial_agreement": validation.get("trial_agreement"),
+                        "confidence": validation.get("confidence"),
                     },
                 )
                 written_keys.add(validation["signal_key"])
@@ -393,6 +481,10 @@ def signal_validation_batched(
         f"{signals_validated} signals written, {parcels_skipped} skipped, "
         f"{errors} errors"
     )
+    check_error_budget(
+        log, label="pass2_signal_validation",
+        errors=errors, total=parcels_validated + errors,
+    )
 
     return MaterializeResult(
         metadata={
@@ -403,6 +495,8 @@ def signal_validation_batched(
             "parcels_validated": MetadataValue.int(parcels_validated),
             "signals_validated": MetadataValue.int(signals_validated),
             "parcels_skipped": MetadataValue.int(parcels_skipped),
+            "item_limit": MetadataValue.int(item_budget.limit),
+            "items_claimed": MetadataValue.int(item_budget.claimed),
             "errors": MetadataValue.int(errors),
         }
     )

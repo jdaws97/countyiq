@@ -1,6 +1,7 @@
 # CountyIQ
 
-CountyIQ is a York County civic intelligence platform built around three active surfaces:
+CountyIQ is a York County real-estate intelligence platform for investors and
+developers, built around three active surfaces:
 
 - `frontend/`: React app for search, map, radar, owners, parcels, and operations views
 - `api/`: FastAPI service serving `/api/*`
@@ -14,4 +15,7 @@ Start here:
 - [Infrastructure](./docs/infrastructure.md)
 - [Local Dev Rules](./AGENTS.md)
 
-Historical plans, drafts, and older monolith docs live under `archives/` and are no longer the source of truth for day-to-day work.
+Current product and architecture docs live directly under `docs/` and its
+named topic folders. Time-stamped source investigations live under
+`docs/research/`; they are evidence, not runtime configuration or product
+direction.

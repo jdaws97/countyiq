@@ -1,0 +1,155 @@
+# Current State
+
+This file is the fast answer to "where are we really with this repo?"
+
+## What CountyIQ Is Right Now
+
+CountyIQ is a real-estate intelligence platform for York County, PA. The repo contains:
+
+- a React frontend with home, map, municipalities, delinquent, licenses, projects, distressed, assemblage, search, property, owner, radar, feed, and ops-health views
+- a FastAPI API serving those surfaces under `/api/*`
+- a Dagster pipeline layer that handles both source ingestion and an LLM-backed intelligence workflow
+
+## Target Buyer
+
+CountyIQ is a **real-estate intelligence product for private-market investors and
+developers in South-Central PA**, starting in York County. See
+`docs/products/real-estate-intelligence.md` for the full lane, personas, and
+roadmap. All new surfaces should serve an investor or developer job. This is
+the only audience; earlier civic/journalist/government framings are dead.
+
+## Honest Gap Assessment (2026-08-28 review)
+
+The first usable intelligence loop is now implemented, but it still needs live
+data backfill and customer use before CountyIQ is sales-ready:
+
+- **Entity case file** (`/entity/:id`) — implemented over the stable
+  `public.owners` ID space, with relationships, linked events, portfolio, brief,
+  and entity watching.
+- **Unified intelligence feed** (`/feed`) — combines deterministic parcel,
+  value, structure, and delinquency changes with source-grounded development
+  applications, hearings, revisions, continuances, decisions, conditions, and
+  upcoming actions extracted once in Pass 0.
+- **Watchlist** — browser-local entity, parcel, and development-project watches exist;
+  server-side persistence and notifications are not built.
+- ~~Weekly digest email~~ — dropped by decision (2026-08-02): no email features planned.
+- Pass 2+ intelligence has run on ~75 of 176,060 parcels. The municipal
+  proceedings registry covers all 72 municipalities explicitly: 63 currently
+  have an authorized main governing-body source and 65 have at least one active
+  board source. All vendor, robots, and no-web-presence gaps remain as paused
+  policy rows rather than being treated as empty activity.
+- Zero customer conversations logged; pricing is unvalidated.
+
+The active work queue is `docs/open-items.md`. Model choices and the evaluated
+LLM/non-LLM boundary are recorded in `docs/decisions.md`; reusable comparison
+tools remain under `pipelines/eval/`.
+
+## Current Runtime Assumptions
+
+| Area | Current state |
+|---|---|
+| Frontend | React + Vite; Cloudflare Pages is the production hosting target, with deployment configured outside this repo |
+| API | FastAPI + Uvicorn |
+| Pipelines | Dagster |
+| Database | PostgreSQL 16 + PostGIS (self-managed) |
+| Object storage | Cloudflare R2 (via `R2_ENDPOINT_URL` — required, otherwise boto3 targets AWS) |
+| Front door | Cloudflare |
+| Inference backend | OpenRouter |
+| Deployment | Not deployed. Docker Compose on a Hetzner VPS behind Cloudflare is the current target architecture, not a live environment. |
+
+## Current Model Lineup
+
+Per-pass defaults live in `pipelines/countyiq/lib/pass_llm_config.py`
+(`_PASS_MODEL_DEFAULTS`) with eval citations inline. Summary (2026-08-30):
+
+| Pass | Default |
+|---|---|
+| Pass 0 (PDF extraction) | `openai/gpt-5.6-luna` (native PDF input) |
+| Pass 1 (entity verification) | `openai/gpt-5.6-luna` (high reasoning, adaptive N=3 voting) |
+| Pass 2 (signal validation) | `openai/gpt-5.6-luna` (low reasoning) |
+| Pass 3/3b (briefs) | `openai/gpt-5.6-luna` |
+| Pass 4 (narratives) | Disabled by default; Luna remains the opt-in provisional model pending wider data and a required product surface |
+| NL search | Disabled by default; `qwen/qwen3.5-flash-02-23` is the opt-in intent parser |
+
+Precedence: `COUNTYIQ_PASS{N}_MODEL` env > code default > `COUNTYIQ_OPENROUTER_MODEL`.
+`z-ai/glm-5.3-flash` FP8 led the initial ten-case Pass 2 comparison but did not
+generalize. On a stratified 100-case diagnostic, Luna led grounded decisions
+(191/263 vs 166/263), strict signals (133/263 vs 102/263), required facts
+(595/683 vs 573/683), and prohibited-claim control (0 vs 30 signals). Luna
+therefore remains the default. The expanded rubric labels still require human
+confirmation before they become promotion gold; a post-backfill live shadow is
+for workload drift and cost, not model promotion. `deepseek/deepseek-v4-flash-0731`
+remains the configured Pass 2 cost fallback with a renewed quality caveat;
+`minimax/minimax-m3` is the cross-vendor fallback. Retired model slugs must not
+be restored from old docs or git history.
+
+LLMs are deliberately limited to work that needs semantic interpretation:
+extracting and explaining unstructured municipal proceedings, entity ambiguity,
+and selected synthesis. Parcel diffs, delinquency transitions, joins, filters,
+ranking, API responses, and watch state remain deterministic. The feed rebuild
+uses cached Pass 0 output and makes no additional model call.
+
+Relevant env vars: `OPENROUTER_API_KEY`, `COUNTYIQ_PASS{0-4}_MODEL`,
+`COUNTYIQ_PASS{0-4}_ENABLED`,
+`COUNTYIQ_OPENROUTER_MODEL`, `COUNTYIQ_THINKING`, `COUNTYIQ_ARCHIVE_DIR`,
+`COUNTYIQ_ARCHIVE_STRICT`, `COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS`,
+`COUNTYIQ_PASS2_TRIALS`,
+`COUNTYIQ_SEARCH_LLM_ENABLED`,
+`COUNTYIQ_SEARCH_RATE_PER_MIN`, `COUNTYIQ_SEARCH_DAILY_LLM_BUDGET`, and the
+default-off `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS` deployment gate.
+
+## Source Posture (2026-08-28)
+
+Source reachability is not treated as permission. Migrations 031 through 036
+establish use-specific source policy, immutable source-decision ledgers,
+per-municipal-body policy and health state, and exact municipal origin
+allowlists. Governed collection and API serving fail closed for unknown,
+paused, disallowed-method, disallowed-use, unreviewed-origin, or overdue-review
+policies.
+
+- The YCPC project-folder economic-development candidates and CDBG housing
+  layers are paused, removed from scheduled jobs, and expired from current
+  scoring inputs pending written reuse confirmation.
+- PLCB, tax claims, sheriff sales, and municipal proceedings are conditional.
+  Collection uses allowlisted official methods; proceedings fail closed on
+  robots/access uncertainty and sheriff collection no longer disguises a
+  browser client.
+- Municipal proceedings contain 110 configured source entries (107 distinct
+  listing URLs) across 65 municipalities. All 72 municipalities remain in 122
+  policy rows: 110 are conditional and 12 are paused. Pauses cover two
+  no-web-presence bodies, eCode360, Rep'd, Google Drive, three explicit
+  West Manheim robots disallows, and three GoDaddy-CDN-only sources. Every
+  configured body must match its policy's municipality, URL, proceeding type,
+  acquisition method, and allowed origin before any request is made;
+  listing/document health is visible in `/api/ops/health`.
+- County Scout is paused and unscheduled. Its manual jobs and API also consult
+  the same source policy, so it cannot probe or promote arbitrary URLs. It has
+  zero runtime rows, no score or product dependency, and is not worth
+  activating for the York alpha; retain it only as an offline research
+  prototype for possible later multi-county discovery.
+- York `OPEN_DATA`, PennDOT open data, FEMA NFHL, and data.pa.gov business data
+  are approved for derived analytics within the recorded delivery boundary.
+- PA DEP's public, non-sensitive GIS is approved for attributed derived
+  screening. Active storage-tank facilities and land-recycling cleanup
+  locations are deterministic proximity evidence, never contamination claims.
+- Tax-claim row queries and claimant-name search are disabled; person-linked
+  distress routes and frontend pages are default-off. Natural-person owner
+  names are suppressed while recognized legal organizations remain usable for
+  entity intelligence. Municipality aggregates, boolean parcel delinquency,
+  and backend scores preserve the useful signal without exposing exact debt.
+- Replacement scheduled inputs are York zoning overlays, business parks,
+  industrial parks, soils, and local traffic counts. They power a separate
+  site-screening score and buyer-facing Radar view. The 2026-08-28 local live
+  verification loaded 85 overlays, 160 business-park records, 344
+  industrial-park records, 16,735 soils, 3,010 traffic observations, 384 York
+  active storage-tank facilities, and 1,314 cleanup-location records from the
+  conservative county query envelope.
+- Revision 036 makes source receipts reconstructable with the exact policy
+  version, canonical snapshot, and SHA-256 fingerprint used for the decision.
+  It also namespaces new-county municipal source keys and scopes policy-health
+  reporting to the active isolated county stack.
+
+RTKL responses, assessment-portal scraping, Tyler recorder scraping, eCode360,
+and browser-based PA DOS scraping remain outside the production collection
+path. Details and reactivation conditions are in `docs/decisions.md` and the
+database source-rights rows.

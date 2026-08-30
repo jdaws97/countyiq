@@ -5,7 +5,9 @@ import os
 
 from countyiq.lib.parsers.public_proceedings import (
     classify_proceeding_type,
+    extract_drive_folder_ids,
     extract_pdf_links,
+    parse_drive_folder_listing,
     parse_meeting_date_from_filename,
 )
 
@@ -16,6 +18,73 @@ BASE_URL = "https://springvale.gov"
 def _load_fixture(name: str) -> str:
     with open(os.path.join(FIXTURES, name)) as f:
         return f.read()
+
+
+# ---------------------------------------------------------------------------
+# Google Drive folder support (West York Borough hosts minutes in Drive)
+# ---------------------------------------------------------------------------
+
+class TestExtractDriveFolderIds:
+
+    def test_extracts_drive_folders_links(self):
+        html = (
+            '<a href="https://drive.google.com/drive/folders/1_kfY8Fq0lomdpIgul7Xt'
+            'Ci6a3MlFAKnR?usp=sharing">2026 Minutes</a>'
+        )
+        assert extract_drive_folder_ids(html) == ["1_kfY8Fq0lomdpIgul7XtCi6a3MlFAKnR"]
+
+    def test_extracts_legacy_folderview_links(self):
+        html = (
+            '<a href="https://drive.google.com/folderview?id=12wXw_s6QTg7yumxB5dK6'
+            '0R8dnaol1Woz">Previous Years</a>'
+        )
+        assert extract_drive_folder_ids(html) == ["12wXw_s6QTg7yumxB5dK60R8dnaol1Woz"]
+
+    def test_ignores_non_drive_links(self):
+        html = '<a href="https://example.com/minutes.pdf">m</a>'
+        assert extract_drive_folder_ids(html) == []
+
+    def test_dedupes_repeated_folders(self):
+        html = (
+            '<a href="https://drive.google.com/drive/folders/1abcDEF_2ghiJKL34mnoP'
+            'QR56stuVWX78">a</a>'
+            '<a href="https://drive.google.com/drive/folders/1abcDEF_2ghiJKL34mnoP'
+            'QR56stuVWX78">b</a>'
+        )
+        assert extract_drive_folder_ids(html) == ["1abcDEF_2ghiJKL34mnoPQR56stuVWX78"]
+
+
+class TestParseDriveFolderListing:
+    """Parses the static HTML from drive.google.com/embeddedfolderview?id=..."""
+
+    def setup_method(self):
+        self.result = parse_drive_folder_listing(_load_fixture("drive_folder_listing.html"))
+
+    def test_files_have_download_urls(self):
+        urls = [f["url"] for f in self.result["files"]]
+        assert (
+            "https://drive.google.com/uc?export=download&id="
+            "1uQkJCqVWe_edLUUgTv9mbR8GbDGGCyQj"
+        ) in urls
+
+    def test_filenames_come_from_entry_titles(self):
+        names = [f["filename"] for f in self.result["files"]]
+        assert "01052026_meeting_minutes.pdf" in names
+        assert "01122026_Meeting_Minutes.pdf" in names
+
+    def test_files_exclude_subfolders(self):
+        assert len(self.result["files"]) == 2
+
+    def test_subfolder_ids_extracted(self):
+        assert self.result["subfolder_ids"] == ["1lQixUBlT3x0nenJl4x6dvswwAQsvZy8G"]
+
+    def test_file_records_have_standard_keys(self):
+        for f in self.result["files"]:
+            for key in ("url", "filename", "link_text"):
+                assert key in f
+
+    def test_empty_html(self):
+        assert parse_drive_folder_listing("") == {"files": [], "subfolder_ids": []}
 
 
 # ---------------------------------------------------------------------------
@@ -32,12 +101,32 @@ class TestExtractPdfLinks:
         assert isinstance(self.links, list)
         assert all(isinstance(r, dict) for r in self.links)
 
-    def test_only_pdf_links_returned(self):
-        """Non-PDF links (.docx, .txt, .jpg, .html, .png) must be excluded."""
+    def test_only_document_links_returned(self):
+        """Non-document links (.txt, .jpg, .html, .png) must be excluded;
+        .pdf, .doc, and .docx are all documents."""
         for link in self.links:
-            assert link["url"].lower().endswith(".pdf"), (
-                f"Non-PDF URL found: {link['url']}"
+            path = link["url"].lower().split("?")[0]
+            assert path.endswith((".pdf", ".doc", ".docx")), (
+                f"Non-document URL found: {link['url']}"
             )
+
+    def test_docx_link_included(self):
+        """Word documents are ingested (many small boroughs post .docx minutes)."""
+        urls = [r["url"] for r in self.links]
+        assert "https://springvale.gov/minutes/bos-agenda-2025-11-14.docx" in urls
+
+    def test_docx_filename_keeps_real_extension(self):
+        docx = [r for r in self.links if r["url"].endswith(".docx")]
+        assert docx and docx[0]["filename"] == "bos-agenda-2025-11-14.docx"
+
+    def test_dn_query_param_preferred_for_filename(self):
+        """Wix serves hex-named files with the human name in the dn= param."""
+        html = (
+            '<a href="https://x.com/_files/ugd/390391_9cfc15dec2ca46e0.docx'
+            '?dn=minutes%201-3-22.docx">minutes 1-3-22</a>'
+        )
+        links = extract_pdf_links(html, "https://x.com")
+        assert links[0]["filename"] == "minutes 1-3-22.docx"
 
     def test_required_keys_present(self):
         for link in self.links:
@@ -77,9 +166,9 @@ class TestExtractPdfLinks:
         assert by_filename["PC_01-15-2026.pdf"] == "Planning Commission Minutes - January 15, 2026"
         assert by_filename["ZHB_Minutes_March_2025.pdf"] == "Zoning Hearing Board Minutes - March 2025"
 
-    def test_pdf_count(self):
-        """Fixture has exactly 10 PDF links; non-PDFs must all be dropped."""
-        assert len(self.links) == 10
+    def test_document_count(self):
+        """Fixture has exactly 10 PDF links + 1 docx; the rest must be dropped."""
+        assert len(self.links) == 11
 
     def test_empty_html_returns_empty_list(self):
         assert extract_pdf_links("", BASE_URL) == []
@@ -87,8 +176,8 @@ class TestExtractPdfLinks:
     def test_html_with_no_links_returns_empty_list(self):
         assert extract_pdf_links("<p>No links here.</p>", BASE_URL) == []
 
-    def test_html_with_no_pdfs_returns_empty_list(self):
-        html = '<a href="/doc.docx">A Word doc</a><a href="/map.png">A map</a>'
+    def test_html_with_no_documents_returns_empty_list(self):
+        html = '<a href="/page.html">A page</a><a href="/map.png">A map</a>'
         assert extract_pdf_links(html, BASE_URL) == []
 
 
@@ -129,6 +218,30 @@ class TestParseMeetingDateFromFilename:
         assert parse_meeting_date_from_filename("Planning_Commission_Minutes_March_2025.pdf") == "2025-03-01"
 
     # No recognisable date
+    def test_compact_mmddyyyy(self):
+        """West York Drive files: 05042026_Meeting_Minutes.PDF.pdf"""
+        assert parse_meeting_date_from_filename(
+            "05042026_Meeting_Minutes.PDF.pdf"
+        ) == "2026-05-04"
+
+    def test_compact_yyyymmdd(self):
+        assert parse_meeting_date_from_filename("20260504_minutes.pdf") == "2026-05-04"
+
+    def test_compact_invalid_month_returns_none(self):
+        """8 digits that don't form a real date must not parse."""
+        assert parse_meeting_date_from_filename("99887766_minutes.pdf") is None
+
+    def test_compact_not_matched_inside_longer_digit_run(self):
+        assert parse_meeting_date_from_filename("doc_390391123456789.pdf") is None
+
+    def test_short_year_dash_format(self):
+        """Winterstown docx names: 'minutes 1-3-22.docx'"""
+        assert parse_meeting_date_from_filename("minutes 1-3-22.docx") == "2022-01-03"
+
+    def test_short_year_does_not_eat_four_digit_year(self):
+        """Existing MM-DD-YYYY files must not be misread by the short-year rule."""
+        assert parse_meeting_date_from_filename("PC_01-15-2026.pdf") == "2026-01-15"
+
     def test_unparseable_returns_none(self):
         assert parse_meeting_date_from_filename("Annual_Report_SpringvaleTwp.pdf") is None
 

@@ -1,117 +1,77 @@
-# Schema & Identifier Strategy
+# Schema and Identifier Strategy
 
-### Schema Strategy
+Alembic migrations under `pipelines/alembic/versions/` are the database
+authority. Documentation describes intent; it does not replace deployed DDL.
 
-**Raw data goes to R2, not Postgres.** Every pipeline run dumps its unmodified response to the R2 bucket `countyiq-raw` at `<source>/<date>/`. This is the audit trail and replay source. No `raw` schema exists in Postgres.
+## Schemas
 
-| Schema | Purpose | Example Tables |
+| Schema | Purpose | Representative objects |
 |---|---|---|
-| `staging` | Cleaned, normalized, change-tracked data (SCD Type 2). This is where all source data lives after parsing. | `staging.parcels`, `staging.assessment_properties`, `staging.flood_zones`, `staging.municipalities`, `staging.structures` (BLDG_Footprint), `staging.address_points` (AddressPts), `staging.plcb_licenses`, `staging.tax_claims`, `staging.zipcodes` |
-| `public` | Entity-resolved output and cross-source views | `public.owners`, `public.owner_source_links`, `public.properties` (view on staging.parcels; assessment join deferred — see Source 2 in data-source-feasibility.md) |
-| `meta` | Application metadata — NOT Dagster internals (those are in the separate `dagster` database) | `meta.infra_metrics`, `meta.pipeline_status`, `meta.data_quality_checks` |
+| `staging` | Parsed source records and version history | `parcels`, `tax_claims`, `zoning_overlays`, `economic_development_parks`, `soils`, `local_traffic_counts` |
+| `public` | Product-facing entities, evidence, briefs, events, scores, and views | `owners`, `development_momentum`, `parcel_briefs`, `parcel_events`, `intelligence_events`, `properties` |
+| `meta` | Intelligence-pass state, scraper state, and source governance | `intelligence_passes`, `scrape_checkpoints`, `scraper_http_cache`, `source_rights`, `source_rights_audit`, `municipality_source_rights`, `municipality_source_audit`, `municipality_source_health` |
 
-**Where are the staging DDLs?** Individual staging table DDLs (e.g., `staging.parcels`, `staging.assessment_properties`) are created via Alembic migrations at build time — they're not pre-defined in documentation because their exact columns depend on what each data source actually returns. The `meta` schema DDL is pre-defined in `docs/schema/meta.md` because it's application-owned. Staging tables follow the SCD Type 2 pattern: source-specific columns + `valid_from TIMESTAMPTZ DEFAULT NOW()` + `valid_to TIMESTAMPTZ` (NULL = current). See `docs/schema/migrations.md` for the Alembic workflow.
+Most mutable source tables use SCD2 timestamps: `valid_to IS NULL` identifies
+the current version. Some product tables are upserted, append-oriented, or
+fully rebuildable instead. The migration and owning asset define the behavior
+for each table.
 
-**Note:** `public.properties` is a **PostgreSQL view**, not a table. At MVP it queries `staging.parcels` only — the GIS layer provides owner, assessed values, sale history, and all core property attributes. The assessment portal scraper is built but deferred due to commercial-use ambiguity (see `docs/data-source-feasibility.md`, Source 2). When assessment is reactivated, the VIEW should be updated to join `staging.assessment_properties` for permits, delinquent taxes, and value history.
+Raw source evidence is stored outside Postgres only when the ingestion asset
+calls `S3StorageResource`; see `docs/pipelines/data-retention.md`. There is no
+`raw` database schema. Dagster's internal run and schedule tables live in the
+separate `dagster` database, not in `countyiq.meta`.
 
-```sql
--- public.properties is a VIEW, not a table
--- MVP: parcels only (assessment deferred — see data-source-feasibility.md Source 2)
-CREATE VIEW public.properties AS
-SELECT
-    p.pidn,
-    p.geom,
-    p.owner_full,
-    p.propadr,
-    p.aprtotal,
-    p.saledt,
-    p.price,
-    p.municipality,
-    p.school_dis,
-    p.acres,
-    p."class",
-    p.valid_from,
-    p.valid_to
-FROM staging.parcels p
-WHERE p.valid_to IS NULL;   -- Current parcel records only (SCD Type 2)
-```
+Migration 030 removes the unused early tables `meta.pipeline_status`,
+`meta.infra_metrics`, and `meta.data_quality_checks`. Current operational state
+comes from Dagster's separate database, source tables, and registered asset
+checks rather than a second observability model.
 
-<details>
-<summary>Future: VIEW with assessment join (when reactivated)</summary>
+Migration 031 adds executable source authorization and its append-only audit
+receipts; adds the four site-readiness staging families; adds
+`public.development_momentum.site_readiness_score`; expires the two paused York
+layers; removes their rebuildable signals/evidence; and clears momentum rows so
+no stale score survives until the next enrichment rebuild.
 
-```sql
-CREATE VIEW public.properties AS
-SELECT
-    p.pidn,
-    p.geom,
-    p.owner_full,
-    p.propadr,
-    p.aprtotal,
-    p.saledt,
-    p.price,
-    p.municipality,
-    p.school_dis,
-    p.acres,
-    p."class",
-    a.permits,
-    a.delinquent_taxes,
-    a.value_history,
-    p.valid_from,
-    p.valid_to
-FROM staging.parcels p
-LEFT JOIN staging.assessment_properties a
-    ON p.pidn = a.pidn
-    AND a.valid_to IS NULL
-WHERE p.valid_to IS NULL;
-```
-</details>
+Migration 032 adds use-specific enforcement and municipal-source governance.
+The policy table identifies one exact configured body/source, the audit table
+records every allow/deny decision and is append-only, and the health table
+stores current listing/document outcomes separately from permission. Health
+never grants permission. The same revision records County Scout as paused.
 
-**Dagster metadata separation:** Dagster's internal database (`dagster` on the same Postgres instance) stores run history, event logs, and schedule state. The `meta` schema in `countyiq` stores application-level summaries that the API can query — specifically, a Dagster sensor writes summarized pipeline status and infra metrics to `meta` tables. This keeps the API decoupled from Dagster's internal schema (which can change between Dagster versions).
+Migrations 033 and 034 add exact municipal origin allowlists, record reviewed
+same-organization HTTPS aliases, and pause paths whose useful documents depend
+on restricted or unreviewed vendor delivery. Redirect destinations and browser
+document/API requests must remain inside these allowlists; runtime health cannot
+expand them.
 
-### Identifier Strategy
+## Serving Objects
 
-**The canonical parcel identifier is PIDN** (Parcel ID Number), a 13-character string from the GIS data (e.g., `4300006006500`). This is the primary key for `staging.parcels` and the join key across all source tables.
+`public.properties` is a view over current parcel rows with nullable legacy
+assessment fields. The removed assessment scraper does not populate new data;
+parcel values and sale attributes come from the county GIS source, delinquency
+comes from `staging.tax_claims`, and parcel change history comes from SCD2
+versions plus `public.parcel_events`.
 
-The assessment database uses a different identifier — **PARID**, an 18-digit string (e.g., `46000060065000000`). PARID encodes the same district/block/map/parcel components as PIDN but in a different format with zero-padding.
+`public.intelligence_events` is a rebuildable serving ledger. It combines
+parcel events, tax-claim transitions, and cached proceeding interpretations.
+Rebuilding the ledger does not invoke a model.
 
-**Crosswalk:** The PIDN and PARID contain the same underlying components:
+## Identifiers
 
-```
-PIDN format:    DD-BBB-MM-PPPPPP      (13 chars, from GIS DISTRICT+BLOCK+MAP+PARCEL fields)
-PARID format:   DD000BBB0MM00PPPPPP   (18 digits, zero-padded, from Assessment portal)
+- `pidn` is the canonical parcel identifier and the cross-source parcel join
+  key. Keep it as text; leading zeroes and source formatting matter.
+- `owner_id` is the API identifier for a row in `public.owners`.
+  `owner_resolution` upserts by `canonical_name`, so the ID remains stable
+  across ordinary rebuilds while that owner remains present. If an owner is
+  removed and later recreated, or cluster identity changes, a new ID is
+  possible.
+- `canonical_name` is the durable semantic owner key used by owner briefs and
+  entity-resolution reconciliation. It is not a substitute for source-name
+  provenance; raw aliases remain linked separately.
+- `entity_id` identifies a verified `public.entity_graph` row and must not be
+  conflated with `owner_id` until the planned entity-profile API defines that
+  contract.
 
-Example:
-  GIS:        PIDN = "4300006006500"
-              DISTRICT=43, BLOCK=000, MAP=06, PARCEL=006500
-
-  Assessment: PARID = "43000060065000000"
-```
-
-**Conversion function (used by the assessment pipeline on ingest):**
-
-```sql
-CREATE OR REPLACE FUNCTION staging.parid_to_pidn(parid TEXT) RETURNS TEXT AS $$
-    -- Strip zero-padding to reconstruct PIDN from PARID
-    SELECT CONCAT(
-        SUBSTRING(parid FROM 1 FOR 2),     -- District (2 digits)
-        SUBSTRING(parid FROM 4 FOR 3),     -- Block (3 digits, skip zero pad)
-        SUBSTRING(parid FROM 8 FOR 2),     -- Map (2 digits, skip zero pad)
-        SUBSTRING(parid FROM 11 FOR 6)     -- Parcel (6 digits)
-    );
-$$ LANGUAGE sql IMMUTABLE;
-```
-
-**All tables use PIDN as the join key.** The assessment pipeline converts PARID → PIDN on ingest. No table stores PARID as a primary key.
-
-**Entity identifiers:**
-
-| Entity | Primary Key | Type | Rationale |
-|---|---|---|---|
-| Parcels | `pidn` | TEXT(13) | Natural key from GIS; stable across refreshes |
-| Owners (resolved entities) | `owner_id` | SERIAL | Synthetic key; entities are created by resolution, not by any source |
-| Source links | `link_id` | SERIAL | Synthetic key for the join table |
-| All staging tables | Source-specific natural key + `valid_from` | Varies | SCD Type 2 requires composite key |
-
-**Why SERIAL (not UUID) for owners:** Owner entities are created and consumed entirely within this platform. They're never shared with external systems. SERIAL is simpler, uses less storage, and is faster for joins. If CountyIQ ever needs to federate owner data across county instances, UUIDs can be added as an additional column without changing the primary key.
-
----
+Legacy PARID conversion helpers remain because the initial schema included the
+now-retired assessment source. New product code should use PIDN and should not
+revive the assessment ingestion path without a new source decision.

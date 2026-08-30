@@ -5,8 +5,9 @@ requires-python = ">=3.11"
 
 dependencies = [
     # Dagster core
-    "dagster",
-    "dagster-webserver",
+    "dagster==1.12.20",
+    "dagster-postgres==0.28.20",
+    "dagster-webserver==1.12.20",
 
     # Database
     "psycopg2-binary",
@@ -19,11 +20,9 @@ dependencies = [
     "playwright",
     "pdfplumber",
 
-    # AWS / Cloudflare R2 (S3-compatible)
+    # Cloudflare R2 (S3-compatible client)
     "boto3",
 
-    # Utilities
-    "python-dotenv",
 ]
 
 [project.optional-dependencies]
@@ -38,3 +37,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["countyiq*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: requires local Postgres/PostGIS or live infrastructure",
+]

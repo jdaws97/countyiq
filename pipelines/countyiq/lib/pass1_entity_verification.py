@@ -16,14 +16,16 @@ from __future__ import annotations
 
 import hashlib
 
+from countyiq.lib.county_config import county_prompt_context
+
 
 # =============================================================================
 # SQL CONSTANTS
 # =============================================================================
 
-# Reads from the pre-computed materialized view instead of running
-# the expensive trgm self-join live. The view is refreshed by the
-# refresh_entity_candidate_pairs Dagster asset on a weekly schedule.
+# Reads from the pre-computed materialized view instead of running the
+# expensive trgm self-join live. The deterministic
+# entity_candidate_pairs_refresh asset populates it after municipality_join.
 CANDIDATE_CLUSTERS_QUERY = """
     SELECT name_a, name_b, municipality, sim
     FROM public.entity_candidate_pairs
@@ -47,6 +49,14 @@ CANDIDATE_CLUSTERS_QUERY = """
 
 # Standalone refresh query — used by the Dagster asset that maintains the matview.
 REFRESH_CANDIDATE_PAIRS = "REFRESH MATERIALIZED VIEW public.entity_candidate_pairs"
+
+ENTITY_CANDIDATE_PAIRS_READY_QUERY = """
+    SELECT c.relispopulated
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname = 'entity_candidate_pairs'
+"""
 
 
 def stable_cluster_key(cluster_names: list[str]) -> str:
@@ -133,11 +143,11 @@ CLUSTER_RECORDS_QUERY_PROCEEDINGS = """
 # LLM TEMPLATE
 # =============================================================================
 
-ENTITY_VERIFICATION_TEMPLATE = """You are a county intelligence analyst verifying entity identities across public records from York County, PA.
+# Static instruction block. Sent as a byte-identical system message on every
+# cluster call so providers with implicit prompt caching can reuse it.
+_P1_SYSTEM_TEMPLATE = """You are a county intelligence analyst verifying entity identities across public records from {county_context}.
 
-Below are records from multiple data sources that may belong to the same person or related entities. Your job is to determine which records belong to the same real-world entity and identify relationships between entities.
-
-{sections}
+You will be given records from multiple data sources that may belong to the same person or related entities. Your job is to determine which records belong to the same real-world entity and identify relationships between entities.
 
 TASKS:
 1. GROUP records that belong to the same real-world entity (person or organization). Consider name variations, abbreviations, and common patterns (e.g., "SMITH JOHN A" and "J A SMITH HOLDINGS LLC" may be related).
@@ -181,10 +191,32 @@ OUTPUT FORMAT:
       "name_b": "second name",
       "reason": "why these are NOT the same entity"
     }}
+  ],
+  "abstentions": [
+    {{
+      "names": ["names you cannot confidently merge OR reject"],
+      "reason": "what evidence is missing or conflicting"
+    }}
   ]
 }}
 
+IMPORTANT: An incorrect merge is far worse than leaving records unmerged.
+If the evidence for a group is insufficient or conflicting, do NOT guess —
+list those names under "abstentions" with the reason. Abstaining is a
+correct answer.
+
 Return ONLY valid JSON. Do not include commentary outside the JSON object."""
+
+# Dynamic per-cluster block. The trailing sentence keeps the word "JSON" in
+# the user message (OpenAI-family endpoints require it for json_object).
+ENTITY_VERIFICATION_USER_TEMPLATE = """{sections}
+
+Group, relate, reject, or abstain on the records above. Return ONLY the JSON object."""
+
+# Final system string sent to the API (single braces).
+ENTITY_VERIFICATION_SYSTEM_PROMPT = _P1_SYSTEM_TEMPLATE.format(
+    county_context=county_prompt_context()
+)
 
 
 # =============================================================================
@@ -356,7 +388,9 @@ def build_entity_cluster_prompt(records: dict) -> str:
 
     combined_sections = "\n\n".join(sections) if sections else "(no records)"
 
-    return ENTITY_VERIFICATION_TEMPLATE.format(sections=combined_sections)
+    # Returns only the dynamic user block; the static instructions travel
+    # as ENTITY_VERIFICATION_SYSTEM_PROMPT via the harness system_prompt.
+    return ENTITY_VERIFICATION_USER_TEMPLATE.format(sections=combined_sections)
 
 
 def parse_entity_verification_output(output: dict) -> dict:
@@ -409,9 +443,21 @@ def parse_entity_verification_output(output: dict) -> dict:
     if not isinstance(rejected, list):
         rejected = []
 
+    # Explicit abstention channel: names the model declined to merge or
+    # reject for lack of evidence. A false merge poisons a portfolio; an
+    # abstention just leaves records unlinked until better evidence lands.
+    abstentions = output.get("abstentions", [])
+    if not isinstance(abstentions, list):
+        abstentions = []
+    abstentions = [
+        a for a in abstentions
+        if isinstance(a, dict) and isinstance(a.get("names"), list)
+    ]
+
     return {
         "entities": normalized_entities,
         "rejected_matches": rejected,
+        "abstentions": abstentions,
     }
 
 
@@ -420,6 +466,155 @@ def parse_entity_verification_output(output: dict) -> dict:
 # the full listing, so the prompt stays within token budgets.
 _MAX_PARCELS_DETAIL = 50
 _MAX_TAX_CLAIMS_DETAIL = 30
+
+
+# =============================================================================
+# N-TRIAL PARTITION VOTING
+#
+# The 2026-08-06 stability probe (docs/decisions.md) showed per-pair
+# same-entity verdicts agree 97% across trials while the abstain/reject
+# tallies swing — so voting happens at the PAIR level: a merge survives
+# only when a strict majority of trials grouped that pair. Merges without
+# majority support are demoted to abstentions ("disagreement → abstain"),
+# never resolved by guessing.
+# =============================================================================
+
+def _entity_member_names(entity: dict, cluster_names: list[str]) -> set[str]:
+    """Names from the candidate cluster that this entity claims."""
+    linked = entity.get("linked_records", {}) or {}
+    claimed: set[str] = set()
+    for value in [entity.get("canonical_name", "")]:
+        if isinstance(value, str) and value.strip():
+            claimed.add(value.strip())
+    for key in ("corporate_entities", "proceedings"):
+        for value in linked.get(key, []) or []:
+            if isinstance(value, str) and value.strip():
+                claimed.add(value.strip())
+    members = {name for name in cluster_names if name in claimed}
+    return members
+
+
+def _trial_pair_verdicts(
+    parsed: dict, cluster_names: list[str]
+) -> dict[tuple[str, str], bool]:
+    """Map each cluster-name pair to this trial's same-entity verdict."""
+    groups = [
+        _entity_member_names(e, cluster_names)
+        for e in parsed.get("entities", [])
+        if isinstance(e, dict)
+    ]
+    same: dict[tuple[str, str], bool] = {}
+    ordered = sorted(cluster_names)
+    for i, a in enumerate(ordered):
+        for b in ordered[i + 1:]:
+            same[(a, b)] = any(a in g and b in g for g in groups)
+    return same
+
+
+def entity_trial_majority_decided(
+    trials_parsed: list[dict],
+    cluster_names: list[str],
+    target_trials: int,
+) -> bool:
+    """Return whether future trials can no longer change any pair verdict.
+
+    For the default target of three trials, two identical pair partitions are
+    already a strict majority. Skipping the third call in that case preserves
+    the exact merge/no-merge decision while saving one inference call. If any
+    pair disagrees, the deciding trial still runs.
+    """
+    if target_trials <= 1:
+        return bool(trials_parsed)
+    if not trials_parsed:
+        return False
+
+    verdicts = [_trial_pair_verdicts(t, cluster_names) for t in trials_parsed]
+    all_pairs = sorted(verdicts[0].keys()) if verdicts else []
+    if not all_pairs:
+        return True
+
+    majority_threshold = target_trials // 2
+    for pair in all_pairs:
+        same_votes = sum(1 for verdict in verdicts if verdict.get(pair, False))
+        different_votes = len(verdicts) - same_votes
+        if max(same_votes, different_votes) <= majority_threshold:
+            return False
+    return True
+
+
+def merge_entity_trial_partitions(
+    trials_parsed: list[dict],
+    cluster_names: list[str],
+) -> dict:
+    """Aggregate N parsed Pass 1 runs by majority pair voting.
+
+    The representative trial (highest agreement with the majority pair
+    verdicts) supplies the entity payloads; any of its entities that
+    contain a pair WITHOUT strict-majority support is demoted to an
+    abstention. No merge beyond what a trial itself proposed is created.
+
+    Returns a parsed-output-shaped dict with an extra ``trial_stats`` key:
+    ``{"n_trials", "pair_agreement", "demoted_entities"}``.
+    """
+    n = len(trials_parsed)
+    if n == 1:
+        result = dict(trials_parsed[0])
+        result["trial_stats"] = {
+            "n_trials": 1, "pair_agreement": 1.0, "demoted_entities": 0,
+        }
+        return result
+
+    verdicts = [_trial_pair_verdicts(t, cluster_names) for t in trials_parsed]
+    all_pairs = sorted(verdicts[0].keys()) if verdicts else []
+
+    majority: dict[tuple[str, str], bool] = {}
+    for pair in all_pairs:
+        same_votes = sum(1 for v in verdicts if v.get(pair, False))
+        majority[pair] = same_votes * 2 > n  # strict majority
+
+    # Representative trial = the one most consistent with the majority.
+    def _agreement(v: dict) -> float:
+        if not all_pairs:
+            return 1.0
+        return sum(1 for p in all_pairs if v.get(p, False) == majority[p]) / len(all_pairs)
+
+    agreements = [_agreement(v) for v in verdicts]
+    rep_idx = max(range(n), key=lambda i: agreements[i])
+    rep = trials_parsed[rep_idx]
+
+    kept_entities: list[dict] = []
+    demoted: list[dict] = []
+    for entity in rep.get("entities", []):
+        members = sorted(_entity_member_names(entity, cluster_names))
+        unsupported = [
+            (a, b)
+            for i, a in enumerate(members)
+            for b in members[i + 1:]
+            if not majority.get((a, b), False)
+        ]
+        if unsupported:
+            demoted.append({
+                "names": members,
+                "reason": (
+                    f"cross-trial disagreement: {len(unsupported)} pair(s) in this "
+                    f"grouping lacked majority support across {n} trials"
+                ),
+            })
+        else:
+            kept_entities.append(entity)
+
+    abstentions = list(rep.get("abstentions", [])) + demoted
+    result = {
+        "entities": kept_entities,
+        "rejected_matches": list(rep.get("rejected_matches", [])),
+        "abstentions": abstentions,
+        "trial_stats": {
+            "n_trials": n,
+            "pair_agreement": round(sum(agreements) / n, 3) if n else 1.0,
+            "demoted_entities": len(demoted),
+        },
+    }
+    return result
 
 
 # =============================================================================

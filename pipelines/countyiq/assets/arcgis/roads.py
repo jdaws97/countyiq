@@ -19,10 +19,11 @@ from dagster import (
 
 from countyiq.lib.arcgis_client import query_all_features
 from countyiq.lib.checks import make_row_count_check
-from countyiq.lib.county_config import get_county_config
+from countyiq.lib.county_config import county_open_data_source_key, get_county_config
 from countyiq.lib.geometry import paths_to_multilinestring_geojson
 from countyiq.lib.parsers.roads import parse_roads_features
 from countyiq.lib.scd import scd2_upsert_geom
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -55,6 +56,9 @@ def roads_arcgis(
     """Fetch road centerlines, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
+    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="roads_arcgis", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     context.log.info(f"Querying ArcGIS roads for {county.name}: {county.arcgis_roads_url}")
 
     raw_features = query_all_features(
@@ -129,8 +133,14 @@ roads_record_count_nonzero = make_row_count_check(roads_arcgis, table="roads")
 
 
 @asset_check(asset=roads_arcgis)
-def roads_schema_drift() -> AssetCheckResult:
+def roads_schema_drift(database: DatabaseResource) -> AssetCheckResult:
     """Verify ArcGIS Roads layer still has expected fields."""
+    authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="roads_schema_drift",
+    )
     county = get_county_config()
     try:
         resp = requests.get(f"{county.arcgis_roads_url}?f=json", timeout=30)

@@ -10,10 +10,15 @@ from pathlib import Path
 import pytest
 
 from countyiq.lib.pass1_entity_verification import (
-    ENTITY_VERIFICATION_TEMPLATE,
+    ENTITY_VERIFICATION_SYSTEM_PROMPT,
+    ENTITY_VERIFICATION_USER_TEMPLATE,
     build_entity_cluster_prompt,
     parse_entity_verification_output,
     stable_cluster_key,
+)
+
+ENTITY_VERIFICATION_PROMPT_TEXT = (
+    ENTITY_VERIFICATION_SYSTEM_PROMPT + "\n\n" + ENTITY_VERIFICATION_USER_TEMPLATE
 )
 
 
@@ -318,46 +323,46 @@ class TestStableClusterKey:
 # ---------------------------------------------------------------------------
 
 class TestEntityVerificationTemplate:
-    """Tests for ENTITY_VERIFICATION_TEMPLATE string constant."""
+    """Tests for the system and user prompt contract."""
 
     def test_has_parcel_records_reference(self):
         """Template must reference parcels in the output format."""
-        assert '"parcels"' in ENTITY_VERIFICATION_TEMPLATE
+        assert '"parcels"' in ENTITY_VERIFICATION_PROMPT_TEXT
 
     def test_has_tasks_section(self):
-        assert "TASKS:" in ENTITY_VERIFICATION_TEMPLATE
+        assert "TASKS:" in ENTITY_VERIFICATION_PROMPT_TEXT
 
     def test_has_output_format_section(self):
-        assert "OUTPUT FORMAT:" in ENTITY_VERIFICATION_TEMPLATE
+        assert "OUTPUT FORMAT:" in ENTITY_VERIFICATION_PROMPT_TEXT
 
     def test_has_canonical_name_key(self):
-        assert "canonical_name" in ENTITY_VERIFICATION_TEMPLATE
+        assert "canonical_name" in ENTITY_VERIFICATION_PROMPT_TEXT
 
     def test_has_entities_key(self):
-        assert '"entities"' in ENTITY_VERIFICATION_TEMPLATE
+        assert '"entities"' in ENTITY_VERIFICATION_PROMPT_TEXT
 
     def test_has_rejected_matches_key(self):
-        assert '"rejected_matches"' in ENTITY_VERIFICATION_TEMPLATE
+        assert '"rejected_matches"' in ENTITY_VERIFICATION_PROMPT_TEXT
 
     def test_has_sections_placeholder(self):
-        assert "{sections}" in ENTITY_VERIFICATION_TEMPLATE
+        assert "{sections}" in ENTITY_VERIFICATION_USER_TEMPLATE
 
     def test_has_relationship_type_values(self):
-        assert "controls" in ENTITY_VERIFICATION_TEMPLATE
-        assert "officer_of" in ENTITY_VERIFICATION_TEMPLATE
-        assert "same_person" in ENTITY_VERIFICATION_TEMPLATE
+        assert "controls" in ENTITY_VERIFICATION_PROMPT_TEXT
+        assert "officer_of" in ENTITY_VERIFICATION_PROMPT_TEXT
+        assert "same_person" in ENTITY_VERIFICATION_PROMPT_TEXT
 
     def test_has_entity_type_values(self):
-        assert "individual" in ENTITY_VERIFICATION_TEMPLATE
-        assert "llc" in ENTITY_VERIFICATION_TEMPLATE
-        assert "corporation" in ENTITY_VERIFICATION_TEMPLATE
+        assert "individual" in ENTITY_VERIFICATION_PROMPT_TEXT
+        assert "llc" in ENTITY_VERIFICATION_PROMPT_TEXT
+        assert "corporation" in ENTITY_VERIFICATION_PROMPT_TEXT
 
     def test_template_accepts_sections_format(self):
         """Verify the template formats without error."""
         try:
-            result = ENTITY_VERIFICATION_TEMPLATE.format(sections="test sections here")
+            result = ENTITY_VERIFICATION_USER_TEMPLATE.format(sections="test sections here")
         except KeyError as exc:
-            pytest.fail(f"ENTITY_VERIFICATION_TEMPLATE missing variable: {exc}")
+            pytest.fail(f"ENTITY_VERIFICATION_USER_TEMPLATE missing variable: {exc}")
         assert "test sections here" in result
 
 

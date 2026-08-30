@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from dagster import (
@@ -13,12 +14,20 @@ from dagster import (
 )
 
 from countyiq.lib.intelligence_common import compute_input_hash
-from countyiq.lib.pass_llm_config import PassHarnessUnavailable, resolve_pass_harness
+from countyiq.lib.pass_llm_config import (
+    PassItemBudget,
+    PassHarnessUnavailable,
+    resolve_pass_harness,
+)
 from countyiq.lib.pass4_county_narratives import (
     CORRIDOR_SCAN_QUERY,
+    CORRIDOR_SYSTEM_PROMPT,
     DISTRESS_SCAN_QUERY,
+    DISTRESS_SYSTEM_PROMPT,
     MUNICIPAL_SCAN_QUERY,
+    MUNICIPAL_SYSTEM_PROMPT,
     PORTFOLIO_SCAN_QUERY,
+    PORTFOLIO_SYSTEM_PROMPT,
     build_corridor_prompt,
     build_distress_prompt,
     build_municipal_prompt,
@@ -101,18 +110,33 @@ PROCEEDINGS_FOR_PIDNS_QUERY = """
     LIMIT 20
 """
 
+# Transfers involving the entity, from parcel-diff events (the recorder
+# scraper was removed 2026-08-05 — public.parcel_events is the transfer
+# source now). grantor/grantee approximate from the observed owner change;
+# price stays text — it goes into LLM prose, not arithmetic.
 DEEDS_FOR_ENTITY_QUERY = """
     SELECT
-        rd.pidn,
-        rd.grantor,
-        rd.grantee,
-        rd.record_date AS date,
-        rd.consideration AS price
-    FROM staging.recorder_documents rd
-    WHERE (rd.grantor = ANY(%(names)s) OR rd.grantee = ANY(%(names)s))
-      AND rd.valid_to IS NULL
-      AND rd.doc_type IN ('DEED', 'DEED OF TRUST')
-    ORDER BY rd.record_date DESC
+        ev.pidn,
+        COALESCE(
+            ev.evidence->'changed'->'owner_full'->>'old',
+            ev.evidence->'changed'->'prev_owner'->>'new'
+        ) AS grantor,
+        COALESCE(
+            ev.evidence->'changed'->'owner_full'->>'new',
+            p.owner_full
+        ) AS grantee,
+        COALESCE(ev.event_date, ev.detected_at::date) AS date,
+        ev.evidence->'changed'->'price'->>'new' AS price
+    FROM public.parcel_events ev
+    LEFT JOIN staging.parcels p ON p.pidn = ev.pidn AND p.valid_to IS NULL
+    WHERE ev.event_type = 'transfer'
+      AND (
+          ev.evidence->'changed'->'owner_full'->>'old' = ANY(%(names)s)
+          OR ev.evidence->'changed'->'owner_full'->>'new' = ANY(%(names)s)
+          OR ev.evidence->'changed'->'prev_owner'->>'new' = ANY(%(names)s)
+          OR p.owner_full = ANY(%(names)s)
+      )
+    ORDER BY COALESCE(ev.event_date, ev.detected_at::date) DESC
     LIMIT 20
 """
 
@@ -162,6 +186,7 @@ def county_narratives(
         )
     except PassHarnessUnavailable as exc:
         return _skipped_result(exc.reason)
+    item_budget = PassItemBudget(PASS_NUMBER)
 
     database.execute(CLEANUP_EXPIRED_QUERY)
     log.info("Cleaned up expired narratives")
@@ -179,28 +204,28 @@ def county_narratives(
     }
 
     corridor_generated, corridor_skipped, corridor_errors = _run_corridor_scan(
-        database, log, config, invoke_with_retry
+        database, log, config, invoke_with_retry, item_budget
     )
     counts["corridor_generated"] = corridor_generated
     counts["corridor_skipped"] = corridor_skipped
     counts["errors"] += corridor_errors
 
     portfolio_generated, portfolio_skipped, portfolio_errors = _run_portfolio_scan(
-        database, log, config, invoke_with_retry
+        database, log, config, invoke_with_retry, item_budget
     )
     counts["portfolio_generated"] = portfolio_generated
     counts["portfolio_skipped"] = portfolio_skipped
     counts["errors"] += portfolio_errors
 
     municipal_generated, municipal_skipped, municipal_errors = _run_municipal_scan(
-        database, log, config, invoke_with_retry
+        database, log, config, invoke_with_retry, item_budget
     )
     counts["municipal_generated"] = municipal_generated
     counts["municipal_skipped"] = municipal_skipped
     counts["errors"] += municipal_errors
 
     distress_generated, distress_skipped, distress_errors = _run_distress_scan(
-        database, log, config, invoke_with_retry
+        database, log, config, invoke_with_retry, item_budget
     )
     counts["distress_generated"] = distress_generated
     counts["distress_skipped"] = distress_skipped
@@ -241,17 +266,23 @@ def county_narratives(
             "distress_skipped": MetadataValue.int(counts["distress_skipped"]),
             "total_narratives": MetadataValue.int(total_generated),
             "total_skipped": MetadataValue.int(total_skipped),
+            "item_limit": MetadataValue.int(item_budget.limit),
+            "items_claimed": MetadataValue.int(item_budget.claimed),
+            "items_deferred": MetadataValue.int(item_budget.denied),
             "errors": MetadataValue.int(counts["errors"]),
         }
     )
 
 
-def _run_corridor_scan(database, log, config, invoke_with_retry):
+def _run_corridor_scan(database, log, config, invoke_with_retry, item_budget):
     generated = 0
     skipped = 0
     errors = 0
     seen_keys: list[str] = []
 
+    # Scan-specific static block as a byte-identical system message —
+    # cacheable across every cluster in the scan.
+    config = replace(config, system_prompt=CORRIDOR_SYSTEM_PROMPT)
     log.info("Running corridor activity scan")
     try:
         rows = database.execute(CORRIDOR_SCAN_QUERY) or []
@@ -304,6 +335,7 @@ def _run_corridor_scan(database, log, config, invoke_with_retry):
                     log=log,
                     config=config,
                     invoke_with_retry=invoke_with_retry,
+                    item_budget=item_budget,
                     narrative_key=narrative_key,
                     narrative_type="corridor",
                     prompt=build_corridor_prompt(narrative_data),
@@ -317,7 +349,7 @@ def _run_corridor_scan(database, log, config, invoke_with_retry):
                 )
                 if status == "generated":
                     generated += 1
-                elif status == "skipped":
+                elif status in {"skipped", "budget_deferred"}:
                     skipped += 1
                 else:
                     errors += 1
@@ -334,12 +366,13 @@ def _run_corridor_scan(database, log, config, invoke_with_retry):
     return generated, skipped, errors
 
 
-def _run_portfolio_scan(database, log, config, invoke_with_retry):
+def _run_portfolio_scan(database, log, config, invoke_with_retry, item_budget):
     generated = 0
     skipped = 0
     errors = 0
     seen_keys: list[str] = []
 
+    config = replace(config, system_prompt=PORTFOLIO_SYSTEM_PROMPT)
     log.info("Running owner portfolio scan")
     try:
         rows = database.execute(PORTFOLIO_SCAN_QUERY) or []
@@ -400,6 +433,7 @@ def _run_portfolio_scan(database, log, config, invoke_with_retry):
                     log=log,
                     config=config,
                     invoke_with_retry=invoke_with_retry,
+                    item_budget=item_budget,
                     narrative_key=narrative_key,
                     narrative_type="owner_portfolio",
                     prompt=build_portfolio_prompt(narrative_data),
@@ -411,7 +445,7 @@ def _run_portfolio_scan(database, log, config, invoke_with_retry):
                 )
                 if status == "generated":
                     generated += 1
-                elif status == "skipped":
+                elif status in {"skipped", "budget_deferred"}:
                     skipped += 1
                 else:
                     errors += 1
@@ -428,12 +462,13 @@ def _run_portfolio_scan(database, log, config, invoke_with_retry):
     return generated, skipped, errors
 
 
-def _run_municipal_scan(database, log, config, invoke_with_retry):
+def _run_municipal_scan(database, log, config, invoke_with_retry, item_budget):
     generated = 0
     skipped = 0
     errors = 0
     seen_keys: list[str] = []
 
+    config = replace(config, system_prompt=MUNICIPAL_SYSTEM_PROMPT)
     log.info("Running municipal trends scan")
     try:
         rows = database.execute(MUNICIPAL_SCAN_QUERY) or []
@@ -505,6 +540,7 @@ def _run_municipal_scan(database, log, config, invoke_with_retry):
                     log=log,
                     config=config,
                     invoke_with_retry=invoke_with_retry,
+                    item_budget=item_budget,
                     narrative_key=narrative_key,
                     narrative_type="municipality",
                     prompt=build_municipal_prompt(narrative_data),
@@ -513,7 +549,7 @@ def _run_municipal_scan(database, log, config, invoke_with_retry):
                 )
                 if status == "generated":
                     generated += 1
-                elif status == "skipped":
+                elif status in {"skipped", "budget_deferred"}:
                     skipped += 1
                 else:
                     errors += 1
@@ -530,12 +566,13 @@ def _run_municipal_scan(database, log, config, invoke_with_retry):
     return generated, skipped, errors
 
 
-def _run_distress_scan(database, log, config, invoke_with_retry):
+def _run_distress_scan(database, log, config, invoke_with_retry, item_budget):
     generated = 0
     skipped = 0
     errors = 0
     seen_keys: list[str] = []
 
+    config = replace(config, system_prompt=DISTRESS_SYSTEM_PROMPT)
     log.info("Running distress migration scan")
     try:
         rows = database.execute(DISTRESS_SCAN_QUERY) or []
@@ -578,6 +615,7 @@ def _run_distress_scan(database, log, config, invoke_with_retry):
                     log=log,
                     config=config,
                     invoke_with_retry=invoke_with_retry,
+                    item_budget=item_budget,
                     narrative_key=narrative_key,
                     narrative_type="market_segment",
                     prompt=build_distress_prompt(narrative_data),
@@ -586,7 +624,7 @@ def _run_distress_scan(database, log, config, invoke_with_retry):
                 )
                 if status == "generated":
                     generated += 1
-                elif status == "skipped":
+                elif status in {"skipped", "budget_deferred"}:
                     skipped += 1
                 else:
                     errors += 1
@@ -609,6 +647,7 @@ def _generate_or_refresh_narrative(
     log,
     config,
     invoke_with_retry,
+    item_budget,
     narrative_key: str,
     narrative_type: str,
     prompt: str,
@@ -628,6 +667,9 @@ def _generate_or_refresh_narrative(
         _touch_narrative(database, narrative_key)
         _update_pass_status(database, narrative_key, "complete", input_hash)
         return "skipped"
+
+    if not item_budget.claim(log, label="changed county narratives"):
+        return "budget_deferred"
 
     result = invoke_with_retry(
         config,

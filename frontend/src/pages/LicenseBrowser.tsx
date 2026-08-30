@@ -60,7 +60,7 @@ export default function LicenseBrowser() {
   /* Filtered licenses */
   const filtered = licenses.filter((lic) => {
     if (typeFilter && lic.license_type !== typeFilter) return false
-    if (muniFilter && !lic.municipality.toLowerCase().includes(muniFilter.toLowerCase()))
+    if (muniFilter && !(lic.municipality ?? '').toLowerCase().includes(muniFilter.toLowerCase()))
       return false
     return true
   })
@@ -354,7 +354,7 @@ export default function LicenseBrowser() {
                         paddingRight: 12,
                       }}
                     >
-                      {lic.premises_name || lic.licensee}
+                      {lic.premises_name || lic.licensee || 'Licensed premises'}
                     </div>
 
                     {/* Address */}
@@ -430,9 +430,9 @@ export default function LicenseBrowser() {
                           fontWeight: 600,
                           letterSpacing: 1,
                           textTransform: 'uppercase',
-                          color: statusColor(lic.status),
-                          background: statusBg(lic.status),
-                          border: `1px solid ${statusColor(lic.status)}30`,
+                          color: statusColor(lic.status ?? ''),
+                          background: statusBg(lic.status ?? ''),
+                          border: `1px solid ${statusColor(lic.status ?? '')}30`,
                           borderRadius: 3,
                           padding: '2px 8px',
                         }}

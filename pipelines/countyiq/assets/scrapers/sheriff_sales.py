@@ -3,7 +3,7 @@
 Source: https://attorneyportal.yorkcountypa.gov/sheriff.salelisting/
 Records: ~95-120 active listings per sale date
 Schedule: Weekly (scraper_refresh job)
-Strategy: Playwright scrape — page is JavaScript-rendered
+Strategy: honest direct HTTP fetch of the official listing
 """
 
 import re
@@ -19,8 +19,9 @@ from dagster import (
 
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.playwright_utils import browser_context
+from countyiq.lib.http_retry import get_with_retry
 from countyiq.lib.scd import scd2_upsert
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -106,30 +107,50 @@ def parse_sheriff_sale_page(html: str) -> list[dict]:
 @asset(
     group_name="scrapers",
     description="Sheriff sale listings → staging.sheriff_sales",
-    kinds={"postgres", "playwright"},
+    kinds={"postgres", "html"},
 )
 def sheriff_sales_scrape(
     context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
 ) -> MaterializeResult:
-    """Scrape sheriff sale listings via Playwright."""
+    """Fetch the official sheriff listing without browser impersonation."""
     county = get_county_config()
+    authorization = authorize_source(
+        database,
+        source_key="sheriff_sales",
+        acquisition_method="official_html_direct",
+        asset_key="sheriff_sales_scrape",
+        dagster_run_id=context.run_id,
+    )
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
 
-    with browser_context() as page:
-        context.log.info(f"Navigating to {county.sheriff_sales_url}")
-        page.goto(county.sheriff_sales_url)
-        page.wait_for_selector("table", timeout=15000)
+    context.log.info(f"Fetching official sheriff listing: {county.sheriff_sales_url}")
+    html = get_with_retry(county.sheriff_sales_url, timeout=60).text
 
-        # Get the page HTML after JS rendering
-        html = page.content()
-
-    context.log.info(f"Page loaded, parsing...")
+    context.log.info("Page loaded, parsing...")
     s3.archive(f"{county.s3_prefix}/scrapers/sheriff_sales", html, filename="listing.html")
 
     records = parse_sheriff_sale_page(html)
     for rec in records:
         rec["source_url"] = county.sheriff_sales_url
+        # property_address is part of the PK (migration 028) — never NULL.
+        rec["property_address"] = rec.get("property_address") or ""
+
+    # The portal lists a continued/postponed sale under BOTH its original and
+    # rescheduled date — the same (case_no, property_address) twice in one
+    # page. Two rows with one SCD2 key in a single batch violate the
+    # (key, valid_from) PK; keep the last occurrence (latest status wins).
+    deduped: dict = {}
+    for rec in records:
+        deduped[(rec.get("case_no"), rec.get("property_address"))] = rec
+    if len(deduped) < len(records):
+        context.log.info(
+            f"Deduplicated {len(records) - len(deduped)} repeated listing(s) "
+            "(continued sales appear under both dates)"
+        )
+    records = list(deduped.values())
     context.log.info(f"Parsed {len(records)} sheriff sale records")
 
     if not records:

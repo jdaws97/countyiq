@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from countyiq.lib.county_config import get_county_config, municipality_source_key
 from countyiq.lib.scout.models import ScoutSeed
 
 
@@ -190,4 +191,75 @@ def get_scout_seeds(county_key: str) -> tuple[ScoutSeed, ...]:
     """Return the seed catalog for the requested county."""
     if county_key == "york":
         return YORK_SEEDS
-    raise KeyError(f"County Scout seed catalog not defined for county '{county_key}'")
+
+    county = get_county_config(county_key)
+    seeds: list[ScoutSeed] = []
+
+    def add(
+        slug: str,
+        name: str,
+        url: str,
+        categories: tuple[str, ...],
+        audiences: tuple[str, ...],
+        notes: str,
+    ) -> None:
+        if not url or any(seed.url == url for seed in seeds):
+            return
+        seeds.append(
+            ScoutSeed(
+                county_key=county_key,
+                slug=slug,
+                name=name,
+                url=url,
+                discovery_method="configured_seed",
+                category_hints=categories,
+                audience_hints=audiences,
+                notes=notes,
+                max_discovery_links=10,
+            )
+        )
+
+    add(
+        "gis-parcels",
+        f"{county.name} GIS parcel service",
+        county.arcgis_base_url or county.arcgis_parcels_url,
+        ("assessment_property", "planning_zoning", "development_land_use"),
+        ("realtors", "investors", "builders", "journalists"),
+        "County-configured public GIS entry point.",
+    )
+    add(
+        "tax-claims",
+        f"{county.name} tax-claim listing",
+        county.tax_claims_pdf_url,
+        ("tax_sales_delinquency", "assessment_property"),
+        ("investors", "lawyers", "property_managers", "journalists"),
+        "County-configured delinquent-tax source.",
+    )
+    add(
+        "penndot-projects",
+        "PennDOT Projects",
+        county.penndot_projects_url,
+        ("infrastructure_public_works", "public_decisions"),
+        ("builders", "local_businesses", "investors", "journalists"),
+        "Statewide source filtered by the active county manifest.",
+    )
+    add(
+        "pa-open-data",
+        "PA Open Data",
+        county.soda_base_url,
+        ("assessment_property", "public_decisions", "procurement_bids"),
+        ("journalists", "local_businesses", "citizens"),
+        "Statewide open-data portal with county-filterable datasets.",
+    )
+
+    for body_name, minutes_url, proceeding_type in county.municipality_websites:
+        add(
+            f"municipal-{municipality_source_key(body_name)}",
+            body_name,
+            minutes_url,
+            ("public_decisions", "planning_zoning", "development_land_use"),
+            ("builders", "realtors", "investors", "journalists", "citizens"),
+            f"Official configured {proceeding_type.replace('_', ' ')} source.",
+        )
+
+    return tuple(seeds)

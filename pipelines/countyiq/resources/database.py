@@ -9,9 +9,9 @@ from dagster import ConfigurableResource, InitResourceContext
 class DatabaseResource(ConfigurableResource):
     """PostgreSQL connection resource for the countyiq database.
 
-    Reads connection parameters from environment variables (set by .env on EC2,
-    or DATABASE_* vars for local dev). Reuses a single connection per resource
-    instance to avoid connection churn.
+    Reads connection parameters from environment variables (set by Compose in
+    production or DATABASE_* vars for local dev). Reuses a single connection
+    per resource instance to avoid connection churn.
     """
 
     host: str = ""

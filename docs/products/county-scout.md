@@ -1,12 +1,29 @@
 # County Scout
 
-County Scout is a CountyIQ product for long-running public-source discovery and monitoring. The initial build targets York County, PA and answers five operational questions for each source:
+County Scout is an internal CountyIQ source-discovery and monitoring subsystem,
+not an alpha customer product. It supports the evidence layer by answering five
+operational questions for each source:
 
 1. What public source exists?
 2. What signals does it contain?
 3. What is the cheapest viable extraction path?
 4. How fragile or risky is the source to rely on?
 5. Is it valuable enough to promote into a monitored source registry?
+
+## Current product decision
+
+County Scout is not used by the current product and is not worth activating for
+the York alpha. As of the 2026-08-27 completion audit, its candidate, registry,
+and observation tables all contain zero rows; it contributes no score, feed,
+case-file, or frontend signal. The reviewed source register and explicit
+source-onboarding workflow provide better evidence with substantially lower
+legal and operational risk.
+
+Keep the implementation paused as an offline research prototype, not active
+product infrastructure. Reconsider it only when multi-county expansion creates
+enough source-discovery volume to justify redesigning Scout as candidate-only
+discovery: no automatic fetch, retention, monitoring, or promotion before a
+human rights review approves the exact source and origin.
 
 ## Scope
 
@@ -26,14 +43,16 @@ The current implementation focuses on York County and the first set of public-in
 County Scout runs as two Dagster assets in the `scout` group:
 
 - `county_scout_discovery`
-  discovers and classifies source candidates from a curated York County seed catalog
+  discovers and classifies source candidates from York's curated catalog or a
+  manifest-derived starter catalog for another county
 - `county_scout_monitor`
   re-checks promoted sources for changes, outages, or new blockers
 
-Schedules:
-
-- discovery: weekly, Wednesday 01:30
-- monitoring: daily, 06:30
+Both jobs remain registered for inspection but are absent from schedules and
+blocked by the paused `county_scout` source policy, including manual runs. The
+API fails closed under the same policy. Reactivation requires a reviewed
+outbound-host boundary, source-by-source terms/robots evidence, retention rules,
+and promotion criteria; validating cost or product value alone is insufficient.
 
 ## Persistence
 
@@ -59,7 +78,7 @@ County Scout exposes four inspection surfaces through FastAPI:
 
 ## Seed Catalog
 
-The initial York County seed catalog includes:
+The curated York County seed catalog includes:
 
 - York County official site
 - York County GIS hub
@@ -78,4 +97,7 @@ The initial York County seed catalog includes:
 - York City RFPs
 - PLCB licensing
 
-The discovery engine probes each seed, extracts relevant linked documents/endpoints, and scores them for promotion.
+For other configured counties, the starter catalog is derived from manifest
+GIS, tax, PennDOT, state-open-data, and municipal-proceedings URLs, so it never
+falls back to York sources. The discovery engine probes each seed, extracts
+relevant linked documents/endpoints, and scores them for promotion.

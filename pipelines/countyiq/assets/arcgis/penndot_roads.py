@@ -23,6 +23,7 @@ from countyiq.lib.county_config import get_county_config
 from countyiq.lib.geometry import paths_to_multilinestring_geojson
 from countyiq.lib.parsers.penndot_roads import parse_penndot_roads_features
 from countyiq.lib.scd import scd2_upsert_geom
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -50,6 +51,9 @@ def penndot_roads_arcgis(
     """Fetch PennDOT road segments, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
+    authorization = authorize_source(database, source_key="penndot_open_data", acquisition_method="arcgis_rest", asset_key="penndot_roads_arcgis", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     context.log.info(f"Querying PennDOT roads for {county.name}: {county.penndot_roads_url}")
 
     raw_features = query_all_features(
@@ -127,8 +131,14 @@ penndot_roads_record_count_nonzero = make_row_count_check(
 
 
 @asset_check(asset=penndot_roads_arcgis)
-def penndot_roads_schema_drift() -> AssetCheckResult:
+def penndot_roads_schema_drift(database: DatabaseResource) -> AssetCheckResult:
     """Verify PennDOT MapServer still has expected fields."""
+    authorize_source(
+        database,
+        source_key="penndot_open_data",
+        acquisition_method="arcgis_rest",
+        asset_key="penndot_roads_schema_drift",
+    )
     county = get_county_config()
     try:
         resp = requests.get(f"{county.penndot_roads_url}?f=json", timeout=30)

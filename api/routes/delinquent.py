@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Query
 
 from api.lib.database import get_cursor
+from api.lib.source_policy import require_source_use
 
 router = APIRouter(tags=["delinquent"])
 
@@ -10,7 +11,7 @@ router = APIRouter(tags=["delinquent"])
 @router.get("/top-owners")
 def top_delinquent_owners(
     municipality: str | None = Query(default=None),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> list[dict]:
     """Top delinquent property owners by total owed."""
     where = "WHERE tc.valid_to IS NULL AND tc.total > 0"
@@ -20,6 +21,7 @@ def top_delinquent_owners(
         params["muni"] = municipality
 
     with get_cursor() as cur:
+        require_source_use(cur, "tax_claims", "person_level_display")
         cur.execute(f"""
             SELECT
                 tc.owner_name,
@@ -51,7 +53,7 @@ def top_delinquent_owners(
 def delinquent_parcels(
     municipality: str | None = Query(default=None),
     min_owed: float | None = Query(default=None),
-    limit: int = Query(default=100, le=500),
+    limit: int = Query(default=100, ge=1, le=500),
 ) -> list[dict]:
     """Browse individual delinquent parcels."""
     where = "WHERE tc.valid_to IS NULL AND tc.total > 0"
@@ -63,6 +65,7 @@ def delinquent_parcels(
         params["min_owed"] = min_owed
 
     with get_cursor() as cur:
+        require_source_use(cur, "tax_claims", "person_level_display")
         cur.execute(f"""
             SELECT
                 tc.pidn,

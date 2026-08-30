@@ -1,0 +1,585 @@
+{
+  "version": 1,
+  "reviewed_at": "2026-08-30",
+  "derivation": "de-identified production-shaped entity-resolution contexts",
+  "cases": [
+    {
+      "id": "p1-001",
+      "case_type": "similar_name_hard_negative",
+      "context": {
+        "parcels": [
+          {
+            "pidn": "P1A001",
+            "owner_full": "MARTIN MICHAEL L",
+            "propadr": "101 EXAMPLE PIKE",
+            "aprtotal": 141680,
+            "acres": 4.68,
+            "class": "R",
+            "saledt": "11-OCT-2002",
+            "price": 170000,
+            "prev_owner": "PRIOR OWNER A",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1A002",
+            "owner_full": "MARTINSON MICHAEL E",
+            "propadr": "908 SAMPLE MILL RD",
+            "aprtotal": 119310,
+            "acres": 1.679,
+            "class": "R",
+            "saledt": "29-SEP-2000",
+            "price": 123700,
+            "prev_owner": "PRIOR OWNER B",
+            "municipality": "EXAMPLE TWP"
+          }
+        ],
+        "tax_claims": [],
+        "plcb_licenses": [],
+        "corporate_entities": [],
+        "proceedings": []
+      },
+      "context_sha256": "1dd5d7861694e506b9b00e685f3c73c92660331d999d112579cbe83932cd0c34",
+      "labels": {
+        "acceptable_partitions": [
+          [
+            [
+              "P1A001"
+            ],
+            [
+              "P1A002"
+            ]
+          ]
+        ]
+      },
+      "review": "A shared first name and similar surname are insufficient; the middle initials and properties differ with no corroborating address or source link."
+    },
+    {
+      "id": "p1-002",
+      "case_type": "same_couple_alias_merge",
+      "context": {
+        "parcels": [
+          {
+            "pidn": "P1B001",
+            "owner_full": "KELLEY THOMAS S & CAROL A",
+            "propadr": "165 EXAMPLE DR",
+            "aprtotal": 29140,
+            "acres": 0.65,
+            "class": "R",
+            "saledt": "01-MAY-1982",
+            "price": 1,
+            "prev_owner": "",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1B002",
+            "owner_full": "KELLEY TOM A & CAROL A",
+            "propadr": "165 EXAMPLE DR",
+            "aprtotal": 145120,
+            "acres": 0.98,
+            "class": "R",
+            "saledt": "30-JUL-1973",
+            "price": 1,
+            "prev_owner": "KELLEY TOM A & CAROL A",
+            "municipality": "EXAMPLE TWP"
+          }
+        ],
+        "tax_claims": [],
+        "plcb_licenses": [],
+        "corporate_entities": [],
+        "proceedings": []
+      },
+      "context_sha256": "335ce851d445d65b724e213b049d234c8d16ac1ac5d0d49c5fa97a033d01c26c",
+      "labels": {
+        "acceptable_partitions": [
+          [
+            [
+              "P1B001",
+              "P1B002"
+            ]
+          ]
+        ]
+      },
+      "review": "Tom/Thomas variation, same spouse, and the same property address provide strong corroboration."
+    },
+    {
+      "id": "p1-003",
+      "case_type": "borderline_typo_adjacent_properties",
+      "context": {
+        "parcels": [
+          {
+            "pidn": "P1C001",
+            "owner_full": "HENDER JEFFERY A & CASEY",
+            "propadr": "1829 SAMPLE TRL",
+            "aprtotal": 58040,
+            "acres": 0.321,
+            "class": "C",
+            "saledt": "31-MAY-2022",
+            "price": 350000,
+            "prev_owner": "PRIOR OWNER C",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1C002",
+            "owner_full": "HENDER JEFFREY A & CASEY S",
+            "propadr": "1845 SAMPLE TRL",
+            "aprtotal": 196870,
+            "acres": 0.179,
+            "class": "I",
+            "saledt": "04-SEP-2002",
+            "price": 165000,
+            "prev_owner": "PRIOR OWNER D",
+            "municipality": "EXAMPLE TWP"
+          }
+        ],
+        "tax_claims": [],
+        "plcb_licenses": [],
+        "corporate_entities": [],
+        "proceedings": []
+      },
+      "context_sha256": "989ae5661e14c853c7a20ba13c834c6da5ff600a5276395adbb899dbef3496b5",
+      "labels": {
+        "acceptable_partitions": [
+          [
+            [
+              "P1C001",
+              "P1C002"
+            ]
+          ],
+          [
+            [
+              "P1C001"
+            ],
+            [
+              "P1C002"
+            ]
+          ]
+        ]
+      },
+      "review": "The spelling variation, spouse initial, and adjacent addresses support a merge, but the long sale-date gap and absent cross-source identity evidence make a conservative abstention acceptable."
+    },
+    {
+      "id": "p1-004",
+      "case_type": "household_alias_with_conflicting_coowner",
+      "context": {
+        "parcels": [
+          {
+            "pidn": "P1D001",
+            "owner_full": "HART SCOTT A & TAYLOR",
+            "propadr": "60 EXAMPLE AVE",
+            "aprtotal": 142140,
+            "acres": 0.338,
+            "class": "R",
+            "saledt": "23-AUG-2002",
+            "price": 98800,
+            "prev_owner": "PRIOR OWNER E",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1D002",
+            "owner_full": "HART SCOTT & TAYLOR",
+            "propadr": "75 EXAMPLE AVE",
+            "aprtotal": 110810,
+            "acres": 0.182,
+            "class": "R",
+            "saledt": "03-DEC-2008",
+            "price": 120000,
+            "prev_owner": "PRIOR OWNER F",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1D003",
+            "owner_full": "HART SCOTT A & TAYLOR L",
+            "propadr": "155 SAMPLE RD",
+            "aprtotal": 65310,
+            "acres": 0.23,
+            "class": "R",
+            "saledt": "12-DEC-2005",
+            "price": 68500,
+            "prev_owner": "PRIOR OWNER G",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1D004",
+            "owner_full": "HART SCOTT A & COLBY",
+            "propadr": "748 SAMPLE ST",
+            "aprtotal": 158290,
+            "acres": 0.301,
+            "class": "C",
+            "saledt": "12-MAR-2018",
+            "price": 235500,
+            "prev_owner": "PRIOR OWNER H",
+            "municipality": "EXAMPLE TWP"
+          }
+        ],
+        "tax_claims": [],
+        "plcb_licenses": [],
+        "corporate_entities": [],
+        "proceedings": []
+      },
+      "context_sha256": "5f1a1a6d6f5409b4aff328a10bd63ff5cfb4b21c1a5642aad9d582173cd5674e",
+      "labels": {
+        "acceptable_partitions": [
+          [
+            [
+              "P1D001",
+              "P1D002",
+              "P1D003"
+            ],
+            [
+              "P1D004"
+            ]
+          ]
+        ]
+      },
+      "review": "The Taylor records are spelling/initial variants of one couple. The Colby co-owner record must remain separate absent evidence that the Scott Hart is the same person."
+    },
+    {
+      "id": "p1-005",
+      "case_type": "corporate_aliases_with_unrelated_developer",
+      "context": {
+        "parcels": [
+          {
+            "pidn": "P1E001",
+            "owner_full": "NORTH PLUS DEV CORP",
+            "propadr": "14 EXAMPLE ST",
+            "aprtotal": 0,
+            "acres": 0.027,
+            "class": "E",
+            "saledt": "21-DEC-2017",
+            "price": 171500,
+            "prev_owner": "PRIOR LLC A",
+            "municipality": "EXAMPLE CITY"
+          },
+          {
+            "pidn": "P1E002",
+            "owner_full": "NORTH PLUS DEVELOPMENT CORP",
+            "propadr": "16 EXAMPLE ST",
+            "aprtotal": 0,
+            "acres": 0.027,
+            "class": "E",
+            "saledt": "21-DEC-2017",
+            "price": 171500,
+            "prev_owner": "PRIOR LLC A",
+            "municipality": "EXAMPLE CITY"
+          },
+          {
+            "pidn": "P1E003",
+            "owner_full": "NORTH PLUS DEVELOPMENT CORPORATION",
+            "propadr": "31 SAMPLE ST",
+            "aprtotal": 0,
+            "acres": 0.23,
+            "class": "E",
+            "saledt": "03-OCT-1997",
+            "price": 1,
+            "prev_owner": "PRIOR NONPROFIT",
+            "municipality": "EXAMPLE CITY"
+          },
+          {
+            "pidn": "P1E004",
+            "owner_full": "STONE RIDGE DEVELOPMENT CORPORATION",
+            "propadr": "900 OTHER RD",
+            "aprtotal": 212500,
+            "acres": 2.4,
+            "class": "C",
+            "saledt": "08-MAY-2023",
+            "price": 680000,
+            "prev_owner": "PRIOR OWNER I",
+            "municipality": "OTHER TWP"
+          }
+        ],
+        "tax_claims": [],
+        "plcb_licenses": [],
+        "corporate_entities": [],
+        "proceedings": []
+      },
+      "context_sha256": "2a8c70d85366e66dbb20211b7f21076034db5d81fe6593d1e061673a23a9372d",
+      "labels": {
+        "acceptable_partitions": [
+          [
+            [
+              "P1E001",
+              "P1E002",
+              "P1E003"
+            ],
+            [
+              "P1E004"
+            ]
+          ]
+        ]
+      },
+      "review": "The North Plus abbreviations and coordinated deed evidence are one organization. Generic DEVELOPMENT wording does not link Stone Ridge."
+    },
+    {
+      "id": "p1-006",
+      "case_type": "government_and_authority_boundary",
+      "context": {
+        "parcels": [
+          {
+            "pidn": "P1F001",
+            "owner_full": "EXAMPLE TOWNSHIP",
+            "propadr": "100 MUNICIPAL RD",
+            "aprtotal": 0,
+            "acres": 15.05,
+            "class": "E",
+            "saledt": "03-MAY-1999",
+            "price": 612000,
+            "prev_owner": "EXAMPLE TOWNSHIP",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1F002",
+            "owner_full": "EXAMPLE TWP",
+            "propadr": "PARK LN",
+            "aprtotal": 0,
+            "acres": 5.54,
+            "class": "E",
+            "saledt": "24-SEP-1987",
+            "price": 1,
+            "prev_owner": "EXAMPLE TWP",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1F003",
+            "owner_full": "EXAMPLE TOWNSHIP SEWER AUTHORITY",
+            "propadr": "KENNETH RD",
+            "aprtotal": 0,
+            "acres": 0.579,
+            "class": "E",
+            "saledt": "16-OCT-1997",
+            "price": 1,
+            "prev_owner": "EXAMPLE TOWNSHIP",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1F004",
+            "owner_full": "EXAMPLE TWP SEWER AUTH",
+            "propadr": "SALEM RD",
+            "aprtotal": 0,
+            "acres": 0.16,
+            "class": "E",
+            "saledt": "04-SEP-1986",
+            "price": 1,
+            "prev_owner": "EXAMPLE TOWNSHIP",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1F005",
+            "owner_full": "ST PAULS CHURCH CEMETERY OF EXAMPLE TOWNSHIP",
+            "propadr": "CHURCH RD",
+            "aprtotal": 0,
+            "acres": 3.2,
+            "class": "E",
+            "saledt": "",
+            "price": 0,
+            "prev_owner": "",
+            "municipality": "EXAMPLE TWP"
+          }
+        ],
+        "tax_claims": [],
+        "plcb_licenses": [],
+        "corporate_entities": [],
+        "proceedings": []
+      },
+      "context_sha256": "a8310746be5642e92a907be13d44cf0df9241fb10bc29b733a34938d64b10343",
+      "labels": {
+        "acceptable_partitions": [
+          [
+            [
+              "P1F001",
+              "P1F002"
+            ],
+            [
+              "P1F003",
+              "P1F004"
+            ],
+            [
+              "P1F005"
+            ]
+          ]
+        ]
+      },
+      "review": "Township aliases merge with each other, sewer-authority aliases merge separately, and the cemetery remains an independent organization."
+    },
+    {
+      "id": "p1-007",
+      "case_type": "generic_llc_suffix_hard_negative",
+      "context": {
+        "parcels": [
+          {
+            "pidn": "P1G001",
+            "owner_full": "APEX HOLDINGS LLC",
+            "propadr": "320 EXAMPLE AVE",
+            "aprtotal": 148590,
+            "acres": 0.333,
+            "class": "C",
+            "saledt": "16-AUG-2021",
+            "price": 200000,
+            "prev_owner": "PRIOR OWNER J",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1G002",
+            "owner_full": "FESSLER HOLDINGS LLC",
+            "propadr": "N SAMPLE DR",
+            "aprtotal": 273670,
+            "acres": 1.36,
+            "class": "I",
+            "saledt": "18-DEC-2025",
+            "price": 850000,
+            "prev_owner": "PRIOR LLC B",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1G003",
+            "owner_full": "GOLD KEY HOLDINGS LLC",
+            "propadr": "1343 OTHER RD",
+            "aprtotal": 59640,
+            "acres": 0.072,
+            "class": "R",
+            "saledt": "09-AUG-2022",
+            "price": 270000,
+            "prev_owner": "PRIOR OWNER K",
+            "municipality": "EXAMPLE TWP"
+          },
+          {
+            "pidn": "P1G004",
+            "owner_full": "IRIE HOLDINGS LLC",
+            "propadr": "36 SAMPLE AVE",
+            "aprtotal": 81580,
+            "acres": 0.045,
+            "class": "C",
+            "saledt": "20-NOV-2023",
+            "price": 150000,
+            "prev_owner": "PRIOR OWNER L",
+            "municipality": "OTHER BORO"
+          }
+        ],
+        "tax_claims": [
+          {
+            "pidn": "P1G001",
+            "owner_name": "APEX HOLDINGS LLC",
+            "tax_year": 2025,
+            "authority_name": "COUNTY",
+            "total": 1632.18
+          }
+        ],
+        "plcb_licenses": [],
+        "corporate_entities": [],
+        "proceedings": []
+      },
+      "context_sha256": "de7ea6746266ef068b70f5018cdfc57e8bc4b6cc055818f05f4246ea9dc5ff40",
+      "labels": {
+        "acceptable_partitions": [
+          [
+            [
+              "P1G001"
+            ],
+            [
+              "P1G002"
+            ],
+            [
+              "P1G003"
+            ],
+            [
+              "P1G004"
+            ]
+          ]
+        ]
+      },
+      "review": "A generic HOLDINGS LLC suffix and nearby geography are not identity evidence. Each legal entity remains separate."
+    },
+    {
+      "id": "p1-008",
+      "case_type": "cross_source_organization_linkage",
+      "context": {
+        "parcels": [
+          {
+            "pidn": "P1H001",
+            "owner_full": "EXAMPLE DEVELOPMENT LLC",
+            "propadr": "500 MARKET ST",
+            "aprtotal": 425000,
+            "acres": 1.8,
+            "class": "C",
+            "saledt": "15-JUN-2024",
+            "price": 825000,
+            "prev_owner": "PRIOR OWNER M",
+            "municipality": "EXAMPLE CITY"
+          }
+        ],
+        "tax_claims": [
+          {
+            "pidn": "P1H001",
+            "owner_name": "EXAMPLE DEVELOPMENT LLC",
+            "tax_year": 2025,
+            "authority_name": "COUNTY",
+            "total": 925.5
+          }
+        ],
+        "plcb_licenses": [
+          {
+            "license_number": "LIC-P1H-01",
+            "license_type": "R",
+            "licensee": "EXAMPLE DEVELOPMENT LLC",
+            "premises_name": "EXAMPLE MARKET",
+            "premises_owner": "EXAMPLE DEV LLC",
+            "premises_address": "500 MARKET ST",
+            "municipality": "EXAMPLE CITY",
+            "status": "ACTIVE"
+          }
+        ],
+        "corporate_entities": [
+          {
+            "entity_name": "EXAMPLE DEVELOPMENT LLC",
+            "entity_number": "ENT-P1H-01",
+            "status": "ACTIVE",
+            "formation_date": "2018-04-12",
+            "office_address": "500 MARKET ST",
+            "source_url": "https://example.invalid/entity/P1H"
+          }
+        ],
+        "proceedings": [
+          {
+            "extraction_type": "conditional_use",
+            "applicant_name": "EXAMPLE DEVELOPMENT LLC",
+            "parcel_reference": "P1H001",
+            "decision": "continued",
+            "meeting_date": "2026-07-10",
+            "body_name": "EXAMPLE PLANNING COMMISSION"
+          }
+        ]
+      },
+      "context_sha256": "cefeee6751f86f9908a6c91bafd793215c6c0fa47eca57efa457ebb04f9820f2",
+      "labels": {
+        "acceptable_partitions": [
+          [
+            [
+              "P1H001"
+            ]
+          ]
+        ],
+        "linked_record_expectations": [
+          {
+            "entity_parcels": [
+              "P1H001"
+            ],
+            "required": {
+              "tax_claims": [
+                "P1H001"
+              ],
+              "plcb_licenses": [
+                "LIC-P1H-01"
+              ],
+              "corporate_entities": [
+                "EXAMPLE DEVELOPMENT LLC"
+              ],
+              "proceedings": [
+                "EXAMPLE DEVELOPMENT LLC"
+              ]
+            }
+          }
+        ]
+      },
+      "review": "Exact organization name, office/premises/property address, and parcel reference corroborate one organization across parcel, tax, license, corporate, and proceeding records."
+    }
+  ]
+}

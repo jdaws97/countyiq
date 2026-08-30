@@ -8,7 +8,7 @@ All functions are pure — HTML / filename string in, structured dicts out.
 
 import re
 from collections.abc import Callable
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -78,9 +78,93 @@ def _dotted_short_year(m: re.Match) -> str:
     return f"{year}-{month}-{day}"
 
 
+# M-D-YY (dashed/underscored, short year) — e.g. "minutes 1-3-22" → "2022-01-03".
+# Registered after the 4-digit-year patterns so those keep priority.
+@_register(r"(?<!\d)(\d{1,2})[-_](\d{1,2})[-_](\d{2})(?!\d)")
+def _dashed_short_year(m: re.Match) -> str:
+    month = m.group(1).zfill(2)
+    day = m.group(2).zfill(2)
+    return f"20{m.group(3)}-{month}-{day}"
+
+
+# Compact 8-digit dates with no separators: MMDDYYYY (West York Drive files
+# like "05042026_Meeting_Minutes.pdf") or YYYYMMDD. Lowest priority; the
+# handler returns None (skip) when the digits don't form a plausible date.
+@_register(r"(?<!\d)(\d{8})(?!\d)")
+def _compact_eight_digits(m: re.Match) -> str | None:
+    digits = m.group(1)
+
+    def _plausible(year: str, month: str, day: str) -> bool:
+        return (
+            1900 <= int(year) <= 2099
+            and 1 <= int(month) <= 12
+            and 1 <= int(day) <= 31
+        )
+
+    year, month, day = digits[:4], digits[4:6], digits[6:8]
+    if _plausible(year, month, day):
+        return f"{year}-{month}-{day}"
+    month, day, year = digits[:2], digits[2:4], digits[4:8]
+    if _plausible(year, month, day):
+        return f"{year}-{month}-{day}"
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+_DRIVE_FOLDER_RE = re.compile(
+    r"drive\.google\.com/(?:drive/folders/|folderview\?id=)([A-Za-z0-9_-]+)"
+)
+
+# One embeddedfolderview entry: the id carries the item ID, the first href
+# inside distinguishes file (/file/d/<id>/) from subfolder (/drive/folders/).
+_DRIVE_ENTRY_RE = re.compile(
+    r'<div class="flip-entry" id="entry-([A-Za-z0-9_-]+)".*?'
+    r'<a href="([^"]+)".*?'
+    r'<div class="flip-entry-title">([^<]*)</div>',
+    re.DOTALL,
+)
+
+
+def extract_drive_folder_ids(html: str) -> list[str]:
+    """Find Google Drive folder IDs linked from a municipality minutes page.
+
+    Recognises both modern (/drive/folders/<id>) and legacy
+    (/folderview?id=<id>) share links. Order-preserving, deduped.
+    """
+    seen: set[str] = set()
+    ids: list[str] = []
+    for folder_id in _DRIVE_FOLDER_RE.findall(html):
+        if folder_id not in seen:
+            seen.add(folder_id)
+            ids.append(folder_id)
+    return ids
+
+
+def parse_drive_folder_listing(html: str) -> dict:
+    """Parse a drive.google.com/embeddedfolderview?id=... static HTML page.
+
+    The embedded view is server-side rendered, so no browser is needed.
+    Returns {"files": [link records], "subfolder_ids": [...]}; file URLs use
+    the uc?export=download endpoint, which serves raw bytes headlessly.
+    """
+    files: list[dict] = []
+    subfolder_ids: list[str] = []
+    for entry_id, href, title in _DRIVE_ENTRY_RE.findall(html):
+        title = title.strip()
+        if "/drive/folders/" in href:
+            subfolder_ids.append(entry_id)
+        elif "/file/d/" in href:
+            files.append({
+                "url": f"https://drive.google.com/uc?export=download&id={entry_id}",
+                "filename": title,
+                "link_text": title,
+            })
+    return {"files": files, "subfolder_ids": subfolder_ids}
+
+
 
 def extract_pdf_links(html: str, base_url: str) -> list[dict]:
     """Find all PDF links in an HTML page.
@@ -110,21 +194,23 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
         link_text = re.sub(r"\s+", " ", link_text)
 
         # Keep links that either:
-        #   (a) end with .pdf, OR
+        #   (a) end with a document extension (.pdf, .doc, .docx — several
+        #       small boroughs post minutes as Word files), OR
         #   (b) match a known PDF-serving route pattern where the URL has
         #       no .pdf extension but the route returns application/pdf.
         #       CivicEngage:   /AgendaCenter/ViewFile/...
         #                       /DocumentCenter/View/...
         #       CourseVector:  /document/<slug>/     (PA Boroughs template)
-        path = urlparse(href).path
+        parsed = urlparse(href)
+        path = parsed.path
         path_lower = path.lower()
-        is_pdf_ext = path_lower.endswith(".pdf")
+        is_doc_ext = path_lower.endswith((".pdf", ".doc", ".docx"))
         is_civicengage = (
             "/agendacenter/viewfile/" in path_lower
             or "/documentcenter/view/" in path_lower
         )
         is_coursevector_doc = re.match(r"^/document/[^/]+/?$", path_lower) is not None
-        if not (is_pdf_ext or is_civicengage or is_coursevector_doc):
+        if not (is_doc_ext or is_civicengage or is_coursevector_doc):
             continue
 
         absolute_url = urljoin(base_url, href)
@@ -133,8 +219,13 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
             continue
         seen_urls.add(absolute_url)
 
-        if is_pdf_ext:
+        if is_doc_ext:
             filename = path.split("/")[-1] or href.split("/")[-1]
+            # Wix serves hex-named files with the human-readable name in the
+            # dn= query param — prefer it (it carries the meeting date).
+            dn_match = re.search(r"[?&]dn=([^&]+)", href)
+            if dn_match:
+                filename = unquote(dn_match.group(1))
         else:
             # Synthesize a filename from the URL tail + link text so the
             # date parser and classifier have something to work with.
@@ -172,7 +263,9 @@ def parse_meeting_date_from_filename(filename: str) -> str | None:
     for pattern, handler in _DATE_PATTERNS:
         m = pattern.search(stem)
         if m:
-            return handler(m)
+            result = handler(m)
+            if result is not None:
+                return result
 
     return None
 

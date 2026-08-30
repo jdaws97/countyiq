@@ -10,7 +10,7 @@ CountyIQ's current infrastructure direction is:
 - Caddy for reverse proxy
 - FastAPI, Dagster, and PostgreSQL/PostGIS as containers
 
-The provider is not a hard architectural dependency. Hostinger is the current preferred VPS option to evaluate. Older Hetzner-specific language is historical context only.
+Provider: **Hetzner, confirmed 2026-08-02** (CX23 now; CX33 at 3-county scale; Netcup is the fallback if Hetzner raises prices again). Hostinger was evaluated and rejected — see `docs/cost.md` for the verified comparison.
 
 ## Runtime Topology
 
@@ -32,9 +32,9 @@ The production Compose stack in `docker/docker-compose.yml` is the current deplo
 |---|---|
 | `postgres` | application database + PostGIS |
 | `api` | FastAPI/Uvicorn |
-| `dagster` | Dagster webserver + daemon |
+| `dagster-webserver` | Dagster UI and GraphQL API |
+| `dagster-daemon` | Schedule/sensor evaluation and run execution |
 | `caddy` | reverse proxy and TLS termination |
-| `watchtower` | image polling / restarts |
 
 ## Required Environment
 
@@ -49,15 +49,18 @@ DATABASE_PASSWORD=...
 DATABASE_URL=postgresql://dagster_admin:...@postgres:5432/countyiq
 
 OPENROUTER_API_KEY=...
-COUNTYIQ_PASS0_MODEL=x-ai/grok-4.1-fast
+# Optional overrides; leave unset to use the evaluated defaults in
+# pipelines/countyiq/lib/pass_llm_config.py.
+COUNTYIQ_PASS0_MODEL=
 COUNTYIQ_PASS1_MODEL=
 COUNTYIQ_PASS2_MODEL=
 COUNTYIQ_PASS3_MODEL=
 COUNTYIQ_PASS4_MODEL=
-COUNTYIQ_OPENROUTER_MODEL=xiaomi/mimo-v2-flash
+COUNTYIQ_OPENROUTER_MODEL=
 COUNTYIQ_SEARCH_MODEL=
 COUNTYIQ_THINKING=true
 COUNTYIQ_ARCHIVE_DIR=/opt/countyiq/archives
+COUNTYIQ_ARCHIVE_STRICT=true
 
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
@@ -67,9 +70,10 @@ S3_RAW_BUCKET=countyiq-raw
 
 Notes:
 
-- Pass 0 prefers `COUNTYIQ_PASS0_MODEL`.
-- Passes 1-4 prefer `COUNTYIQ_PASS{N}_MODEL`, then fall back to `COUNTYIQ_OPENROUTER_MODEL`.
-- Search can use `COUNTYIQ_SEARCH_MODEL`, then fall back to `COUNTYIQ_OPENROUTER_MODEL`.
+- Passes 0-4 prefer `COUNTYIQ_PASS{N}_MODEL`, then the evaluated code
+  default, then `COUNTYIQ_OPENROUTER_MODEL`.
+- Search can use `COUNTYIQ_SEARCH_MODEL`, then its dedicated low-cost model
+  pool. It does not inherit the offline pipeline model.
 - `COUNTYIQ_THINKING` is only the global fallback; pass-specific overrides are supported.
 
 ## Access Model
@@ -86,16 +90,15 @@ Notes:
 
 The archives are operational artifacts, not core repo content. They should not be committed to git.
 
-## CI/CD
+## Delivery
 
-Current expected flow:
+GitHub Actions currently verifies the locked pipeline and API environments,
+pipeline definition import, unit and contract tests, and the frontend type,
+lint, and production-build gates. It does not publish container images or
+deploy either runtime.
 
-1. GitHub Actions builds/publishes container images.
-2. Frontend can deploy independently via Cloudflare Pages.
-3. The VPS pulls updated images and restarts containers.
-4. Alembic migrations remain an explicit operator step.
-
-## Legacy Material
-
-The old AWS/Terraform deployment stack has been archived under `archives/infrastructure/aws-terraform/`.
-It remains available for historical reference, but it is no longer part of the active deployment path.
+VPS deployment is manual: pull the reviewed revision, rebuild the local
+Compose images, apply Alembic deliberately, and restart the affected services
+using `docs/operations/runbook.md`. The Caddy configuration expects the static
+frontend to be hosted separately on Cloudflare Pages, but Pages deployment
+automation is not contained in this repository.

@@ -432,3 +432,37 @@ def compute_input_hash(data: dict) -> str:
     """
     serialized = json.dumps(data, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(serialized).hexdigest()
+
+
+def fetch_prior_pass_hashes(database, pass_number: int) -> dict[str, str]:
+    """Fetch all completed input hashes for a pass in one query.
+
+    Replaces the per-item ``SELECT input_hash`` the pass loops used to run —
+    on a full weekly run that was thousands of extra round trips. Keys are
+    whatever the pass stores in ``pidn`` (PIDN, cluster key, narrative key).
+
+    Args:
+        database: DatabaseResource (anything with an ``execute`` method).
+        pass_number: The pass whose 'complete' hashes to load.
+
+    Returns:
+        Dict mapping key -> input_hash for rows with status='complete'.
+    """
+    rows = database.execute(
+        """
+        SELECT pidn, input_hash
+        FROM meta.intelligence_passes
+        WHERE pass_number = %(pass_number)s
+          AND status = 'complete'
+        """,
+        {"pass_number": pass_number},
+    ) or []
+    hashes: dict[str, str] = {}
+    for row in rows:
+        if isinstance(row, dict):
+            key, value = row.get("pidn"), row.get("input_hash")
+        else:
+            key, value = row[0], row[1]
+        if key is not None:
+            hashes[key] = value
+    return hashes

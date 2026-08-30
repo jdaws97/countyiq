@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "reviewed_at": "2026-08-30",
+  "review_method": "Manual evidence audit of the complete gathered context for each md5-stable two-signal case. Accepted alternatives encode calibration uncertainty; unsupported intent, approval, and causality claims remain prohibited.",
+  "cases": [
+    {
+      "id": "p2-001",
+      "case_type": "nearby_small_plan_and_weak_residential_assemblage",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["1 lot", "one lot", "prop lots 1"], ["236", "235.7", "nearby"]],
+            "forbidden_claims": ["approved", "owner filed", "development intent"]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["6 neighbor", "six neighbor", "six adjacent"], ["no delinquency", "zero delinquency", "none delinquent", "no distress", "no tax delinquency"]],
+            "forbidden_claims": ["coordinated acquisition", "developer intent"]
+          }
+        ]
+      },
+      "review": "A one-lot land-development record 236m away is weak parcel evidence. Six differently owned residential neighbors without delinquency do not establish an assemblage strategy."
+    },
+    {
+      "id": "p2-002",
+      "case_type": "ordinary_home_sale_near_one_lot_plan",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["1 lot", "one lot", "1 unit", "one unit"], ["175", "nearby"]],
+            "forbidden_claims": ["approved", "same owner", "development intent"]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": ["confirmed", "downgraded"],
+            "accepted_significance": ["low"],
+            "required_fact_groups": [["215500", "215,500"], ["individual", "not an llc", "non llc", "buyer is llc false"]],
+            "forbidden_claims": ["distressed sale", "developer acquisition"]
+          }
+        ]
+      },
+      "review": "The sale is real but looks like an ordinary individual residential purchase. The nearby one-lot plan has no shown relationship to the parcel."
+    },
+    {
+      "id": "p2-003",
+      "case_type": "owner_matched_four_lot_plan_on_vacant_component",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": ["confirmed", "upgraded"],
+            "accepted_significance": ["high", "medium"],
+            "required_fact_groups": [["4 lot", "four lot"], ["3 unit", "three unit"], ["owner", "same name", "matches"]],
+            "forbidden_claims": ["approved", "entitled"]
+          },
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": ["confirmed", "upgraded"],
+            "accepted_significance": ["high", "medium"],
+            "required_fact_groups": [["0 structure", "no structure", "structure count 0", "zero reported structure"], ["760"], ["plan", "subdivision"]],
+            "forbidden_claims": ["demolished", "approved"]
+          }
+        ]
+      },
+      "review": "The plan title matches the parcel owner, proposes four lots/three units over 45.5 acres, and is only 74m away. The low-value no-structure component is consistent with the plan but approval is not shown."
+    },
+    {
+      "id": "p2-004",
+      "case_type": "zero_lot_land_development_and_weak_commercial_mismatch",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["0 lot", "zero lot", "no lots"], ["143", "nearby"]],
+            "forbidden_claims": ["subdivision approval", "owner filed"]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["commercial shopping"], ["mixed use", "commercial and industrial"]],
+            "forbidden_claims": ["rezoning", "policy change", "approved"]
+          }
+        ]
+      },
+      "review": "The nearby record has zero lots and a different plan identity. Commercial Shopping versus mixed commercial/industrial future use is not a strong parcel-level mismatch without plan authority or timing."
+    },
+    {
+      "id": "p2-005",
+      "case_type": "large_farm_sale_with_many_uncoordinated_neighbors",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": ["confirmed", "downgraded"],
+            "accepted_significance": ["medium", "low"],
+            "required_fact_groups": [["10 neighbor", "ten neighbor", "ten adjacent"], ["101.13", "101 acre"], ["no delinquency", "zero delinquency", "none delinquent", "no distress", "no tax delinquency"]],
+            "forbidden_claims": ["coordinated acquisition", "active assemblage"]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": ["confirmed", "downgraded"],
+            "accepted_significance": ["medium", "low"],
+            "required_fact_groups": [["1160000", "1,160,000", "1.16 million"], ["not an llc", "non llc", "individual", "buyer is llc false"]],
+            "forbidden_claims": ["distressed", "developer buyer"]
+          }
+        ]
+      },
+      "review": "The 101-acre, $1.16m transfer is material. Ten differently owned neighbors create scale context, but no distress or coordinated buyer evidence supports an active assemblage claim."
+    },
+    {
+      "id": "p2-006",
+      "case_type": "utility_land_false_positive",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["7 neighbor", "seven neighbor", "seven adjacent"], ["0.803", "less than one acre", "under one acre"], ["no delinquency", "zero delinquency", "none delinquent", "no distress", "no tax delinquency"]],
+            "forbidden_claims": ["coordinated acquisition", "development site"]
+          },
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["water company", "utility"], ["0 structure", "no structure", "structure count 0", "zero reported structure"], ["0 assessed", "0 assessment", "assessed value of 0", "zero assessed"]],
+            "forbidden_claims": ["abandoned", "demolished", "development ready"]
+          }
+        ]
+      },
+      "review": "A sub-acre water-company parcel can legitimately lack a mapped structure and assessment. Seven ordinary residential neighbors do not make it an assemblage opportunity."
+    },
+    {
+      "id": "p2-007",
+      "case_type": "large_rural_parcel_with_conservation_future_use",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": ["confirmed", "downgraded"],
+            "accepted_significance": ["medium", "low"],
+            "required_fact_groups": [["13 neighbor", "thirteen neighbor", "thirteen adjacent"], ["12 different", "twelve different", "12 distinct", "twelve distinct"], ["15.13", "15 acre"]],
+            "forbidden_claims": ["coordinated acquisition", "distressed neighbors"]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["rural living"], ["rural conservation", "conservation"]],
+            "forbidden_claims": ["upzoning", "higher density", "rezoning approved"]
+          }
+        ]
+      },
+      "review": "The parcel is large and touches many distinct owners, but no coordination or distress is shown. Rural Living versus Rural Conservation is a constraint-oriented distinction, not evidence of development uplift."
+    },
+    {
+      "id": "p2-008",
+      "case_type": "recent_low_price_home_sale_with_structure_gap",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": ["confirmed", "downgraded"],
+            "accepted_significance": ["medium", "low"],
+            "required_fact_groups": [["99900", "99,900"], ["individual", "not an llc", "non llc", "buyer is llc false"]],
+            "forbidden_claims": ["distressed", "developer buyer"]
+          },
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": ["downgraded"],
+            "accepted_significance": ["low"],
+            "required_fact_groups": [["0 structure", "no structure", "structure count 0", "zero reported structure"], ["29120", "29,120"], ["data gap", "missing footprint", "residential class"]],
+            "forbidden_claims": ["demolished", "confirmed vacant land"]
+          }
+        ]
+      },
+      "review": "The sale is current but does not identify a developer buyer. Residential classification and a nonzero assessment make the missing structure footprint a plausible data gap."
+    },
+    {
+      "id": "p2-009",
+      "case_type": "institutional_purchase_with_weak_mixed_use_mismatch",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": ["confirmed", "upgraded"],
+            "accepted_significance": ["high", "medium"],
+            "required_fact_groups": [["1500000", "1,500,000", "1.5 million"], ["school authority", "school district", "institutional buyer", "public authority"]],
+            "forbidden_claims": ["development approved", "rezoning filed"]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["commercial office"], ["mixed use", "commercial and industrial"]],
+            "forbidden_claims": ["rezoning", "policy change", "approved"]
+          }
+        ]
+      },
+      "review": "A $1.5m purchase by a school authority is a material ownership event. The commercial-to-mixed-use distinction is modest and has no proceeding or authoritative timing evidence."
+    },
+    {
+      "id": "p2-010",
+      "case_type": "small_vacant_rural_component_with_conservation_constraint",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": ["confirmed", "downgraded"],
+            "accepted_significance": ["low"],
+            "required_fact_groups": [["0 structure", "no structure", "structure count 0", "zero reported structure"], ["710"], ["1.14", "1 acre"]],
+            "forbidden_claims": ["development ready", "demolished"]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": ["downgraded", "irrelevant"],
+            "accepted_significance": ["low", "none"],
+            "required_fact_groups": [["rural living"], ["rural conservation", "conservation"]],
+            "forbidden_claims": ["upzoning", "higher density", "rezoning approved"]
+          }
+        ]
+      },
+      "review": "The no-structure, $710 assessment supports a small vacant component, but conservation future use and physical constraints weaken actionability. The zoning distinction is not an uplift signal."
+    }
+  ]
+}

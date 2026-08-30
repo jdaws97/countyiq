@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import BackButton from '../components/BackButton'
 import Badge from '../components/Badge'
@@ -6,10 +6,13 @@ import NarrativeCard from '../components/NarrativeCard'
 import PageShell from '../components/PageShell'
 import Section from '../components/Section'
 import { formatCurrency, formatLabel, formatShortDate } from '../lib/format'
+import { useFetchJson } from '../lib/useFetchJson'
+import { isWatched, toggleWatch } from '../lib/watchlist'
 import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
 import type {
   DevelopmentSignal,
   DevelopmentSignalEvidence,
+  DevelopmentSignalValue,
   LinkedProceeding,
   PropertyReport,
   StructureBuilding,
@@ -24,14 +27,18 @@ function getSignalEvidence(signal: DevelopmentSignal): DevelopmentSignalEvidence
   if (signal.evidence && typeof signal.evidence === 'object') {
     return signal.evidence
   }
-  return signal
+  const flat: DevelopmentSignalEvidence = {}
+  for (const [key, value] of Object.entries(signal)) {
+    if (value === null || typeof value !== 'object') flat[key] = value
+  }
+  return flat
 }
 
-function getString(value: string | number | boolean | null | undefined): string | null {
+function getString(value: DevelopmentSignalValue | DevelopmentSignalEvidence): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-function getNumber(value: string | number | boolean | null | undefined): number | null {
+function getNumber(value: DevelopmentSignalValue): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.length > 0) {
     const parsed = Number(value)
@@ -44,9 +51,9 @@ function formatSignalDetail(key: string, evidence: DevelopmentSignalEvidence): s
   if (key === 'active_subdivision') {
     return getString(evidence['plan_title']) ?? ''
   }
-  if (key === 'ecodev_candidate') {
-    const underutilized = getNumber(evidence['percent_underutilized'])
-    return underutilized == null ? '' : `${underutilized}% underutilized`
+  if (key === 'economic_development_park') {
+    const names = evidence['park_names']
+    return Array.isArray(names) && names.length > 0 ? names.join(', ') : 'Official park designation'
   }
   if (key === 'zoning_mismatch') {
     const current = getString(evidence['current_zname']) ?? getString(evidence['current_ztype']) ?? '?'
@@ -73,8 +80,22 @@ function formatSignalDetail(key: string, evidence: DevelopmentSignalEvidence): s
     if (type === 'PGA') return 'Primary Growth Area'
     if (type) return 'Secondary Growth Area'
   }
-  if (key === 'cdbg_investment') {
-    return getString(evidence['name']) ?? getString(evidence['address']) ?? 'nearby'
+  if (key === 'development_overlay') {
+    return getString(evidence['overlay_name']) ?? getString(evidence['overlay_type']) ?? 'Development overlay'
+  }
+  if (key === 'local_traffic_activity') {
+    const volume = getNumber(evidence['volume'])
+    const year = getNumber(evidence['count_year'])
+    return volume == null ? '' : `${volume.toLocaleString()} vehicles${year ? ` (${year})` : ''}`
+  }
+  if (key === 'soil_constraint') {
+    return getString(evidence['drainage']) ?? getString(evidence['map_unit_name']) ?? 'Adverse soil profile'
+  }
+  if (key === 'zoning_constraint') {
+    return getString(evidence['overlay_type']) ?? 'Special-purpose overlay'
+  }
+  if (key === 'environmental_diligence') {
+    return getString(evidence['site_name']) ?? getString(evidence['facility_type']) ?? 'Nearby PA DEP record'
   }
   return ''
 }
@@ -108,24 +129,18 @@ function significanceBadgeColor(significance: string): string {
 export default function PropertyDetail() {
   const { pidn } = useParams<{ pidn: string }>()
   const navigate = useNavigate()
-  const [report, setReport] = useState<PropertyReport | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!pidn) return
-    setLoading(true)
-    fetch(`/api/parcels/${pidn}`)
-      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
-      .then(setReport)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [pidn])
+  const { data: report, error, loading } = useFetchJson<PropertyReport>(
+    pidn ? `/api/parcels/${encodeURIComponent(pidn)}` : null,
+  )
+  // localStorage read is cheap; deriving at render (re-triggered by the
+  // counter bump on toggle) avoids a setState-in-effect.
+  const [, setWatchToggleCount] = useState(0)
 
   if (loading) return <PageShell><div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '80px 0' }}>Loading property...</div></PageShell>
   if (error || !report) return <PageShell><div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-red)' }}>Property not found: {pidn}</div></PageShell>
 
   const p = report.parcel
+  const watchedState = isWatched(p.pidn)
   const tax = report.tax_delinquency
   const flood = report.flood_zone
   const structures = report.structures
@@ -139,15 +154,35 @@ export default function PropertyDetail() {
         {/* Back + Actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <BackButton onClick={() => navigate(-1)} marginBottom={0} />
-          {p.lat && p.lng && (
-            <Link to={`/map?lat=${p.lat}&lng=${p.lng}&zoom=18&highlight=${p.pidn}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 4 }}>View on Map</Link>
-          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={() => {
+                toggleWatch(p.pidn)
+                setWatchToggleCount((c) => c + 1)
+              }}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: watchedState ? 'var(--accent-gold)' : 'var(--accent-blue)',
+                background: 'transparent',
+                border: `1px solid ${watchedState ? 'var(--accent-gold)' : 'var(--border)'}`,
+                borderRadius: 4,
+                padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              {watchedState ? '★ Watching' : '☆ Watch'}
+            </button>
+            {p.lat && p.lng && (
+              <Link to={`/map?lat=${p.lat}&lng=${p.lng}&zoom=18&highlight=${p.pidn}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 4 }}>View on Map</Link>
+            )}
+          </div>
         </div>
 
         {/* Header */}
         <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-gold)', marginBottom: 8 }}>Property Report</div>
-          <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{p.owner_full || 'Unknown Owner'}</h1>
+          <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{p.owner_full || 'Owner not displayed'}</h1>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-secondary)' }}>{p.propadr || 'No address'}</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             {p.class && <Badge color="var(--accent-blue)">{getPropertyClassLabel(p.class)}</Badge>}
@@ -178,9 +213,9 @@ export default function PropertyDetail() {
             <Field label="Class" value={getPropertyClassLabel(p.class) || '--'} />
             <Field label="School District" value={getSchoolDistrictLabel(p.school_dis) || '--'} />
             {p.acres && <Field label="Acres" value={Number(p.acres).toFixed(2)} />}
-            {p.yrblt && <Field label="Year Built" value={p.yrblt} />}
+            {p.yrblt && <Field label="Year Built" value={String(p.yrblt)} />}
             {p.style && <Field label="Style" value={p.style} />}
-            {p.num_stories && <Field label="Stories" value={p.num_stories} />}
+            {p.num_stories && <Field label="Stories" value={String(p.num_stories)} />}
             {p.res_living_area && <Field label="Living Area" value={`${Number(p.res_living_area).toLocaleString()} sf`} />}
             {p.prev_owner && <Field label="Previous Owner" value={p.prev_owner} />}
             {p.deed_bk && <Field label="Deed" value={`${p.deed_bk}/${p.deed_pg}`} />}
@@ -192,8 +227,14 @@ export default function PropertyDetail() {
           {tax.is_delinquent ? (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <Badge color="var(--accent-red)">Delinquent — {formatCurrency(tax.total_owed)}</Badge>
+                <Badge color="var(--accent-red)">Delinquency signal detected</Badge>
               </div>
+              {!tax.detail_available && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  Exact claim records remain backend-only under the current source-use policy.
+                </div>
+              )}
+              {tax.detail_available && (
               <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '80px 120px 1fr 120px', padding: '8px 16px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                   <div>Year</div><div>Authority</div><div></div><div style={{ textAlign: 'right' }}>Amount</div>
@@ -207,6 +248,7 @@ export default function PropertyDetail() {
                   </div>
                 ))}
               </div>
+              )}
             </>
           ) : (
             <Badge color="var(--accent-green)">Current — No Delinquent Taxes</Badge>
@@ -379,6 +421,17 @@ export default function PropertyDetail() {
                     : `Ineligible: ${(report.development_momentum.exclusion_reasons || []).join(', ')}`}
                 </div>
               </div>
+              <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--accent-purple)' }}>
+                  {report.development_momentum.site_readiness_score}
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>
+                  Site Screening
+                </div>
+              </div>
+            </div>
+            <div style={{ fontFamily: 'var(--font-sans)', fontSize: 12, lineHeight: 1.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Screening rank only. It is not an entitlement, engineering, flood, soil, or environmental determination. Follow the evidence links before relying on it.
             </div>
             {report.development_momentum.eligible && report.development_momentum.signals && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -392,6 +445,8 @@ export default function PropertyDetail() {
                     const validationStatus = getValidationStatus(sig, ev)
                     const adjustedSignificance = getAdjustedSignificance(sig, ev)
                     const validationReasoning = getValidationReasoning(sig, ev)
+                    const sourceUrl = getString(sig.source_url) ?? getString(ev['source_url'])
+                    const detailUrl = getString(ev['detail_url'])
                     return (
                       <div key={key} style={{
                         display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13,
@@ -420,6 +475,16 @@ export default function PropertyDetail() {
                             <div style={{ marginTop: 8, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                               {validationReasoning}
                             </div>
+                          )}
+                          {(detailUrl || sourceUrl) && (
+                            <a
+                              href={detailUrl || sourceUrl || undefined}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ display: 'inline-block', marginTop: 7, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent-blue)' }}
+                            >
+                              View official evidence ↗
+                            </a>
                           )}
                         </div>
                         <span style={{ fontFamily: 'var(--font-mono)', color: w > 0 ? '#22c55e' : w < 0 ? '#ef4444' : 'var(--text-muted)', fontWeight: 600 }}>

@@ -1,6 +1,6 @@
 """Dagster entry point — registers all assets, jobs, schedules, sensors, and resources."""
 
-from dagster import Definitions, load_assets_from_package_module
+from dagster import Definitions, load_asset_checks_from_package_module, load_assets_from_package_module
 
 from countyiq import assets
 from countyiq.jobs import (
@@ -20,6 +20,7 @@ from countyiq.jobs import (
     signal_validation_refresh,
     brief_generation_refresh,
     county_narratives_refresh,
+    deterministic_enrichment_refresh,
     intelligence_full_pipeline,
 )
 from countyiq.schedules import all_schedules
@@ -29,6 +30,10 @@ from countyiq.resources.storage import make_s3_resource
 
 defs = Definitions(
     assets=load_assets_from_package_module(assets),
+    # load_assets_from_package_module does NOT collect AssetChecksDefinition
+    # objects — without this line every make_row_count_check/schema-drift
+    # check in the codebase silently never ran (found 2026-08-02).
+    asset_checks=load_asset_checks_from_package_module(assets),
     jobs=[
         arcgis_refresh,
         scraper_refresh,
@@ -46,6 +51,7 @@ defs = Definitions(
         signal_validation_refresh,
         brief_generation_refresh,
         county_narratives_refresh,
+        deterministic_enrichment_refresh,
         intelligence_full_pipeline,
     ],
     schedules=all_schedules,

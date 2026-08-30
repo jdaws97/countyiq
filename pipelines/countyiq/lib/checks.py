@@ -24,6 +24,7 @@ def make_row_count_check(
     metadata_key: str = "current_record_count",
     schema: str = "staging",
     count_expr: str = "*",
+    where: str | None = "valid_to IS NULL",
     description: str | None = None,
     include_threshold_metadata: bool = False,
 ) -> Any:
@@ -55,8 +56,11 @@ def make_row_count_check(
             value and surfacing it aids debugging).
     """
     check_name = name or f"{table}_record_count_nonzero"
-    doc = description or f"Verify staging.{table} has at least one current record."
-    sql = f"SELECT COUNT({count_expr}) FROM {schema}.{table} WHERE valid_to IS NULL"
+    doc = description or f"Verify {schema}.{table} has at least one current record."
+    # `where` defaults to the SCD2 current-row filter; pass None for
+    # non-SCD2 tables (the public.* enrichment outputs).
+    where_clause = f" WHERE {where}" if where else ""
+    sql = f"SELECT COUNT({count_expr}) FROM {schema}.{table}{where_clause}"
 
     @asset_check(asset=asset_def, name=check_name, description=doc)
     def _check(database: DatabaseResource) -> AssetCheckResult:

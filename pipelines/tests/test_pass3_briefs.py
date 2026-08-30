@@ -10,11 +10,16 @@ from pathlib import Path
 import pytest
 
 from countyiq.lib.pass3_brief_generation import (
-    BRIEF_GENERATION_TEMPLATE,
+    BRIEF_GENERATION_SYSTEM_PROMPT,
+    BRIEF_GENERATION_USER_TEMPLATE,
     VALID_ASSESSMENTS,
     should_generate_brief,
     build_brief_generation_prompt,
     parse_brief_output,
+)
+
+BRIEF_GENERATION_PROMPT_TEXT = (
+    BRIEF_GENERATION_SYSTEM_PROMPT + "\n\n" + BRIEF_GENERATION_USER_TEMPLATE
 )
 
 
@@ -147,17 +152,19 @@ class TestBuildBriefGenerationPrompt:
         assert "1,450,000" in result  # portfolio_value
 
     def test_includes_citation_constraint(self, sample_context):
-        result = build_brief_generation_prompt(sample_context)
-        assert "[Signal:" in result or "[Signal: signal_key]" in result
+        # Static constraints live in the system prompt now; the model sees
+        # system + user together, so assert on the combined pair.
+        full = BRIEF_GENERATION_SYSTEM_PROMPT + "\n" + build_brief_generation_prompt(sample_context)
+        assert "[Signal:" in full or "[Signal: signal_key]" in full
 
     def test_includes_all_assessment_categories(self, sample_context):
-        result = build_brief_generation_prompt(sample_context)
+        full = BRIEF_GENERATION_SYSTEM_PROMPT + "\n" + build_brief_generation_prompt(sample_context)
         for assessment in VALID_ASSESSMENTS:
-            assert assessment in result, f"Missing assessment category: {assessment}"
+            assert assessment in full, f"Missing assessment category: {assessment}"
 
     def test_includes_do_not_invent_constraint(self, sample_context):
-        result = build_brief_generation_prompt(sample_context)
-        assert "do not invent" in result.lower() or "no invented" in result.lower()
+        full = BRIEF_GENERATION_SYSTEM_PROMPT + "\n" + build_brief_generation_prompt(sample_context)
+        assert "do not invent" in full.lower() or "no invented" in full.lower()
 
     def test_minimal_context(self):
         """Prompt builder should handle minimal context without error."""
@@ -301,23 +308,23 @@ class TestParseBriefOutput:
 # ---------------------------------------------------------------------------
 
 class TestBriefGenerationTemplate:
-    """Tests for the BRIEF_GENERATION_TEMPLATE constant."""
+    """Tests for the system and user prompt contract."""
 
     def test_has_constraints_section(self):
-        assert "CONSTRAINTS" in BRIEF_GENERATION_TEMPLATE
+        assert "CONSTRAINTS" in BRIEF_GENERATION_PROMPT_TEXT
 
     def test_has_do_not_invent_phrase(self):
-        lower = BRIEF_GENERATION_TEMPLATE.lower()
+        lower = BRIEF_GENERATION_PROMPT_TEXT.lower()
         assert "do not invent" in lower
 
     def test_has_signal_citation_instruction(self):
-        assert "[Signal:" in BRIEF_GENERATION_TEMPLATE
+        assert "[Signal:" in BRIEF_GENERATION_PROMPT_TEXT
 
     def test_has_output_format(self):
-        assert "brief" in BRIEF_GENERATION_TEMPLATE
-        assert "assessment" in BRIEF_GENERATION_TEMPLATE
-        assert "key_questions" in BRIEF_GENERATION_TEMPLATE
+        assert "brief" in BRIEF_GENERATION_PROMPT_TEXT
+        assert "assessment" in BRIEF_GENERATION_PROMPT_TEXT
+        assert "key_questions" in BRIEF_GENERATION_PROMPT_TEXT
 
     def test_has_all_assessment_values(self):
         for assessment in VALID_ASSESSMENTS:
-            assert assessment in BRIEF_GENERATION_TEMPLATE
+            assert assessment in BRIEF_GENERATION_PROMPT_TEXT

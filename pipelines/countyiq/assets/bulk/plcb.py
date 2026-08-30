@@ -23,6 +23,7 @@ from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.plcb import parse_plcb_csv, EXPECTED_HEADERS
 from countyiq.lib.scd import scd2_upsert
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -59,6 +60,16 @@ def plcb_licenses(
 ) -> MaterializeResult:
     """Download PLCB CSV, filter to configured county, SCD2 upsert."""
 
+    authorization = authorize_source(
+        database,
+        source_key="plcb_licenses",
+        acquisition_method="official_bulk_export",
+        asset_key="plcb_licenses",
+        dagster_run_id=context.run_id,
+    )
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
+
     # 1. Download CSV
     context.log.info(f"Downloading PLCB CSV from {PLCB_CSV_URL}")
     resp = requests.get(PLCB_CSV_URL, timeout=120)
@@ -66,7 +77,7 @@ def plcb_licenses(
     csv_text = resp.text
     context.log.info(f"Downloaded {len(csv_text)} characters")
 
-    # 2. Archive raw CSV to S3 (skipped locally if no AWS creds)
+    # 2. Archive raw CSV to R2 (skipped locally without archive credentials)
     county = get_county_config()
     s3.archive(f"{county.s3_prefix}/bulk/plcb", csv_text, filename="licenses.csv")
 
@@ -120,8 +131,14 @@ plcb_record_count_nonzero = make_row_count_check(
 
 
 @asset_check(asset=plcb_licenses)
-def plcb_no_schema_drift() -> AssetCheckResult:
+def plcb_no_schema_drift(database: DatabaseResource) -> AssetCheckResult:
     """Verify PLCB CSV headers haven't changed."""
+    authorize_source(
+        database,
+        source_key="plcb_licenses",
+        acquisition_method="official_bulk_export",
+        asset_key="plcb_no_schema_drift",
+    )
     try:
         with requests.get(PLCB_CSV_URL, timeout=30, stream=True) as resp:
             resp.raise_for_status()

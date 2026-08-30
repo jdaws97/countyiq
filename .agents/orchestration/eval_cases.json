@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "tool-exact-search",
+      "prompt": "Find every reference to one exact symbol and return paths and lines.",
+      "expected_route": "direct_tool",
+      "risk": "low",
+      "oracle": "Exact search output can be obtained directly; delegation has negative economics."
+    },
+    {
+      "id": "luna-named-file-extraction",
+      "prompt": "Extract scripts from these three named manifest files into a fixed JSON schema.",
+      "expected_route": "luna",
+      "risk": "low",
+      "oracle": "Compare keys against a direct parser over the same named files."
+    },
+    {
+      "id": "luna-one-file-tested-change",
+      "prompt": "Apply a precisely specified null-handling change in one parser with an existing focused test.",
+      "expected_route": "luna",
+      "risk": "low",
+      "oracle": "Focused parser tests plus changed-path check."
+    },
+    {
+      "id": "terra-repository-discovery",
+      "prompt": "Map the validation surface across manifests and workflow files from a supplied file inventory.",
+      "expected_route": "terra",
+      "risk": "low",
+      "oracle": "Sample claims against the machine-generated inventory and cited files."
+    },
+    {
+      "id": "terra-data-flow",
+      "prompt": "Trace a PIDN field from a named Dagster asset through a named API route.",
+      "expected_route": "terra",
+      "risk": "medium",
+      "oracle": "Cited symbol chain exists and targeted tests cover claimed contracts."
+    },
+    {
+      "id": "terra-failure-triage",
+      "prompt": "Diagnose two failing focused tests using their supplied traces without editing.",
+      "expected_route": "terra",
+      "risk": "medium",
+      "oracle": "Hypothesis predicts a minimal reproducer or explains the observed trace."
+    },
+    {
+      "id": "root-migration",
+      "prompt": "Design and implement an Alembic migration that changes canonical owner identity semantics.",
+      "expected_route": "root",
+      "risk": "high",
+      "oracle": "Migration safety and identity semantics require primary judgment and database verification."
+    },
+    {
+      "id": "root-cross-surface",
+      "prompt": "Change a parcel contract across pipeline schema, FastAPI, and React consumers.",
+      "expected_route": "root",
+      "risk": "high",
+      "oracle": "Primary agent owns integration; bounded evidence collection may be delegated."
+    },
+    {
+      "id": "root-security",
+      "prompt": "Change API authentication and rate-limit trust boundaries.",
+      "expected_route": "root",
+      "risk": "high",
+      "oracle": "Security decisions are a hard root domain."
+    },
+    {
+      "id": "root-llm-policy",
+      "prompt": "Change CountyIQ pass model selection and production eval thresholds.",
+      "expected_route": "root",
+      "risk": "high",
+      "oracle": "LLM policy and acceptance thresholds are a hard root domain."
+    }
+  ]
+}

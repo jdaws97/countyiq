@@ -66,21 +66,20 @@ class TestSignalTemplates:
         "zoning_mismatch",
         "vacancy",
         "assemblage",
-        "ecodev_candidate",
+        "economic_development_park",
         "penndot_project",
-        "cdbg_investment",
         "growth_area",
         "flood_zone",
         "conservation_easement",
         "ag_security",
     ]
 
-    def test_all_13_signal_types_have_templates(self):
+    def test_all_12_signal_types_have_templates(self):
         for signal_type in self.EXPECTED_SIGNAL_TYPES:
             assert signal_type in SIGNAL_TEMPLATES, f"Missing template for {signal_type}"
 
-    def test_exactly_13_templates(self):
-        assert len(SIGNAL_TEMPLATES) == 13
+    def test_exactly_12_templates(self):
+        assert len(SIGNAL_TEMPLATES) == 12
 
     def test_each_has_base_questions(self):
         for signal_type, template in SIGNAL_TEMPLATES.items():
@@ -117,8 +116,8 @@ class TestSignalTemplates:
         assert "has_proceedings" in cond
         assert "has_corporate" in cond
 
-    def test_ecodev_has_no_conditionals(self):
-        cond = SIGNAL_TEMPLATES["ecodev_candidate"]["conditional_questions"]
+    def test_economic_park_has_no_conditionals(self):
+        cond = SIGNAL_TEMPLATES["economic_development_park"]["conditional_questions"]
         assert len(cond) == 0
 
     def test_penndot_has_no_conditionals(self):

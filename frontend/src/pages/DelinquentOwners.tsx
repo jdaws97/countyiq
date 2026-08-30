@@ -490,7 +490,7 @@ export default function DelinquentOwners() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {parcel.address}
+                    {parcel.property_address ?? '—'}
                   </div>
 
                   {/* District */}
@@ -504,7 +504,7 @@ export default function DelinquentOwners() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {parcel.district}
+                    {parcel.tax_district_name ?? '—'}
                   </div>
 
                   {/* Years delinquent */}

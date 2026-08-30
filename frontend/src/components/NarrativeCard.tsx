@@ -3,7 +3,7 @@ import Badge from './Badge'
 import { formatLabel, formatShortDate } from '../lib/format'
 import type { CountyNarrative } from '../types/api'
 
-export function narrativeTypeColor(type: string): string {
+function narrativeTypeColor(type: string): string {
   if (type === 'corridor') return 'var(--accent-blue)'
   if (type === 'distress') return 'var(--accent-red)'
   if (type === 'municipal') return 'var(--accent-green)'

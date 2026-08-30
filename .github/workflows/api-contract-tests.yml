@@ -1,0 +1,36 @@
+name: API Contract Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "pipelines/**"
+      - ".github/workflows/api-contract-tests.yml"
+
+jobs:
+  api-contract-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.6"
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: |
+            api/uv.lock
+            pipelines/uv.lock
+
+      - name: Install locked API dependencies
+        run: uv sync --project api --locked
+
+      - name: Install locked pipeline dependencies
+        run: uv sync --project pipelines --locked
+
+      - name: Run API contract tests
+        run: uv run --project api pytest api/tests -v

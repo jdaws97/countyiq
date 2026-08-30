@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from typing_extensions import NotRequired, TypedDict
@@ -15,6 +16,16 @@ class SourceStatus(TypedDict):
     status: SourceHealthStatus
     record_count: int
     error: NotRequired[Literal["missing_table", "query_failed"]]
+    configured_count: NotRequired[int]
+    active_count: NotRequired[int]
+    healthy_count: NotRequired[int]
+    blocked_count: NotRequired[int]
+    unchecked_count: NotRequired[int]
+    conditional_count: NotRequired[int]
+    paused_count: NotRequired[int]
+    overdue_count: NotRequired[int]
+    due_soon_count: NotRequired[int]
+    next_review_on: NotRequired[date | None]
 
 
 class OpsHealthResponse(TypedDict):
@@ -39,6 +50,7 @@ class HomepageStatsResponse(TypedDict):
     municipal_tax_owed: float
     oldest_delinquent_year: int | None
     districts_affected: int
+    tax_claim_report_date: date | None
 
 
 class TaxDelinquencyRecord(TypedDict):
@@ -49,13 +61,12 @@ class TaxDelinquencyRecord(TypedDict):
     interest_owed: float | int | None
     fees_owed: float | int | None
     total: float | int | None
-    owner_name: str | None
-    property_address: str | None
 
 
 class TaxDelinquencyPayload(TypedDict):
+    detail_available: bool
     is_delinquent: bool
-    total_owed: float
+    total_owed: float | None
     records: list[TaxDelinquencyRecord]
 
 
@@ -88,13 +99,14 @@ class ReasonSignalPayload(TypedDict):
 class DevelopmentMomentumPayload(TypedDict):
     score: float | int
     opportunity_score: float | int
+    site_readiness_score: float | int
     has_active_plan: bool
     eligible: bool
     exclusion_reasons: list[str]
     signals: dict[str, object]
     top_signal: str | None
     signal_count: int
-    score_version: str | None
+    score_version: int | None
     computed_at: str | None
     reason_signals: list[ReasonSignalPayload]
 
@@ -119,6 +131,62 @@ class CountyNarrativePayload(TypedDict):
     key_entities: list[str]
     citations: list[str]
     generated_at: str | None
+
+
+class IntelligenceSourcePayload(TypedDict):
+    label: str
+    url: str | None
+    document_url: str | None
+    excerpt: str | None
+    details: dict[str, object]
+
+
+class IntelligenceProjectPayload(TypedDict):
+    key: str
+    name: str
+
+
+class IntelligenceEntityLinkPayload(TypedDict):
+    owner_id: int
+    name: str
+    matched_name: str
+    verification_status: str | None
+
+
+class IntelligenceInterpretationPayload(TypedDict):
+    kind: Literal["deterministic", "llm"]
+    model: str | None
+    generated_at: str | None
+
+
+class IntelligenceEventPayload(TypedDict):
+    event_key: str
+    category: Literal["parcel", "development"]
+    event_type: str
+    event_tags: list[str]
+    title: str
+    what_happened: str
+    why_it_matters: str
+    what_happens_next: str
+    event_date: str | None
+    detected_at: str
+    confidence: float | None
+    municipality: str | None
+    project: IntelligenceProjectPayload | None
+    related_entities: list[str]
+    entity_links: list[IntelligenceEntityLinkPayload]
+    related_pidns: list[str]
+    importance_score: int
+    importance_reasons: list[str]
+    sources: list[IntelligenceSourcePayload]
+    interpretation: IntelligenceInterpretationPayload
+
+
+class IntelligenceFeedResponse(TypedDict):
+    events: list[IntelligenceEventPayload]
+    limit: int
+    offset: int
+    has_more: bool
 
 
 class IntelligenceSummaryPayload(TypedDict):
@@ -206,7 +274,8 @@ RadarParcelPayload = TypedDict(
         "signals": dict[str, object] | None,
         "eligible": bool,
         "has_active_plan": NotRequired[bool],
-        "score_version": str | None,
+        "site_readiness_score": NotRequired[float | int],
+        "score_version": int | None,
         "computed_at": str | None,
         "owner_full": str | None,
         "propadr": str | None,
@@ -222,6 +291,7 @@ RadarParcelPayload = TypedDict(
 class RadarParcelListResponse(TypedDict):
     count: int
     parcels: list[RadarParcelPayload]
+    coverage: NotRequired[dict[str, object]]
 
 
 class RadarMunicipalitiesResponse(TypedDict):
@@ -237,8 +307,7 @@ class ParcelBboxProperties(TypedDict, total=False):
     class_: str | None
     saledt: str | None
     price: float | None
-    delinquent_total: float
-    years_delinquent: int | None
+    has_tax_delinquency: bool
 
 
 class ParcelBboxFeature(TypedDict):
@@ -271,6 +340,48 @@ class MunicipalitySummary(TypedDict):
     muni_type: str | None
     delinquent_parcels: int
     total_delinquent: float
+
+
+class MunicipalityStatsPayload(TypedDict):
+    parcel_count: int
+    total_assessed: float
+
+
+class MunicipalityDelinquencyPayload(TypedDict):
+    delinquent_parcels: int
+    total_delinquent: float
+    oldest_delinquent_year: int | None
+    delinquent_years: int
+
+
+class TopDelinquentOwnerPayload(TypedDict):
+    owner_name: str
+    parcel_count: int
+    total_owed: float
+    oldest_year: int | None
+    newest_year: int | None
+    years_delinquent: int
+    districts: list[str]
+
+
+class MunicipalityLicenseSummaryPayload(TypedDict):
+    licensee: str | None
+    premises_name: str | None
+    premises_address: str | None
+    license_type: str
+    status: str | None
+    municipality: str | None
+    last_issue_date: str | None
+    expiration_date: str | None
+
+
+class MunicipalityProfileResponse(TypedDict):
+    name: str
+    muni_type: str | None
+    county: str | None
+    stats: MunicipalityStatsPayload
+    delinquency: MunicipalityDelinquencyPayload
+    licenses: list[MunicipalityLicenseSummaryPayload]
 
 
 class HealthResponse(TypedDict):

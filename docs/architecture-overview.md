@@ -1,6 +1,8 @@
 # Architecture Overview
 
-CountyIQ is currently a containerized civic intelligence stack with Cloudflare in front, a React frontend, a FastAPI API, and Dagster pipelines feeding PostgreSQL/PostGIS.
+CountyIQ is a containerized real-estate intelligence stack with Cloudflare in
+front, a React frontend, a FastAPI API, and Dagster pipelines feeding
+PostgreSQL/PostGIS.
 
 ## System Shape
 
@@ -11,10 +13,10 @@ Users
 Cloudflare
   - DNS / CDN / TLS / WAF
   - Cloudflare Pages for the frontend (current preferred setup)
-  - Cloudflare R2 for raw archives and tile/object storage
+  - Cloudflare R2 for selected raw-source and backup archives
   |
   v
-Ubuntu VPS (current target: generic container host, likely Hostinger)
+Ubuntu VPS (Hetzner)
   - Caddy
   - FastAPI
   - Dagster
@@ -25,7 +27,7 @@ Ubuntu VPS (current target: generic container host, likely Hostinger)
 
 - `/*`: frontend, ideally served from Cloudflare Pages
 - `/api/*`: proxied to FastAPI behind Caddy
-- raw archives and tile-like artifacts: stored outside Postgres, primarily in Cloudflare R2
+- selected source and backup archives: stored outside Postgres in Cloudflare R2
 
 ## Data Flow
 
@@ -44,11 +46,13 @@ The current repo is no longer just an MVP property browser. It includes an LLM-b
 - Pass 3: parcel brief generation
 - Pass 4: county narrative generation
 
-OpenRouter is the primary remote inference backend. Local GGUF support remains in the harness for evaluation and fallback.
+OpenRouter is the only inference backend in the production harness. Model
+fallbacks are alternate OpenRouter routes selected through explicit pass
+configuration.
 
 ## Deployment Reality
 
 - The current deployment story is containerized VPS plus Cloudflare, not AWS Lambda.
-- Hostinger is the current preferred VPS option to evaluate.
-- Hetzner references in older materials are historical, not architectural requirements.
-- The old AWS/Terraform stack has been archived under `archives/infrastructure/aws-terraform/` and should not be treated as an active deployment path.
+- Hetzner is the selected VPS provider; Netcup is the fallback.
+- AWS/Lambda/Terraform deployment material is historical and is not kept in the
+  working tree.

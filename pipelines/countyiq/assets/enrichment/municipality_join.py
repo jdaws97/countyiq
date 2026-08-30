@@ -39,17 +39,10 @@ def municipality_join(
     nulls_before = result[0][0] if result else 0
     context.log.info(f"Parcels with NULL municipality before join: {nulls_before}")
 
-    if nulls_before == 0:
-        context.log.info("All current parcels already have a municipality — skipping")
-        return MaterializeResult(
-            metadata={
-                "nulls_before": MetadataValue.int(0),
-                "rows_updated": MetadataValue.int(0),
-                "nulls_after": MetadataValue.int(0),
-            }
-        )
-
-    # Run spatial join — ST_Centroid picks one municipality per parcel
+    # Run spatial join — ST_Centroid picks one municipality per parcel.
+    # Reconciles rather than fills: NULLs get assigned AND rows whose stored
+    # municipality no longer matches the boundary polygons get corrected
+    # (boundary fixes in staging.municipalities propagate on the next run).
     cur = database.cursor()
     conn = cur.connection
     was_autocommit = conn.autocommit
@@ -64,7 +57,7 @@ def municipality_join(
             WHERE ST_Intersects(ST_Centroid(p.geom), m.geom)
               AND p.valid_to IS NULL
               AND m.valid_to IS NULL
-              AND p.municipality IS NULL
+              AND p.municipality IS DISTINCT FROM m.name
         """)
         rows_updated = cur.rowcount
         conn.commit()
@@ -76,13 +69,16 @@ def municipality_join(
             conn.autocommit = True
         cur.close()
 
-    context.log.info(f"Updated {rows_updated} parcels with municipality")
-
     # Count remaining NULLs
     result = database.execute(
         "SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL AND municipality IS NULL"
     )
     nulls_after = result[0][0] if result else 0
+    rows_filled = nulls_before - nulls_after
+    rows_corrected = rows_updated - rows_filled
+    context.log.info(
+        f"Updated {rows_updated} parcels ({rows_filled} filled, {rows_corrected} corrected)"
+    )
     if nulls_after > 0:
         context.log.warning(f"{nulls_after} parcels still have NULL municipality (centroid outside all municipality polygons)")
 
@@ -97,6 +93,8 @@ def municipality_join(
         metadata={
             "nulls_before": MetadataValue.int(nulls_before),
             "rows_updated": MetadataValue.int(rows_updated),
+            "rows_filled": MetadataValue.int(rows_filled),
+            "rows_corrected": MetadataValue.int(rows_corrected),
             "nulls_after": MetadataValue.int(nulls_after),
             "distinct_municipalities": MetadataValue.int(distinct_munis),
         }

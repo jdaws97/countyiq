@@ -18,7 +18,9 @@ Shared:
 
 from __future__ import annotations
 
+from countyiq.lib.county_config import county_prompt_context
 
+_COUNTY_CONTEXT = county_prompt_context()
 
 # =============================================================================
 # CONSTANTS
@@ -91,23 +93,15 @@ CORRIDOR_SCAN_QUERY = """
     ORDER BY COUNT(*) DESC
 """
 
-CORRIDOR_TEMPLATE = """You are a county intelligence analyst identifying corridor-level development patterns in York County, PA.
+# Each scan's prompt is split into a byte-identical system block and a dynamic
+# user block so providers with implicit prompt caching can reuse instructions.
+
+_CORRIDOR_SYSTEM_TEMPLATE = """You are a county intelligence analyst identifying corridor-level development patterns in {county_context}.
 
 Your job is to synthesize cluster data into a narrative about what is happening along this corridor and whether the activity is coordinated or independent.
 
-CLUSTER:
-- Signal type: {signal_key}
-- Cluster size: {cluster_size} parcels
-- PIDNs: {cluster_pidns}
-
-PARCELS IN CLUSTER:
-{parcels_text}
-
-RECENT PROCEEDINGS:
-{proceedings_text}
-
 CONSTRAINTS:
-1. Every claim MUST be grounded in the data above. Do not invent facts.
+1. Every claim MUST be grounded in the data provided. Do not invent facts.
 2. Do not provide legal or financial advice.
 3. If evidence is ambiguous, say so explicitly.
 
@@ -130,6 +124,21 @@ Return ONLY valid JSON with this structure:
 }}
 
 Return ONLY valid JSON. Do not include commentary outside the JSON object."""
+
+CORRIDOR_USER_TEMPLATE = """CLUSTER:
+- Signal type: {signal_key}
+- Cluster size: {cluster_size} parcels
+- PIDNs: {cluster_pidns}
+
+PARCELS IN CLUSTER:
+{parcels_text}
+
+RECENT PROCEEDINGS:
+{proceedings_text}
+
+Write the corridor narrative. Return ONLY the JSON object."""
+
+CORRIDOR_SYSTEM_PROMPT = _CORRIDOR_SYSTEM_TEMPLATE.format(county_context=_COUNTY_CONTEXT)
 
 
 def _format_corridor_parcels(parcels: list[dict]) -> str:
@@ -182,7 +191,7 @@ def build_corridor_prompt(cluster: dict) -> str:
 
     pidns_str = ", ".join(cluster.get("cluster_pidns", []))
 
-    return CORRIDOR_TEMPLATE.format(
+    return CORRIDOR_USER_TEMPLATE.format(
         signal_key=cluster.get("signal_key", ""),
         cluster_size=cluster.get("cluster_size", 0),
         cluster_pidns=pidns_str,
@@ -235,25 +244,12 @@ PORTFOLIO_SCAN_QUERY = """
     ORDER BY briefed_parcels DESC
 """
 
-PORTFOLIO_TEMPLATE = """You are a county intelligence analyst profiling an entity's real estate portfolio in York County, PA.
+_PORTFOLIO_SYSTEM_TEMPLATE = """You are a county intelligence analyst profiling an entity's real estate portfolio in {county_context}.
 
 Your job is to synthesize the entity's parcel briefs and deed history into a narrative about the entity's strategy and trajectory.
 
-ENTITY:
-- Name: {canonical_name}
-- Type: {entity_type}
-- Briefed parcels: {briefed_parcels}
-- Municipalities: {municipalities}
-- Total acres: {total_acres}
-
-PARCEL BRIEFS:
-{briefs_text}
-
-DEED HISTORY:
-{deeds_text}
-
 CONSTRAINTS:
-1. Every claim MUST be grounded in the data above. Do not invent facts.
+1. Every claim MUST be grounded in the data provided. Do not invent facts.
 2. Do not provide legal or financial advice.
 3. If the entity's intent is unclear, say so explicitly.
 
@@ -276,6 +272,23 @@ Return ONLY valid JSON with this structure:
 }}
 
 Return ONLY valid JSON. Do not include commentary outside the JSON object."""
+
+PORTFOLIO_USER_TEMPLATE = """ENTITY:
+- Name: {canonical_name}
+- Type: {entity_type}
+- Briefed parcels: {briefed_parcels}
+- Municipalities: {municipalities}
+- Total acres: {total_acres}
+
+PARCEL BRIEFS:
+{briefs_text}
+
+DEED HISTORY:
+{deeds_text}
+
+Write the portfolio narrative. Return ONLY the JSON object."""
+
+PORTFOLIO_SYSTEM_PROMPT = _PORTFOLIO_SYSTEM_TEMPLATE.format(county_context=_COUNTY_CONTEXT)
 
 
 def _format_portfolio_briefs(briefs: list[dict]) -> str:
@@ -332,7 +345,7 @@ def build_portfolio_prompt(portfolio: dict) -> str:
     municipalities = portfolio.get("municipalities", [])
     municipalities_str = ", ".join(municipalities) if municipalities else "N/A"
 
-    return PORTFOLIO_TEMPLATE.format(
+    return PORTFOLIO_USER_TEMPLATE.format(
         canonical_name=portfolio.get("canonical_name", ""),
         entity_type=portfolio.get("entity_type", "unknown"),
         briefed_parcels=portfolio.get("briefed_parcels", 0),
@@ -386,26 +399,12 @@ MUNICIPAL_SCAN_QUERY = """
     ORDER BY p.municipality
 """
 
-MUNICIPAL_TEMPLATE = """You are a county intelligence analyst assessing municipal-level development and distress trends in York County, PA.
+_MUNICIPAL_SYSTEM_TEMPLATE = """You are a county intelligence analyst assessing municipal-level development and distress trends in {county_context}.
 
-Your job is to synthesize the data below into a narrative about the municipality's current development posture and tensions.
-
-MUNICIPALITY: {municipality}
-
-ASSESSMENT DISTRIBUTION (from parcel briefs):
-{assessment_text}
-
-SIGNAL DISTRIBUTION (from validated evidence):
-{signal_text}
-
-ZHB DECISIONS (from proceeding extractions):
-{zhb_text}
-
-DISTRESS SUMMARY (from tax claims):
-{distress_text}
+Your job is to synthesize the data provided into a narrative about the municipality's current development posture and tensions.
 
 CONSTRAINTS:
-1. Every claim MUST be grounded in the data above. Do not invent facts.
+1. Every claim MUST be grounded in the data provided. Do not invent facts.
 2. Do not provide legal or financial advice.
 3. If trends are ambiguous, say so explicitly.
 
@@ -428,6 +427,24 @@ Return ONLY valid JSON with this structure:
 }}
 
 Return ONLY valid JSON. Do not include commentary outside the JSON object."""
+
+MUNICIPAL_USER_TEMPLATE = """MUNICIPALITY: {municipality}
+
+ASSESSMENT DISTRIBUTION (from parcel briefs):
+{assessment_text}
+
+SIGNAL DISTRIBUTION (from validated evidence):
+{signal_text}
+
+ZHB DECISIONS (from proceeding extractions):
+{zhb_text}
+
+DISTRESS SUMMARY (from tax claims):
+{distress_text}
+
+Write the municipality narrative. Return ONLY the JSON object."""
+
+MUNICIPAL_SYSTEM_PROMPT = _MUNICIPAL_SYSTEM_TEMPLATE.format(county_context=_COUNTY_CONTEXT)
 
 
 def _format_assessment_distribution(data: dict) -> str:
@@ -499,7 +516,7 @@ def build_municipal_prompt(data: dict) -> str:
     zhb_text = _format_zhb_decisions(data)
     distress_text = _format_distress_summary(data)
 
-    return MUNICIPAL_TEMPLATE.format(
+    return MUNICIPAL_USER_TEMPLATE.format(
         municipality=data.get("municipality", ""),
         assessment_text=assessment_text,
         signal_text=signal_text,
@@ -553,22 +570,12 @@ DISTRESS_SCAN_QUERY = """
     ORDER BY ABS(COALESCE(c.current_total_owed, 0) - COALESCE(pr.prior_total_owed, 0)) DESC
 """
 
-DISTRESS_TEMPLATE = """You are a county intelligence analyst tracking tax distress migration patterns in York County, PA.
+_DISTRESS_SYSTEM_TEMPLATE = """You are a county intelligence analyst tracking tax distress migration patterns in {county_context}.
 
 Your job is to analyze how tax delinquency is changing across municipalities and school districts, identifying where distress is concentrating, spreading, or resolving.
 
-DISTRESS CHANGE DATA:
-- Municipality: {municipality}
-- School district: {school_dis}
-- Current delinquent parcels: {current_count}
-- Prior delinquent parcels (90 days ago): {prior_count}
-- Parcel count change: {count_delta:+d}
-- Current total owed: ${current_total_owed:,.0f}
-- Prior total owed (90 days ago): ${prior_total_owed:,.0f}
-- Total owed change: ${total_delta:+,.0f}
-
 CONSTRAINTS:
-1. Every claim MUST be grounded in the data above. Do not invent facts.
+1. Every claim MUST be grounded in the data provided. Do not invent facts.
 2. Do not provide legal or financial advice.
 3. If the direction of change is ambiguous, say so explicitly.
 
@@ -591,6 +598,20 @@ Return ONLY valid JSON with this structure:
 
 Return ONLY valid JSON. Do not include commentary outside the JSON object."""
 
+DISTRESS_USER_TEMPLATE = """DISTRESS CHANGE DATA:
+- Municipality: {municipality}
+- School district: {school_dis}
+- Current delinquent parcels: {current_count}
+- Prior delinquent parcels (90 days ago): {prior_count}
+- Parcel count change: {count_delta:+d}
+- Current total owed: ${current_total_owed:,.0f}
+- Prior total owed (90 days ago): ${prior_total_owed:,.0f}
+- Total owed change: ${total_delta:+,.0f}
+
+Write the distress migration narrative. Return ONLY the JSON object."""
+
+DISTRESS_SYSTEM_PROMPT = _DISTRESS_SYSTEM_TEMPLATE.format(county_context=_COUNTY_CONTEXT)
+
 
 def build_distress_prompt(data: dict) -> str:
     """Format distress migration data into the distress narrative prompt.
@@ -603,7 +624,7 @@ def build_distress_prompt(data: dict) -> str:
     Returns:
         Fully formatted prompt string ready for LLM invocation.
     """
-    return DISTRESS_TEMPLATE.format(
+    return DISTRESS_USER_TEMPLATE.format(
         municipality=data.get("municipality", ""),
         school_dis=data.get("school_dis", ""),
         current_count=data.get("current_count", 0),

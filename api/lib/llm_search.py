@@ -1,133 +1,101 @@
-"""LLM-powered natural language search via OpenRouter."""
+"""LLM-powered natural-language intent parsing via OpenRouter."""
 
 import json
+import logging
 import os
-import sys
 
 import requests
 
+from api.lib.settings import county_metadata
+
+logger = logging.getLogger(__name__)
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# Search uses a cheap, dedicated model pool. It intentionally does not inherit
+# the more expensive intelligence-pipeline model default.
 DEFAULT_MODELS = [
-    "google/gemma-3-27b-it:free",
+    "qwen/qwen3.5-flash-02-23",
     "mistralai/mistral-small-2603",
     "qwen/qwen3.5-9b",
 ]
 
-SYSTEM_PROMPT = """You are the search engine for CountyIQ, a civic intelligence platform for York County, Pennsylvania.
+ALLOWED_REDIRECT_PATHS = frozenset(
+    {
+        "/",
+        "/map",
+        "/feed",
+        "/radar",
+        "/licenses",
+        "/watch",
+    }
+)
 
-Your job: given a user query, return a JSON object that tells the system what to do.
+_COUNTY = county_metadata()
+SYSTEM_PROMPT = f"You interpret search requests for CountyIQ, a real-estate intelligence product for {_COUNTY['county_name']}, {_COUNTY['state']}. Return exactly one JSON object. Never produce SQL, code, markdown, or commentary.\n\n" + """The application compiles your JSON through a strict allowlist. Use only this grammar.
 
-## Available Data
+INTENTS
 
-### 1. staging.parcels — 176,059 property parcels
-Key columns: pidn (VARCHAR PK), owner_full (TEXT — format: "LAST FIRST M", e.g. "DAWS JAROD N & MILLER COURTNEY M"), propadr (TEXT — street address only, no city/zip), class (CHAR: R=Residential 150K, F=Farm 11K, C=Commercial 6K, E=Exempt 5K, I=Industrial 2K, A=Agricultural 1K, U=Utility 135), acres (NUMERIC), aprtotal (TEXT — assessed total value, cast to numeric for sorting/filtering), saledt (TEXT — format "22-NOV-2024"), price (TEXT — sale price, cast to numeric), school_dis (VARCHAR — code like "002", "030"), prev_owner, prev_price
-NOTE: municipality column is often NULL for parcels. Use school_dis as area proxy, or join staging.zipcodes/staging.municipalities spatially.
-NOTE: year_built, style, living_area are mostly NULL in GIS data (assessment fields not populated).
+1. Row query:
+{"intent":"query","table":"parcels","description":"What the result represents and any data limitation","filters":[{"field":"acres","op":"gte","value":2}],"signals":["vacant"],"location":{"type":"municipality","value":"Spring Garden"},"sort":[{"field":"acres","direction":"desc"}],"limit":20}
 
-### 2. staging.tax_claims — 36,831 delinquent tax records
-Key columns: pidn, owner_name, property_address, tax_district_name (e.g. "YORK CITY 1ST WARD", "CARROLL TOWNSHIP"), tax_year (INT, range 2000-2026), authority_name (COUNTY/SCHOOL/MUNICIPAL), total (NUMERIC — net amount owed), tax_district_code
-Use for: delinquency lookups, biggest tax debtors, oldest delinquencies, delinquency by area
+2. Numeric aggregate (tax claims are aggregate-only):
+{"intent":"aggregate","table":"tax_claims","description":"Total delinquent taxes in Dover Township","aggregate":{"operation":"sum","field":"total"},"filters":[{"field":"total","op":"gt","value":0}],"location":{"type":"municipality","value":"Dover Township"},"label":"Total Delinquent","format":"currency"}
 
-### 3. staging.plcb_licenses — 1,346 liquor licenses
-Key columns: licensee, premises_name, premises_address (includes city+state+zip like "602 OLD YORK RD, ETTERS PA 17319"), license_type, status (Active/Expired/Safekeeping), municipality (e.g. "York City", "Fairview Twp" — note mixed case, different from parcels)
-Active license types: Restaurant (180), Catering Club (32), Brewery (27), Distributor (26), Hotel (21), Limited Winery (20), Club (16)
-NOTE: This is the ONLY source that identifies restaurants, bars, breweries, wineries. Not all restaurants have liquor licenses. When searching for restaurants/bars/food establishments, note this limitation in your description.
+3. Exact person, company, address, or parcel lookup:
+{"intent":"lookup","search_term":"DAWS JAROD","description":"Looking up property owner Jarod Daws"}
 
-### 4. staging.municipalities — 72 municipalities with geometry
-Key columns: name (e.g. "YORK CITY", "CARROLL TWP", "DELTA BORO"), muni_type (TOWNSHIP/BOROUGH/CITY)
+4. Existing product page:
+{"intent":"redirect","redirect_path":"/radar","description":"Development radar"}
+Allowed redirect_path values: /, /map, /feed, /radar, /licenses, /watch.
 
-### 5. staging.flood_zones — 4,000 FEMA flood hazard zones with geometry
-Key columns: fld_zone (AE=high risk 2568, X=minimal 1240, A=high risk 192), sfha_tf (T=Special Flood Hazard Area, F=not)
+TABLES AND FIELDS
+- parcels: pidn, owner_full, propadr, class, acres, aprtotal, aprland, aprbldg, price, saledt, school_dis
+  class codes: R residential, C commercial, I industrial, F farm, A agricultural, E exempt, U utility.
+  owner_full is stored LAST FIRST MIDDLE. propadr has street address but usually no municipality or ZIP.
+- tax_claims (aggregate intent only): pidn, tax_district_name, tax_year, authority_name, total
+- plcb_licenses: premises_name, premises_address, license_type, status, municipality
+  This is the only restaurant/bar/brewery source and covers only licensed establishments; say so in descriptions.
+- penndot_projects: project_name, description, status, cost, start_date, end_date
+- penndot_roads: road_name, road_class, speed_limit
+- municipalities: name, muni_type
+- zipcodes: zipcode, po_name
 
-### 6. staging.structures — 213,041 building footprints with geometry
-Use for vacancy detection: parcels with no intersecting structure are likely vacant land.
+FILTERS
+- Each filter is {"field":"one listed field","op":"operator","value":value}.
+- Text operators: eq, neq, contains, starts_with, in.
+- Numeric/integer/date operators: eq, neq, gt, gte, lt, lte, in.
+- Dates must be YYYY-MM-DD.
+- Do not invent fields. Omit filters rather than guessing values.
 
-### 7. staging.penndot_projects — 81 PennDOT projects
-Key columns: project_name, description, status (Active 27, Candidate 49, Completed 2, Programmed 2), cost, start_date, end_date
+PARCEL SIGNALS
+- vacant: no intersecting building footprint plus conservative assessment/sale guards. Footprints may be stale, so describe results as likely vacant.
+- tax_delinquent: parcel has a current tax claim with a positive balance.
+- flood_zone: parcel intersects a FEMA Special Flood Hazard Area.
+- recent_sale: sale within recent_sale_years, an integer from 1 to 10; default 1.
+Signals are valid only with table=parcels.
 
-### 8. staging.penndot_roads — 2,271 state road segments with geometry
-Key columns: road_name, road_class, speed_limit
+LOCATION
+- {"type":"zipcode","value":"17404"}
+- {"type":"municipality","value":"York City"}
+Location is supported for parcels and plcb_licenses; municipality is also supported for tax_claims.
 
-### 9. staging.pa_open_data — 89,237 PA registered businesses
-Key columns: dataset_id, record_id, data (JSONB with: business_name, typeofbusinessregistration, city, filing_number)
-NOTE: Only has registration type (LLC, Corp, etc.), NOT industry/business type. Cannot identify restaurants, stores, etc. from this data.
+SORT AND AGGREGATES
+- sort is a list of up to three {"field":"one table field","direction":"asc|desc"} objects.
+- aggregate.operation: count, count_distinct, sum, avg, min, max.
+- count has no field. count_distinct requires a field. sum/avg/min/max require a numeric field.
+- format: number, currency, or percent.
 
-## Spatial Capabilities
-- All geometry tables use SRID 4326 (lat/long)
-- ST_Intersects(a.geom, b.geom) — test overlap
-- ST_DWithin(a.geom, b.geom, distance) — proximity check. 1 mile ≈ 0.0145 degrees
-- ST_MakeEnvelope(west, south, east, north, 4326) — bounding box
-- Vacant land (MULTI-SIGNAL — always use ALL conditions together):
-  NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND s.geom IS NOT NULL AND ST_Intersects(s.geom, staging.parcels.geom))
-  AND (class NOT IN ('R') OR aprtotal IS NULL OR aprtotal::numeric < 50000)
-  AND (price IS NULL OR price::numeric < 100000)
-  IMPORTANT: building footprint data may be stale. A parcel with no footprint but high assessed value or recent expensive sale is NOT truly vacant.
-- Flood zone check: EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, p.geom))
-- Zip code filter: pidn IN (SELECT p2.pidn FROM staging.parcels p2 JOIN staging.zipcodes z ON ST_Intersects(p2.geom, z.geom) WHERE z.zipcode = '17404')
+EXAMPLES
+- most expensive property -> {"intent":"query","table":"parcels","description":"Highest assessed parcels","sort":[{"field":"aprtotal","direction":"desc"}],"limit":5}
+- breweries in 17404 -> {"intent":"query","table":"plcb_licenses","description":"Active brewery licenses in 17404; this covers licensed establishments only","filters":[{"field":"status","op":"eq","value":"Active"},{"field":"license_type","op":"contains","value":"Brewery"}],"location":{"type":"zipcode","value":"17404"},"sort":[{"field":"premises_name","direction":"asc"}],"limit":20}
+- vacant delinquent parcels over 2 acres in Spring Garden -> {"intent":"query","table":"parcels","description":"Likely vacant, tax-delinquent parcels over two acres in Spring Garden; footprint data may be stale","filters":[{"field":"acres","op":"gte","value":2}],"signals":["vacant","tax_delinquent"],"location":{"type":"municipality","value":"Spring Garden"},"sort":[{"field":"acres","direction":"desc"}],"limit":20}
+- parcels in flood zone in 17401 -> {"intent":"query","table":"parcels","description":"Parcels intersecting FEMA Special Flood Hazard Areas in 17401","signals":["flood_zone"],"location":{"type":"zipcode","value":"17401"},"sort":[{"field":"aprtotal","direction":"desc"}],"limit":20}
+- recent sales over 500000 -> {"intent":"query","table":"parcels","description":"Property sales over $500,000 in the last year","filters":[{"field":"price","op":"gt","value":500000}],"signals":["recent_sale"],"recent_sale_years":1,"sort":[{"field":"saledt","direction":"desc"}],"limit":20}
+- average property value -> {"intent":"aggregate","table":"parcels","description":"Average assessed parcel value","aggregate":{"operation":"avg","field":"aprtotal"},"label":"Average Assessed Value","format":"currency"}
+- how many parcels are delinquent -> {"intent":"aggregate","table":"tax_claims","description":"Number of parcels with a positive current delinquent balance","aggregate":{"operation":"count_distinct","field":"pidn"},"filters":[{"field":"total","op":"gt","value":0}],"label":"Delinquent Parcels","format":"number"}
 
-### 10. staging.zipcodes — 51 zip code polygons with geometry
-Key columns: zipcode (VARCHAR, e.g. "17404"), po_name (e.g. "YORK", "ETTERS", "HANOVER")
-York County zip codes: 17301-17408 (plus 17011, 17019, 17055, 17070 on the border)
-Use ST_Intersects to find parcels/licenses within a zip code:
-  pidn IN (SELECT p.pidn FROM staging.parcels p JOIN staging.zipcodes z ON ST_Intersects(p.geom, z.geom) WHERE z.zipcode = '17404')
-For PLCB: premises_address LIKE '%17404%' (zip embedded in address string)
-
-## York County Geography
-- 72 municipalities: mix of townships (TWP), boroughs (BORO), and York City
-- Major areas: York City (urban center), Hanover (southwest), Red Lion (southeast), Dover (north), Spring Grove (west)
-- School districts identified by codes: 002=Central, 004=Dallastown, 006=Dover, 008=Eastern, 010=Hanover, 012=Northeastern, 014=Northern, 016=Red Lion, 018=South Eastern, 020=South Western, 022=Southern, 024=Spring Grove, 026=West Shore, 028=West York, 030=York Suburban, 17F=York City
-- Zip codes: Use staging.zipcodes geometry for spatial joins. Also PLCB has zip in premises_address text.
-
-## Query Examples
-
-- "oldest tax delinquent parcel" → {"intent":"query","table":"tax_claims","description":"Oldest tax delinquent parcel in York County","sql_where":"valid_to IS NULL AND total > 0","sql_order":"tax_year ASC, total DESC","sql_limit":5}
-- "most expensive property" → {"intent":"query","table":"parcels","description":"Most expensive property by assessed value","sql_where":"valid_to IS NULL AND aprtotal IS NOT NULL","sql_order":"aprtotal::numeric DESC","sql_limit":5}
-- "breweries in 17404" → {"intent":"query","table":"plcb_licenses","description":"Breweries with liquor licenses in 17404 zip code (note: only covers licensed establishments)","sql_where":"valid_to IS NULL AND UPPER(status) = 'ACTIVE' AND license_type ILIKE '%brewery%' AND premises_address LIKE '%17404%'","sql_order":"licensee","sql_limit":20}
-- "restaurants in york city" → {"intent":"query","table":"plcb_licenses","description":"Restaurants with liquor licenses in York City (note: only covers licensed restaurants)","sql_where":"valid_to IS NULL AND UPPER(status) = 'ACTIVE' AND license_type ILIKE '%restaurant%' AND UPPER(municipality) LIKE '%YORK CITY%'","sql_order":"premises_name","sql_limit":20}
-- "vacant land that is tax delinquent" → {"intent":"query","table":"parcels","description":"Vacant parcels (no building, not high-value residential) with outstanding tax delinquency","sql_where":"valid_to IS NULL AND NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND s.geom IS NOT NULL AND ST_Intersects(s.geom, staging.parcels.geom)) AND (class NOT IN ('R') OR aprtotal IS NULL OR aprtotal::numeric < 50000) AND (price IS NULL OR price::numeric < 100000) AND pidn IN (SELECT tc.pidn FROM staging.tax_claims tc WHERE tc.valid_to IS NULL AND tc.total > 0)","sql_order":"acres DESC","sql_limit":20}
-- "vacant parcels in Spring Garden Township over 2 acres that are delinquent" → {"intent":"query","table":"parcels","description":"Vacant, tax-delinquent parcels over 2 acres in Spring Garden Township","sql_where":"valid_to IS NULL AND acres > 2 AND NOT EXISTS (SELECT 1 FROM staging.structures s WHERE s.valid_to IS NULL AND s.geom IS NOT NULL AND ST_Intersects(s.geom, staging.parcels.geom)) AND (class NOT IN ('R') OR aprtotal IS NULL OR aprtotal::numeric < 50000) AND pidn IN (SELECT tc.pidn FROM staging.tax_claims tc WHERE tc.valid_to IS NULL AND tc.total > 0) AND pidn IN (SELECT p2.pidn FROM staging.parcels p2 JOIN staging.municipalities m ON ST_Intersects(p2.geom, m.geom) WHERE m.valid_to IS NULL AND UPPER(m.name) LIKE '%SPRING GARDEN%')","sql_order":"acres DESC","sql_limit":20}
-- "parcels in flood zone in 17401" → {"intent":"query","table":"parcels","description":"Properties in FEMA flood zones within 17401 zip code","sql_where":"valid_to IS NULL AND EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, staging.parcels.geom)) AND pidn IN (SELECT p2.pidn FROM staging.parcels p2 JOIN staging.zipcodes z ON ST_Intersects(p2.geom, z.geom) WHERE z.zipcode = '17401')","sql_order":"aprtotal::numeric DESC","sql_limit":20}
-- "large farms near flood zones" → {"intent":"query","table":"parcels","description":"Farm parcels over 10 acres near FEMA flood zones","sql_where":"valid_to IS NULL AND class = 'F' AND acres > 10 AND EXISTS (SELECT 1 FROM staging.flood_zones f WHERE f.valid_to IS NULL AND f.sfha_tf = 'T' AND ST_Intersects(f.geom, staging.parcels.geom))","sql_order":"acres DESC","sql_limit":20}
-- "who owns 123 main st" → {"intent":"query","table":"parcels","description":"Owner of 123 Main St","sql_where":"valid_to IS NULL AND UPPER(propadr) LIKE '%123 MAIN%'","sql_order":"propadr","sql_limit":5}
-- "Jarod Daws" → {"intent":"lookup","search_term":"DAWS JAROD","description":"Looking up property owner Jarod Daws (names stored as LAST FIRST)"}
-- "top delinquent owners" → {"intent":"redirect","redirect_path":"/delinquent","description":"Top delinquent property owners"}
-- "properties sold for $1" → {"intent":"query","table":"parcels","description":"Properties with $1 sale price (potentially suspicious transfers)","sql_where":"valid_to IS NULL AND price::numeric = 1","sql_order":"saledt DESC","sql_limit":20}
-- "recent sales over 500000" → {"intent":"query","table":"parcels","description":"Recent property sales over $500,000","sql_where":"valid_to IS NULL AND price::numeric > 500000 AND saledt IS NOT NULL","sql_order":"TO_DATE(saledt, 'DD-MON-YYYY') DESC","sql_limit":20}
-- "commercial properties in dover" → {"intent":"query","table":"parcels","description":"Commercial properties in Dover area","sql_where":"valid_to IS NULL AND class = 'C' AND school_dis = '006'","sql_order":"aprtotal::numeric DESC","sql_limit":20}
-- "average property value" → {"intent":"aggregate","table":"parcels","description":"Average assessed property value in York County","sql_select":"ROUND(AVG(aprtotal::numeric))","sql_where":"valid_to IS NULL AND aprtotal IS NOT NULL","label":"Average Assessed Value","format":"currency"}
-- "how many parcels are delinquent" → {"intent":"aggregate","table":"tax_claims","description":"Number of unique delinquent parcels","sql_select":"COUNT(DISTINCT pidn)","sql_where":"valid_to IS NULL AND total > 0","label":"Delinquent Parcels","format":"number"}
-- "total delinquent taxes in dover township" → {"intent":"aggregate","table":"tax_claims","description":"Total delinquent taxes owed in Dover Township","sql_select":"ROUND(SUM(total)::numeric, 2)","sql_where":"valid_to IS NULL AND total > 0 AND UPPER(tax_district_name) LIKE 'DOVER TOWNSHIP%'","label":"Total Delinquent in Dover Township","format":"currency"}
-- "how many breweries are there" → {"intent":"aggregate","table":"plcb_licenses","description":"Active breweries in York County","sql_select":"COUNT(*)","sql_where":"valid_to IS NULL AND UPPER(status) = 'ACTIVE' AND license_type ILIKE '%brewery%'","label":"Active Breweries","format":"number"}
-
-## Response Format
-
-Return ONLY valid JSON:
-
-For data queries (return rows):
-{"intent":"query","table":"parcels","description":"Clear description including data limitations","sql_where":"WHERE clause","sql_order":"ORDER BY clause","sql_limit":20}
-
-For aggregate queries (return a single computed value — COUNT, SUM, AVG, MIN, MAX):
-{"intent":"aggregate","table":"parcels","description":"Average assessed property value in York County","sql_select":"AVG(aprtotal::numeric)","sql_where":"valid_to IS NULL AND aprtotal IS NOT NULL","label":"Average Assessed Value","format":"currency"}
-
-format can be: "currency" ($X,XXX), "number" (X,XXX), "percent" (X.X%)
-
-For name/address lookups (person names, specific addresses):
-{"intent":"lookup","search_term":"cleaned search term for pg_trgm","description":"Looking up property owner Jarod Daws"}
-
-For page redirects:
-{"intent":"redirect","redirect_path":"/delinquent","description":"Top delinquent property owners"}
-
-## Rules
-- Always include valid_to IS NULL in WHERE clauses
-- For multi-condition queries, use pidn IN (SELECT ...) subqueries chained with AND — do NOT nest subqueries inside each other
-- Every opening parenthesis MUST have a matching closing parenthesis. Double-check before responding.
-- Cast aprtotal and price to numeric for comparisons: aprtotal::numeric, price::numeric
-- saledt is text format "DD-MON-YYYY" — use TO_DATE(saledt, 'DD-MON-YYYY') for date comparisons
-- For "recent sales", use: TO_DATE(saledt, 'DD-MON-YYYY') > CURRENT_DATE - INTERVAL '1 year'
-- For name lookups, note that owner_full format is "LAST FIRST MIDDLE" not "FIRST LAST"
-- Be honest about data limitations in the description field
-- NEVER return columns that don't exist
-- Return ONLY the JSON object, no markdown fences"""
+Be honest about source limitations. Return only the JSON object."""
 
 
 def _clean_llm_json(content: str) -> dict | None:
@@ -141,26 +109,21 @@ def _clean_llm_json(content: str) -> dict | None:
     content = content.strip()
 
     try:
-        return json.loads(content)
+        parsed = json.loads(content)
     except json.JSONDecodeError:
         start = content.find("{")
         end = content.rfind("}")
         if start == -1 or end == -1 or end <= start:
             return None
         try:
-            return json.loads(content[start : end + 1])
+            parsed = json.loads(content[start : end + 1])
         except json.JSONDecodeError:
             return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def resolve_search_models() -> list[str]:
-    """Resolve the model list for interactive search.
-
-    Search should use a dedicated model override when present, then fall back
-    to the cheap/default search pool. It should not inherit the general
-    pass-model default because that puts higher-cost models on the live search
-    path.
-    """
+    """Resolve the dedicated model pool for interactive search."""
     configured = os.environ.get("COUNTYIQ_SEARCH_MODEL")
     candidates = [configured.strip()] if configured and configured.strip() else []
     candidates.extend(DEFAULT_MODELS)
@@ -173,21 +136,18 @@ def resolve_search_models() -> list[str]:
 
 
 def parse_query_with_llm(query: str) -> dict | None:
-    """Send a natural language query to OpenRouter and get structured intent."""
+    """Send a natural-language query to OpenRouter and return structured intent."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         return None
-
-    models = resolve_search_models()
 
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-
-    for model in models:
+    for model in resolve_search_models():
         try:
-            resp = requests.post(
+            response = requests.post(
                 OPENROUTER_URL,
                 headers=headers,
                 json={
@@ -202,34 +162,29 @@ def parse_query_with_llm(query: str) -> dict | None:
                 },
                 timeout=15,
             )
-            if resp.status_code in (429, 404):
-                print(f"LLM {model}: {resp.status_code}, trying next...", file=sys.stderr)
+            if response.status_code in (404, 429):
+                logger.info(
+                    "Search model %s returned %s; trying fallback",
+                    model,
+                    response.status_code,
+                )
                 continue
-            resp.raise_for_status()
-            payload = resp.json()
-            choices = payload.get("choices", [])
+            response.raise_for_status()
+            choices = response.json().get("choices", [])
             if not choices:
                 continue
-            content = choices[0].get("message", {}).get("content")
-            parsed = _clean_llm_json(content or "")
+            parsed = _clean_llm_json(
+                choices[0].get("message", {}).get("content", "")
+            )
             if parsed:
                 return parsed
-            print(f"LLM {model}: bad JSON response", file=sys.stderr)
-        except requests.exceptions.RequestException as exc:
-            print(f"LLM {model} error: {exc}", file=sys.stderr)
-            continue
+            logger.warning("Search model %s returned invalid JSON", model)
+        except (
+            requests.exceptions.RequestException,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as exc:
+            logger.warning("Search model %s failed: %s", model, exc)
 
     return None
-
-
-# Allowed tables for safety
-ALLOWED_TABLES = {
-    "parcels": "staging.parcels",
-    "tax_claims": "staging.tax_claims",
-    "plcb_licenses": "staging.plcb_licenses",
-    "municipalities": "staging.municipalities",
-    "penndot_projects": "staging.penndot_projects",
-    "penndot_roads": "staging.penndot_roads",
-    "pa_open_data": "staging.pa_open_data",
-    "zipcodes": "staging.zipcodes",
-}

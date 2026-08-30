@@ -1,34 +1,90 @@
-"""Job definitions for grouping assets by source type."""
+"""Dagster asset jobs.
 
-from dagster import define_asset_job, AssetSelection
+Two categories:
+
+1. **Scheduled jobs** — cost-isolated jobs wired to cron in
+   ``schedules/__init__.py``. These cover source refreshes and deterministic
+   enrichment only. Paid LLM passes are never selected by a schedule.
+
+2. **Manual-trigger jobs** — single-asset or composite jobs that target a specific
+   pass or source. They are redundant with the scheduled group jobs and exist
+   only so an operator can re-run one pass (e.g. after a prompt change) without
+   rematerializing the full enrichment chain. Launch from the Dagster UI.
+"""
+
+from dagster import AssetSelection, define_asset_job
+
+from countyiq.lib.county_config import get_county_config
+
+
+_county = get_county_config()
+
+
+def _configured_assets(pairs: tuple[tuple[str, object], ...]) -> AssetSelection:
+    """Select only assets backed by a configured county capability."""
+
+    return AssetSelection.assets(*(asset_name for asset_name, value in pairs if value))
+
+# -----------------------------------------------------------------------------
+# Scheduled jobs (production refresh path)
+# -----------------------------------------------------------------------------
 
 arcgis_refresh = define_asset_job(
     name="arcgis_refresh",
-    selection=AssetSelection.groups("arcgis"),
+    selection=_configured_assets((
+        ("parcels_arcgis", _county.arcgis_parcels_url),
+        ("zoning_arcgis", _county.arcgis_zoning_url),
+        ("roads_arcgis", _county.arcgis_roads_url),
+        ("structures_arcgis", _county.arcgis_structures_url),
+        ("municipalities_arcgis", _county.arcgis_municipalities_url),
+        ("address_points_arcgis", _county.arcgis_address_pts_url),
+        ("zipcodes_arcgis", _county.arcgis_zipcodes_url),
+        ("traffic_counts_arcgis", _county.traffic_counts_url),
+        ("penndot_roads_arcgis", _county.penndot_roads_url),
+        ("penndot_projects_arcgis", _county.penndot_projects_url),
+    )),
     description="Refresh all ArcGIS REST API data sources",
+)
+
+radar_refresh = define_asset_job(
+    name="radar_refresh",
+    selection=_configured_assets((
+        ("planning_subdivisions_arcgis", _county.arcgis_planning_subdivisions_url),
+        ("growth_areas_arcgis", _county.arcgis_growth_areas_url),
+        ("future_landuse_arcgis", _county.arcgis_future_landuse_url),
+        ("conservation_easements_arcgis", _county.arcgis_conservation_easements_url),
+        ("ag_security_arcgis", _county.arcgis_ag_security_url),
+        ("zoning_overlays_arcgis", _county.arcgis_zoning_overlays_url),
+        ("business_parks_arcgis", _county.arcgis_business_parks_url),
+        ("industrial_parks_arcgis", _county.arcgis_industrial_parks_url),
+        ("soils_arcgis", _county.arcgis_soils_url),
+        ("local_traffic_counts_arcgis", _county.arcgis_local_traffic_counts_url),
+        ("pa_dep_environmental_diligence", _county.pa_dep_query_bbox),
+    )),
+    description="Refresh development-radar ArcGIS layers (upstream of development_signals)",
 )
 
 scraper_refresh = define_asset_job(
     name="scraper_refresh",
-    selection=AssetSelection.groups("scrapers"),
-    description="Refresh all Playwright/BeautifulSoup scraper sources",
+    selection=_configured_assets((
+        ("public_proceedings_scrape", _county.municipality_websites),
+        ("sheriff_sales_scrape", _county.sheriff_sales_url),
+    )),
+    description="Refresh bounded municipal proceedings and sheriff-sale sources",
 )
 
 bulk_refresh = define_asset_job(
     name="bulk_refresh",
-    selection=AssetSelection.groups("bulk"),
+    selection=_configured_assets((
+        ("plcb_licenses", _county.plcb_filter),
+        ("tax_claims", _county.tax_claims_pdf_url),
+    )),
     description="Refresh all bulk download / API sources",
-)
-
-enrichment_refresh = define_asset_job(
-    name="enrichment_refresh",
-    selection=AssetSelection.groups("enrichment"),
-    description="Run entity resolution and enrichment assets",
 )
 
 fema_refresh = define_asset_job(
     name="fema_refresh",
-    selection=AssetSelection.assets("fema_flood_zones"),
+    selection=AssetSelection.groups("fema"),
     description="Refresh FEMA flood hazard zone data",
 )
 
@@ -44,65 +100,103 @@ scout_monitor_refresh = define_asset_job(
     description="Monitor promoted County Scout sources for changes and outages",
 )
 
-radar_refresh = define_asset_job(
-    name="radar_refresh",
-    selection=AssetSelection.groups("radar"),
-    description="Refresh all development radar ArcGIS layers",
+enrichment_refresh = define_asset_job(
+    name="enrichment_refresh",
+    selection=AssetSelection.groups("enrichment"),
+    description="Run entity resolution, signal validation, and intelligence passes",
 )
+
+# Safe first-load/rebuild path. This selection intentionally names only assets
+# that make no provider calls; paid passes remain available through the full
+# enrichment job and pass-specific manual jobs after an estimate and review.
+deterministic_enrichment_refresh = define_asset_job(
+    name="deterministic_enrichment_refresh",
+    selection=AssetSelection.assets(
+        "municipality_join",
+        "entity_candidate_pairs_refresh",
+        "development_signals",
+        "owner_resolution",
+        "parcel_events",
+        "intelligence_events",
+        "development_momentum",
+    ),
+    description="Rebuild deterministic joins, signals, identities, events, and momentum without LLM calls",
+)
+
+# -----------------------------------------------------------------------------
+# Manual-trigger jobs (operator re-runs for individual sources / passes)
+#
+# These do NOT have schedules. They exist so you can re-run one piece of the
+# pipeline without rematerializing its whole group. Example: tweaking the
+# Pass 2 validation prompt and wanting to re-score without re-running Pass 1.
+# -----------------------------------------------------------------------------
 
 pa_dos_refresh = define_asset_job(
     name="pa_dos_refresh",
     selection=AssetSelection.assets("pa_dos_entities"),
-    description="Refresh PA DOS corporate entity lookups",
+    description="Run one bounded, resumable PA DOS statewide open-data lookup batch",
 )
 
 proceedings_refresh = define_asset_job(
     name="proceedings_refresh",
     selection=AssetSelection.assets("public_proceedings_scrape"),
-    description="Scrape meeting minutes from all York County municipalities",
+    description="[Manual] Re-scrape meeting minutes for all municipalities",
 )
 
 proceedings_extraction_refresh = define_asset_job(
     name="proceedings_extraction_refresh",
     selection=AssetSelection.assets("proceeding_extraction"),
-    description="Run Pass 0: extract structured records from meeting minute PDFs",
-)
-
-intelligence_data_refresh = define_asset_job(
-    name="intelligence_data_refresh",
-    selection=AssetSelection.assets("pa_dos_entities", "public_proceedings_scrape", "proceeding_extraction"),
-    description="Full intelligence data pipeline: PA DOS + proceedings + extraction",
+    description="[Manual] Re-run Pass 0: extract structured records from minute PDFs",
 )
 
 entity_verification_refresh = define_asset_job(
     name="entity_verification_refresh",
-    selection=AssetSelection.assets("entity_verification"),
-    description="Pass 1: entity verification across all sources",
+    selection=AssetSelection.assets(
+        "municipality_join",
+        "entity_candidate_pairs_refresh",
+        "entity_verification",
+    ),
+    description=(
+        "[Manual] Refresh candidate pairs, then re-run Pass 1 entity verification "
+        "across all sources"
+    ),
 )
 
 signal_validation_refresh = define_asset_job(
     name="signal_validation_refresh",
     selection=AssetSelection.assets("signal_validation_batched"),
-    description="Pass 2: validate all signals per parcel via batched LLM call",
+    description="[Manual] Re-run Pass 2: batched signal validation per parcel",
 )
 
 brief_generation_refresh = define_asset_job(
     name="brief_generation_refresh",
     selection=AssetSelection.assets("brief_generation"),
-    description="Pass 3: generate intelligence briefs from validated signals",
+    description="[Manual] Re-run Pass 3: generate intelligence briefs",
 )
 
 county_narratives_refresh = define_asset_job(
     name="county_narratives_refresh",
     selection=AssetSelection.assets("county_narratives"),
-    description="Pass 4: detect cross-parcel patterns and generate county narratives",
+    description="[Manual] Re-run Pass 4: cross-parcel patterns and county narratives",
+)
+
+intelligence_data_refresh = define_asset_job(
+    name="intelligence_data_refresh",
+    selection=AssetSelection.assets(
+        "pa_dos_entities", "public_proceedings_scrape", "proceeding_extraction",
+    ),
+    description="[Manual] Re-pull all intelligence source data (PA DOS + proceedings + Pass 0)",
 )
 
 intelligence_full_pipeline = define_asset_job(
     name="intelligence_full_pipeline",
     selection=AssetSelection.assets(
-        "entity_verification", "signal_validation_batched",
-        "development_momentum", "brief_generation", "county_narratives",
+        "entity_verification",
+        "signal_validation_batched",
+        "development_momentum",
+        "brief_generation",
+        "county_narratives",
+        "intelligence_events",
     ),
-    description="Full intelligence pipeline: validated signals, product scoring, and Passes 1-4",
+    description="[Manual] Re-run Passes 1–4 end-to-end (skips source scrapes and Pass 0)",
 )

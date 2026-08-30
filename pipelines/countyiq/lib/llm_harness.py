@@ -11,15 +11,19 @@ The harness keeps pass assets thin and consistent:
 from __future__ import annotations
 
 import base64
+import dataclasses
 import hashlib
 import json
+import logging
 import os
 import random
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+_telemetry_log = logging.getLogger("countyiq.llm")
 
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -27,6 +31,10 @@ _BACKOFF_MAX_ATTEMPTS = 5
 _BACKOFF_BASE_SECONDS = 2.0
 _BACKOFF_CAP_SECONDS = 60.0
 _DEFAULT_INLINE_PDF_MAX_BYTES = 8 * 1024 * 1024
+_DEFAULT_LLM_ARCHIVE_RETENTION_DAYS = 90
+_ARCHIVE_FILENAME_RE = re.compile(r"^[0-9a-f]{16}_\d{6}_\d{6}\.json$")
+_ARCHIVE_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_last_archive_prune_date: str | None = None
 
 
 @dataclass(frozen=True)
@@ -34,7 +42,6 @@ class HarnessConfig:
     """Configuration for one OpenRouter invocation."""
 
     model_path: str
-    n_ctx: int = 4096
     max_tokens: int = 2048
     temperature: float = 0.7
     top_p: float = 0.95
@@ -45,6 +52,39 @@ class HarnessConfig:
     thinking: bool = False
     model_family: str = "auto"
     archive_label: str | None = None
+    # Explicit OpenRouter reasoning effort ("low" | "medium" | "high").
+    # When set, it overrides the family-derived thinking heuristics —
+    # exp H showed "low" wins on Pass 2 and higher efforts just burn
+    # output tokens. None = keep the per-family default behavior.
+    reasoning_effort: str | None = None
+    # Strict structured output: when set, response_format becomes
+    # json_schema with strict=true (instead of bare json_object) and
+    # provider routing requires endpoints that support it. On a 404
+    # (no matching provider) the call falls back to json_object once.
+    json_schema: dict | None = None
+    schema_name: str = "response"
+    # Static instruction block emitted as a system message — providers
+    # with implicit prompt caching (OpenAI, DeepSeek, Gemini, ...) can
+    # cache it across calls when it stays byte-identical.
+    system_prompt: str | None = None
+    # Provider routing preferences (docs: openrouter.ai provider-routing).
+    # max_price units are $/M tokens; they guard against promotional
+    # prices expiring into a silently larger bill.
+    require_parameters: bool = False
+    max_price_prompt: float | None = None
+    max_price_completion: float | None = None
+    zdr: bool = False
+    # Restrict routing to providers serving these quantizations (e.g.
+    # ("fp8", "bf16", "fp16")). Needed where OpenRouter's cheapest
+    # providers serve degraded FP4/NVFP4 weights — documented for GLM-5.2
+    # (multi-byte decode failures on FP4 hosts; see docs/decisions.md).
+    provider_quantizations: tuple[str, ...] | None = None
+    # PDF parsing engine pinned for inline file uploads. Unpinned PDFs can
+    # silently route to OpenRouter's OCR parser at ~$2/1,000 pages (the
+    # cost trap in docs/cost.md); "native" sends the file to the model's
+    # own file input at ordinary token pricing. Only emitted when a PDF is
+    # actually attached.
+    pdf_engine: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +93,10 @@ class HarnessResult:
     parsed: dict | None
     success: bool
     error: str | None = None
+    # Provider-returned usage/cost metadata plus local timing. Keeping this on
+    # the result lets evals enforce a run budget instead of scraping logs or
+    # trusting a stale price sheet.
+    metadata: dict = dataclasses.field(default_factory=dict)
 
 
 MODEL_PRESETS = {
@@ -98,6 +142,15 @@ MODEL_PRESETS = {
     },
     "mercury": {
         "temperature": 0.75, "top_p": 0.95, "top_k": -1,
+        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+    },
+    # OpenAI reasoning endpoints (gpt-5.x) accept NO sampling parameters —
+    # the OpenRouter listing for gpt-5.6-luna exposes only max_tokens,
+    # reasoning, response_format, structured_outputs, seed, tools (verified
+    # 2026-08-06). Neutral values here; build_openrouter_payload omits
+    # temperature/top_p entirely for this family.
+    "openai": {
+        "temperature": 1.0, "top_p": 1.0, "top_k": -1,
         "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
     },
     "generic": {
@@ -146,6 +199,8 @@ def detect_model_family(model_path: str) -> str:
         return "mercury"
     if "gpt-oss" in name or "gpt_oss" in name:
         return "gpt_oss"
+    if name.startswith("openai/") or "gpt-5" in name or "gpt-4" in name:
+        return "openai"
     if "deepseek" in name:
         return "deepseek"
     if "mimo" in name:
@@ -188,6 +243,8 @@ def get_preset_for_model(
         return MODEL_PRESETS["grok"]
     if family == "gpt_oss":
         return MODEL_PRESETS["gpt_oss"]
+    if family == "openai":
+        return MODEL_PRESETS["openai"]
     if family == "mercury":
         return MODEL_PRESETS["mercury"]
     return MODEL_PRESETS["generic"]
@@ -198,6 +255,80 @@ def _archive_dir() -> Path:
     if env_dir:
         return Path(env_dir)
     return Path.cwd() / "archives"
+
+
+def llm_archive_retention_days() -> int:
+    """Return archive retention in days; zero explicitly disables pruning."""
+    return max(
+        _int_env(
+            "COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS",
+            _DEFAULT_LLM_ARCHIVE_RETENTION_DAYS,
+        ),
+        0,
+    )
+
+
+def prune_llm_archives(
+    archive_root: Path | None = None,
+    *,
+    retention_days: int | None = None,
+    now: datetime | None = None,
+) -> int:
+    """Delete expired harness JSON files, leaving unrelated files untouched."""
+    root = (archive_root or _archive_dir()).resolve()
+    days = llm_archive_retention_days() if retention_days is None else retention_days
+    if days <= 0 or not root.is_dir():
+        return 0
+
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    cutoff = current - timedelta(days=days)
+    removed = 0
+    for label_dir in root.iterdir():
+        if not label_dir.is_dir() or label_dir.is_symlink():
+            continue
+        for date_dir in label_dir.iterdir():
+            if (
+                not date_dir.is_dir()
+                or date_dir.is_symlink()
+                or not _ARCHIVE_DATE_RE.fullmatch(date_dir.name)
+            ):
+                continue
+            for path in date_dir.iterdir():
+                if (
+                    not path.is_file()
+                    or path.is_symlink()
+                    or not _ARCHIVE_FILENAME_RE.fullmatch(path.name)
+                ):
+                    continue
+                modified = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+                if modified < cutoff:
+                    path.unlink()
+                    removed += 1
+            try:
+                date_dir.rmdir()
+            except OSError:
+                pass
+        try:
+            label_dir.rmdir()
+        except OSError:
+            pass
+    return removed
+
+
+def _prune_archives_once_per_day(archive_root: Path) -> None:
+    global _last_archive_prune_date
+    today = datetime.now(timezone.utc).date().isoformat()
+    if _last_archive_prune_date == today:
+        return
+    try:
+        removed = prune_llm_archives(archive_root)
+        _last_archive_prune_date = today
+        if removed:
+            _telemetry_log.info("pruned %d expired LLM archive files", removed)
+    except Exception as exc:
+        _telemetry_log.warning("LLM archive retention prune failed: %s", exc)
 
 
 def archive_raw_output(
@@ -226,6 +357,7 @@ def archive_raw_output(
             "metadata": metadata or {},
         }
         path.write_text(json.dumps(record, default=str))
+        _prune_archives_once_per_day(archive_root)
         return str(path)
     except Exception:
         return None
@@ -283,6 +415,9 @@ def _build_messages(
     family = config.model_family if config.model_family != "auto" else detect_model_family(config.model_path)
     messages: list[dict] = []
     user_prompt = prompt
+
+    if config.system_prompt:
+        messages.append({"role": "system", "content": config.system_prompt})
 
     if family == "gemma" and config.thinking:
         messages.append(
@@ -357,27 +492,62 @@ def _post_with_backoff(url: str, json_payload: dict, headers: dict, timeout: int
     raise RuntimeError("backoff loop exited without response")
 
 
-def _invoke_openrouter(
+def build_openrouter_payload(
     config: HarnessConfig,
     prompt: str,
     pdf_bytes: bytes | None = None,
-) -> tuple[str, str | None]:
-    """Invoke OpenRouter and return (raw_output, error)."""
-    import requests
+) -> dict:
+    """Build the OpenRouter request payload for a config.
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        return "", "OPENROUTER_API_KEY not set"
-
+    Split out from ``_invoke_openrouter`` so the reasoning/thinking wiring
+    is unit-testable without a network call — the effort setting silently
+    ran at "high" for months because nothing asserted on the payload.
+    """
     family = config.model_family if config.model_family != "auto" else detect_model_family(config.model_path)
+    if config.json_schema:
+        response_format: dict = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": config.schema_name,
+                "strict": True,
+                "schema": config.json_schema,
+            },
+        }
+    else:
+        response_format = {"type": "json_object"}
+
     payload = {
         "model": config.model_path,
         "messages": _build_messages(config, prompt, pdf_bytes=pdf_bytes),
         "temperature": config.temperature,
         "top_p": config.top_p,
         "max_tokens": config.max_tokens,
-        "response_format": {"type": "json_object"},
+        "response_format": response_format,
     }
+
+    provider_prefs: dict = {}
+    # Strict schemas are only honored by providers that support them —
+    # route only to those. (docs: structured-outputs + require_parameters)
+    if config.require_parameters or config.json_schema:
+        provider_prefs["require_parameters"] = True
+    if config.max_price_prompt is not None or config.max_price_completion is not None:
+        max_price: dict = {}
+        if config.max_price_prompt is not None:
+            max_price["prompt"] = config.max_price_prompt
+        if config.max_price_completion is not None:
+            max_price["completion"] = config.max_price_completion
+        provider_prefs["max_price"] = max_price
+    if config.zdr:
+        provider_prefs["zdr"] = True
+    if config.provider_quantizations:
+        provider_prefs["quantizations"] = list(config.provider_quantizations)
+    if provider_prefs:
+        payload["provider"] = provider_prefs
+
+    if pdf_bytes and config.pdf_engine:
+        payload["plugins"] = [
+            {"id": "file-parser", "pdf": {"engine": config.pdf_engine}}
+        ]
 
     if config.top_k > 0:
         payload["top_k"] = config.top_k
@@ -388,16 +558,50 @@ def _invoke_openrouter(
     if config.repeat_penalty != 1.0:
         payload["frequency_penalty"] = config.repeat_penalty - 1.0
 
+    # OpenAI reasoning endpoints accept no sampling params at all; sending
+    # temperature/top_p with require_parameters=true would exclude every
+    # provider and 404 each strict-schema call (verified against the
+    # OpenRouter listing 2026-08-06).
+    if family == "openai":
+        payload.pop("temperature", None)
+        payload.pop("top_p", None)
+
     if family == "mimo":
         payload["chat_template_kwargs"] = {"enable_thinking": config.thinking}
     elif family == "deepseek" and config.thinking:
         payload["chat_template_kwargs"] = {"thinking_mode": "thinking"}
     elif family == "grok":
-        payload["reasoning"] = {"enabled": config.thinking}
+        # grok-4.5+ endpoints have MANDATORY reasoning — {"enabled": false}
+        # is a hard 400 ("Reasoning is mandatory for this endpoint"). Send
+        # the flag only to enable; omit it otherwise and accept the default.
+        if config.thinking:
+            payload["reasoning"] = {"enabled": True}
     elif family == "gpt_oss":
         payload["reasoning_effort"] = "high"
     elif family == "mercury":
         payload["reasoning"] = {"effort": "high" if config.thinking else "medium"}
+
+    # Explicit per-pass effort beats every family heuristic above.
+    if config.reasoning_effort:
+        payload.pop("reasoning_effort", None)
+        payload["reasoning"] = {"effort": config.reasoning_effort}
+
+    return payload
+
+
+def _invoke_openrouter(
+    config: HarnessConfig,
+    prompt: str,
+    pdf_bytes: bytes | None = None,
+) -> tuple[str, str | None, dict]:
+    """Invoke OpenRouter and return (raw_output, error, telemetry_meta)."""
+    import requests
+
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        return "", "OPENROUTER_API_KEY not set"
+
+    payload = build_openrouter_payload(config, prompt, pdf_bytes=pdf_bytes)
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -407,9 +611,27 @@ def _invoke_openrouter(
     }
 
     resp = None
+    meta: dict = {}
     try:
         resp = _post_with_backoff(OPENROUTER_URL, payload, headers, timeout=180)
         data = resp.json()
+
+        usage = data.get("usage") or {}
+        details = usage.get("completion_tokens_details") or {}
+        meta = {
+            "provider": data.get("provider"),
+            "served_model": data.get("model"),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "reasoning_tokens": details.get("reasoning_tokens"),
+            "cached_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+            # OpenRouter reports the actual routed-call charge when usage
+            # accounting is available. Persist it instead of estimating from
+            # a model price sheet that may not match the selected provider.
+            "cost": usage.get("cost"),
+            "cost_details": usage.get("cost_details"),
+        }
+
         choice = data["choices"][0]
         message = choice["message"]
         finish = choice.get("finish_reason", "unknown")
@@ -424,19 +646,32 @@ def _invoke_openrouter(
             return raw_output, (
                 f"Response truncated at max_tokens={config.max_tokens} "
                 f"(finish_reason=length)"
-            )
+            ), meta
         if not raw_output:
-            return "", f"Empty response content (finish_reason={finish})"
-        return raw_output, None
+            return "", f"Empty response content (finish_reason={finish})", meta
+        return raw_output, None, meta
     except requests.exceptions.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else None
+        # 404 from OpenRouter with provider prefs = no endpoint satisfies
+        # the constraints (typically strict-schema support). Downgrade to
+        # json_object once rather than failing the item.
+        if status == 404 and config.json_schema is not None:
+            downgraded = dataclasses.replace(
+                config, json_schema=None, require_parameters=False
+            )
+            raw_output, error, meta = _invoke_openrouter(
+                downgraded, prompt, pdf_bytes=pdf_bytes
+            )
+            meta["schema_fallback"] = True
+            return raw_output, error, meta
         body = resp.text[:500] if resp is not None else ""
-        return "", f"HTTP error: {exc} | body: {body}"
+        return "", f"HTTP error: {exc} | body: {body}", meta
     except requests.exceptions.Timeout:
-        return "", "Request timeout (180s)"
+        return "", "Request timeout (180s)", meta
     except (KeyError, IndexError) as exc:
-        return "", f"Unexpected response format: {exc}"
+        return "", f"Unexpected response format: {exc}", meta
     except Exception as exc:
-        return "", str(exc)
+        return "", str(exc), meta
 
 
 def invoke(
@@ -447,8 +682,30 @@ def invoke(
 ) -> HarnessResult:
     """Invoke OpenRouter and return parsed JSON or an error."""
     started = time.time()
-    raw_output, error = _invoke_openrouter(config, prompt, pdf_bytes=pdf_bytes)
+    raw_output, error, meta = _invoke_openrouter(config, prompt, pdf_bytes=pdf_bytes)
     elapsed_ms = int((time.time() - started) * 1000)
+    result_meta = {
+        **meta,
+        "requested_model": config.model_path,
+        "elapsed_ms": elapsed_ms,
+    }
+
+    _telemetry_log.info(
+        "llm call model=%s provider=%s in=%s out=%s reasoning=%s cached=%s "
+        "cost=%s effort=%s strict=%s fallback=%s ms=%d err=%s",
+        config.model_path,
+        meta.get("provider"),
+        meta.get("prompt_tokens"),
+        meta.get("completion_tokens"),
+        meta.get("reasoning_tokens"),
+        meta.get("cached_tokens"),
+        meta.get("cost"),
+        config.reasoning_effort,
+        bool(config.json_schema),
+        meta.get("schema_fallback", False),
+        elapsed_ms,
+        (error or "")[:120] or None,
+    )
 
     if config.archive_label and archive_key and raw_output:
         archive_raw_output(
@@ -460,30 +717,101 @@ def invoke(
                 "model": config.model_path,
                 "temperature": config.temperature,
                 "thinking": config.thinking,
+                "reasoning_effort": config.reasoning_effort,
+                "strict_schema": bool(config.json_schema),
                 "elapsed_ms": elapsed_ms,
                 "error": error,
+                **result_meta,
             },
         )
 
     if error:
-        return HarnessResult(raw_output=raw_output, parsed=None, success=False, error=error)
+        return HarnessResult(
+            raw_output=raw_output,
+            parsed=None,
+            success=False,
+            error=error,
+            metadata=result_meta,
+        )
 
     clean_output = strip_thinking(raw_output)
     try:
-        return HarnessResult(raw_output=raw_output, parsed=json.loads(clean_output), success=True)
+        return HarnessResult(
+            raw_output=raw_output,
+            parsed=json.loads(clean_output),
+            success=True,
+            metadata=result_meta,
+        )
     except json.JSONDecodeError:
         pass
 
     extracted = extract_json_object(clean_output)
     try:
-        return HarnessResult(raw_output=raw_output, parsed=json.loads(extracted), success=True)
+        return HarnessResult(
+            raw_output=raw_output,
+            parsed=json.loads(extracted),
+            success=True,
+            metadata=result_meta,
+        )
     except json.JSONDecodeError as exc:
         return HarnessResult(
             raw_output=raw_output,
             parsed=None,
             success=False,
             error=f"JSON parse error: {exc}",
+            metadata=result_meta,
         )
+
+
+# Truncation marker emitted by _invoke_openrouter on finish_reason=length.
+_TRUNCATION_MARKER = "finish_reason=length"
+# Ceiling for adaptive budget doubling. Generous on purpose: for reasoning
+# models you pay for generated tokens either way — a tight max_tokens doesn't
+# save money, it just decides whether the JSON answer fits AFTER the
+# reasoning spend. Cost is controlled by reasoning effort and provider
+# max_price, not by starving the completion budget.
+_ADAPTIVE_MAX_TOKENS = 16384
+_EFFORT_STEP_DOWN = {"high": "medium", "medium": "low", "low": "low"}
+_USAGE_TOTAL_FIELDS = (
+    "prompt_tokens",
+    "completion_tokens",
+    "reasoning_tokens",
+    "cached_tokens",
+    "cost",
+    "elapsed_ms",
+)
+
+
+def _is_deterministic_failure(error: str | None) -> bool:
+    """Failures that will recur identically — retrying burns money for nothing."""
+    return bool(error) and "OPENROUTER_API_KEY not set" in error
+
+
+def _aggregate_attempt_metadata(attempts: list[dict]) -> dict:
+    """Combine retry usage so callers see the full cost, not only the last call."""
+    if not attempts:
+        return {"attempt_count": 0}
+
+    aggregate = dict(attempts[-1])
+    for field in _USAGE_TOTAL_FIELDS:
+        values = [m.get(field) for m in attempts]
+        numeric = [v for v in values if isinstance(v, (int, float))]
+        if numeric:
+            aggregate[field] = sum(numeric)
+    aggregate["attempt_count"] = len(attempts)
+    if len(attempts) > 1:
+        aggregate["attempts"] = attempts
+    return aggregate
+
+
+def _with_attempt_metadata(
+    result: HarnessResult,
+    attempts: list[dict],
+) -> HarnessResult:
+    return dataclasses.replace(
+        result,
+        metadata=_aggregate_attempt_metadata(attempts),
+    )
 
 
 def invoke_with_retry(
@@ -493,13 +821,43 @@ def invoke_with_retry(
     archive_key: str | None = None,
     pdf_bytes: bytes | None = None,
 ) -> HarnessResult:
-    """Invoke OpenRouter with a small retry budget."""
-    result = invoke(config, prompt, archive_key=archive_key, pdf_bytes=pdf_bytes)
-    if result.success:
-        return result
+    """Invoke OpenRouter with a small, failure-aware retry budget.
 
+    Truncation (finish_reason=length) is deterministic for an identical
+    config — the answer cannot fit after the reasoning spend — so the retry
+    doubles max_tokens and steps reasoning effort down a notch instead of
+    repeating the same failure. This is what turned DeepSeek V4 Flash's
+    "50% parse failure" in expL2 into a config artifact rather than a
+    capability measurement; see docs/decisions.md.
+    """
+    result = invoke(config, prompt, archive_key=archive_key, pdf_bytes=pdf_bytes)
+    attempt_metadata = [result.metadata]
+    if result.success:
+        return _with_attempt_metadata(result, attempt_metadata)
+
+    attempt_config = config
     for _ in range(retries):
-        result = invoke(config, prompt, archive_key=archive_key, pdf_bytes=pdf_bytes)
+        if _is_deterministic_failure(result.error):
+            return _with_attempt_metadata(result, attempt_metadata)
+        if result.error and _TRUNCATION_MARKER in result.error:
+            stepped_effort = (
+                _EFFORT_STEP_DOWN.get(attempt_config.reasoning_effort, "low")
+                if attempt_config.reasoning_effort
+                else "low"
+            )
+            attempt_config = dataclasses.replace(
+                attempt_config,
+                max_tokens=min(attempt_config.max_tokens * 2, _ADAPTIVE_MAX_TOKENS),
+                reasoning_effort=stepped_effort,
+            )
+            _telemetry_log.info(
+                "truncation retry model=%s max_tokens->%d effort->%s",
+                attempt_config.model_path,
+                attempt_config.max_tokens,
+                stepped_effort,
+            )
+        result = invoke(attempt_config, prompt, archive_key=archive_key, pdf_bytes=pdf_bytes)
+        attempt_metadata.append(result.metadata)
         if result.success:
-            return result
-    return result
+            return _with_attempt_metadata(result, attempt_metadata)
+    return _with_attempt_metadata(result, attempt_metadata)

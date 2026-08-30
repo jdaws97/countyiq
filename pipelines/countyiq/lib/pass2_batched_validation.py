@@ -13,8 +13,11 @@ Benefits:
 The per-signal version (pass2_signal_validation.py) is retained for A/B
 comparison and for cases where individual validation is specifically needed.
 """
+from collections import Counter as _Counter
+import hashlib as _hashlib
 import json
 
+from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.intelligence_common import (
     PARCEL_QUERY,
     TAX_CLAIMS_QUERY,
@@ -47,7 +50,25 @@ SIGNAL_NEEDS_PROCEEDINGS = {
     "active_subdivision",
     "zoning_mismatch",
     "ownership_change",
-    "ecodev_candidate",
+    "conservation_easement",
+    "ag_security",
+}
+
+
+# Deterministic spatial facts and constraints are context, not claims to
+# validate. They remain visible to the LLM without consuming validation slots
+# or producing evidence rows.
+CONTEXT_ONLY_SIGNALS = {
+    "economic_development_park",
+    "tax_distress",
+    "penndot_project",
+    "growth_area",
+    "development_overlay",
+    "local_traffic_activity",
+    "soil_constraint",
+    "zoning_constraint",
+    "flood_zone",
+    "environmental_diligence",
     "conservation_easement",
     "ag_security",
 }
@@ -119,6 +140,9 @@ def gather_parcel_batch_context(cursor, pidn: str) -> dict:
                 "evidence": evidence,
             }
         )
+
+    context_signals = [s for s in signals if s["signal_key"] in CONTEXT_ONLY_SIGNALS]
+    signals = [s for s in signals if s["signal_key"] not in CONTEXT_ONLY_SIGNALS]
 
     signal_keys = {s["signal_key"] for s in signals}
 
@@ -196,6 +220,7 @@ def gather_parcel_batch_context(cursor, pidn: str) -> dict:
         "corporate": corporate,
         "proceedings": proceedings,
         "signals": signals,
+        "context_signals": context_signals,
     }
 
 
@@ -203,27 +228,18 @@ def gather_parcel_batch_context(cursor, pidn: str) -> dict:
 # Prompt builder
 # ---------------------------------------------------------------------------
 
-BATCHED_VALIDATION_TEMPLATE = """You are a real estate intelligence analyst validating development signals for a parcel in York County, PA.
+# Static instruction block. Sent as a byte-identical system message on every
+# parcel call so providers with implicit prompt caching can reuse it.
+_P2_SYSTEM_TEMPLATE = """You are a real estate intelligence analyst validating development signals for parcels in {county_context}.
 
-PARCEL:
-{parcel_section}
-
-ENTITY CONTEXT:
-{entity_section}
-
-{optional_sections}
-
-SIGNALS TO VALIDATE ({n_signals} signal{plural}):
-{signals_list}
-
-Your task: for EACH signal above, determine if it is meaningful, stale, misclassified, or irrelevant for THIS specific parcel. Consider how the signals INTERACT — a parcel with overlapping signals tells a different story than any single signal alone.
+Your task: for EACH signal listed under "SIGNALS TO VALIDATE", determine if it is meaningful, stale, misclassified, or irrelevant for THIS specific parcel. Consider how the signals INTERACT — a parcel with overlapping signals tells a different story than any single signal alone.
 
 Rules:
 1. Do arithmetic carefully — ratios, percentages, and distances matter for calibration.
 2. If a signal label doesn't match its evidence (e.g., active_subdivision for a plan with 0 lots), downgrade it.
 3. Consider portfolio and neighbor context — a solo delinquency differs from systemic distress.
 4. Never invent facts. If context is missing, note it in reasoning.
-5. Return exactly one validation per signal above, in the same order.
+5. Return exactly one validation per listed signal, in the same order.
 
 OUTPUT — return ONLY valid JSON with this exact structure:
 {{
@@ -239,6 +255,34 @@ OUTPUT — return ONLY valid JSON with this exact structure:
   ],
   "cross_signal_insight": "optional: observation about signal combinations on this parcel, or empty string"
 }}"""
+
+# Dynamic per-parcel block. The trailing sentence keeps the word "JSON" in
+# the user message (OpenAI-family endpoints require it for json_object).
+BATCHED_VALIDATION_USER_TEMPLATE = """PARCEL:
+{parcel_section}
+
+ENTITY CONTEXT:
+{entity_section}
+
+{optional_sections}
+
+SIGNALS TO VALIDATE ({n_signals} signal{plural}):
+{signals_list}
+
+Validate each signal above. Return ONLY the JSON object."""
+
+# Final system string sent to the API (single braces).
+BATCHED_VALIDATION_SYSTEM_PROMPT = _P2_SYSTEM_TEMPLATE.format(
+    county_context=county_prompt_context()
+)
+
+
+# Prompt version hash — travels with every persisted evidence row so we can
+# trace a regression to a specific prompt change without diffing git history.
+# Covers both the system and user halves; recompute whenever either changes.
+PROMPT_VERSION = _hashlib.sha256(
+    (BATCHED_VALIDATION_SYSTEM_PROMPT + "\n\n" + BATCHED_VALIDATION_USER_TEMPLATE).encode("utf-8")
+).hexdigest()[:12]
 
 
 def _format_parcel_section(parcel: dict) -> str:
@@ -379,6 +423,18 @@ def _format_signals_list(signals: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_context_signals(context_signals: list[dict]) -> str:
+    """Render context-only signals as background, not validation targets."""
+    if not context_signals:
+        return ""
+    lines = ["AREA CONTEXT (background only — do NOT validate these):"]
+    for s in context_signals:
+        evidence = s.get("evidence") or {}
+        detail = ", ".join(f"{k}={v}" for k, v in list(evidence.items())[:4])
+        lines.append(f"- {s['signal_key']}: {detail}" if detail else f"- {s['signal_key']}")
+    return "\n".join(lines)
+
+
 def build_batched_signal_prompt(context: dict, signals_override: list[dict] | None = None) -> str:
     """Build the batched validation prompt for signals on a parcel.
 
@@ -407,7 +463,13 @@ def build_batched_signal_prompt(context: dict, signals_override: list[dict] | No
         if section:
             optional_parts.append(section)
 
-    return BATCHED_VALIDATION_TEMPLATE.format(
+    context_signal_section = _format_context_signals(context.get("context_signals") or [])
+    if context_signal_section:
+        optional_parts.append(context_signal_section)
+
+    # Returns only the dynamic user block; the static instructions travel
+    # as BATCHED_VALIDATION_SYSTEM_PROMPT via the harness system_prompt.
+    return BATCHED_VALIDATION_USER_TEMPLATE.format(
         parcel_section=_format_parcel_section(parcel),
         entity_section=_format_entity_section(entity),
         optional_sections="\n\n".join(optional_parts) if optional_parts else "",
@@ -500,3 +562,128 @@ def parse_batched_signal_output(
         "missing": missing,
     }
 
+
+# ---------------------------------------------------------------------------
+# N-trial voting (ships trust metadata with every persisted validation)
+#
+# The evaluation summarized by docs/decisions.md showed temperature=0 is NOT
+# deterministic on shared LLM APIs — the same parcel can flip validation
+# status between runs. The fix is evidence-based voting: run N trials,
+# majority-vote status+significance per signal, and persist the agreement
+# rate as the native confidence score. Agreement IS the calibration.
+#
+# SIGNIFICANCE_WEIGHT tunes how much the "strength" of the modal
+# significance bends the confidence score upward. A signal with 3/3
+# agreement on "high" significance is more trustworthy than 3/3 on "none".
+# ---------------------------------------------------------------------------
+
+SIGNIFICANCE_WEIGHT = {
+    "high":   1.00,
+    "medium": 0.85,
+    "low":    0.65,
+    "none":   0.50,
+}
+
+
+def merge_trial_validations(
+    trials_parsed: list[dict],
+    expected_signals: list[dict],
+) -> dict:
+    """Aggregate N parsed validation runs into a single set with confidence.
+
+    Args:
+        trials_parsed: list of ``parse_batched_signal_output`` results, one
+            per LLM call. Each must have a ``validations`` list.
+        expected_signals: the full set of signals we asked about.
+
+    Returns:
+        Dict with:
+          * ``validations``: one row per expected signal_key that was
+            answered in at least one trial. Each row includes
+            ``validation_status``, ``adjusted_significance``, ``reasoning``
+            (from the modal trial), and trust metadata: ``n_trials``
+            (how many trials returned this signal), ``trial_agreement``
+            (modal count / n_trials for this signal), and ``confidence``
+            (agreement × significance weight — roughly, how much a
+            consumer should trust this row).
+          * ``cross_signal_insight``: the modal non-empty insight string.
+          * ``missing``: signal_keys that NO trial returned.
+          * ``n_trials``: total number of trials supplied.
+    """
+    n_trials = len(trials_parsed)
+    by_key: dict[str, list[dict]] = {}
+    for t in trials_parsed:
+        for v in t.get("validations", []):
+            key = v.get("signal_key")
+            if key:
+                by_key.setdefault(key, []).append(v)
+
+    merged = []
+    missing = []
+
+    for expected in expected_signals:
+        key = expected["signal_key"]
+        entries = by_key.get(key, [])
+        if not entries:
+            missing.append(key)
+            continue
+
+        statuses = _Counter(v.get("validation_status") for v in entries)
+        sigs = _Counter(v.get("adjusted_significance") for v in entries)
+        modal_status, modal_count = statuses.most_common(1)[0]
+        modal_sig, _ = sigs.most_common(1)[0]
+
+        n_called = len(entries)
+        agreement = round(modal_count / n_called, 2) if n_called else 0.0
+
+        # Pick reasoning from any trial that returned the modal status.
+        reasoning = next(
+            (v.get("reasoning", "") for v in entries
+             if v.get("validation_status") == modal_status and v.get("reasoning")),
+            entries[0].get("reasoning", ""),
+        )
+        # Union of all unique key_facts / cross_references across trials.
+        key_facts = []
+        seen_facts: set = set()
+        cross_refs = []
+        seen_refs: set = set()
+        for v in entries:
+            for fact in v.get("key_facts", []) or []:
+                if fact and fact not in seen_facts:
+                    seen_facts.add(fact)
+                    key_facts.append(fact)
+            for ref in v.get("cross_references", []) or []:
+                frozen = repr(ref) if not isinstance(ref, str) else ref
+                if frozen not in seen_refs:
+                    seen_refs.add(frozen)
+                    cross_refs.append(ref)
+
+        sig_weight = SIGNIFICANCE_WEIGHT.get(modal_sig, 0.5)
+        confidence = round(agreement * sig_weight, 2)
+
+        merged.append({
+            "signal_key": key,
+            "validation_status": modal_status,
+            "adjusted_significance": modal_sig,
+            "reasoning": reasoning,
+            "key_facts": key_facts,
+            "cross_references": cross_refs,
+            "n_trials": n_called,
+            "trial_agreement": agreement,
+            "confidence": confidence,
+        })
+
+    # Modal cross_signal_insight (pick the most commonly emitted non-empty one).
+    insights = _Counter(
+        (t.get("cross_signal_insight") or "").strip()
+        for t in trials_parsed
+        if (t.get("cross_signal_insight") or "").strip()
+    )
+    cross_insight = insights.most_common(1)[0][0] if insights else ""
+
+    return {
+        "validations": merged,
+        "cross_signal_insight": cross_insight,
+        "missing": missing,
+        "n_trials": n_trials,
+    }

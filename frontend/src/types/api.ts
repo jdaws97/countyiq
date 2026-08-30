@@ -1,12 +1,18 @@
 export type NumericLike = number | string | null | undefined
 
+export interface CountyMetadata {
+  county_key: string
+  county_name: string
+  state: string
+  product_stage: string
+}
+
 export interface OwnerSummary {
   owner_id: number
   canonical_name: string
   entity_type: string
   parcel_count: number
   municipality: string | null
-  source_mode?: 'entity_graph' | 'owner_resolution'
   aliases?: string[]
   verification_status?: string | null
   verification_reasoning?: string | null
@@ -40,8 +46,51 @@ export interface LinkedLicense {
   match_tier: string | null
 }
 
+export interface WatchlistParcelSummary {
+  pidn: string
+  owner_full: string | null
+  propadr: string | null
+  municipality: string | null
+  aprtotal: number | null
+  class: string | null
+  acres: number | null
+  changed_at: string | null
+  changed_recently: boolean
+  has_tax_delinquency: boolean
+  momentum_score: number | null
+  top_signal: string | null
+}
+
+export interface WatchlistSummaryResponse {
+  parcels: WatchlistParcelSummary[]
+  missing: string[]
+}
+
+export interface OwnerBrief {
+  brief_text: string
+  portfolio_strategy: string | null
+  concentration_notes: string | null
+  key_pattern: string | null
+  recommendation: string | null
+  urgency: string | null
+  top_risk: string | null
+  evidence_strength: string | null
+  n_parcels: number | null
+  confidence: number | null
+  n_trials: number | null
+  trial_agreement: number | null
+  model_version: string | null
+  generated_at: string | null
+}
+
+export interface EntityRelationship {
+  [key: string]: string | number | boolean | null | undefined
+}
+
 export interface OwnerProfileResponse {
   owner: OwnerSummary
+  relationships: EntityRelationship[]
+  brief: OwnerBrief | null
   portfolio: {
     parcel_count: number
     total_assessed: number
@@ -65,8 +114,7 @@ export interface ParcelFeatureProperties {
   school_dis?: string | null
   saledt: string | null
   price: number | null
-  delinquent_total?: number | null
-  years_delinquent?: number | null
+  has_tax_delinquency?: boolean
 }
 
 export type ParcelFeatureCollection = GeoJSON.FeatureCollection<
@@ -157,15 +205,14 @@ export interface TaxDelinquencyRecord {
   interest_owed: number | null
   fees_owed: number | null
   total: number | null
-  owner_name: string | null
-  property_address: string | null
 }
 
 export type PropertyTaxDelinquencyRecord = TaxDelinquencyRecord
 
 export interface TaxDelinquency {
+  detail_available: boolean
   is_delinquent: boolean
-  total_owed: number
+  total_owed: number | null
   records: TaxDelinquencyRecord[]
 }
 
@@ -195,7 +242,7 @@ export interface ReasonSignal {
   is_risk: boolean
 }
 
-export type DevelopmentSignalValue = string | number | boolean | null | undefined
+export type DevelopmentSignalValue = string | number | boolean | string[] | null | undefined
 export type DevelopmentSignalEvidence = Record<string, DevelopmentSignalValue>
 
 export interface DevelopmentSignal {
@@ -207,13 +254,14 @@ export interface DevelopmentSignal {
 export interface DevelopmentMomentum {
   score: number
   opportunity_score: number
+  site_readiness_score: number
   has_active_plan: boolean
   eligible: boolean
   exclusion_reasons: string[]
   signals: Record<string, DevelopmentSignal>
   top_signal: string | null
   signal_count: number
-  score_version: string | null
+  score_version: number | null
   computed_at: string | null
   reason_signals: ReasonSignal[]
 }
@@ -262,12 +310,61 @@ export interface LinkedProceeding {
   match_type: 'pidn' | 'address'
 }
 
-export type CountyFeedNarrative = CountyNarrative & { affected_pidns: string[] }
+export type IntelligenceCategory = 'parcel' | 'development'
+export type IntelligenceInterpretationKind = 'deterministic' | 'llm'
 
-export interface CountyFeedResponse {
-  narratives: CountyFeedNarrative[]
+export interface IntelligenceSource {
+  label: string
+  url: string | null
+  document_url: string | null
+  excerpt: string | null
+  details: Record<string, unknown>
+}
+
+export interface IntelligenceProject {
+  key: string
+  name: string
+}
+
+export interface IntelligenceEntityLink {
+  owner_id: number
+  name: string
+  matched_name: string
+  verification_status: string | null
+}
+
+export interface IntelligenceEvent {
+  event_key: string
+  category: IntelligenceCategory
+  event_type: string
+  event_tags: string[]
+  title: string
+  what_happened: string
+  why_it_matters: string
+  what_happens_next: string
+  event_date: string | null
+  detected_at: string
+  confidence: number | null
+  municipality: string | null
+  project: IntelligenceProject | null
+  related_entities: string[]
+  entity_links: IntelligenceEntityLink[]
+  related_pidns: string[]
+  importance_score: number
+  importance_reasons: string[]
+  sources: IntelligenceSource[]
+  interpretation: {
+    kind: IntelligenceInterpretationKind
+    model: string | null
+    generated_at: string | null
+  }
+}
+
+export interface IntelligenceFeedResponse {
+  events: IntelligenceEvent[]
   limit: number
   offset: number
+  has_more: boolean
 }
 
 export interface PropertyReport {
@@ -284,14 +381,23 @@ export interface PropertyReport {
 
 export interface MunicipalityProfile {
   name: string
-  muni_type: string
-  county: string
-  delinquency: {
-    delinquent_parcels: number
-    total_delinquent: number
-    oldest_delinquent_year: number | null
-    delinquent_years: number
-  }
+  muni_type: string | null
+  county: string | null
+  stats: MunicipalityStats
+  delinquency: MunicipalityDelinquency
+  licenses: LicenseRecord[]
+}
+
+export interface MunicipalityStats {
+  parcel_count: number
+  total_assessed: number
+}
+
+export interface MunicipalityDelinquency {
+  delinquent_parcels: number
+  total_delinquent: number
+  oldest_delinquent_year: number | null
+  delinquent_years: number
 }
 
 export interface MunicipalitySummary {
@@ -302,7 +408,7 @@ export interface MunicipalitySummary {
 }
 
 export interface LicenseRecord {
-  licensee: string
+  licensee: string | null
   premises_name: string | null
   premises_address: string | null
   license_type: string
@@ -340,15 +446,15 @@ export interface TopDelinquentOwner {
 export interface DelinquentParcelSummary {
   pidn: string
   owner_name: string
-  address: string
-  district: string
+  property_address: string | null
+  tax_district_name: string | null
+  oldest_year: number | null
   years_delinquent: number
   total_owed: number
 }
 
 export interface DistressedParcel {
   pidn: string
-  owner_full: string
   propadr: string | null
   class: string | null
   acres: number | null
@@ -356,12 +462,9 @@ export interface DistressedParcel {
   saledt: string | null
   price: number | null
   school_dis: string | null
-  years_delinquent: number | null
-  total_owed: number | null
   vacant_score: number | null
   no_flood_score: number | null
   sheriff_score: number | null
-  sheriff_judgment: number | null
   traffic_score: number | null
   delinquency_score: number | null
   sale_stage_score: number | null
@@ -379,7 +482,6 @@ export interface DistressedResponse {
 
 export interface AssemblageNeighbor {
   pidn: string
-  owner: string
   address: string | null
   acres: NumericLike
   assessed: NumericLike
@@ -390,7 +492,6 @@ export interface AssemblageNeighbor {
 
 export interface AssemblageCluster {
   seed_pidn: string
-  seed_owner: string
   seed_address: string | null
   seed_class: string | null
   school_dis: string | null
@@ -415,7 +516,7 @@ export interface AssemblageResponse {
   clusters: AssemblageCluster[]
 }
 
-export type RadarViewMode = 'opportunity' | 'momentum'
+export type RadarViewMode = 'opportunity' | 'momentum' | 'readiness'
 
 export interface RadarParcel {
   pidn: string
@@ -425,7 +526,8 @@ export interface RadarParcel {
   signals: Record<string, DevelopmentSignal> | null
   eligible: boolean
   has_active_plan?: boolean
-  score_version: string | null
+  site_readiness_score?: number
+  score_version: number | null
   computed_at: string | null
   owner_full: string | null
   propadr: string | null
@@ -436,9 +538,15 @@ export interface RadarParcel {
   reason_signals: ReasonSignal[]
 }
 
-export interface RadarParcelResponse {
+export interface RadarParcelListResponse {
   count: number
   parcels: RadarParcel[]
+  coverage?: {
+    loaded_count: number
+    total_count: number
+    loaded_layers: string[]
+    missing_layers: string[]
+  }
 }
 
 export interface RadarMunicipalitiesResponse {

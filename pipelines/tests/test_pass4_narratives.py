@@ -8,10 +8,14 @@ import pytest
 
 from countyiq.lib.pass4_county_narratives import (
     CORRIDOR_SCAN_QUERY,
-    CORRIDOR_TEMPLATE,
-    PORTFOLIO_TEMPLATE,
-    MUNICIPAL_TEMPLATE,
-    DISTRESS_TEMPLATE,
+    CORRIDOR_SYSTEM_PROMPT,
+    CORRIDOR_USER_TEMPLATE,
+    DISTRESS_SYSTEM_PROMPT,
+    DISTRESS_USER_TEMPLATE,
+    MUNICIPAL_SYSTEM_PROMPT,
+    MUNICIPAL_USER_TEMPLATE,
+    PORTFOLIO_SYSTEM_PROMPT,
+    PORTFOLIO_USER_TEMPLATE,
     VALID_NARRATIVE_TYPES,
     VALID_TRAJECTORIES,
     build_corridor_prompt,
@@ -20,6 +24,11 @@ from countyiq.lib.pass4_county_narratives import (
     build_distress_prompt,
     parse_narrative_output,
 )
+
+CORRIDOR_PROMPT_TEXT = CORRIDOR_SYSTEM_PROMPT + "\n\n" + CORRIDOR_USER_TEMPLATE
+PORTFOLIO_PROMPT_TEXT = PORTFOLIO_SYSTEM_PROMPT + "\n\n" + PORTFOLIO_USER_TEMPLATE
+MUNICIPAL_PROMPT_TEXT = MUNICIPAL_SYSTEM_PROMPT + "\n\n" + MUNICIPAL_USER_TEMPLATE
+DISTRESS_PROMPT_TEXT = DISTRESS_SYSTEM_PROMPT + "\n\n" + DISTRESS_USER_TEMPLATE
 
 
 # ---------------------------------------------------------------------------
@@ -174,29 +183,29 @@ def valid_narrative_output():
 # ---------------------------------------------------------------------------
 
 class TestCorridorTemplate:
-    """Tests for CORRIDOR_TEMPLATE and build_corridor_prompt."""
+    """Tests for the corridor system/user prompt and builder."""
 
     def test_corridor_query_uses_dbscan_clusters(self):
         assert "ST_ClusterDBSCAN" in CORRIDOR_SCAN_QUERY
         assert "cluster_id" in CORRIDOR_SCAN_QUERY
 
     def test_has_cluster_section(self):
-        assert "CLUSTER" in CORRIDOR_TEMPLATE
+        assert "CLUSTER" in CORRIDOR_PROMPT_TEXT
 
     def test_has_parcels_section(self):
-        assert "PARCELS" in CORRIDOR_TEMPLATE
+        assert "PARCELS" in CORRIDOR_PROMPT_TEXT
 
     def test_has_proceedings_section(self):
-        assert "PROCEEDINGS" in CORRIDOR_TEMPLATE
+        assert "PROCEEDINGS" in CORRIDOR_PROMPT_TEXT
 
     def test_has_tasks_section(self):
-        assert "TASKS" in CORRIDOR_TEMPLATE
+        assert "TASKS" in CORRIDOR_PROMPT_TEXT
 
     def test_has_output_format(self):
-        assert "OUTPUT FORMAT" in CORRIDOR_TEMPLATE
-        assert "title" in CORRIDOR_TEMPLATE
-        assert "narrative" in CORRIDOR_TEMPLATE
-        assert "corridor" in CORRIDOR_TEMPLATE
+        assert "OUTPUT FORMAT" in CORRIDOR_PROMPT_TEXT
+        assert "title" in CORRIDOR_PROMPT_TEXT
+        assert "narrative" in CORRIDOR_PROMPT_TEXT
+        assert "corridor" in CORRIDOR_PROMPT_TEXT
 
     def test_build_corridor_prompt_returns_string(self, sample_cluster):
         result = build_corridor_prompt(sample_cluster)
@@ -226,25 +235,25 @@ class TestCorridorTemplate:
 # ---------------------------------------------------------------------------
 
 class TestPortfolioTemplate:
-    """Tests for PORTFOLIO_TEMPLATE and build_portfolio_prompt."""
+    """Tests for the portfolio system/user prompt and builder."""
 
     def test_has_entity_section(self):
-        assert "ENTITY" in PORTFOLIO_TEMPLATE
+        assert "ENTITY" in PORTFOLIO_PROMPT_TEXT
 
     def test_has_briefs_section(self):
-        assert "BRIEFS" in PORTFOLIO_TEMPLATE or "PARCEL" in PORTFOLIO_TEMPLATE
+        assert "BRIEFS" in PORTFOLIO_PROMPT_TEXT or "PARCEL" in PORTFOLIO_PROMPT_TEXT
 
     def test_has_deed_section(self):
-        assert "DEED" in PORTFOLIO_TEMPLATE
+        assert "DEED" in PORTFOLIO_PROMPT_TEXT
 
     def test_has_tasks_section(self):
-        assert "TASKS" in PORTFOLIO_TEMPLATE
+        assert "TASKS" in PORTFOLIO_PROMPT_TEXT
 
     def test_has_output_format(self):
-        assert "OUTPUT FORMAT" in PORTFOLIO_TEMPLATE
-        assert "title" in PORTFOLIO_TEMPLATE
-        assert "narrative" in PORTFOLIO_TEMPLATE
-        assert "owner_portfolio" in PORTFOLIO_TEMPLATE
+        assert "OUTPUT FORMAT" in PORTFOLIO_PROMPT_TEXT
+        assert "title" in PORTFOLIO_PROMPT_TEXT
+        assert "narrative" in PORTFOLIO_PROMPT_TEXT
+        assert "owner_portfolio" in PORTFOLIO_PROMPT_TEXT
 
     def test_build_portfolio_prompt_returns_string(self, sample_portfolio):
         result = build_portfolio_prompt(sample_portfolio)
@@ -273,26 +282,26 @@ class TestPortfolioTemplate:
 # ---------------------------------------------------------------------------
 
 class TestMunicipalTemplate:
-    """Tests for MUNICIPAL_TEMPLATE and build_municipal_prompt."""
+    """Tests for the municipal system/user prompt and builder."""
 
     def test_has_municipality_section(self):
-        upper = MUNICIPAL_TEMPLATE.upper()
+        upper = MUNICIPAL_PROMPT_TEXT.upper()
         assert "MUNICIPALITY" in upper or "MUNICIPAL" in upper
 
     def test_has_assessment_section(self):
-        assert "assessment" in MUNICIPAL_TEMPLATE.lower() or "ASSESSMENT" in MUNICIPAL_TEMPLATE
+        assert "assessment" in MUNICIPAL_PROMPT_TEXT.lower()
 
     def test_has_signal_section(self):
-        assert "signal" in MUNICIPAL_TEMPLATE.lower() or "SIGNAL" in MUNICIPAL_TEMPLATE
+        assert "signal" in MUNICIPAL_PROMPT_TEXT.lower()
 
     def test_has_tasks_section(self):
-        assert "TASKS" in MUNICIPAL_TEMPLATE
+        assert "TASKS" in MUNICIPAL_PROMPT_TEXT
 
     def test_has_output_format(self):
-        assert "OUTPUT FORMAT" in MUNICIPAL_TEMPLATE
-        assert "title" in MUNICIPAL_TEMPLATE
-        assert "narrative" in MUNICIPAL_TEMPLATE
-        assert "municipality" in MUNICIPAL_TEMPLATE
+        assert "OUTPUT FORMAT" in MUNICIPAL_PROMPT_TEXT
+        assert "title" in MUNICIPAL_PROMPT_TEXT
+        assert "narrative" in MUNICIPAL_PROMPT_TEXT
+        assert "municipality" in MUNICIPAL_PROMPT_TEXT
 
     def test_build_municipal_prompt_returns_string(self, sample_municipal_data):
         result = build_municipal_prompt(sample_municipal_data)
@@ -317,24 +326,24 @@ class TestMunicipalTemplate:
 # ---------------------------------------------------------------------------
 
 class TestDistressTemplate:
-    """Tests for DISTRESS_TEMPLATE and build_distress_prompt."""
+    """Tests for the distress system/user prompt and builder."""
 
     def test_has_distress_section(self):
-        upper = DISTRESS_TEMPLATE.upper()
+        upper = DISTRESS_PROMPT_TEXT.upper()
         assert "DISTRESS" in upper
 
     def test_has_change_section(self):
-        lower = DISTRESS_TEMPLATE.lower()
+        lower = DISTRESS_PROMPT_TEXT.lower()
         assert "change" in lower or "delta" in lower or "migration" in lower
 
     def test_has_tasks_section(self):
-        assert "TASKS" in DISTRESS_TEMPLATE
+        assert "TASKS" in DISTRESS_PROMPT_TEXT
 
     def test_has_output_format(self):
-        assert "OUTPUT FORMAT" in DISTRESS_TEMPLATE
-        assert "title" in DISTRESS_TEMPLATE
-        assert "narrative" in DISTRESS_TEMPLATE
-        assert "market_segment" in DISTRESS_TEMPLATE
+        assert "OUTPUT FORMAT" in DISTRESS_PROMPT_TEXT
+        assert "title" in DISTRESS_PROMPT_TEXT
+        assert "narrative" in DISTRESS_PROMPT_TEXT
+        assert "market_segment" in DISTRESS_PROMPT_TEXT
 
     def test_build_distress_prompt_returns_string(self, sample_distress_data):
         result = build_distress_prompt(sample_distress_data)

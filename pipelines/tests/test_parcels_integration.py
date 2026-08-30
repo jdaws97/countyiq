@@ -1,6 +1,6 @@
 """Integration test: parcels parser + SCD2 upsert against local Docker Postgres.
 
-Requires: docker compose up -d postgres-test (with init.sql + alembic applied)
+Requires: docker compose up -d postgres-test (with init-db scripts + Alembic applied)
 """
 
 import json

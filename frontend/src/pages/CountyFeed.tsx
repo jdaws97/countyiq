@@ -1,107 +1,170 @@
 import { useEffect, useState } from 'react'
-import NarrativeCard from '../components/NarrativeCard'
+
+import IntelligenceEventCard from '../components/IntelligenceEventCard'
 import PageShell from '../components/PageShell'
 import Section from '../components/Section'
-import { formatShortDate } from '../lib/format'
-import type { CountyFeedNarrative, CountyFeedResponse } from '../types/api'
+import { useCountyMeta } from '../lib/useCountyMeta'
+import type {
+  IntelligenceCategory,
+  IntelligenceEvent,
+  IntelligenceFeedResponse,
+} from '../types/api'
 
-const NARRATIVE_TYPES = ['all', 'corridor', 'distress', 'municipal', 'portfolio'] as const
-type NarrativeTypeFilter = (typeof NARRATIVE_TYPES)[number]
 
-// A curated subset of Pass 4's trajectory vocabulary. Scan-specific trajectories
-// (e.g. "concentrating" for distress, "expanding" for portfolio) are excluded
-// so the filter bar stays compact; users can still see them on individual cards.
-const TRAJECTORIES = ['all', 'accelerating', 'steady', 'stalling', 'declining'] as const
-type TrajectoryFilter = (typeof TRAJECTORIES)[number]
+const PAGE_SIZE = 30
+const CATEGORIES = ['all', 'development', 'parcel'] as const
+const EVENT_TYPES = [
+  'all',
+  'application',
+  'approval',
+  'continuance',
+  'denial',
+  'condition',
+  'transfer',
+  'delinquency_change',
+  'value_change',
+  'structure_change',
+] as const
+const TIME_WINDOWS = [30, 90, 365, 3650] as const
+const SORT_MODES = ['priority', 'latest'] as const
 
-const PAGE_SIZE = 50
+type CategoryFilter = 'all' | IntelligenceCategory
+type EventTypeFilter = (typeof EVENT_TYPES)[number]
+type TimeWindow = (typeof TIME_WINDOWS)[number]
+type SortMode = (typeof SORT_MODES)[number]
+
 
 export default function CountyFeed() {
-  const [narratives, setNarratives] = useState<CountyFeedNarrative[]>([])
-  const [loading, setLoading] = useState(true)
+  const county = useCountyMeta()
+  const [events, setEvents] = useState<IntelligenceEvent[]>([])
+  const [category, setCategory] = useState<CategoryFilter>('all')
+  const [eventType, setEventType] = useState<EventTypeFilter>('all')
+  const [sinceDays, setSinceDays] = useState<TimeWindow>(90)
+  const [sortMode, setSortMode] = useState<SortMode>('priority')
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [typeFilter, setTypeFilter] = useState<NarrativeTypeFilter>('all')
-  const [trajectoryFilter, setTrajectoryFilter] = useState<TrajectoryFilter>('all')
   const [hasMore, setHasMore] = useState(false)
+  const requestKey = `${category}|${eventType}|${sinceDays}|${sortMode}`
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null)
+  const loading = resolvedKey !== requestKey
 
   useEffect(() => {
-    setLoading(true)
-    setHasMore(false)
-    fetchPage(0, typeFilter, trajectoryFilter)
-      .then(({ narratives, hasMore }) => {
-        setNarratives(narratives)
-        setHasMore(hasMore)
+    const key = `${category}|${eventType}|${sinceDays}|${sortMode}`
+    let cancelled = false
+    fetchPage(0, category, eventType, sinceDays, sortMode)
+      .then((result) => {
+        if (cancelled) return
+        setEvents(result.events)
+        setHasMore(result.has_more)
         setError(null)
+        setResolvedKey(key)
       })
-      .catch((e) => setError(e.message ?? 'Failed to load feed'))
-      .finally(() => setLoading(false))
-  }, [typeFilter, trajectoryFilter])
+      .catch((reason: unknown) => {
+        if (cancelled) return
+        setError(reason instanceof Error ? reason.message : 'Failed to load intelligence feed')
+        setResolvedKey(key)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [category, eventType, sinceDays, sortMode])
 
   const loadMore = () => {
     setLoadingMore(true)
-    fetchPage(narratives.length, typeFilter, trajectoryFilter)
-      .then(({ narratives: next, hasMore }) => {
-        setNarratives((prev) => [...prev, ...next])
-        setHasMore(hasMore)
+    fetchPage(events.length, category, eventType, sinceDays, sortMode)
+      .then((result) => {
+        setEvents((current) => [...current, ...result.events])
+        setHasMore(result.has_more)
       })
-      .catch((e) => setError(e.message ?? 'Failed to load more'))
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : 'Failed to load more intelligence')
+      })
       .finally(() => setLoadingMore(false))
   }
 
-  // API returns narratives sorted newest first, so index 0 is the most recent.
-  const mostRecent = narratives[0]?.generated_at ?? null
+  const developmentCount = events.filter((event) => event.category === 'development').length
+  const llmCount = events.filter((event) => event.interpretation.kind === 'llm').length
 
   return (
-    <PageShell maxWidth={960}>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-gold)', marginBottom: 8 }}>
-          Pass 4 Intelligence
+    <PageShell maxWidth={1040}>
+      <header style={{ marginBottom: 26 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            letterSpacing: 3,
+            textTransform: 'uppercase',
+            color: 'var(--accent-gold)',
+            marginBottom: 8,
+          }}
+        >
+          Evidence-backed intelligence
         </div>
-        <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-          County Feed
+        <h1
+          style={{
+            fontFamily: 'var(--font-sans)',
+            fontSize: 30,
+            fontWeight: 700,
+            color: 'var(--text-primary)',
+            marginBottom: 6,
+          }}
+        >
+          {county.county_name} Intelligence Feed
         </h1>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)' }}>
-          Corridor, distress, municipal, and portfolio narratives across York County.
-          {mostRecent && <span> Last narrative generated {formatShortDate(mostRecent)}.</span>}
-        </div>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)', maxWidth: 780 }}>
+          Parcel changes detected from county records and development activity extracted from municipal documents.
+          Deterministic priority, interpretation, next steps, and original evidence remain visibly separated.
+        </p>
+      </header>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: 10,
+          marginBottom: 22,
+        }}
+      >
+        <SummaryStat label="Events shown" value={events.length} />
+        <SummaryStat label="Development events" value={developmentCount} />
+        <SummaryStat label="Source-grounded LLM events" value={llmCount} />
       </div>
 
-      <FilterRow label="Type" options={NARRATIVE_TYPES} value={typeFilter} onChange={setTypeFilter} />
-      <FilterRow label="Trajectory" options={TRAJECTORIES} value={trajectoryFilter} onChange={setTrajectoryFilter} />
+      <FilterRow label="Order" options={SORT_MODES} value={sortMode} onChange={setSortMode} />
+      <FilterRow label="Intelligence" options={CATEGORIES} value={category} onChange={setCategory} />
+      <FilterRow label="Event" options={EVENT_TYPES} value={eventType} onChange={setEventType} />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24, alignItems: 'center' }}>
+        <FilterLabel>Window</FilterLabel>
+        {TIME_WINDOWS.map((days) => (
+          <FilterButton key={days} selected={sinceDays === days} onClick={() => setSinceDays(days)}>
+            {days === 3650 ? 'All history' : `${days} days`}
+          </FilterButton>
+        ))}
+      </div>
 
       {loading && (
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '60px 0' }}>
-          Loading feed...
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '70px 0' }}>
+          Loading intelligence…
         </div>
       )}
 
-      {error && !loading && (
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-red)' }}>
+      {!loading && error && (
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-red)', padding: '30px 0' }}>
           Failed to load feed: {error}
         </div>
       )}
 
-      {!loading && !error && narratives.length === 0 && (
-        <Section title="No narratives yet">
+      {!loading && !error && events.length === 0 && (
+        <Section title="No matching intelligence">
           <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            No Pass 4 narratives match these filters yet. They are produced weekly after the
-            signal-validation pass completes.
+            No events match the current filters. Try a longer time window or another intelligence type.
           </div>
         </Section>
       )}
 
-      {!loading && narratives.length > 0 && (
+      {!loading && events.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {narratives.map((n) => (
-            <NarrativeCard
-              key={n.narrative_id}
-              narrative={n}
-              showAffectedPidns
-              titleAs="h2"
-            />
-          ))}
-
+          {events.map((event) => <IntelligenceEventCard key={event.event_key} event={event} />)}
           {hasMore && (
             <button
               onClick={loadMore}
@@ -110,7 +173,7 @@ export default function CountyFeed() {
                 alignSelf: 'center',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 12,
-                letterSpacing: 1.5,
+                letterSpacing: 1.4,
                 textTransform: 'uppercase',
                 padding: '10px 18px',
                 borderRadius: 4,
@@ -118,7 +181,7 @@ export default function CountyFeed() {
                 background: 'transparent',
                 color: 'var(--text-secondary)',
                 cursor: loadingMore ? 'wait' : 'pointer',
-                marginTop: 8,
+                marginTop: 6,
               }}
             >
               {loadingMore ? 'Loading…' : 'Load more'}
@@ -129,6 +192,17 @@ export default function CountyFeed() {
     </PageShell>
   )
 }
+
+
+function SummaryStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', background: 'var(--bg-card)', borderRadius: 6, padding: '12px 14px' }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase', color: 'var(--text-muted)' }}>{label}</div>
+      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 22, color: 'var(--text-primary)', marginTop: 3 }}>{value}</div>
+    </div>
+  )
+}
+
 
 function FilterRow<T extends string>({
   label,
@@ -142,48 +216,67 @@ function FilterRow<T extends string>({
   onChange: (next: T) => void
 }) {
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>
-        {label}
-      </span>
-      {options.map((t) => (
-        <button
-          key={t}
-          onClick={() => onChange(t)}
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            letterSpacing: 1.5,
-            textTransform: 'uppercase',
-            padding: '6px 12px',
-            borderRadius: 4,
-            border: '1px solid var(--border)',
-            background: value === t ? 'var(--accent-gold)' : 'transparent',
-            color: value === t ? 'var(--bg-deep)' : 'var(--text-secondary)',
-            cursor: 'pointer',
-          }}
-        >
-          {t}
-        </button>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+      <FilterLabel>{label}</FilterLabel>
+      {options.map((option) => (
+        <FilterButton key={option} selected={value === option} onClick={() => onChange(option)}>
+          {option.replace(/_/g, ' ')}
+        </FilterButton>
       ))}
     </div>
   )
 }
 
+
+function FilterLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>
+      {children}
+    </span>
+  )
+}
+
+
+function FilterButton({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 11,
+        letterSpacing: 1,
+        textTransform: 'capitalize',
+        padding: '6px 11px',
+        borderRadius: 4,
+        border: '1px solid var(--border)',
+        background: selected ? 'var(--accent-gold)' : 'transparent',
+        color: selected ? 'var(--bg-deep)' : 'var(--text-secondary)',
+        cursor: 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+
 async function fetchPage(
   offset: number,
-  typeFilter: NarrativeTypeFilter,
-  trajectoryFilter: TrajectoryFilter,
-): Promise<{ narratives: CountyFeedNarrative[]; hasMore: boolean }> {
-  const params = new URLSearchParams()
-  if (typeFilter !== 'all') params.set('narrative_type', typeFilter)
-  if (trajectoryFilter !== 'all') params.set('trajectory', trajectoryFilter)
-  params.set('limit', String(PAGE_SIZE))
-  params.set('offset', String(offset))
+  category: CategoryFilter,
+  eventType: EventTypeFilter,
+  sinceDays: TimeWindow,
+  sortMode: SortMode,
+): Promise<IntelligenceFeedResponse> {
+  const params = new URLSearchParams({
+    limit: String(PAGE_SIZE),
+    offset: String(offset),
+    since_days: String(sinceDays),
+    sort: sortMode,
+  })
+  if (category !== 'all') params.set('category', category)
+  if (eventType !== 'all') params.set('event_type', eventType)
 
-  const r = await fetch(`/api/feed?${params.toString()}`)
-  if (!r.ok) throw new Error(`${r.status}`)
-  const data = (await r.json()) as CountyFeedResponse
-  const narratives = data.narratives ?? []
-  return { narratives, hasMore: narratives.length === PAGE_SIZE }
+  const response = await fetch(`/api/feed?${params.toString()}`)
+  if (!response.ok) throw new Error(`${response.status}`)
+  return response.json() as Promise<IntelligenceFeedResponse>
 }

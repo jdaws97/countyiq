@@ -2,357 +2,100 @@
 
 ## What it does
 
-Entity resolution answers the question: "Are these two records from different sources talking about the same person, business, or property?" Your platform pulls owner names from assessment records, deed transfers, business filings, professional licenses, and liquor licenses — all with slightly different formatting, abbreviations, and errors. Entity resolution links them together into a single canonical entity.
+Entity resolution answers the question: "Are these two records from different sources talking about the same person, business, or property?" Owner names arrive from GIS parcels, tax claims, PLCB liquor licenses, PA corporate filings, and public proceedings — all with slightly different formatting, abbreviations, and errors. Entity resolution links them into a single canonical owner.
 
-## Approach: Deterministic matching in PostgreSQL
+## Single identity space
 
-For the MVP, all matching logic runs as SQL inside the `enrichment/owners.py` Dagster asset. No external tools, no Spark, no ML models. Just PostgreSQL functions using the `pg_trgm` extension (already planned for installation) and well-designed normalization logic.
+`public.owners` is the **only** owner identity space. The API serves
+`/api/owners/{owner_id}` from it directly, and `owner_id` is **stable across
+rebuilds**: the `owner_resolution` asset upserts by `canonical_name`
+(unique constraint, migration 025) instead of truncating and restarting the
+sequence, so profile URLs survive re-runs.
 
-The approach has three stages:
+`public.entity_graph` still exists, but only as **Pass 1's output table**
+(`entity_verification` — LLM-verified alias clusters and relationships).
+`owner_resolution` reads it and folds the results onto the owner rows:
+`aliases`, `relationships`, `verification_status`, `verification_reasoning`,
+`verified_at`. There is no separate entity-graph ID space in the API anymore.
 
-**Stage 1: Normalize.** Before comparing anything, clean and standardize all names and addresses into a consistent format.
+## How resolution works (`pipelines/countyiq/assets/enrichment/owners.py`)
 
-Name normalization (`public.normalize_name()` — implemented in migration 001):
-- Uppercase everything
-- Strip suffixes: JR, SR, II, III, IV
-- Strip entity types: LLC, INC, CORP, LP, LTD, CO, TRUST, ESTATE
-- Strip punctuation and extra whitespace
-- Result: "John A. Smith Jr." → "JOHN A SMITH"
-- Result: "York Properties, LLC" → "YORK PROPERTIES"
+**Stage 1 — Normalize.** Python-side name normalization: uppercase, strip
+parentheticals, iteratively strip entity/person suffixes (LLC, INC, TRUST, JR,
+…), collapse whitespace. Raw names with the same normalized form group
+together ("SMITH JOHN A" + "SMITH JOHN A JR").
 
-**Not yet implemented** (add in a future migration if needed):
-- Common name abbreviations: WM → WILLIAM, ROBT → ROBERT, CHAS → CHARLES
-- These cause occasional misses but are rare enough to defer
+**Stage 2 — Cluster.** One evidence-backed merge pass runs over normalized
+groups with a union-find. Shared-address groups are measured for review but do
+not merge automatically:
 
-Address normalization (`public.normalize_address()` — implemented in migration 001):
-- Uppercase everything
-- Standardize street types: STREET → ST, AVENUE → AVE, ROAD → RD
-- Strip unit/apt/suite numbers
-- Result: "123 Main Street, Apt 2" → "123 MAIN ST"
+1. **Shared-address ambiguity detection:** business-classified groups sharing
+   normalized `mail_addr_full` are counted in materialization metadata. They
+   remain separate because registered agents, accountants, virtual offices,
+   and large landlords can host unrelated entities at one address.
+2. **Entity-graph merge** (`match_tier = 'entity_graph'`, confidence 0.9):
+   groups whose names appear in the same `entity_graph` row's
+   `canonical_name`/`linked_names` merge, and the owner row inherits that
+   row's verification metadata and relationships.
 
-**Not yet implemented** (add in a future migration if needed):
-- Directional standardization: NORTH → N, SOUTH → S, etc.
-- Zip code padding to 5 digits
-- Additional street type mappings (BOULEVARD → BLVD, DRIVE → DR, LANE → LN, etc.)
-- These are incremental improvements — the current functions handle the majority of cases
+**Stage 3 — Canonicalize and classify.** Canonical name = the variant holding
+the most parcels (tie → shortest). Entity type is a priority vote across all
+variants: `government > trust > business > person`.
 
-These normalizations live as PostgreSQL functions in the `public` schema so they can be reused everywhere:
+**Stage 4 — Upsert.** Owners upsert by `canonical_name` (parcel_count,
+mode-municipality, mode-mailing-address, aliases, verification fields);
+owners that disappeared are deleted. `owner_source_links` is rebuilt:
 
-```sql
-CREATE OR REPLACE FUNCTION normalize_name(raw_name TEXT)
-RETURNS TEXT AS $$
-    SELECT UPPER(
-        REGEXP_REPLACE(
-            REGEXP_REPLACE(
-                TRIM(raw_name),
-                '\s+(JR|SR|II|III|IV|LLC|INC|CORP|LP|LTD|CO|TRUST|ESTATE)\.?$',
-                '', 'gi'
-            ),
-            '[^A-Za-z0-9\s]', '', 'g'
-        )
-    );
-$$ LANGUAGE SQL IMMUTABLE;
+| source_type | match | confidence |
+|---|---|---|
+| `parcel` | normalized name / entity graph | 1.0 / 0.9 |
+| `tax_claim` | PIDN join through parcel links | 0.95 |
+| `plcb_license` | trigram `%` match, municipality-scoped | similarity (>0.6) |
+| `plcb_license` | trigram `%` match, unscoped fallback | similarity × 0.8 (>0.75) |
 
-CREATE OR REPLACE FUNCTION normalize_address(raw_address TEXT)
-RETURNS TEXT AS $$
-    -- Similar pattern: uppercase, standardize types, strip units
-    ...
-$$ LANGUAGE SQL IMMUTABLE;
-```
+PLCB matching sets `pg_trgm.similarity_threshold` and uses the `%` operator
+so the planner can drive the join from the small license table through
+`idx_owners_name` (GIN trigram) instead of computing `similarity()` across
+the owners × licenses cross product.
 
-**Stage 2: Match.** Compare normalized records across sources using a tiered confidence system. All fuzzy matches are scoped to the same municipality to reduce false positives ("JOHN SMITH" in Conewago shouldn't match "JOHN SMITH" in Spring Garden):
+## Ordering
 
-| Tier | Rule | Confidence | Example |
-|---|---|---|---|
-| Parcel link | Same PIDN across sources | 0.95 | Assessment and GIS both reference parcel 43-000-01-0001. Strongest link — even if owner names differ (trust, LLC, etc.) |
-| Exact | Normalized name AND normalized address match exactly | 0.90 | "JOHN SMITH" + "123 N MAIN ST" appears in both assessment and GIS |
-| Strong | Normalized name exact + address similarity > 0.8 (pg_trgm), same municipality | 0.80 | "JOHN SMITH" at "123 N MAIN ST" vs "123 NORTH MAIN STREET" in Conewago |
-| Fuzzy name | Name similarity > 0.85 (pg_trgm) + same PIDN | 0.70 | "JOHN A SMITH" vs "JOHN SMITH" on same parcel |
-| Business alias | Normalized business name similarity > 0.8 + same municipality | 0.65 | "YORK PROPERTIES" vs "YORK PROPS" in same township |
-| Address point geocode | Owner mailing address matches `staging.address_points`, resolved point falls within a parcel polygon | 0.75 | Assessment mailing address "123 N MAIN STREET" → address point → ST_Within → parcel PIDN. Catches cases where PROPADR formatting prevents direct matching. |
+`owner_resolution` depends on `municipality_join` (PLCB scoping needs
+`staging.parcels.municipality`). `owner_briefs` (Pass 3b) depends on
+`owner_resolution` and keys briefs by `canonical_name`, which survives both
+rebuilds and cluster re-merges.
 
-**Municipality scoping:** The municipality spatial join (from `staging.municipalities`) must run before entity resolution. Fuzzy matches (Strong, Business alias) are restricted to `WHERE p.municipality = a.municipality`, which both reduces false positives and makes the pg_trgm similarity joins faster (smaller candidate set per municipality).
-
-**Address point bridge:** When `staging.address_points` has data, entity resolution gains an extra matching path. For assessment records where the PIDN join misses (e.g., PARID→PIDN conversion failed or PIDN is absent), normalize the assessment address → match against address points → use `ST_Within(addr_point.geom, parcel.geom)` to find the containing parcel → link back to PIDN. This is a second-chance geocoder that comes free from the GIS portal.
+## Validation queries (run after resolution)
 
 ```sql
--- MVP matching query: parcels + assessment, scoped by municipality
-WITH matched_pairs AS (
-    SELECT
-        p.owner_full AS gis_owner,
-        a.owner_name AS assessment_owner,
-        p.pidn,
-        p.municipality,
-        similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) AS name_score,
-        CASE
-            -- Tier: parcel_link (0.95) — same PIDN is the strongest link
-            WHEN p.pidn = a.pidn THEN 0.95
-            -- Tier: exact (0.90) — normalized name + address match exactly
-            WHEN normalize_name(p.owner_full) = normalize_name(a.owner_name)
-                AND normalize_address(p.propadr) = normalize_address(a.address) THEN 0.90
-            -- Tier: strong (0.80) — exact name + fuzzy address, same municipality
-            WHEN normalize_name(p.owner_full) = normalize_name(a.owner_name)
-                AND similarity(normalize_address(p.propadr), normalize_address(a.address)) > 0.8
-                AND p.municipality = a.municipality THEN 0.80
-            -- Tier: fuzzy_name (0.70) — fuzzy name + same PIDN
-            WHEN similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) > 0.85
-                AND p.pidn = a.pidn THEN 0.70
-            ELSE NULL
-        END AS confidence,
-        CASE
-            WHEN p.pidn = a.pidn THEN 'parcel_link'
-            WHEN normalize_name(p.owner_full) = normalize_name(a.owner_name)
-                AND normalize_address(p.propadr) = normalize_address(a.address) THEN 'exact'
-            WHEN normalize_name(p.owner_full) = normalize_name(a.owner_name) THEN 'strong'
-            WHEN similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) > 0.85 THEN 'fuzzy_name'
-            ELSE NULL
-        END AS match_tier
-    FROM staging.parcels p
-    JOIN staging.assessment_properties a ON (
-        p.pidn = a.pidn  -- PIDN is the primary join key
-        OR (
-            p.municipality = a.municipality  -- Municipality scoping reduces false positives
-            AND similarity(normalize_name(p.owner_full), normalize_name(a.owner_name)) > 0.7
-        )
-    )
-    WHERE p.valid_to IS NULL AND a.valid_to IS NULL
-)
-SELECT * FROM matched_pairs WHERE confidence IS NOT NULL;
-
--- Address point bridge: for unmatched assessment records, geocode through address_points
--- Only runs when staging.address_points has data
-WITH unmatched_assessment AS (
-    SELECT a.* FROM staging.assessment_properties a
-    WHERE a.valid_to IS NULL
-    AND a.pidn NOT IN (SELECT pidn FROM matched_pairs WHERE confidence IS NOT NULL)
-),
-geocoded AS (
-    SELECT
-        ua.owner_name,
-        ua.address,
-        p.pidn,
-        p.municipality,
-        0.75 AS confidence,
-        'address_geocode' AS match_tier
-    FROM unmatched_assessment ua
-    JOIN staging.address_points ap
-        ON similarity(
-            normalize_address(ua.address),
-            normalize_address(CONCAT(ap.add_number, ' ', ap.st_pre_dir, ' ', ap.street_name, ' ', ap.st_pos_typ))
-        ) > 0.85
-        AND ap.valid_to IS NULL
-    JOIN staging.parcels p
-        ON ST_Within(ap.geom, p.geom)
-        AND p.valid_to IS NULL
-)
-SELECT * FROM geocoded;
-
--- PLCB cross-reference: match licensees to resolved owners
--- Runs after owners table is populated from parcels + assessment
-INSERT INTO public.owner_source_links (owner_id, source_type, source_id, source_name, source_address, match_tier, confidence)
-SELECT
-    o.owner_id,
-    'plcb_license',
-    l.lid,
-    l.licensee,
-    l.premises_address,
-    'business_alias',
-    GREATEST(0.65, similarity(normalize_name(l.licensee), o.canonical_name)) AS confidence
-FROM staging.plcb_licenses l
-JOIN public.owners o
-    ON similarity(normalize_name(l.licensee), o.canonical_name) > 0.8
-    AND o.municipality = l.municipality
-WHERE l.valid_to IS NULL
-ON CONFLICT (source_type, source_id) DO UPDATE
-    SET confidence = EXCLUDED.confidence, matched_at = NOW();
-```
-
-**Stage 3: Cluster and classify.** Group matched records into entities. Each entity gets:
-
-- **Canonical name:** Most frequently occurring normalized form across sources
-- **Canonical address:** From the most authoritative source (assessment data, since it's county-maintained)
-- **Entity type:** Classified by heuristic pattern matching on the canonical name (no LLM needed):
-
-```sql
-CASE
-    WHEN canonical_name ~ '(LLC|INC|CORP|LP|LTD|CO\b|COMPANY|ASSOCIATES|PARTNERS|GROUP|HOLDINGS)'
-        THEN 'business'
-    WHEN canonical_name ~ '(TRUST|ESTATE|REVOCABLE|IRREVOCABLE|LIVING TRUST)'
-        THEN 'trust'
-    WHEN canonical_name ~ '(COUNTY|COMMONWEALTH|SCHOOL DIST|BOROUGH|TOWNSHIP|CITY OF|STATE OF|UNITED STATES)'
-        THEN 'government'
-    ELSE 'person'
-END
-```
-
-This classification powers the frontend — the Top Owners dashboard distinguishes individual owners from institutional owners, and the owner profile page displays entity type.
-
-## Schema
-
-```sql
--- Resolved entities
-CREATE TABLE public.owners (
-    owner_id        SERIAL PRIMARY KEY,
-    canonical_name  TEXT NOT NULL,
-    canonical_addr  TEXT,
-    entity_type     TEXT,  -- 'person', 'business', 'trust', 'government'
-    municipality    TEXT,
-    parcel_count    INTEGER DEFAULT 0,
-    first_seen      DATE,
-    last_seen       DATE,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Links back to every source record
-CREATE TABLE public.owner_source_links (
-    link_id         SERIAL PRIMARY KEY,
-    owner_id        INTEGER REFERENCES public.owners(owner_id),
-    source_type     TEXT NOT NULL,  -- 'assessment', 'deed', 'business_filing', 'license', 'liquor'
-    source_id       TEXT NOT NULL,  -- Original ID from that source
-    source_name     TEXT,           -- Original (un-normalized) name from source
-    source_address  TEXT,           -- Original (un-normalized) address from source
-    match_tier      TEXT,           -- 'exact', 'strong', 'fuzzy_name', 'business_alias', 'parcel_link'
-    confidence      NUMERIC(3,2),   -- 0.00 to 1.00
-    matched_at      TIMESTAMPTZ DEFAULT NOW(),
-
-    UNIQUE(source_type, source_id)  -- One link per source record
-);
-
--- Indexes for fast lookups
-CREATE INDEX idx_owners_name ON public.owners USING gin (canonical_name gin_trgm_ops);
-CREATE INDEX idx_owners_municipality ON public.owners (municipality);
-CREATE INDEX idx_owner_links_owner ON public.owner_source_links (owner_id);
-CREATE INDEX idx_owner_links_source ON public.owner_source_links (source_type, source_id);
-```
-
-## What this enables
-
-Once the `owners` table is populated, the platform can answer questions like:
-
-- **"Who owns the most parcels in Conewago Township?"** — Query `owners` WHERE `municipality = 'Conewago Twp'` ORDER BY `parcel_count DESC`. Already computed during resolution.
-- **"Show me everything we know about York Properties LLC"** — Find the owner_id (entity_type = 'business'), then pull all source links — every parcel they own, assessment data, and whether they hold a liquor license (PLCB cross-reference).
-- **"Which businesses in this area have both a liquor license and property?"** — Join owners WHERE entity_type = 'business' to owner_source_links WHERE source_type IN ('plcb_license', 'assessment'). Group by owner_id HAVING COUNT(DISTINCT source_type) >= 2.
-- **"Top institutional property owners"** — `SELECT * FROM public.owners WHERE entity_type IN ('business', 'trust') ORDER BY parcel_count DESC`. Distinguishes LLCs and trusts from individual owners.
-- **"Flag properties where assessment PIDN lookup failed"** — Address point bridge records (match_tier = 'address_geocode') indicate properties where the PARID→PIDN conversion didn't work and geocoding was needed as a fallback — a data quality signal.
-
-## Why this design scales to other counties
-
-The `owners` table and `owner_source_links` table know nothing about York County specifically. The normalization functions are generic (they handle Pennsylvania address patterns, but that's a config change, not a code change). The matching tiers work on any name + address data. If you ever add Lancaster County, you'd create the same schema in a separate database (or a separate schema within the same database), run the same normalization and matching logic against Lancaster's data sources, and get a resolved entity set for Lancaster.
-
-The scrapers change per county. The entity resolution doesn't.
-
-## Dagster asset: `enrichment/owners.py`
-
-Entity resolution dynamically resolves whichever sources are available. It detects loaded staging tables at runtime and includes matching logic for each.
-
-**MVP resolution (parcels + assessment + PLCB):**
-- **Core match:** GIS `owner_full` against assessment `owner_name` via PIDN join (tier: parcel_link, 0.95)
-- **Fuzzy fallback:** Name + address similarity scoped by municipality (tiers: exact, strong, fuzzy_name)
-- **Address point bridge:** When `staging.address_points` has data, unmatched assessment records are geocoded through address points → `ST_Within` → parcel PIDN
-- **PLCB cross-reference:** Normalized `licensee`/`premises_name` from `staging.plcb_licenses` matched against resolved owners by name + municipality (adds `source_type = 'plcb_license'` to `owner_source_links`)
-- **Entity type classification:** Heuristic regex on canonical name → person/business/trust/government
-- **Municipality scoping:** All fuzzy matches restricted to same municipality (requires municipality spatial join to have run first)
-
-**Prerequisites (must run before entity resolution):**
-1. `staging.parcels` loaded with `municipality` populated (requires municipalities pipeline + spatial join enrichment)
-2. `staging.assessment_properties` loaded (when assessment pipeline is built)
-3. `staging.address_points` loaded (optional — enhances matching but not required)
-4. `staging.plcb_licenses` loaded (optional — adds cross-source links)
-
-```python
-@asset(
-    group_name="enrichment",
-    deps=["parcels_arcgis", "municipality_join"],  # Minimum deps for MVP
-    description="Resolved owner entities across all available data sources",
-)
-def owners(context: AssetExecutionContext, database: DatabaseResource):
-    """Run entity resolution across all loaded source tables."""
-
-    # Detect which source tables actually have data
-    available_sources = database.execute("""
-        SELECT table_name FROM information_schema.tables
-        WHERE table_schema = 'staging'
-        AND table_name IN ('parcels', 'assessment_properties',
-                           'address_points', 'plcb_licenses',
-                           'deeds', 'business_filings', 'pals_licenses')
-    """)
-    source_tables = [row[0] for row in available_sources] if available_sources else []
-    context.log.info(f"Running entity resolution against: {source_tables}")
-
-    cur = database.cursor()
-    try:
-        # 1. Build candidate pairs via PIDN join + fuzzy matching (municipality-scoped)
-        # 2. If address_points available, run address point bridge for unmatched records
-        # 3. Cluster matches into entities (canonical name = most frequent normalized form)
-        # 4. Classify entity type (person/business/trust/government)
-        # 5. If plcb_licenses available, match licensees to resolved owners
-        # 6. Write to public.owners + public.owner_source_links
-        # 7. Update parcel_count on each owner
-        ...
-    finally:
-        cur.close()
-```
-
-**Phase 2 enriched resolution (+ deeds, business filings, licenses):**
-- Same matching logic, but with additional source tables feeding into the candidate pool
-- Each new source type gets added to `owner_source_links.source_type` as its pipeline is built
-- Adding a source to resolution = adding it to the deps list and a matching block in the SQL
-- The Dagster asset dynamically detects which tables have data, so it won't break when Phase 2 tables don't exist yet
-
-## Validation (run after each resolution)
-
-A five-record spot check is not sufficient. Run these validation queries after every resolution and check results before go-live:
-
-```sql
--- 1. Distribution by match tier (are any tiers dominating suspiciously?)
-SELECT match_tier, confidence, COUNT(*)
+-- 1. Distribution by match tier (any tier dominating suspiciously?)
+SELECT match_tier, COUNT(*), ROUND(AVG(confidence), 2)
 FROM public.owner_source_links
-GROUP BY match_tier, confidence
-ORDER BY COUNT(*) DESC;
+GROUP BY match_tier ORDER BY COUNT(*) DESC;
 
--- 2. Entities with suspiciously high parcel counts (likely over-merged)
+-- 2. Possible over-merges (persons with huge portfolios)
 SELECT canonical_name, entity_type, parcel_count, municipality
 FROM public.owners
-WHERE parcel_count > 100
+WHERE entity_type = 'person' AND parcel_count > 100
 ORDER BY parcel_count DESC LIMIT 20;
--- Sanity check: are these real institutional owners or bad merges?
--- "YORK COUNTY" owning 500+ parcels = correct. "JOHN SMITH" owning 200 = probably over-merged.
 
--- 3. Sample low-confidence matches (most likely to be wrong)
-SELECT o.canonical_name, l.source_name, l.source_address, l.match_tier, l.confidence
-FROM public.owner_source_links l
-JOIN public.owners o ON o.owner_id = l.owner_id
-WHERE l.confidence < 0.75
-ORDER BY l.confidence ASC LIMIT 50;
+-- 3. Shared-address links should never be emitted automatically
+SELECT COUNT(*) AS unsafe_address_links
+FROM public.owner_source_links
+WHERE match_tier = 'shared_mail_addr';
 
--- 4. Entity type distribution (sanity check classification)
-SELECT entity_type, COUNT(*), ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct
+-- 4. Entity type distribution (expect ~80% person, ~15% business,
+--    ~3% trust, ~2% government)
+SELECT entity_type, COUNT(*),
+       ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct
 FROM public.owners GROUP BY entity_type;
--- Expect: ~80% person, ~15% business, ~3% trust, ~2% government
-
--- 5. Unmatched records (what fell through?)
-SELECT COUNT(*) AS unmatched_parcels
-FROM staging.parcels p
-WHERE p.valid_to IS NULL
-AND NOT EXISTS (
-    SELECT 1 FROM public.owner_source_links l
-    WHERE l.source_type = 'gis_parcel' AND l.source_id = p.pidn
-);
--- Some unmatched is expected (parcels with no assessment record). >20% warrants investigation.
 ```
-
-**Go-live gate:** All 5 queries return reasonable results. No entity with entity_type='person' has parcel_count > 100. Low-confidence matches are defensible on manual inspection. Unmatched rate < 20%.
 
 ## Known limitations and when to upgrade
 
 | Limitation | Impact | When to upgrade |
 |---|---|---|
-| No ML confidence scoring | Rigid tiers; edge cases fall through | When false positive/negative rate is unacceptable after QA |
-| No incremental matching | Full rebuild on every run | When dataset grows large enough that full rebuild is slow (>30 min) |
-| No human-in-the-loop review | Ambiguous matches auto-resolved by tier | When match accuracy is critical for official use |
-| Normalization is basic | Missing directionals (NORTH→N), name abbreviations (WM→WILLIAM), extra street types (BLVD, DR, LN) | When these cause consistent misses in QA validation |
-| Address point bridge depends on concatenation | `CONCAT(add_number, st_pre_dir, street_name, st_pos_typ)` is fragile | Add a `full_address` computed column to address_points migration |
+| Address-only evidence does not merge LLC portfolios | Legitimate one-owner/many-LLC portfolios stay split until stronger evidence exists | Use officers, registered agents plus corroborating evidence, deeds, or reviewed Pass 1 links; never promote address alone to identity |
+| Full rebuild every run | Fine at county scale (~200K names) | Incremental matching when rebuild exceeds ~30 min |
+| No ML confidence scoring | Rigid tiers; edge cases fall through | Zingg or similar when false positive/negative rate is unacceptable — same tables, only Stage 2 changes |
 | No cross-county entity linking | Each county is a separate entity universe | When multi-county product is in scope |
-
-**Upgrade path:** If deterministic matching isn't sufficient, the next step is **Zingg** (open-source, Spark-based ML matching). The schema doesn't change — Zingg would replace the matching logic in Stage 2, outputting to the same `owners` and `owner_source_links` tables. The normalization functions and schema are already designed to be tool-agnostic.

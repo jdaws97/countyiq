@@ -1,168 +1,130 @@
-"""Unit tests for PA DOS corporate entity parser."""
+"""Unit tests for the SODA registered-business parser (data.pa.gov xvd7-5r2c)."""
 
-import json
-import os
+from datetime import date
 
 from countyiq.lib.parsers.pa_dos_entities import (
-    parse_filing_detail,
-    parse_search_results,
+    STATUS_NOT_FOUND,
+    STATUS_PRESENT,
+    make_not_found_record,
+    parse_soda_business_rows,
+)
+from countyiq.assets.scrapers.pa_dos_entities import (
+    _get_pending_entity_names,
+    _positive_int_env,
 )
 
-FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+
+def _row(**overrides) -> dict:
+    row = {
+        "business_name": "York Holdings, LLC",
+        "filing_number": "0007123456",
+        "address_line1": "10 Main Street",
+        "city": "York",
+        "state": "PA",
+        "zip": "17401",
+        "typeofbusinessregistration": "Domestic Limited Liability Company",
+        "creationdate": "2019-05-01T00:00:00.000",
+        "party_type": "President",
+        "first_name": "JANE",
+        "middle_name": "Q",
+        "last_name": "DOE",
+        "shortcountyname": "York",
+        "county_code": "67",
+    }
+    row.update(overrides)
+    return row
 
 
-def _load_fixture(name: str) -> dict:
-    with open(os.path.join(FIXTURES, name)) as f:
-        return json.load(f)
+class TestParseSodaBusinessRows:
 
+    def test_matches_despite_case_and_punctuation_drift(self):
+        record = parse_soda_business_rows([_row()], "YORK HOLDINGS LLC")
+        assert record is not None
+        assert record["entity_name"] == "YORK HOLDINGS LLC"  # search key preserved
+        assert record["matched_name"] == "York Holdings, LLC"  # as published
+        assert record["entity_number"] == "0007123456"
+        assert record["entity_type"] == "Domestic Limited Liability Company"
+        assert record["status"] == STATUS_PRESENT
+        assert record["formation_date"] == date(2019, 5, 1)
+        assert record["office_address"] == "10 Main Street, York, PA, 17401"
 
-# ---------------------------------------------------------------------------
-# parse_search_results
-# ---------------------------------------------------------------------------
+    def test_llc_dot_variants_match(self):
+        rows = [_row(business_name="York Holdings, L.L.C.")]
+        assert parse_soda_business_rows(rows, "YORK HOLDINGS LLC") is not None
 
-class TestParseSearchResults:
-
-    def test_returns_list_of_dicts(self):
-        data = _load_fixture("pa_dos_search_response.json")
-        results = parse_search_results(data)
-        assert isinstance(results, list)
-        assert all(isinstance(r, dict) for r in results)
-
-    def test_correct_count(self):
-        data = _load_fixture("pa_dos_search_response.json")
-        results = parse_search_results(data)
-        assert len(results) == 3
-
-    def test_required_fields_present(self):
-        data = _load_fixture("pa_dos_search_response.json")
-        required = [
-            "entity_name",
-            "entity_number",
-            "entity_type",
-            "status",
-            "formation_date",
-            "registered_agent_name",
-            "registered_agent_address",
-            "office_address",
-            "officers",
-            "source_url",
+    def test_officer_rows_group_into_one_record(self):
+        rows = [
+            _row(),
+            _row(party_type="Secretary", first_name="JOHN", middle_name=None, last_name="SMITH"),
         ]
-        for record in parse_search_results(data):
-            for field in required:
-                assert field in record, f"Missing field: {field}"
-
-    def test_first_record_values(self):
-        data = _load_fixture("pa_dos_search_response.json")
-        first = parse_search_results(data)[0]
-        assert first["entity_name"] == "Smith Holdings Company, LLC"
-        assert first["entity_number"] == "4346768"
-        assert first["entity_type"] == "Domestic Limited Liability Company"
-        assert first["status"] == "Active"
-        assert first["office_address"] == "6224 THOMAN DRIVE, SPRING GROVE, PA 17362"
-
-    def test_formation_date_parsed(self):
-        data = _load_fixture("pa_dos_search_response.json")
-        results = parse_search_results(data)
-        from datetime import date
-        assert results[0]["formation_date"] == date(2015, 4, 10)
-        assert results[1]["formation_date"] == date(2019, 11, 22)
-
-    def test_inactive_status_preserved(self):
-        data = _load_fixture("pa_dos_search_response.json")
-        results = parse_search_results(data)
-        assert results[2]["status"] == "Inactive"
-
-    def test_source_url_format(self):
-        data = _load_fixture("pa_dos_search_response.json")
-        results = parse_search_results(data)
-        for record in results:
-            assert record["source_url"].startswith(
-                "https://file.dos.pa.gov/search/business#"
-            )
-            assert record["entity_number"] in record["source_url"]
-
-    def test_empty_results_returns_empty_list(self):
-        assert parse_search_results({"results": []}) == []
-
-    def test_missing_results_key_returns_empty_list(self):
-        assert parse_search_results({}) == []
-
-    def test_agents_and_officers_empty(self):
-        """Registered agent and officers are unavailable from public search."""
-        data = _load_fixture("pa_dos_search_response.json")
-        for record in parse_search_results(data):
-            assert record["registered_agent_name"] == ""
-            assert record["registered_agent_address"] == ""
-            assert record["officers"] == []
-
-
-# ---------------------------------------------------------------------------
-# parse_filing_detail
-# ---------------------------------------------------------------------------
-
-class TestParseFilingDetail:
-
-    def test_returns_dict(self):
-        data = _load_fixture("pa_dos_detail_response.json")
-        result = parse_filing_detail(data, entity_name="Smith Holdings Company, LLC")
-        assert isinstance(result, dict)
-
-    def test_required_fields_present(self):
-        data = _load_fixture("pa_dos_detail_response.json")
-        required = [
-            "entity_name",
-            "entity_number",
-            "entity_type",
-            "status",
-            "formation_date",
-            "registered_agent_name",
-            "registered_agent_address",
-            "office_address",
-            "officers",
-            "source_url",
+        record = parse_soda_business_rows(rows, "YORK HOLDINGS LLC")
+        assert record["officers"] == [
+            {"party_type": "President", "name": "JANE Q DOE"},
+            {"party_type": "Secretary", "name": "JOHN SMITH"},
         ]
-        result = parse_filing_detail(data, entity_name="fallback")
-        for field in required:
-            assert field in result, f"Missing field: {field}"
 
-    def test_office_address_assembled(self):
-        data = _load_fixture("pa_dos_detail_response.json")
-        result = parse_filing_detail(data, entity_name="fallback")
-        assert "6224 THOMAN DRIVE" in result["office_address"]
-        assert "SPRING GROVE" in result["office_address"]
-        assert "PA" in result["office_address"]
-        assert "17362" in result["office_address"]
+    def test_duplicate_officer_rows_dedupe(self):
+        record = parse_soda_business_rows([_row(), _row()], "YORK HOLDINGS LLC")
+        assert len(record["officers"]) == 1
 
-    def test_formation_date_parsed(self):
-        data = _load_fixture("pa_dos_detail_response.json")
-        from datetime import date
-        result = parse_filing_detail(data, entity_name="fallback")
-        assert result["formation_date"] == date(2015, 4, 10)
+    def test_unrelated_fulltext_hits_do_not_match(self):
+        rows = [_row(business_name="York Holdings of Ohio LLC")]
+        assert parse_soda_business_rows(rows, "YORK HOLDINGS LLC") is None
 
-    def test_entity_type_uses_filing_type(self):
-        """Detail view has filingType which is more specific than entityType."""
-        data = _load_fixture("pa_dos_detail_response.json")
-        result = parse_filing_detail(data, entity_name="fallback")
-        assert result["entity_type"] == "Domestic Limited Liability Company"
+    def test_multiple_filings_take_most_recent(self):
+        rows = [
+            _row(filing_number="0001", creationdate="2005-01-01T00:00:00.000"),
+            _row(filing_number="0002", creationdate="2021-03-15T00:00:00.000"),
+        ]
+        record = parse_soda_business_rows(rows, "YORK HOLDINGS LLC")
+        assert record["entity_number"] == "0002"
 
-    def test_source_url_contains_entity_number(self):
-        data = _load_fixture("pa_dos_detail_response.json")
-        result = parse_filing_detail(data, entity_name="fallback")
-        assert "4346768" in result["source_url"]
+    def test_empty_rows_return_none(self):
+        assert parse_soda_business_rows([], "YORK HOLDINGS LLC") is None
 
-    def test_entity_name_from_response(self):
-        data = _load_fixture("pa_dos_detail_response.json")
-        result = parse_filing_detail(data, entity_name="should not use this")
-        assert result["entity_name"] == "Smith Holdings Company, LLC"
+    def test_missing_creationdate_still_parses(self):
+        record = parse_soda_business_rows([_row(creationdate=None)], "YORK HOLDINGS LLC")
+        assert record is not None
+        assert record["formation_date"] is None
 
-    def test_entity_name_fallback(self):
-        data = _load_fixture("pa_dos_detail_response.json")
-        data_no_name = {k: v for k, v in data.items() if k != "entityName"}
-        result = parse_filing_detail(data_no_name, entity_name="Fallback Name")
-        assert result["entity_name"] == "Fallback Name"
 
-    def test_missing_registered_office(self):
-        data = _load_fixture("pa_dos_detail_response.json")
-        data_no_office = {k: v for k, v in data.items() if k != "registeredOffice"}
-        result = parse_filing_detail(data_no_office, entity_name="test")
-        assert result["office_address"] == ""
+class TestMakeNotFoundRecord:
+
+    def test_negative_cache_record(self):
+        record = make_not_found_record("GHOST VENTURES LP")
+        assert record["entity_name"] == "GHOST VENTURES LP"
+        assert record["status"] == STATUS_NOT_FOUND
+        assert record["matched_name"] == ""
+        assert record["officers"] == []
+        assert record["formation_date"] is None
+
+
+class _RecordingDatabase:
+    def __init__(self):
+        self.query = ""
+        self.params = ()
+
+    def execute(self, query, params=()):
+        self.query = query
+        self.params = params
+        return [("ALPHA HOLDINGS LLC",), ("BETA PROPERTIES LP",)]
+
+
+def test_pending_entity_batch_has_limit_and_differentiated_ttls():
+    database = _RecordingDatabase()
+
+    names = _get_pending_entity_names(
+        database,
+        limit=25,
+        found_ttl_days=30,
+        not_found_ttl_days=180,
+    )
+
+    assert names == ["ALPHA HOLDINGS LLC", "BETA PROPERTIES LP"]
+    assert "LIMIT %s" in database.query
+    assert database.params[-4:] == (STATUS_NOT_FOUND, 180, 30, 25)
+
+
+def test_positive_int_env_never_turns_zero_into_unbounded(monkeypatch):
+    monkeypatch.setenv("COUNTYIQ_TEST_LIMIT", "0")
+    assert _positive_int_env("COUNTYIQ_TEST_LIMIT", 500) == 500

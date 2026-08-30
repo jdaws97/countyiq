@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Model evaluation report generator for CountyIQ.
+"""Live smoke/performance report generator for CountyIQ.
 
 Reads all eval_*.json files from a results directory (produced by
-eval_runner.py) and prints a comparison table across models and passes.
+eval_runner.py) and prints transport/schema/latency comparisons. It does not
+score model quality; promotion results come from challenger.py frozen gold.
 
 Usage:
-    python eval_report.py                          # uses pipelines/eval/results/
-    python eval_report.py pipelines/eval/results/
-    python eval_report.py /tmp/my_eval_results/
+    .venv/bin/python -m eval.eval_report
+    .venv/bin/python -m eval.eval_report pipelines/eval/results/
 """
 
 from __future__ import annotations
@@ -31,8 +31,7 @@ def load_results(results_dir: Path) -> list[dict]:
     all_files = []
     for fpath in files:
         try:
-            with open(fpath) as f:
-                data = json.load(f)
+            data = json.loads(fpath.read_text())
             data["_source_file"] = fpath.name
             all_files.append(data)
         except (json.JSONDecodeError, OSError) as exc:
@@ -51,7 +50,6 @@ def compute_stats(eval_data: dict) -> dict:
             "model_name": meta.get("model_name", "unknown"),
             "pass_num": meta.get("pass_num", "?"),
             "evaluated_at": meta.get("evaluated_at", ""),
-            "n_ctx": meta.get("n_ctx", "?"),
             "temperature": meta.get("temperature", "?"),
             "total": 0,
             "success_count": 0,
@@ -96,7 +94,6 @@ def compute_stats(eval_data: dict) -> dict:
         "model_family": meta.get("model_family", "?"),
         "pass_num": meta.get("pass_num", "?"),
         "evaluated_at": meta.get("evaluated_at", ""),
-        "n_ctx": meta.get("n_ctx", "?"),
         "temperature": (meta.get("sampling") or {}).get("temperature", meta.get("temperature", "?")),
         "total": total,
         "success_count": success_count,

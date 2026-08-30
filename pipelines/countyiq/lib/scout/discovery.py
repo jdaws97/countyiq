@@ -172,7 +172,7 @@ CATEGORY_AUDIENCES: dict[str, tuple[str, ...]] = {
 CATEGORY_ALERT_TEMPLATES: dict[str, str] = {
     "development_land_use": "Alert when a new subdivision, land-development, or erosion-control item appears in {source_name}.",
     "planning_zoning": "Flag zoning hearings, rezoning packets, or planning agenda changes from {source_name}.",
-    "permit_activity": "Watch {source_name} for permit, inspection, or license changes tied to York County properties.",
+    "permit_activity": "Watch {source_name} for permit, inspection, or license changes tied to properties in the county.",
     "procurement_bids": "Send same-day bid and RFP alerts from {source_name} to contractors and local vendors.",
     "tax_sales_delinquency": "Trigger distressed-property alerts when {source_name} posts new tax-sale or delinquency records.",
     "assessment_property": "Notify when {source_name} exposes parcel, ownership, or assessed-value changes worth review.",
@@ -214,7 +214,7 @@ def discover_county_sources(
     *,
     session: requests.Session | None = None,
 ) -> tuple[list[CandidateRecord], list[ObservationRecord]]:
-    """Probe the York County seed catalog and classify seed + linked sources."""
+    """Probe the active county seed catalog and classify seed + linked sources."""
     seeds = get_scout_seeds(county_key)
     http = session or build_session()
     probe_cache: dict[str, ProbeResult] = {}

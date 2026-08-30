@@ -12,6 +12,11 @@ __pycache__/
 api/.venv/
 *.egg-info/
 dist/
+.coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
 
 # Node
 node_modules/
@@ -33,13 +38,19 @@ models/
 .codex
 
 # Generated test / browser artifacts
+.artifact_tmp/
+.playwright-cli/
 .playwright-mcp/
 .tmp_playwright/
+/output/
+/outputs/
+/tmp/
 test-results/
+pipelines/.tmp_dagster_home_*/
 pipelines/eval/results/
+pipelines/eval/results_live/
 pipelines/archives/
-archives/eval_*/
-archives/smoke_test/
+/archives/
 
 # Ad hoc repo-root screenshots
 homepage-current.png

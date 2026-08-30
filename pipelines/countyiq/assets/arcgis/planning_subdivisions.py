@@ -19,8 +19,9 @@ from dagster import (
 
 from countyiq.lib.arcgis_client import iterate_feature_pages
 from countyiq.lib.checks import make_row_count_check
-from countyiq.lib.county_config import get_county_config
+from countyiq.lib.county_config import county_open_data_source_key, get_county_config
 from countyiq.lib.parsers.planning_subdivisions import parse_planning_subdivision_features
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -52,6 +53,9 @@ def planning_subdivisions_arcgis(
 ) -> MaterializeResult:
     """Stream planning subdivision pages from ArcGIS directly into DB. Memory-efficient."""
     county = get_county_config()
+    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="planning_subdivisions_arcgis", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     context.log.info(f"Querying ArcGIS planning subdivisions for {county.name}: {county.arcgis_planning_subdivisions_url}")
 
     cur = database.cursor()

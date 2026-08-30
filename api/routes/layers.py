@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException
 
 from api.lib.database import get_cursor
 from api.lib.response_types import LayerConfig
+from api.lib.settings import open_data_source_key
+from api.lib.source_policy import require_source_use
 
 router = APIRouter(tags=["layers"])
 
@@ -26,12 +28,17 @@ LAYER_CONFIG: dict[str, LayerConfig] = {
                         "start_date", "end_date", "cost", "project_type"],
         "extra_sql": (
             "t.data->>'PRJCT_GRPHY_DC' AS location_desc, "
-            "t.data->>'PRJCT_MNGR_CONTACT_NM' AS project_manager, "
-            "t.data->>'PRJCT_MNGR_EMAIL' AS manager_email, "
             "t.data->>'UNDER_CONSTRUCTION' AS under_construction, "
             "t.data->>'ACT_89_BREAKDOWN' AS act89_status"
         ),
     },
+}
+
+_LAYER_SOURCE = {
+    "municipalities": open_data_source_key(),
+    "flood_zones": "fema_nfhl",
+    "zoning": open_data_source_key(),
+    "penndot_projects": "penndot_open_data",
 }
 
 
@@ -53,6 +60,9 @@ def get_layer(layer_name: str) -> dict:
         prop_select += ", " + extra
 
     with get_cursor() as cur:
+        require_source_use(
+            cur, _LAYER_SOURCE[layer_name], "derived_product", conceal=False
+        )
         cur.execute(f"""
             SELECT
                 ST_AsGeoJSON(t.geom)::json AS geometry,

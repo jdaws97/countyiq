@@ -1,13 +1,28 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom'
 
 import BackButton from '../components/BackButton'
 import Badge from '../components/Badge'
+import IntelligenceEventCard from '../components/IntelligenceEventCard'
 import PageShell from '../components/PageShell'
 import Section from '../components/Section'
 import { formatCurrencyCompact } from '../lib/format'
 import { getPropertyClassLabel } from '../lib/propertyLabels'
-import type { OwnerProfileResponse } from '../types/api'
+import { useFetchJson } from '../lib/useFetchJson'
+import { isEntityWatched, toggleEntityWatch } from '../lib/watchlist'
+import type { IntelligenceFeedResponse, OwnerProfileResponse } from '../types/api'
+
+const RECOMMENDATION_COLORS: Record<string, string> = {
+  pursue_acquisition: 'var(--accent-green)',
+  compete: 'var(--accent-gold)',
+  monitor: 'var(--accent-cyan)',
+  none: 'var(--text-muted)',
+}
+
+function formatBriefLabel(value: string | null | undefined): string {
+  if (!value) return '--'
+  return value.replace(/_/g, ' ')
+}
 
 function formatEntityTypeLabel(entityType: string | null | undefined): string {
   if (!entityType) return 'Unknown'
@@ -19,27 +34,25 @@ function formatEntityTypeLabel(entityType: string | null | undefined): string {
 
 export default function OwnerProfile() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
   const navigate = useNavigate()
-  const [data, setData] = useState<OwnerProfileResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const entityView = location.pathname.startsWith('/entity/')
+  const { data, error: fetchError, loading } = useFetchJson<OwnerProfileResponse>(
+    id ? `/api/${entityView ? 'entities' : 'owners'}/${encodeURIComponent(id)}` : null,
+  )
+  const intelligence = useFetchJson<IntelligenceFeedResponse>(
+    data?.owner.owner_id
+      ? `/api/feed?entity_ids=${data.owner.owner_id}&since_days=3650&limit=20&sort=latest`
+      : null,
+  )
+  const [, setWatchRevision] = useState(0)
 
   useEffect(() => {
-    if (!id) return
-    setLoading(true)
-    setError(null)
-    fetch(`/api/owners/${id}`)
-      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
-      .then((ownerData) => {
-        setData(ownerData)
-      })
-      .catch((loadError) => {
-        console.error('Failed to load owner profile', loadError)
-        setData(null)
-        setError('Unable to load owner profile.')
-      })
-      .finally(() => setLoading(false))
-  }, [id])
+    const refresh = () => setWatchRevision((value) => value + 1)
+    window.addEventListener('countyiq-watchlist-changed', refresh)
+    return () => window.removeEventListener('countyiq-watchlist-changed', refresh)
+  }, [])
+  const error = fetchError ? 'Unable to load owner profile.' : null
 
   if (loading) {
     return (
@@ -71,15 +84,18 @@ export default function OwnerProfile() {
   const portfolio = data.portfolio
   const delinq = data.delinquency
   const licenses = data.licenses
+  const watched = isEntityWatched(owner.owner_id)
 
   return (
     <PageShell maxWidth={1000}>
       <BackButton onClick={() => navigate(-1)} />
 
       <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-gold)', marginBottom: 8 }}>Owner Profile</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-gold)', marginBottom: 8 }}>
+          {entityView ? 'Entity case file' : 'Owner profile'}
+        </div>
         <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{owner.canonical_name}</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <Badge color="var(--accent-blue)">{formatEntityTypeLabel(owner.entity_type)}</Badge>
           {owner.verification_status && (
             <Badge color={owner.verification_status === 'verified' ? 'var(--accent-green)' : 'var(--accent-gold)'}>
@@ -88,6 +104,24 @@ export default function OwnerProfile() {
           )}
           {delinq.total_owed > 0 && <Badge color="var(--accent-red)">Tax Delinquent — {formatCurrencyCompact(delinq.total_owed, { allowBillions: true })}</Badge>}
           {licenses.length > 0 && <Badge color="var(--accent-green)">{licenses.length} Liquor License{licenses.length > 1 ? 's' : ''}</Badge>}
+          <button
+            onClick={() => {
+              toggleEntityWatch({ id: owner.owner_id, name: owner.canonical_name })
+              setWatchRevision((value) => value + 1)
+            }}
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: watched ? 'var(--accent-gold)' : 'var(--accent-blue)',
+              background: 'transparent',
+              border: `1px solid ${watched ? 'var(--accent-gold)' : 'var(--border)'}`,
+              borderRadius: 4,
+              padding: '5px 10px',
+              cursor: 'pointer',
+            }}
+          >
+            {watched ? '★ Watching entity' : '☆ Watch entity'}
+          </button>
         </div>
       </div>
 
@@ -113,6 +147,90 @@ export default function OwnerProfile() {
           )}
         </Section>
       ) : null}
+
+      {data.relationships.length > 0 && (
+        <Section title={`Known relationships (${data.relationships.length})`}>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {data.relationships.map((relationship, index) => {
+              const name = String(relationship.related_canonical_name ?? relationship.related_entity ?? 'Related entity')
+              const relationshipType = String(relationship.relationship_type ?? 'related').replace(/_/g, ' ')
+              const evidence = relationship.evidence ? String(relationship.evidence) : null
+              const relatedId = typeof relationship.related_owner_id === 'number' ? relationship.related_owner_id : null
+              return (
+                <div key={`${name}-${relationshipType}-${index}`} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '12px 14px', background: 'var(--bg-panel)' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                    <Badge color="var(--accent-purple)">{relationshipType}</Badge>
+                    {relatedId ? (
+                      <Link to={`/entity/${relatedId}`} style={{ fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 600, color: 'var(--accent-green)' }}>
+                        {name} →
+                      </Link>
+                    ) : (
+                      <span style={{ fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
+                    )}
+                  </div>
+                  {evidence && <div style={{ marginTop: 8, fontFamily: 'var(--font-sans)', fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{evidence}</div>}
+                </div>
+              )
+            })}
+          </div>
+        </Section>
+      )}
+
+      <Section title="Recent intelligence">
+        {intelligence.loading && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>Loading related changes…</div>}
+        {intelligence.error && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-red)' }}>{intelligence.error}</div>}
+        {!intelligence.loading && !intelligence.error && (intelligence.data?.events.length ?? 0) === 0 && (
+          <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+            No parcel or municipal events are linked to this entity yet. That absence is explicit; CountyIQ does not invent a narrative when the source record is thin.
+          </div>
+        )}
+        {(intelligence.data?.events.length ?? 0) > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {intelligence.data!.events.map((event) => <IntelligenceEventCard key={event.event_key} event={event} />)}
+          </div>
+        )}
+      </Section>
+
+      {data.brief && (
+        <Section title="Portfolio Intelligence">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+            <Badge color={RECOMMENDATION_COLORS[data.brief.recommendation ?? 'none'] ?? 'var(--text-muted)'}>
+              {formatBriefLabel(data.brief.recommendation)}
+            </Badge>
+            {data.brief.portfolio_strategy && (
+              <Badge color="var(--accent-blue)">{formatBriefLabel(data.brief.portfolio_strategy)}</Badge>
+            )}
+            {data.brief.urgency && data.brief.urgency !== 'none' && (
+              <Badge color="var(--accent-gold)">{formatBriefLabel(data.brief.urgency)}</Badge>
+            )}
+            {data.brief.evidence_strength && (
+              <Badge color="var(--accent-cyan)">evidence: {data.brief.evidence_strength}</Badge>
+            )}
+          </div>
+          {data.brief.key_pattern && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Key Pattern</div>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-primary)', fontWeight: 500 }}>
+                {data.brief.key_pattern}
+              </div>
+            </div>
+          )}
+          <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.7, color: 'var(--text-secondary)', whiteSpace: 'pre-line', marginBottom: 12 }}>
+            {data.brief.brief_text}
+          </div>
+          {data.brief.top_risk && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Top Risk</div>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{data.brief.top_risk}</div>
+            </div>
+          )}
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+            {data.brief.confidence !== null ? `confidence ${(data.brief.confidence * 100).toFixed(0)}% · ` : ''}
+            {data.brief.model_version ?? 'model unknown'}
+            {data.brief.generated_at ? ` · ${new Date(data.brief.generated_at).toLocaleDateString()}` : ''}
+          </div>
+        </Section>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 32, animation: 'fadeUp 0.4s ease 0.1s both' }}>
         <StatCard label="Properties" value={portfolio.parcel_count.toLocaleString()} color="var(--accent-blue)" />

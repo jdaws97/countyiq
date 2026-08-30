@@ -4,6 +4,8 @@ from fastapi import APIRouter
 
 from api.lib.database import get_cursor
 from api.lib.response_types import HomepageStatsResponse
+from api.lib.settings import open_data_source_key
+from api.lib.source_policy import require_source_use
 
 router = APIRouter(tags=["stats"])
 
@@ -12,6 +14,14 @@ router = APIRouter(tags=["stats"])
 def get_stats() -> HomepageStatsResponse:
     """Aggregate stats for homepage cards."""
     with get_cursor() as cur:
+        parcel_source = open_data_source_key()
+        for source_key in (
+            parcel_source,
+            "tax_claims",
+            "fema_nfhl",
+            "plcb_licenses",
+        ):
+            require_source_use(cur, source_key, "derived_product", conceal=False)
         cur.execute("""
             SELECT
                 (SELECT COUNT(*) FROM staging.municipalities WHERE valid_to IS NULL) AS municipality_count,
@@ -32,7 +42,8 @@ def get_stats() -> HomepageStatsResponse:
                 COALESCE(SUM(CASE WHEN authority_name = 'SCHOOL' AND total > 0 THEN total ELSE 0 END), 0) AS school_tax_owed,
                 COALESCE(SUM(CASE WHEN authority_name = 'MUNICIPAL' AND total > 0 THEN total ELSE 0 END), 0) AS municipal_tax_owed,
                 MIN(tax_year) AS oldest_delinquent_year,
-                COUNT(DISTINCT tax_district_code) AS districts_affected
+                COUNT(DISTINCT tax_district_code) AS districts_affected,
+                MAX(report_date) AS tax_claim_report_date
             FROM staging.tax_claims
             WHERE valid_to IS NULL
         """)
@@ -56,4 +67,5 @@ def get_stats() -> HomepageStatsResponse:
         "municipal_tax_owed": float(tax_breakdown["municipal_tax_owed"]),
         "oldest_delinquent_year": tax_breakdown["oldest_delinquent_year"],
         "districts_affected": tax_breakdown["districts_affected"],
+        "tax_claim_report_date": tax_breakdown["tax_claim_report_date"],
     }

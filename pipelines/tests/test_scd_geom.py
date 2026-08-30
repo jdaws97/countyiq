@@ -152,6 +152,7 @@ def test_point_to_geojson_handles_missing():
     assert point_to_geojson(1.0, 2.0) == {"type": "Point", "coordinates": [1.0, 2.0]}
 
 
+@pytest.mark.integration
 def test_geom_upsert_multipolygon_inserts(db_conn, polygon_table):
     cur = db_conn.cursor()
 
@@ -183,6 +184,7 @@ def test_geom_upsert_multipolygon_inserts(db_conn, polygon_table):
     cur.close()
 
 
+@pytest.mark.integration
 def test_geom_upsert_multilinestring_inserts(db_conn, line_table):
     cur = db_conn.cursor()
     paths = [[[0.0, 0.0], [1.0, 1.0]]]
@@ -205,6 +207,7 @@ def test_geom_upsert_multilinestring_inserts(db_conn, line_table):
     cur.close()
 
 
+@pytest.mark.integration
 def test_geom_upsert_point_inserts(db_conn, point_table):
     cur = db_conn.cursor()
     geojson = json.dumps(point_to_geojson(10.0, 20.0))
@@ -226,6 +229,7 @@ def test_geom_upsert_point_inserts(db_conn, point_table):
     cur.close()
 
 
+@pytest.mark.integration
 def test_geom_upsert_data_loss_guard_aborts(db_conn, polygon_table):
     """Refuse to expire when incoming << existing (and existing > 100)."""
     cur = db_conn.cursor()
@@ -268,6 +272,7 @@ def test_geom_upsert_data_loss_guard_aborts(db_conn, polygon_table):
     cur.close()
 
 
+@pytest.mark.integration
 def test_geom_upsert_scope_column_isolates_counties(db_conn, scoped_table):
     """scope_column='scope' must keep county A's records out of county B's expire."""
     cur = db_conn.cursor()
@@ -333,6 +338,7 @@ def test_geom_upsert_scope_column_isolates_counties(db_conn, scoped_table):
     cur.close()
 
 
+@pytest.mark.integration
 def test_geom_upsert_change_detection_expires_then_inserts(db_conn, polygon_table):
     cur = db_conn.cursor()
     geojson = json.dumps(rings_to_multipolygon_geojson([list(reversed(SQUARE))]))
@@ -371,6 +377,7 @@ def test_geom_upsert_change_detection_expires_then_inserts(db_conn, polygon_tabl
     cur.close()
 
 
+@pytest.mark.integration
 def test_geom_upsert_handles_missing_geometry(db_conn, polygon_table):
     cur = db_conn.cursor()
     # Record "Z" has no geometry in the lookup

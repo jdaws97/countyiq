@@ -19,6 +19,7 @@ from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
+from countyiq.lib.source_rights import authorize_source, require_source_use
 
 REQUEST_TIMEOUT = 60
 PAGE_SIZE = 1000
@@ -36,6 +37,9 @@ def traffic_counts_arcgis(
 ) -> MaterializeResult:
     """Fetch traffic count segments, upsert to staging.traffic_counts."""
     county = get_county_config()
+    authorization = authorize_source(database, source_key="penndot_open_data", acquisition_method="arcgis_rest", asset_key="traffic_counts_arcgis", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
 
     # Paginate through all segments
     all_features = []

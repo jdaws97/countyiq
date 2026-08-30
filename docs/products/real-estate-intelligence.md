@@ -4,7 +4,7 @@ This is the active product lane for CountyIQ. It names the buyer, the jobs the p
 
 ## Lane
 
-CountyIQ is a **county-grade real-estate intelligence platform for private-market investors and developers operating in South-Central PA**, starting in York County and expanding to adjacent counties (Lancaster, Cumberland, Adams, Dauphin) after product-market fit is established in York.
+CountyIQ is a **county-grade real-estate intelligence platform for private-market investors and developers operating in South-Central PA**, starting in York County. The code and deployment contract are county-configurable now; an adjacent county is activated only after its source rights, coverage, and a real user need are verified.
 
 We are **not** building:
 - a consumer real-estate search portal (Zillow / Redfin),
@@ -49,65 +49,87 @@ Sourcing deals and pitches. Wants portfolio views of owners and corridor narrati
 
 1. **Links entities across sources** — the same LLC in PA DOS, the same person as grantee on a deed and applicant in a variance hearing.
 2. **Extracts structured records from unstructured PDFs** — every ZHB, Planning Commission, and Board of Supervisors meeting minute in every York County municipality, converted into queryable proceeding records.
-3. **Synthesizes cross-parcel narratives** — corridor scans, distress clusters, portfolio trajectories.
-4. **Fires alerts on change** — the investor's retention loop. "A parcel on your watchlist had a zoning hearing filed yesterday."
+3. **Builds evidence-backed case files** — changes, parcels, projects, entities, relationships, and a grounded next step in one investigation path.
+4. **Surfaces changes on watched records** — the investor's retention loop.
+   "A parcel on your watchlist changed in the latest weekly refresh."
 
 None of this is easy to replicate at the county level. Everyone has the parcels. Nobody has the synthesis.
 
 ## Surfaces (What The Product Is, Concretely)
 
-Each surface maps to one or more of the five pipeline outputs. The roadmap below is how these surfaces get built over the next 90 days.
+Each surface maps to one or more pipeline outputs. These statuses describe the
+local alpha codebase; they do not imply that CountyIQ is deployed.
 
 | Surface | Pipeline source | Status |
 |---|---|---|
-| Property page (`/property/:pidn`) | parcels, tax_claims, flood, structures, Pass 2 evidence, Pass 3 brief, Pass 4 narratives | **Live.** Adding cross-signal insight + linked proceedings. |
-| Owner page (`/owner/:id`) | owner resolution + licenses + delinquency | Live. Redirects to entity profile once live. |
-| Entity profile (`/entity/:id`) | Pass 1 `public.entity_graph` | **Designed, not built.** The moat. Shows canonical name, linked names, portfolio, relationships. |
-| Development radar (`/radar`) | `public.development_momentum` | Live. |
-| Distressed parcels (`/distressed`) | tax claims + sheriff sales composite | Live. |
-| County feed (`/feed`) | Pass 4 `public.county_narratives` | **Net-new.** The weekly digest, in-app. |
-| Watchlist + alerts (`/watch`) | event log over parcel / proceeding / evidence changes | **Designed, blocked on Clerk auth.** |
-| Weekly email | County feed + per-user alerts | Blocked on Clerk + SMTP. |
+| Property page (`/property/:pidn`) | parcels, tax_claims, flood, structures, Pass 2 evidence, Pass 3 brief | Implemented locally, including cross-signal insight and linked proceedings. |
+| Owner page (`/owner/:id`) | stable `public.owners` identity + licenses + portfolio | Compatibility route; uses the same identity contract as entity case files. |
+| Entity case file (`/entity/:id`) | stable `public.owners` identity with Pass 1 aliases, relationships, verification, events, portfolio, and cached brief | Implemented. |
+| Project case file (`/project/:key`) | source-backed event timeline with connected entities, parcels, municipalities, and local watch action | Implemented alpha; notifications and server persistence remain later work. |
+| Development radar (`/radar`) | `public.development_momentum` | Implemented locally. |
+| Distressed parcels (`/distressed`) | tax claims + sheriff sales composite | Implemented behind the restricted-distress feature gate. |
+| Intelligence feed (`/feed`) | deterministic parcel/tax events + cached Pass 0 development extraction | Unified event cards with evidence, relationships, event tags, and next actions are implemented. |
+| Watchlist (`/watch`) | browser-local entity, project, and parcel watches + `/api/feed` filters | MVP live; server-side persistence and notifications are not built. |
+
+## Entity Profile Contract
+
+The entity case file uses `public.owners` as the single stable identity space.
+Pass 1's `public.entity_graph` output is folded into these rows by owner
+resolution rather than exposed as a competing ID system:
+
+- `GET /api/entities/:id` and `GET /api/owners/:id` resolve the same stable ID.
+- `/entity/:id` presents verification context, resolvable relationships, linked
+  intelligence, cached portfolio synthesis, and parcel portfolio.
+- Feed cards link recognized names to the case file; unresolved names remain
+  explicitly labeled instead of being force-merged.
 
 ## Monetization (Directional, Not Committed)
 
 The product must validate desire before pricing. Current hypothesis:
 
-- **Free tier:** search, property pages, county feed, up to 5 watchlist items (when auth lands).
-- **Investor ($79/mo):** 100 watchlist items, instant alerts, entity-profile full portfolio, weekly email digest.
+- **Free tier:** search, property pages, county feed, and a small local watchlist.
+- **Investor ($79/mo):** server-backed watchlists, refresh-to-refresh change
+  flags, and full entity portfolios.
 - **Pro ($249/mo):** team seats, CSV export, API access, saved searches, corridor-scan subscriptions.
 
 Price discovery happens via manual outreach to ~10 local investors before any paywall ships. We are not putting paywalls on the site until we have conversations.
 
-## Non-Goals For The Next 90 Days
+## Current Non-Goals
 
-- Multi-county expansion code paths beyond what `county_config.py` already supports. No county #2 work until York is monetizing.
+- Simultaneously loading multiple counties into the current county-local schema.
+  County manifests and one-stack-per-county deployment are supported; see
+  `docs/operations/county-onboarding.md`.
 - Mobile app.
 - Native map drawing tools beyond what MapLibre provides.
 - MLS integration.
 - Integrations with CRMs (Salesforce, HubSpot, etc.).
-- AI chatbot / "ask a question" interface. Pass 4 narratives are the synthesis surface; chat is not.
+- AI chatbot / unrestricted "ask a question" interface. Case files are the synthesis surface; chat is not.
 
-## Roadmap (Next 90 Days)
+## Immediate Delivery Sequence
 
-### Phase A — Finish extracting latent value (weeks 1–2)
-Everything below is built or designed; the value is mostly in wiring and UI. No new pipelines.
+This is ordered by what can produce a trustworthy product trial now, not by a
+calendar estimate.
 
 - Surface **cross-signal insight** (from `meta.intelligence_passes.cross_signal_insight`) on property page. **Built in this pass.**
 - Surface **linked proceedings** (zoning hearings, subdivision applications) on property page. **Built in this pass.**
-- **County feed page** (`/feed`) rendering Pass 4 narratives. **Built in this pass.**
-- Build **entity profile page** (`/entity/:id`) over `public.entity_graph`. **Designed; next work.**
+- Build the **unified intelligence feed** over deterministic parcel/tax changes
+  and cached Pass 0 municipal extraction. **Implemented; live migration,
+  backfill, and product QA remain.**
+- Let users **watch projects and parcels** directly from evidence-backed event
+  cards. **Browser-local MVP implemented.**
+- Build the **entity case file** (`/entity/:id`) on the stable owner identity,
+  link it from events, and support entity watches. **Implemented and browser-tested.**
 
-### Phase B — Retention loop (weeks 3–6)
-Requires Clerk auth (was already gated behind Phase 2 in the privacy doc). This is the single biggest conversion lever.
+### After observed user demand
+
+Build these only after product trials show that users return to watched records.
 
 - Clerk auth, role = `investor` / `developer` / `admin`.
 - `public.watchlists` + `public.watchlist_items` (parcel, entity, municipality, corridor).
 - Event log (`public.watchlist_events`) — Dagster sensor fires one row per change that matters to anyone's watchlist.
-- Watchlist UI at `/watch`.
-- Weekly email digest (Mailgun or SES — decide on cost-vs-ops grounds).
+- Upgrade the existing `/watch` UI to server persistence.
 
-### Phase C — Distribution and price discovery (weeks 7–12)
+### Distribution and price discovery
 - 10 investor interviews (target list: York Builders Association, PA REIA chapter).
 - One-page landing at the root with "what you get" + form.
 - Paid pilot with 3 investors at $79/mo; no billing infra, invoice by hand.
@@ -118,14 +140,19 @@ Requires Clerk auth (was already gated behind Phase 2 in the privacy doc). This 
 
 Worth naming so we don't rediscover them in 60 days.
 
-1. **Assessment data:** the scraper is built but not wired because commercial-use terms are ambiguous. If the product needs historical assessment values (probable for "undervalued property" queries), we need a legal read or a licensed data swap.
+1. **Assessment data:** the scraper is live on the weekly schedule even though
+   commercial-use terms remain ambiguous. Decide whether to accept that risk,
+   disable it, or replace it with licensed data.
 2. **Multi-seat pricing:** developers want team access; investors want cheap. Two SKUs or one?
 3. **Data-broker exposure:** selling investor-targeted signals against public data on people (tax delinquency at a known address) has reputational risk. The Phase 2 auth gate + audit log in `docs/privacy.md` is the mitigating control. Not sufficient for a "find distressed owners" mailing-list product — which we're not building.
-4. **County #2 threshold:** at what ARR do we start investing in Lancaster or Cumberland? Default: $10K MRR in York first.
+4. **County #2 selection:** which adjacent county has both observed user demand
+   and a source/rights profile that clears the onboarding gates?
 
 ## Working Principles
 
 - **No feature ships without a mapped buyer job.** Every surface answers a specific question P1 or P2 asks. If it doesn't, it's a portfolio project, not this product.
 - **Retention first, acquisition second.** The alert loop is worth more than the landing page.
-- **Synthesis-forward UI.** Pass 3 briefs and Pass 4 narratives are the differentiator; lead with them, not with a data table.
+- **Evidence-backed case UI.** Lead with current changes, connected subjects,
+  and the original record. Cached Pass 3 synthesis supports the case; Pass 4 is
+  off by default.
 - **Evidence, not magic.** Every claim in a brief or narrative cites its source. If users can't click through, they won't trust it.

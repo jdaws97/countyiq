@@ -1,15 +1,16 @@
 """Headless Chromium launcher with consistent settings for scraping.
 
-Used by all Playwright-based scraper assets (assessment, eFACTS, CRIMEWATCH, etc.).
+Used by the remaining Playwright-based scraper assets (sheriff sales, public
+proceedings' JS-rendered municipal sites).
 """
 
 from contextlib import contextmanager
 
 from dagster import get_dagster_logger
-from playwright.sync_api import sync_playwright, Error as PlaywrightError, Page
+from playwright.sync_api import sync_playwright
 
 
-# Shared browser launch args — reduce memory footprint on t3.micro
+# Shared browser launch args — reduce memory use on the production VPS.
 BROWSER_ARGS = [
     "--disable-gpu",
     "--disable-dev-shm-usage",
@@ -73,13 +74,3 @@ def browser_context(
             ctx.close()
             browser.close()
             log.info("Browser closed")
-
-
-def take_screenshot(page: Page, path: str = "/tmp/debug_screenshot.png"):
-    """Capture a screenshot for debugging failed scrapes."""
-    log = get_dagster_logger()
-    try:
-        page.screenshot(path=path, full_page=True)
-        log.info(f"Screenshot saved to {path}")
-    except PlaywrightError as e:
-        log.warning(f"Screenshot failed: {e}")

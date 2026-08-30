@@ -10,11 +10,11 @@ Two stages:
      entity, identifying relationship structures, and flagging rejected
      matches.
 
-Controlled by COUNTYIQ_PASS1_MODEL or COUNTYIQ_OPENROUTER_MODEL.
-If neither is set, returns status="skipped".
+Requires ``COUNTYIQ_PASS1_ENABLED=true``; model selection is independent.
 """
 
 import json
+import os
 import traceback
 from datetime import datetime, timezone
 
@@ -25,12 +25,25 @@ from dagster import (
     asset,
 )
 
-from countyiq.lib.intelligence_common import compute_input_hash
-from countyiq.lib.pass_llm_config import PassHarnessUnavailable, resolve_pass_harness
+from countyiq.lib.intelligence_common import (
+    compute_input_hash,
+    fetch_prior_pass_hashes,
+)
+from countyiq.lib.error_budget import check_error_budget
+from countyiq.lib.pass_llm_config import (
+    PassItemBudget,
+    PassHarnessUnavailable,
+    resolve_escalation_config,
+    resolve_pass_harness,
+)
 from countyiq.lib.pass1_entity_verification import (
     CANDIDATE_CLUSTERS_QUERY,
+    ENTITY_CANDIDATE_PAIRS_READY_QUERY,
+    ENTITY_VERIFICATION_SYSTEM_PROMPT,
     build_entity_cluster_prompt,
+    entity_trial_majority_decided,
     gather_cluster_records,
+    merge_entity_trial_partitions,
     parse_entity_verification_output,
     stable_cluster_key,
 )
@@ -90,7 +103,12 @@ def _build_clusters(pairs) -> list[list[str]]:
         "PLCB licenses, corporate entities, and proceedings to produce a "
         "verified entity relationship graph"
     ),
-    deps=["pa_dos_entities", "proceeding_extraction", "development_signals"],
+    deps=[
+        "pa_dos_entities",
+        "proceeding_extraction",
+        "development_signals",
+        "entity_candidate_pairs_refresh",
+    ],
     kinds={"postgres", "llm"},
 )
 def entity_verification(
@@ -106,13 +124,24 @@ def entity_verification(
             archive_label="pass1_entity",
             default_max_tokens=8192,
             default_thinking=True,
+            # Static block goes out as a byte-identical system message so
+            # providers with implicit prompt caching can reuse it per cluster.
+            system_prompt=ENTITY_VERIFICATION_SYSTEM_PROMPT,
         )
     except PassHarnessUnavailable as exc:
         return _skipped_result(exc.reason)
+    item_budget = PassItemBudget(1)
 
     # ------------------------------------------------------------------
     # Stage A: Find candidate clusters
     # ------------------------------------------------------------------
+    ready_rows = database.execute(ENTITY_CANDIDATE_PAIRS_READY_QUERY) or []
+    if not ready_rows or not bool(ready_rows[0][0]):
+        raise RuntimeError(
+            "public.entity_candidate_pairs is not populated; run "
+            "entity_candidate_pairs_refresh before enabling Pass 1"
+        )
+
     log.info("Stage A: executing candidate clusters query")
     pairs = database.execute(CANDIDATE_CLUSTERS_QUERY)
 
@@ -130,11 +159,42 @@ def entity_verification(
     clusters = _build_clusters(pairs)
     log.info("Stage A complete: %d pairs → %d clusters", len(pairs), len(clusters))
 
+    # One upfront fetch of prior input hashes replaces a per-cluster SELECT
+    # inside the loop.
+    prior_hashes = fetch_prior_pass_hashes(database, pass_number=1)
+
+    # N-trial partition voting (docs/decisions.md 2026-08-06): majority
+    # pair-vote across trials, disagreement → abstain. Default 3 per the
+    # selected lineup (stability probe: 97% pair agreement, ~$1.92/mo);
+    # set COUNTYIQ_PASS1_TRIALS=1 to disable voting.
+    n_trials = max(1, int(os.environ.get("COUNTYIQ_PASS1_TRIALS", "3")))
+    adaptive_voting = os.environ.get(
+        "COUNTYIQ_PASS1_ADAPTIVE_VOTING", "true"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+    # Optional escalation cascade (docs/open-items.md): clusters the primary
+    # model abstains on are re-run through a stronger model. Off unless
+    # COUNTYIQ_PASS1_ESCALATION_MODEL is set.
+    escalation_config = resolve_escalation_config(config, pass_number=1)
+    if n_trials > 1:
+        log.info("Pass 1: N=%d trial partition voting enabled", n_trials)
+    if escalation_config is not None:
+        log.info(
+            "Pass 1: escalation cascade enabled → %s",
+            escalation_config.model_path,
+        )
+
     # ------------------------------------------------------------------
     # Stage B: Verify each cluster via LLM
     # ------------------------------------------------------------------
     clusters_processed = 0
     entities_created = 0
+    abstentions_total = 0
+    demotions_total = 0
+    trial_calls = 0
+    voting_early_stops = 0
+    voting_calls_saved = 0
+    escalations = 0
     skipped = 0
     errors = 0
 
@@ -150,55 +210,107 @@ def entity_verification(
             input_hash = compute_input_hash(records)
 
             # Check if we've already processed this exact input
-            existing = database.execute(
-                """
-                SELECT input_hash FROM meta.intelligence_passes
-                WHERE pidn = %(cluster_key)s
-                  AND pass_number = 1
-                  AND status = 'complete'
-                """,
-                {"cluster_key": cluster_key},
-            )
-            prior_hash = None
-            if existing:
-                row = existing[0]
-                prior_hash = row[0] if not isinstance(row, dict) else row.get("input_hash")
-            if prior_hash == input_hash:
+            if prior_hashes.get(cluster_key) == input_hash:
                 log.debug("Cluster %s unchanged, skipping", cluster_key)
                 skipped += 1
                 continue
 
-            # Build prompt and invoke LLM
+            if not item_budget.claim(log, label="changed entity clusters"):
+                break
+
+            # Build prompt and invoke LLM (N trials; N=1 by default)
             prompt = build_entity_cluster_prompt(records)
-            result = invoke_with_retry(
-                config, prompt, retries=1, archive_key=cluster_key,
-            )
-
-            if not result.success:
-                log.warning(
-                    "LLM failed for cluster %s: %s",
-                    cluster_names[:2], result.error,
+            trial_parses: list[dict] = []
+            last_error: str | None = None
+            for trial_idx in range(n_trials):
+                trial_key = (
+                    cluster_key if n_trials == 1
+                    else f"{cluster_key}:trial-{trial_idx}"
                 )
+                trial_calls += 1
+                result = invoke_with_retry(
+                    config, prompt, retries=1, archive_key=trial_key,
+                )
+                if not result.success:
+                    last_error = result.error
+                    log.warning(
+                        "LLM failed for cluster %s (trial %d/%d): %s",
+                        cluster_names[:2], trial_idx + 1, n_trials, result.error,
+                    )
+                    continue
+                trial_parsed = parse_entity_verification_output(result.parsed or {})
+                if "error" in trial_parsed:
+                    last_error = trial_parsed["error"]
+                    log.warning(
+                        "Invalid LLM output for cluster %s (trial %d/%d): %s",
+                        cluster_names[:2], trial_idx + 1, n_trials,
+                        trial_parsed["error"],
+                    )
+                    continue
+                trial_parses.append(trial_parsed)
+                remaining_trials = n_trials - (trial_idx + 1)
+                if (
+                    adaptive_voting
+                    and remaining_trials > 0
+                    and entity_trial_majority_decided(
+                        trial_parses,
+                        cluster_names,
+                        target_trials=n_trials,
+                    )
+                ):
+                    voting_early_stops += 1
+                    voting_calls_saved += remaining_trials
+                    log.debug(
+                        "Cluster %s reached an irreversible majority after %d/%d trials",
+                        cluster_key,
+                        trial_idx + 1,
+                        n_trials,
+                    )
+                    break
+
+            if not trial_parses:
                 _update_pass_status(
                     database, cluster_key, 1, "error",
-                    input_hash, result.error,
+                    input_hash, last_error or "all trials failed",
                 )
                 errors += 1
                 continue
 
-            # Parse and validate output
-            parsed = parse_entity_verification_output(result.parsed or {})
-            if "error" in parsed:
-                log.warning(
-                    "Invalid LLM output for cluster %s: %s",
-                    cluster_names[:2], parsed["error"],
+            # Majority pair-vote across trials; disagreement → abstain.
+            parsed = merge_entity_trial_partitions(trial_parses, cluster_names)
+            demoted_here = (parsed.get("trial_stats") or {}).get("demoted_entities", 0)
+            if demoted_here:
+                demotions_total += demoted_here
+
+            # Escalation cascade: abstained clusters go to the stronger
+            # model; its (parsed) answer replaces the primary one.
+            if escalation_config is not None and parsed.get("abstentions"):
+                esc_result = invoke_with_retry(
+                    escalation_config, prompt, retries=1,
+                    archive_key=f"{cluster_key}:escalation",
                 )
-                _update_pass_status(
-                    database, cluster_key, 1, "error",
-                    input_hash, parsed["error"],
-                )
-                errors += 1
-                continue
+                if esc_result.success:
+                    esc_parsed = parse_entity_verification_output(
+                        esc_result.parsed or {}
+                    )
+                    if "error" not in esc_parsed:
+                        parsed = esc_parsed
+                        escalations += 1
+                        log.info(
+                            "Cluster [%s]: escalated to %s",
+                            ", ".join(cluster_names[:3]),
+                            escalation_config.model_path,
+                        )
+                    else:
+                        log.warning(
+                            "Escalation output invalid for %s: %s — keeping primary",
+                            cluster_key, esc_parsed["error"],
+                        )
+                else:
+                    log.warning(
+                        "Escalation failed for %s: %s — keeping primary",
+                        cluster_key, esc_result.error,
+                    )
 
             # Upsert entities to public.entity_graph.
             # Inject cluster_names so _upsert_entity can include the original
@@ -215,6 +327,17 @@ def entity_verification(
                 if entity_id is not None:
                     matched_entity_ids.add(entity_id)
                 entities_created += 1
+
+            abstained_here = len(parsed.get("abstentions", []))
+            if abstained_here:
+                abstentions_total += abstained_here
+                for abstention in parsed["abstentions"]:
+                    log.info(
+                        "Cluster [%s]: model abstained on %s — %s",
+                        ", ".join(cluster_names[:3]),
+                        abstention.get("names", [])[:4],
+                        (abstention.get("reason") or "")[:160],
+                    )
 
             # Update pass tracking
             _update_pass_status(
@@ -250,16 +373,30 @@ def entity_verification(
         "%d skipped, %d errors",
         clusters_processed, entities_created, skipped, errors,
     )
+    check_error_budget(
+        log, label="pass1_entity_verification",
+        errors=errors, total=clusters_processed + errors,
+    )
 
     return MaterializeResult(
         metadata={
             "status": MetadataValue.text("complete"),
             "model": MetadataValue.text(config.model_path),
             "thinking": MetadataValue.bool(config.thinking),
+            "n_trials": MetadataValue.int(n_trials),
+            "adaptive_voting": MetadataValue.bool(adaptive_voting),
+            "llm_trial_calls": MetadataValue.int(trial_calls),
+            "voting_early_stops": MetadataValue.int(voting_early_stops),
+            "voting_calls_saved": MetadataValue.int(voting_calls_saved),
             "total_clusters": MetadataValue.int(len(clusters)),
+            "item_limit": MetadataValue.int(item_budget.limit),
+            "items_claimed": MetadataValue.int(item_budget.claimed),
             "clusters_processed": MetadataValue.int(clusters_processed),
             "clusters_skipped": MetadataValue.int(skipped),
             "entities_created": MetadataValue.int(entities_created),
+            "abstentions": MetadataValue.int(abstentions_total),
+            "voting_demotions": MetadataValue.int(demotions_total),
+            "escalations": MetadataValue.int(escalations),
             "errors": MetadataValue.int(errors),
         }
     )

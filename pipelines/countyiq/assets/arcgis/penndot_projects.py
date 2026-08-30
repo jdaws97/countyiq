@@ -23,6 +23,7 @@ from countyiq.lib.county_config import get_county_config
 from countyiq.lib.geometry import point_to_geojson
 from countyiq.lib.parsers.penndot_projects import parse_penndot_projects_features
 from countyiq.lib.scd import scd2_upsert_geom
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -51,6 +52,9 @@ def penndot_projects_arcgis(
     """Fetch PennDOT projects from multiple MapServer layers, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
+    authorization = authorize_source(database, source_key="penndot_open_data", acquisition_method="arcgis_rest", asset_key="penndot_projects_arcgis", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     context.log.info(
         f"Querying PennDOT projects for {county.name}: {county.penndot_projects_url} "
         f"layers={county.penndot_projects_layers}"
@@ -138,8 +142,14 @@ penndot_projects_record_count_nonzero = make_row_count_check(
 
 
 @asset_check(asset=penndot_projects_arcgis)
-def penndot_projects_schema_drift() -> AssetCheckResult:
+def penndot_projects_schema_drift(database: DatabaseResource) -> AssetCheckResult:
     """Verify PennDOT Projects MapServer layer 1 still has expected fields."""
+    authorize_source(
+        database,
+        source_key="penndot_open_data",
+        acquisition_method="arcgis_rest",
+        asset_key="penndot_projects_schema_drift",
+    )
     county = get_county_config()
     try:
         resp = requests.get(f"{county.penndot_projects_url}/1?f=json", timeout=30)

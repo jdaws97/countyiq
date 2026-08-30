@@ -15,7 +15,7 @@ ssh countyiq
 # Check services
 cd /opt/countyiq
 docker compose ps
-docker compose logs dagster --tail=100
+docker compose logs dagster-webserver dagster-daemon --tail=100
 ```
 
 ### Restarting Dagster
@@ -23,7 +23,7 @@ docker compose logs dagster --tail=100
 ```bash
 ssh countyiq
 cd /opt/countyiq
-docker compose restart dagster
+docker compose restart dagster-webserver dagster-daemon
 ```
 
 ### Emergency stop (all services)
@@ -52,7 +52,7 @@ docker compose build
 docker compose up -d
 
 # Run any pending database migrations
-docker compose exec dagster alembic -c /opt/countyiq/pipelines/alembic.ini upgrade head
+docker compose exec dagster-daemon alembic -c /opt/countyiq/pipelines/alembic.ini upgrade head
 ```
 
 ### Monitoring Postgres storage usage
@@ -119,8 +119,8 @@ ssh countyiq
 cd /opt/countyiq
 git log --oneline -5                    # Find the last good commit
 git checkout <last-good-sha>            # Roll back
-docker compose build dagster
-docker compose up -d dagster
+docker compose build dagster-webserver dagster-daemon
+docker compose up -d dagster-webserver dagster-daemon
 ```
 
 **Bad migration (schema broken):**
@@ -131,10 +131,10 @@ ssh countyiq
 cd /opt/countyiq
 
 # See current migration state
-docker compose exec dagster alembic -c /opt/countyiq/pipelines/alembic.ini current
+docker compose exec dagster-daemon alembic -c /opt/countyiq/pipelines/alembic.ini current
 
 # Roll back one migration
-docker compose exec dagster alembic -c /opt/countyiq/pipelines/alembic.ini downgrade -1
+docker compose exec dagster-daemon alembic -c /opt/countyiq/pipelines/alembic.ini downgrade -1
 
 # If the downgrade itself fails, restore from backup:
 rclone copy r2:countyiq-backups/postgres/countyiq-YYYY-MM-DD.dump /tmp/

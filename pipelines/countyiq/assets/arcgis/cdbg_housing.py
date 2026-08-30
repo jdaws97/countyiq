@@ -18,6 +18,7 @@ from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.geometry import point_to_geojson
 from countyiq.lib.scd import scd2_upsert_geom
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -29,8 +30,8 @@ VALUE_COLUMNS = [
 
 
 @asset(
-    group_name="radar",
-    description="CDBG housing development locations from ArcGIS -> staging.cdbg_housing",
+    group_name="paused_sources",
+    description="PAUSED pending publication/privacy review: CDBG housing locations",
     kinds={"postgres", "arcgis"},
 )
 def cdbg_housing_arcgis(
@@ -41,6 +42,15 @@ def cdbg_housing_arcgis(
     """Fetch CDBG housing points, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
+    authorization = authorize_source(
+        database,
+        source_key="cdbg_housing",
+        acquisition_method="arcgis_rest",
+        asset_key="cdbg_housing_arcgis",
+        dagster_run_id=context.run_id,
+    )
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     context.log.info(f"Querying ArcGIS CDBG housing for {county.name}: {county.arcgis_cdbg_housing_url}")
 
     raw_features = query_all_features(

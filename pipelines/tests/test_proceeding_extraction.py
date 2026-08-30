@@ -8,13 +8,42 @@ from contextlib import contextmanager
 
 import pytest
 
-from countyiq.assets.enrichment.proceeding_extraction import _write_proceeding_extractions
-from countyiq.lib.pass0_templates import EXTRACTION_PROMPT
+from countyiq.assets.enrichment.proceeding_extraction import (
+    _is_pdf_document,
+    _write_proceeding_extractions,
+)
 from countyiq.lib.llm_harness import HarnessConfig, HarnessResult, _build_messages
+from countyiq.lib.pass0_templates import EXTRACTION_USER_TEMPLATE, PASS0_SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------
-# EXTRACTION_PROMPT template tests
+# _is_pdf_document — guards the inline-upload fallback
+# ---------------------------------------------------------------------------
+
+class TestIsPdfDocument:
+    """OpenRouter's file-parser accepts only PDFs, so the download-and-attach
+    fallback must never fire for Word documents or unknown types."""
+
+    def test_pdf_url(self):
+        assert _is_pdf_document("https://x.gov/minutes/BOS_2026-01-05.pdf")
+
+    def test_pdf_url_with_query(self):
+        assert _is_pdf_document("https://img1.wsimg.com/blobby/go/x/m.pdf?ver=178")
+
+    def test_docx_url(self):
+        assert not _is_pdf_document("https://x.com/_files/ugd/390391_abc.docx?dn=m.docx")
+
+    def test_legacy_doc_url(self):
+        assert not _is_pdf_document("https://x.com/_files/ugd/1f235a_x.doc?dn=agenda.doc")
+
+    def test_extensionless_url(self):
+        """Drive uc?export=download URLs carry no extension — can't verify
+        PDF-ness up front, so the fallback must skip them."""
+        assert not _is_pdf_document("https://drive.google.com/uc?export=download&id=1uQ")
+
+
+# ---------------------------------------------------------------------------
+# Pass 0 prompt template tests
 # ---------------------------------------------------------------------------
 
 class TestExtractionPrompt:
@@ -23,6 +52,8 @@ class TestExtractionPrompt:
         """Return a fully-formatted prompt with sensible defaults."""
         defaults = dict(
             body_name="Springvale Township",
+            county_name="York County",
+            state="PA",
             proceeding_type="planning_commission",
             meeting_date="2025-11-14",
         )
@@ -32,7 +63,8 @@ class TestExtractionPrompt:
         if date_clause is None:
             date_clause = f" dated {meeting_date}" if meeting_date else ""
         defaults["date_clause"] = date_clause
-        return EXTRACTION_PROMPT.format(**defaults)
+        user_prompt = EXTRACTION_USER_TEMPLATE.format(**defaults)
+        return f"{PASS0_SYSTEM_PROMPT}\n\n{user_prompt}"
 
     def test_formats_without_error(self):
         prompt = self._filled()
@@ -68,6 +100,10 @@ class TestExtractionPrompt:
         prompt = self._filled()
         assert "conditional_use" in prompt
 
+    def test_contains_special_exception(self):
+        prompt = self._filled()
+        assert "special_exception" in prompt
+
     def test_contains_subdivision_review(self):
         prompt = self._filled()
         assert "subdivision_review" in prompt
@@ -81,11 +117,17 @@ class TestExtractionPrompt:
         for etype in [
             "rezoning_application",
             "variance_request",
+            "special_exception",
             "conditional_use",
             "subdivision_review",
             "development_proposal",
         ]:
             assert etype in prompt, f"Missing extraction type '{etype}' in prompt"
+
+    def test_requires_one_record_per_distinct_matter(self):
+        prompt = self._filled()
+        assert "one extraction per distinct application or project matter" in prompt
+        assert "do not duplicate" in prompt
 
     def test_contains_decision_values(self):
         prompt = self._filled()
@@ -96,6 +138,23 @@ class TestExtractionPrompt:
         prompt = self._filled()
         for level in ("high", "medium", "low"):
             assert level in prompt
+
+    def test_contains_intelligence_card_fields(self):
+        prompt = self._filled()
+        for field in (
+            "event_tags",
+            "project_name",
+            "related_entities",
+            "what_happened",
+            "why_it_matters",
+            "what_happens_next",
+            "upcoming_date",
+        ):
+            assert field in prompt
+
+    def test_prohibits_unsupported_market_inference(self):
+        prompt = self._filled()
+        assert "Do not infer market value" in prompt
 
     def test_output_format_includes_extractions_key(self):
         prompt = self._filled()
@@ -114,13 +173,15 @@ class TestExtractionPrompt:
     def test_all_variables_accepted(self):
         """Verify the template accepts all documented variables without KeyError."""
         try:
-            EXTRACTION_PROMPT.format(
+            EXTRACTION_USER_TEMPLATE.format(
                 body_name="Test Body",
+                county_name="Test County",
+                state="PA",
                 proceeding_type="supervisors",
                 date_clause=" dated 2025-06-01",
             )
         except KeyError as exc:
-            pytest.fail(f"EXTRACTION_PROMPT missing template variable: {exc}")
+            pytest.fail(f"EXTRACTION_USER_TEMPLATE missing template variable: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -130,43 +191,37 @@ class TestExtractionPrompt:
 class TestHarnessConfig:
 
     def test_requires_model_path(self):
-        config = HarnessConfig(model_path="/models/llava.gguf")
-        assert config.model_path == "/models/llava.gguf"
-
-    def test_default_n_ctx(self):
-        config = HarnessConfig(model_path="/models/llava.gguf")
-        assert config.n_ctx == 4096
+        config = HarnessConfig(model_path="provider/model")
+        assert config.model_path == "provider/model"
 
     def test_default_temperature(self):
-        config = HarnessConfig(model_path="/models/llava.gguf")
+        config = HarnessConfig(model_path="provider/model")
         # Sampling should come from MODEL_PRESETS via get_preset_for_model();
         # this default is a last resort.
         assert config.temperature == 0.7
 
     def test_default_max_tokens(self):
-        config = HarnessConfig(model_path="/models/llava.gguf")
+        config = HarnessConfig(model_path="provider/model")
         assert config.max_tokens == 2048
 
     def test_custom_values(self):
         config = HarnessConfig(
-            model_path="/models/llava.gguf",
-            n_ctx=8192,
+            model_path="provider/model",
             temperature=0.0,
             max_tokens=512,
         )
-        assert config.n_ctx == 8192
         assert config.temperature == 0.0
         assert config.max_tokens == 512
 
     def test_is_frozen(self):
         """HarnessConfig must be immutable (frozen dataclass)."""
-        config = HarnessConfig(model_path="/models/llava.gguf")
+        config = HarnessConfig(model_path="provider/model")
         with pytest.raises((AttributeError, TypeError)):
-            config.model_path = "/other/model.gguf"  # type: ignore[misc]
+            config.model_path = "other/model"  # type: ignore[misc]
 
     def test_is_hashable(self):
         """Frozen dataclasses must be hashable (usable as dict keys)."""
-        config = HarnessConfig(model_path="/models/llava.gguf")
+        config = HarnessConfig(model_path="provider/model")
         d = {config: "value"}
         assert d[config] == "value"
 

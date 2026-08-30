@@ -23,6 +23,7 @@ from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.pa_open_data import parse_soda_records, EXPECTED_BUSINESS_FIELDS
 from countyiq.lib.scd import scd2_upsert
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -81,8 +82,8 @@ def _fetch_all_pages(
 
 
 @asset(
-    group_name="bulk",
-    description="PA Open Data Portal datasets → staging.pa_open_data",
+    group_name="manual_sources",
+    description="Manual compatibility loader for PA Open Data → staging.pa_open_data",
     kinds={"postgres", "api"},
 )
 def pa_open_data(
@@ -93,6 +94,9 @@ def pa_open_data(
     """Fetch PA Open Data datasets via SODA API, parse, and SCD2 upsert."""
 
     county = get_county_config()
+    authorization = authorize_source(database, source_key="data_pa_businesses", acquisition_method="soda_api", asset_key="pa_open_data", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     total_records = 0
     total_inserted = 0
     total_expired = 0
@@ -211,8 +215,14 @@ def pa_open_data_row_count_delta(database: DatabaseResource) -> AssetCheckResult
 
 
 @asset_check(asset=pa_open_data)
-def pa_open_data_schema_drift() -> AssetCheckResult:
+def pa_open_data_schema_drift(database: DatabaseResource) -> AssetCheckResult:
     """Verify the SODA API still returns expected fields for the businesses dataset."""
+    authorize_source(
+        database,
+        source_key="data_pa_businesses",
+        acquisition_method="soda_api",
+        asset_key="pa_open_data_schema_drift",
+    )
     county = get_county_config()
     # Check the first configured dataset
     if not county.soda_datasets:

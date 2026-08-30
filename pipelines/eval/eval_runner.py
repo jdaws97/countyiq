@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Model evaluation runner for CountyIQ intelligence passes.
+"""Live smoke/performance runner for CountyIQ intelligence passes.
 
-Runs Pass 2 (signal validation) or Pass 3 (brief generation) against a
-sample of test parcels using a specified OpenRouter model and stores the results
-as JSON for later comparison with eval_report.py.
+Runs Pass 2 or Pass 3 against current database context and stores transport,
+schema, latency, and cost results for eval_report.py. This is not a model-quality
+or promotion gate; use challenger.py's frozen human-labeled lane for that.
 
 Usage:
-    python eval_runner.py --model xiaomi/mimo-v2-flash --pass 2 --limit 10
-    python eval_runner.py --model xiaomi/mimo-v2-flash --pass 3 --limit 10
-    python eval_runner.py --model x-ai/grok-4.1-fast --pass 2 --limit 50 --output /tmp/eval_results
+    .venv/bin/python -m eval.eval_runner --model inception/mercury-2 --pass 2 --limit 10
+    .venv/bin/python -m eval.eval_runner --model google/gemini-2.5-flash --pass 3 --limit 10
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import sys
@@ -21,18 +21,10 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Path setup: add pipelines/ to sys.path so countyiq.* imports resolve when
-# the script is run directly (e.g., python eval/eval_runner.py).
-# ---------------------------------------------------------------------------
-_PIPELINES_DIR = Path(__file__).resolve().parent.parent
-if str(_PIPELINES_DIR) not in sys.path:
-    sys.path.insert(0, str(_PIPELINES_DIR))
-
 import psycopg2
 import psycopg2.extras
 
-from countyiq.lib.llm_harness import HarnessConfig, invoke_with_retry, get_preset_for_model, detect_model_family
+from countyiq.lib.llm_harness import HarnessConfig, get_preset_for_model, detect_model_family
 from countyiq.lib.pass2_signal_validation import (
     build_signal_validation_prompt,
     gather_signal_context,
@@ -48,10 +40,19 @@ from countyiq.lib.pass3_brief_generation import (
     gather_brief_context,
     parse_brief_output,
 )
+from eval.protocol import (
+    EVAL_MODEL_PRICE_CEILINGS,
+    EvalCostLedger,
+    EvalCostLimitExceeded,
+    EvalCostUnavailable,
+    build_production_eval_config,
+    invoke_tracked,
+)
 
 
 # ---------------------------------------------------------------------------
-# Dataset SQL — mirrors eval_dataset.sql combined query
+# Dataset SQL for ad hoc stratified sampling. Frozen fixture keys remain the
+# preferred cross-model comparison path.
 # ---------------------------------------------------------------------------
 
 DATASET_SQL = """
@@ -162,7 +163,10 @@ def get_connection():
 # Pass 2 evaluation
 # ---------------------------------------------------------------------------
 
-def run_pass2(cursor, config: HarnessConfig, pidn: str, top_signal: str) -> dict:
+def run_pass2(
+    cursor, config: HarnessConfig, pidn: str, top_signal: str,
+    ledger: EvalCostLedger,
+) -> dict:
     """Run Pass 2 (signal validation) for the top signal on a parcel.
 
     Returns a result dict with: success, elapsed_seconds, raw_output,
@@ -213,7 +217,7 @@ def run_pass2(cursor, config: HarnessConfig, pidn: str, top_signal: str) -> dict
         context = gather_signal_context(cursor, pidn, signal)
         prompt = build_signal_validation_prompt(context)
         archive_key = f"{pidn}:{signal['signal_key']}"
-        result = invoke_with_retry(config, prompt, archive_key=archive_key)
+        result = invoke_tracked(ledger, config, prompt, archive_key=archive_key)
         elapsed = time.perf_counter() - t0
 
         if result.success:
@@ -225,6 +229,7 @@ def run_pass2(cursor, config: HarnessConfig, pidn: str, top_signal: str) -> dict
                 "raw_output": (result.raw_output or "")[:2000],  # truncate for storage
                 "parsed_output": parsed,
                 "error": parsed.get("error") if not success else None,
+                "usage": result.metadata,
             }
         else:
             return {
@@ -233,7 +238,10 @@ def run_pass2(cursor, config: HarnessConfig, pidn: str, top_signal: str) -> dict
                 "raw_output": (result.raw_output or "")[:2000],
                 "parsed_output": None,
                 "error": result.error,
+                "usage": result.metadata,
             }
+    except (EvalCostLimitExceeded, EvalCostUnavailable):
+        raise
     except Exception as exc:
         elapsed = time.perf_counter() - t0
         return {
@@ -249,7 +257,9 @@ def run_pass2(cursor, config: HarnessConfig, pidn: str, top_signal: str) -> dict
 # Pass 2 BATCHED evaluation — one LLM call validates ALL signals on a parcel
 # ---------------------------------------------------------------------------
 
-def run_pass2_batched(cursor, config: HarnessConfig, pidn: str) -> dict:
+def run_pass2_batched(
+    cursor, config: HarnessConfig, pidn: str, ledger: EvalCostLedger
+) -> dict:
     """Run batched Pass 2 validation for all signals on a parcel.
 
     Includes retry path for dropped signals: if the first LLM call returns
@@ -270,7 +280,7 @@ def run_pass2_batched(cursor, config: HarnessConfig, pidn: str) -> dict:
 
         prompt = build_batched_signal_prompt(ctx)
         archive_key = f"batch:{pidn}"
-        result = invoke_with_retry(config, prompt, archive_key=archive_key)
+        result = invoke_tracked(ledger, config, prompt, archive_key=archive_key)
 
         if not result.success:
             elapsed = time.perf_counter() - t0
@@ -281,12 +291,14 @@ def run_pass2_batched(cursor, config: HarnessConfig, pidn: str) -> dict:
                 "parsed_output": None,
                 "error": result.error,
                 "n_signals": len(ctx["signals"]),
+                "usage": result.metadata,
             }
 
         parsed = parse_batched_signal_output(result.parsed or {}, ctx["signals"])
         all_validations = list(parsed.get("validations", []))
         retry_attempted = 0
         retry_recovered = 0
+        retry_usage = None
 
         # Retry path: recover signals the LLM dropped or failed to parse
         retry_keys = set(parsed.get("missing", [])) | set(parsed.get("errors", []))
@@ -298,9 +310,10 @@ def run_pass2_batched(cursor, config: HarnessConfig, pidn: str) -> dict:
             retry_prompt = build_batched_signal_prompt(
                 ctx, signals_override=retry_signals
             )
-            retry_result = invoke_with_retry(
-                config, retry_prompt, archive_key=f"batch:{pidn}:retry"
+            retry_result = invoke_tracked(
+                ledger, config, retry_prompt, archive_key=f"batch:{pidn}:retry"
             )
+            retry_usage = retry_result.metadata
             if retry_result.success:
                 retry_parsed = parse_batched_signal_output(
                     retry_result.parsed or {}, retry_signals
@@ -327,7 +340,11 @@ def run_pass2_batched(cursor, config: HarnessConfig, pidn: str) -> dict:
             "retry_attempted": retry_attempted,
             "retry_recovered": retry_recovered,
             "cross_signal_insight": parsed.get("cross_signal_insight", ""),
+            "usage": result.metadata,
+            "retry_usage": retry_usage,
         }
+    except (EvalCostLimitExceeded, EvalCostUnavailable):
+        raise
     except Exception as exc:
         elapsed = time.perf_counter() - t0
         return {
@@ -343,7 +360,9 @@ def run_pass2_batched(cursor, config: HarnessConfig, pidn: str) -> dict:
 # Pass 3 evaluation
 # ---------------------------------------------------------------------------
 
-def run_pass3(cursor, config: HarnessConfig, pidn: str) -> dict:
+def run_pass3(
+    cursor, config: HarnessConfig, pidn: str, ledger: EvalCostLedger
+) -> dict:
     """Run Pass 3 (brief generation) for a parcel.
 
     Returns a result dict with: success, elapsed_seconds, raw_output,
@@ -353,7 +372,7 @@ def run_pass3(cursor, config: HarnessConfig, pidn: str) -> dict:
     try:
         context = gather_brief_context(cursor, pidn)
         prompt = build_brief_generation_prompt(context)
-        result = invoke_with_retry(config, prompt, archive_key=pidn)
+        result = invoke_tracked(ledger, config, prompt, archive_key=pidn)
         elapsed = time.perf_counter() - t0
 
         if result.success:
@@ -365,6 +384,7 @@ def run_pass3(cursor, config: HarnessConfig, pidn: str) -> dict:
                 "raw_output": (result.raw_output or "")[:2000],
                 "parsed_output": parsed,
                 "error": parsed.get("error") if not success else None,
+                "usage": result.metadata,
             }
         else:
             return {
@@ -373,7 +393,10 @@ def run_pass3(cursor, config: HarnessConfig, pidn: str) -> dict:
                 "raw_output": (result.raw_output or "")[:2000],
                 "parsed_output": None,
                 "error": result.error,
+                "usage": result.metadata,
             }
+    except (EvalCostLimitExceeded, EvalCostUnavailable):
+        raise
     except Exception as exc:
         elapsed = time.perf_counter() - t0
         return {
@@ -391,19 +414,18 @@ def run_pass3(cursor, config: HarnessConfig, pidn: str) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="CountyIQ model evaluation runner — tests Pass 2 or Pass 3 LLM quality.",
+        description="CountyIQ live Pass 2/3 smoke, latency, and cost runner.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python eval_runner.py --model /models/mistral-7b.gguf --pass 2 --limit 10
-  python eval_runner.py --model /models/mistral-7b.gguf --pass 3 --limit 20
-  python eval_runner.py --model /models/qwen-7b.gguf --pass 2 --limit 50 --output /tmp/eval
+  .venv/bin/python -m eval.eval_runner --model inception/mercury-2 --pass 2 --limit 10
+  .venv/bin/python -m eval.eval_runner --model google/gemini-2.5-flash --pass 3 --limit 20
         """,
     )
     parser.add_argument(
         "--model",
         required=True,
-        help="Path to the GGUF model file to evaluate.",
+        help="OpenRouter model slug to evaluate.",
     )
     parser.add_argument(
         "--pass",
@@ -476,7 +498,47 @@ Examples:
         default=None,
         help="Max output tokens. Default: 2048 (per-signal) or 4096 (batched). Reasoning models may need 8192+.",
     )
+    parser.add_argument(
+        "--pidns-file",
+        default=None,
+        help="File with one PIDN per line — evaluate exactly these parcels instead "
+             "of a fresh random sample. Use one shared file across models so every "
+             "model sees identical parcels (cross-model comparability).",
+    )
+    parser.add_argument(
+        "--quantizations",
+        default=None,
+        help="Comma-separated provider quantization allowlist (e.g. 'fp8,bf16,fp16'). "
+             "Needed for models whose cheapest OpenRouter hosts serve degraded FP4 "
+             "(documented for GLM-5.2).",
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        default=None,
+        choices=["low", "medium", "high"],
+        help="Explicit reasoning effort override (production Pass 2 runs 'low').",
+    )
+    parser.add_argument(
+        "--max-cost-usd",
+        type=float,
+        default=1.0,
+        help="Reserve maximum call charges before dispatch (default: 1.00).",
+    )
+    parser.add_argument(
+        "--max-price-prompt",
+        type=float,
+        default=None,
+        help="Required $/M input-token ceiling for an unlisted model.",
+    )
+    parser.add_argument(
+        "--max-price-completion",
+        type=float,
+        default=None,
+        help="Required $/M output-token ceiling for an unlisted model.",
+    )
     args = parser.parse_args()
+    if args.max_cost_usd <= 0:
+        parser.error("--max-cost-usd must be positive")
 
     if not os.environ.get("OPENROUTER_API_KEY"):
         print("ERROR: OPENROUTER_API_KEY not set in environment", file=sys.stderr)
@@ -527,14 +589,87 @@ Examples:
     else:
         max_tokens = 2048
 
-    config = HarnessConfig(
-        model_path=model_path_str,
-        max_tokens=max_tokens,
-        thinking=args.thinking,
-        model_family=family,
-        archive_label=archive_label,
-        **resolved_params,
+    quantizations = (
+        tuple(q.strip() for q in args.quantizations.split(",") if q.strip())
+        if args.quantizations else None
     )
+    known_prices = EVAL_MODEL_PRICE_CEILINGS.get(model_path_str, (None, None))
+    price_prompt = args.max_price_prompt or known_prices[0]
+    price_completion = args.max_price_completion or known_prices[1]
+    if price_prompt is None or price_completion is None:
+        parser.error(
+            "Unknown model pricing: provide --max-price-prompt and "
+            "--max-price-completion so the run can reserve a hard ceiling"
+        )
+    if args.pass_num == 3 or (args.pass_num == 2 and args.batched):
+        config = build_production_eval_config(
+            model_path_str,
+            args.pass_num,
+            archive_label=archive_label,
+            max_tokens=max_tokens,
+            thinking=args.thinking,
+            reasoning_effort=args.reasoning_effort,
+            provider_quantizations=quantizations,
+        )
+        config = dataclasses.replace(
+            config,
+            model_family=family,
+            max_price_prompt=price_prompt,
+            max_price_completion=price_completion,
+            **resolved_params,
+        )
+    else:
+        # The legacy per-signal Pass 2 path is intentionally available only
+        # for historical A/B comparisons; it is not the production protocol.
+        config = HarnessConfig(
+            model_path=model_path_str,
+            max_tokens=max_tokens,
+            thinking=args.thinking,
+            model_family=family,
+            archive_label=archive_label,
+            reasoning_effort=args.reasoning_effort,
+            provider_quantizations=quantizations,
+            max_price_prompt=price_prompt,
+            max_price_completion=price_completion,
+            **resolved_params,
+        )
+    ledger = EvalCostLedger(max_cost_usd=args.max_cost_usd)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    safe_model_name = model_name.replace(" ", "_")
+    mode_parts = []
+    if args.batched:
+        mode_parts.append("batched")
+    mode_parts.append("thinking" if args.thinking else "nothink")
+    mode_tag = "_".join(mode_parts)
+    output_file = output_dir / (
+        f"eval_{safe_model_name}_{mode_tag}_pass{args.pass_num}_{timestamp}.json"
+    )
+    results = []
+    budget_stop = None
+
+    def checkpoint_results() -> None:
+        payload = {
+            "meta": {
+                "model_name": model_name,
+                "model_path": model_path_str,
+                "model_family": family,
+                "pass_num": args.pass_num,
+                "limit": args.limit,
+                "thinking": args.thinking,
+                "mode_tag": mode_tag,
+                "sampling": resolved_params,
+                "evaluated_at": timestamp,
+                "parcels_evaluated": len(results),
+                "budget": ledger.summary(),
+                "budget_stop": budget_stop,
+            },
+            "results": results,
+        }
+        temporary = output_file.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload, indent=2, default=str))
+        temporary.replace(output_file)
+
+    checkpoint_results()
 
     # ------------------------------------------------------------------
     # Connect to DB and load test parcels
@@ -548,18 +683,38 @@ Examples:
 
     with conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-            print("Loading test parcels from dataset...")
-            try:
-                cursor.execute(DATASET_SQL)
-                all_parcels = [dict(row) for row in cursor.fetchall()]
-            except Exception as exc:
-                print(
-                    f"ERROR: Dataset query failed: {exc}\n"
-                    "Hint: public.development_signals may not exist yet. "
-                    "Run the signal detection pipeline first.",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
+            if args.pidns_file:
+                pidns = [
+                    line.strip()
+                    for line in Path(args.pidns_file).read_text().splitlines()
+                    if line.strip() and not line.startswith("#")
+                ]
+                print(f"Loading {len(pidns)} fixed parcels from {args.pidns_file}...")
+                all_parcels = []
+                for pidn in pidns:
+                    cursor.execute(SIGNALS_FOR_PIDN_SQL, {"pidn": pidn})
+                    rows = cursor.fetchall()
+                    if rows:
+                        top = dict(rows[0])
+                        all_parcels.append({
+                            "pidn": pidn,
+                            "top_signal": top.get("signal_key", ""),
+                            "category": "fixed",
+                            "signal_count": len(rows),
+                        })
+            else:
+                print("Loading test parcels from dataset...")
+                try:
+                    cursor.execute(DATASET_SQL)
+                    all_parcels = [dict(row) for row in cursor.fetchall()]
+                except Exception as exc:
+                    print(
+                        f"ERROR: Dataset query failed: {exc}\n"
+                        "Hint: public.development_signals may not exist yet. "
+                        "Run the signal detection pipeline first.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
 
             if not all_parcels:
                 print(
@@ -576,7 +731,6 @@ Examples:
             # ------------------------------------------------------------------
             # Run evaluation
             # ------------------------------------------------------------------
-            results = []
             for i, row in enumerate(test_parcels, 1):
                 pidn = row["pidn"]
                 top_signal = row.get("top_signal", "")
@@ -591,13 +745,19 @@ Examples:
                     flush=True,
                 )
 
-                if args.pass_num == 2:
-                    if args.batched:
-                        outcome = run_pass2_batched(cursor, config, pidn)
+                try:
+                    if args.pass_num == 2:
+                        if args.batched:
+                            outcome = run_pass2_batched(cursor, config, pidn, ledger)
+                        else:
+                            outcome = run_pass2(cursor, config, pidn, top_signal, ledger)
                     else:
-                        outcome = run_pass2(cursor, config, pidn, top_signal)
-                else:
-                    outcome = run_pass3(cursor, config, pidn)
+                        outcome = run_pass3(cursor, config, pidn, ledger)
+                except (EvalCostLimitExceeded, EvalCostUnavailable) as exc:
+                    budget_stop = str(exc)
+                    print(f"-> STOPPED ({budget_stop})")
+                    checkpoint_results()
+                    break
 
                 status_str = "OK" if outcome["success"] else f"FAIL ({outcome.get('error', '')[:60]})"
                 print(f"-> {status_str}  [{outcome['elapsed_seconds']:.1f}s]")
@@ -614,45 +774,14 @@ Examples:
                     "raw_output": outcome["raw_output"],
                     "parsed_output": outcome["parsed_output"],
                     "error": outcome["error"],
+                    "usage": outcome.get("usage"),
+                    "retry_usage": outcome.get("retry_usage"),
                 })
+                checkpoint_results()
 
     conn.close()
 
-    # ------------------------------------------------------------------
-    # Write results
-    # ------------------------------------------------------------------
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    safe_model_name = model_name.replace(" ", "_")
-
-    # Tag the model name with thinking state + batched flag for filename + metadata
-    mode_parts = []
-    if args.batched:
-        mode_parts.append("batched")
-    mode_parts.append("thinking" if args.thinking else "nothink")
-    mode_tag = "_".join(mode_parts)
-    output_file = output_dir / f"eval_{safe_model_name}_{mode_tag}_pass{args.pass_num}_{timestamp}.json"
-
-    with open(output_file, "w") as f:
-        json.dump(
-            {
-                "meta": {
-                    "model_name": model_name,
-                    "model_path": model_path_str,
-                    "model_family": family,
-                    "pass_num": args.pass_num,
-                    "limit": args.limit,
-                    "thinking": args.thinking,
-                    "mode_tag": mode_tag,
-                    "sampling": resolved_params,
-                    "evaluated_at": timestamp,
-                    "parcels_evaluated": len(results),
-                },
-                "results": results,
-            },
-            f,
-            indent=2,
-            default=str,
-        )
+    checkpoint_results()
 
     # ------------------------------------------------------------------
     # Summary

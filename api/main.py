@@ -1,37 +1,49 @@
 """FastAPI application entry point for CountyIQ."""
 
-from dotenv import load_dotenv
-load_dotenv()  # Load .env file (OPENROUTER_API_KEY, etc.)
+from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.lib.database import close_pool
 from api.lib.response_types import HealthResponse
-from api.routes.scout import router as scout_router
-from api.routes.stats import router as stats_router
-from api.routes.layers import router as layers_router
-from api.routes.municipalities import router as municipalities_router
-from api.routes.parcels import router as parcels_router
-from api.routes.search import router as search_router
-from api.routes.owners import router as owners_router
+from api.lib.settings import county_metadata, cors_origins, restricted_distress_enabled
 from api.routes.delinquent import router as delinquent_router
-from api.routes.licenses import router as licenses_router
-from api.routes.projects import router as projects_router
-from api.routes.scores import router as scores_router
-from api.routes.radar import router as radar_router
-from api.routes.ops import router as ops_router
 from api.routes.feed import router as feed_router
+from api.routes.layers import router as layers_router
+from api.routes.licenses import router as licenses_router
+from api.routes.municipalities import router as municipalities_router
+from api.routes.ops import router as ops_router
+from api.routes.owners import router as owners_router
+from api.routes.parcels import router as parcels_router
+from api.routes.projects import router as projects_router
+from api.routes.radar import router as radar_router
+from api.routes.scores import router as scores_router
+from api.routes.scout import router as scout_router
+from api.routes.search import router as search_router
+from api.routes.stats import router as stats_router
+
+load_dotenv()  # Load .env file (OPENROUTER_API_KEY, etc.)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    close_pool()
+
 
 app = FastAPI(
     title="CountyIQ API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins(),
     allow_methods=["GET"],
-    allow_headers=["*"],
+    allow_headers=["Accept", "Content-Type"],
 )
 
 
@@ -41,6 +53,12 @@ def health() -> HealthResponse:
     return {"status": "ok"}
 
 
+@app.get("/api/meta")
+def metadata() -> dict[str, str]:
+    """Public product/county identity used by the county-agnostic frontend."""
+    return county_metadata()
+
+
 app.include_router(scout_router, prefix="/api/scout")
 app.include_router(stats_router, prefix="/api/stats")
 app.include_router(layers_router, prefix="/api/layers")
@@ -48,10 +66,15 @@ app.include_router(municipalities_router, prefix="/api/municipalities")
 app.include_router(parcels_router, prefix="/api/parcels")
 app.include_router(search_router, prefix="/api/search")
 app.include_router(owners_router, prefix="/api/owners")
-app.include_router(delinquent_router, prefix="/api/delinquent")
+# Entity case files deliberately reuse the stable public.owners identity
+# space.  The alias keeps old owner URLs working without creating a second
+# entity ID system.
+app.include_router(owners_router, prefix="/api/entities")
 app.include_router(licenses_router, prefix="/api/licenses")
 app.include_router(projects_router, prefix="/api/projects")
-app.include_router(scores_router, prefix="/api/scores")
-app.include_router(radar_router, prefix="/api/scores", tags=["radar"])
+if restricted_distress_enabled():
+    app.include_router(delinquent_router, prefix="/api/delinquent")
+    app.include_router(scores_router, prefix="/api/scores")
+app.include_router(radar_router, prefix="/api/radar", tags=["radar"])
 app.include_router(ops_router, prefix="/api/ops")
 app.include_router(feed_router, prefix="/api/feed")

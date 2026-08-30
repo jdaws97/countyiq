@@ -1,7 +1,7 @@
 """Pass 2 — Signal Validation.
 
 Provides LLM prompt templates, formatting helpers, and parsing functions for
-validating each development signal on each parcel.  Each of the 13 signal
+validating each development signal on each parcel.  Each direct-validation signal
 types has its own set of base questions (always asked) and conditional
 questions (included when relevant supporting data exists).
 
@@ -16,6 +16,7 @@ Plus a database helper:
 from __future__ import annotations
 
 
+from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.intelligence_common import (
     PARCEL_QUERY,
     TAX_CLAIMS_QUERY,
@@ -146,12 +147,12 @@ SIGNAL_TEMPLATES: dict[str, dict] = {
             ],
         },
     },
-    # ── 7. ecodev_candidate ───────────────────────────────────────────────
-    "ecodev_candidate": {
+    # ── 7. economic_development_park ─────────────────────────────────────
+    "economic_development_park": {
         "base_questions": [
-            "How current is the YCPC economic development candidacy data?",
-            "What is the underutilization percentage — is it significant?",
-            "Is sewer/water infrastructure available for redevelopment?",
+            "Is the parcel actually within the mapped business or industrial park boundary?",
+            "Is the park identity and type useful evidence of development context?",
+            "Do parcel fundamentals support the apparent park-based opportunity?",
         ],
         "conditional_questions": {},
     },
@@ -163,15 +164,7 @@ SIGNAL_TEMPLATES: dict[str, dict] = {
         ],
         "conditional_questions": {},
     },
-    # ── 9. cdbg_investment ────────────────────────────────────────────────
-    "cdbg_investment": {
-        "base_questions": [
-            "Is the CDBG project current or historical?",
-            "Is the proximity close enough to indicate neighborhood investment momentum?",
-        ],
-        "conditional_questions": {},
-    },
-    # ── 10. growth_area ───────────────────────────────────────────────────
+    # ── 9. growth_area ────────────────────────────────────────────────────
     "growth_area": {
         "base_questions": [
             "Is this a Primary Growth Area (PGA) or Secondary Growth Area (SGA)?",
@@ -179,7 +172,7 @@ SIGNAL_TEMPLATES: dict[str, dict] = {
         ],
         "conditional_questions": {},
     },
-    # ── 11. flood_zone ────────────────────────────────────────────────────
+    # ── 10. flood_zone ────────────────────────────────────────────────────
     "flood_zone": {
         "base_questions": [
             "Is the flood zone overlap partial (edge of parcel) or does it cover the full parcel?",
@@ -187,7 +180,7 @@ SIGNAL_TEMPLATES: dict[str, dict] = {
         ],
         "conditional_questions": {},
     },
-    # ── 12. conservation_easement ─────────────────────────────────────────
+    # ── 11. conservation_easement ─────────────────────────────────────────
     "conservation_easement": {
         "base_questions": [
             "Is the conservation restriction still active and enforceable?",
@@ -199,7 +192,7 @@ SIGNAL_TEMPLATES: dict[str, dict] = {
             ],
         },
     },
-    # ── 13. ag_security ───────────────────────────────────────────────────
+    # ── 12. ag_security ───────────────────────────────────────────────────
     "ag_security": {
         "base_questions": [
             "Is the agricultural security area enrollment still active?",
@@ -218,7 +211,7 @@ SIGNAL_TEMPLATES: dict[str, dict] = {
 # PROMPT TEMPLATE
 # =============================================================================
 
-SIGNAL_VALIDATION_PROMPT = """You are a county intelligence analyst validating a development signal for a parcel in York County, PA.
+SIGNAL_VALIDATION_PROMPT = """You are a county intelligence analyst validating a development signal for a parcel in {county_context}.
 
 Your job is to evaluate whether the signal is meaningful, current, and correctly weighted for this specific parcel. Answer each validation question, then provide your overall assessment.
 
@@ -425,6 +418,7 @@ def build_signal_validation_prompt(context: dict) -> str:
     questions_text = _build_questions_text(signal_key, context)
 
     return SIGNAL_VALIDATION_PROMPT.format(
+        county_context=county_prompt_context(),
         signal_key=signal_key,
         signal_weight=signal.get("signal_weight", 0),
         source_table=signal.get("source_table", ""),

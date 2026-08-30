@@ -1,0 +1,5815 @@
+{
+  "version": 1,
+  "built_at": "2026-08-30",
+  "promotion_status": "diagnostic_stability_subset",
+  "source_fixture": "eval/fixtures/p2_expanded_frozen.json",
+  "source_result": "eval/results/challenger_z-ai_glm-5.3-flash_frozen_rubric_20260830T231327Z_rescored.json",
+  "selection": "highest paired scoring disagreement, then cardinality and stable hash",
+  "cases": [
+    {
+      "id": "p2x-095",
+      "case_type": "active_subdivision+assemblage+vacancy+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "assemblage",
+        "vacancy",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X095",
+        "parcel": {
+          "pidn": "P2X095",
+          "owner": "Peyton Walsh",
+          "address": "195 Cedar Road",
+          "assessed_value": 29550.0,
+          "acres": 48.6,
+          "property_class": "F",
+          "sale_date": "07-FEB-2005",
+          "sale_price": 1.0,
+          "previous_owner": "Avery Bennett",
+          "municipality": "WEST MANCHESTER TWP",
+          "school_district": "026",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X095N01",
+            "owner": "Morgan Ellis",
+            "assessed_value": 327160.0,
+            "acres": 6.0,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N02",
+            "owner": "Jordan Patel",
+            "assessed_value": 88700.0,
+            "acres": 12.57,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N03",
+            "owner": "Taylor Brooks",
+            "assessed_value": 140910.0,
+            "acres": 1.59,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N04",
+            "owner": "Meadow Brook Holdings LLC",
+            "assessed_value": 617526.0,
+            "acres": 123.76,
+            "property_class": "C",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N05",
+            "owner": "Riley Turner",
+            "assessed_value": 28620.0,
+            "acres": 0.45,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N06",
+            "owner": "Cameron Reed",
+            "assessed_value": 114610.0,
+            "acres": 1.2,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N07",
+            "owner": "Quinn Foster",
+            "assessed_value": 117190.0,
+            "acres": 0.51,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N08",
+            "owner": "Meadow Brook Holdings LLC",
+            "assessed_value": 127764.0,
+            "acres": 50.96,
+            "property_class": "C",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N09",
+            "owner": "Riley Turner",
+            "assessed_value": 116110.0,
+            "acres": 0.67,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N10",
+            "owner": "Drew Parker",
+            "assessed_value": 129440.0,
+            "acres": 0.47,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N11",
+            "owner": "Hayden Ross",
+            "assessed_value": 199190.0,
+            "acres": 0.46,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N12",
+            "owner": "Robin Carter",
+            "assessed_value": 224370.0,
+            "acres": 0.46,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N13",
+            "owner": "Alex Monroe",
+            "assessed_value": 130290.0,
+            "acres": 0.46,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X095N14",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 197490.0,
+            "acres": 0.48,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "25-0068",
+            "distance_m": 91.0,
+            "evidence": {
+              "prop_du": 65,
+              "date_rcvd": "2025-04-09T05:00:00+00:00",
+              "prop_lots": 67,
+              "pt_subdiv": "NO",
+              "plan_title": "Mill Creek Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "NO",
+              "total_acres": 48.6
+            }
+          },
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.12,
+            "source_table": "staging.structures",
+            "source_id": "P2X095",
+            "distance_m": null,
+            "evidence": {
+              "class": "F",
+              "price": 1,
+              "aprtotal": 29550,
+              "structure_count": 0
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X095",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 14,
+              "different_owner_neighbors": 12
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{2615E4D6-5A51-4EF3-9667-A7682D85AC38}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Open Space Residential -1 ",
+              "general_lu": "Rural",
+              "current_zname": "R-1 Residential Zone",
+              "current_ztype": "R"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{21A56F52-A9F3-402F-8F1E-971063473563}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "PGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          },
+          {
+            "signal_key": "ag_security",
+            "signal_weight": 0.0,
+            "source_table": "staging.ag_security",
+            "source_id": "03-21",
+            "distance_m": null,
+            "evidence": {
+              "book": "1774",
+              "flag": null,
+              "page": "723",
+              "district": "51",
+              "res_date": "2003-09-25T04:00:00+00:00",
+              "res_acres": 48.65,
+              "instrument": "2005093427",
+              "resolution": "03-21",
+              "last_review": null
+            }
+          },
+          {
+            "signal_key": "environmental_diligence",
+            "signal_weight": -0.05,
+            "source_table": "staging.environmental_diligence_sites",
+            "source_id": "land_recycling_cleanup:14357886",
+            "distance_m": 413.7,
+            "evidence": {
+              "site_name": "CLIFFORD N ESTEP RES",
+              "source_url": "https://gis.dep.pa.gov/depgisprd/rest/services/Assessments/AssessmentLayers/MapServer/5",
+              "source_layer": "land_recycling_cleanup",
+              "facility_type": "SOIL MEDIA",
+              "screening_only": true,
+              "facility_status": "ACTIVE"
+            }
+          }
+        ]
+      },
+      "context_sha256": "92fce045f037077ae933f8f279db6d1d525799594ccd0d78d94987e2ce368bb3",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "confirmed",
+              "upgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "67 lot",
+                "prop lots 67"
+              ],
+              [
+                "65 unit",
+                "prop du 65"
+              ],
+              [
+                "91 meter",
+                "91 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": [
+              "confirmed",
+              "upgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "structure count 0",
+                "0 structure",
+                "zero structure",
+                "no structure"
+              ],
+              [
+                "29550",
+                "29,550"
+              ],
+              [
+                "class f",
+                "f class",
+                "vacant land"
+              ]
+            ],
+            "forbidden_claims": [
+              "demolished",
+              "abandoned",
+              "development ready"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "14 neighbor",
+                "fourteen neighbor"
+              ],
+              [
+                "12 different owner",
+                "twelve different owner",
+                "12 distinct owner",
+                "twelve distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "R-1 Residential Zone"
+              ],
+              [
+                "Open Space Residential -1 ",
+                "Rural"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-076",
+      "case_type": "assemblage+ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "assemblage",
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X076",
+        "parcel": {
+          "pidn": "P2X076",
+          "owner": "Ironwood Holdings LLC",
+          "address": "176 Cedar Road",
+          "assessed_value": 2464960.0,
+          "acres": 7.21,
+          "property_class": "C",
+          "sale_date": "25-FEB-2026",
+          "sale_price": 3400000.0,
+          "previous_owner": "Willow Bend Company",
+          "municipality": "YORK TWP",
+          "school_district": "004",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X076N01",
+            "owner": "Skyler Grant",
+            "assessed_value": 298000.0,
+            "acres": 0.953,
+            "property_class": "C",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N02",
+            "owner": "Mill Creek Holdings LLC",
+            "assessed_value": 275360.0,
+            "acres": 0.402,
+            "property_class": "C",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N03",
+            "owner": "Cedar Ridge Holdings LLC",
+            "assessed_value": 353610.0,
+            "acres": 1.296,
+            "property_class": "C",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N04",
+            "owner": "Morgan Ellis",
+            "assessed_value": 0.0,
+            "acres": 0.92,
+            "property_class": "E",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N05",
+            "owner": "Jordan Patel",
+            "assessed_value": 141120.0,
+            "acres": 0.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N06",
+            "owner": "Taylor Brooks",
+            "assessed_value": 120110.0,
+            "acres": 0.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N07",
+            "owner": "Casey Morgan",
+            "assessed_value": 150340.0,
+            "acres": 0.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N08",
+            "owner": "Riley Turner",
+            "assessed_value": 154440.0,
+            "acres": 0.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N09",
+            "owner": "Cameron Reed",
+            "assessed_value": 157740.0,
+            "acres": 0.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N10",
+            "owner": "Quinn Foster",
+            "assessed_value": 139280.0,
+            "acres": 0.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N11",
+            "owner": "Drew Parker",
+            "assessed_value": 138010.0,
+            "acres": 0.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N12",
+            "owner": "Hayden Ross",
+            "assessed_value": 155690.0,
+            "acres": 0.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X076N13",
+            "owner": "Robin Carter",
+            "assessed_value": 136120.0,
+            "acres": 0.316,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X076",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 13,
+              "different_owner_neighbors": 13
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X076",
+            "distance_m": null,
+            "evidence": {
+              "price": 3400000,
+              "saledt": "25-FEB-2026",
+              "prev_owner": "Willow Bend Company",
+              "buyer_is_llc": true
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{F39E1924-4C9A-4628-88BD-036FFABE7BA9}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Low / Medium Density Residential",
+              "general_lu": "Medium Density Residential",
+              "current_zname": "Commercial Shopping",
+              "current_ztype": "C"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{21A56F52-A9F3-402F-8F1E-971063473563}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "PGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          },
+          {
+            "signal_key": "environmental_diligence",
+            "signal_weight": -0.05,
+            "source_table": "staging.environmental_diligence_sites",
+            "source_id": "active_storage_tank:5855",
+            "distance_m": 416.4,
+            "evidence": {
+              "site_name": "ROYAL FARMS 122",
+              "source_url": "https://gis.dep.pa.gov/depgisprd/rest/services/emappa/eMapPA_External/FeatureServer/171",
+              "source_layer": "active_storage_tank",
+              "facility_type": "Active regulated storage tank facility",
+              "screening_only": true,
+              "facility_status": "active"
+            }
+          }
+        ]
+      },
+      "context_sha256": "e9ef925d7325e194ebc0ad224a81d819977e71df488645b209d3928323f06d30",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "13 neighbor",
+                "thirteen neighbor"
+              ],
+              [
+                "13 different owner",
+                "thirteen different owner",
+                "13 distinct owner",
+                "thirteen distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "3400000",
+                "3,400,000"
+              ],
+              [
+                "buyer is llc",
+                "buyer is llc true",
+                "llc buyer",
+                "limited liability"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "Commercial Shopping"
+              ],
+              [
+                "Low / Medium Density Residential",
+                "Medium Density Residential"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-087",
+      "case_type": "active_subdivision+assemblage+ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "assemblage",
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X087",
+        "parcel": {
+          "pidn": "P2X087",
+          "owner": "Clearwater Holdings LLC",
+          "address": "187 Cedar Road",
+          "assessed_value": 502930.0,
+          "acres": 52.71,
+          "property_class": "C",
+          "sale_date": "19-AUG-2026",
+          "sale_price": 4455000.0,
+          "previous_owner": "Red Maple Holdings LLC",
+          "municipality": "MANCHESTER TWP",
+          "school_district": "002",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X087N01",
+            "owner": "Hayden Ross",
+            "assessed_value": 253200.0,
+            "acres": 0.574,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X087N02",
+            "owner": "Robin Carter",
+            "assessed_value": 186280.0,
+            "acres": 0.574,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X087N03",
+            "owner": "Laurel Grove Company",
+            "assessed_value": 855740.0,
+            "acres": 2.365,
+            "property_class": "C",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X087N04",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 213600.0,
+            "acres": 0.587,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X087N05",
+            "owner": "Willow Bend Company",
+            "assessed_value": 804610.0,
+            "acres": 23.39,
+            "property_class": "U",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X087N06",
+            "owner": "Highland Park Holdings LLC",
+            "assessed_value": 0.0,
+            "acres": 50.3,
+            "property_class": "E",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "25-0067",
+            "distance_m": 103.4,
+            "evidence": {
+              "prop_du": 84,
+              "date_rcvd": "2025-04-08T05:00:00+00:00",
+              "prop_lots": 87,
+              "pt_subdiv": "YES",
+              "plan_title": "Clearwater Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "NO",
+              "total_acres": 52.7
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X087",
+            "distance_m": null,
+            "evidence": {
+              "price": 4455000,
+              "saledt": "19-AUG-2026",
+              "prev_owner": "Red Maple Holdings LLC",
+              "buyer_is_llc": true
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{0F436993-20A8-4229-8A3F-D2D175A76B89}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Major Schools, Cemeteries, Public Buildings and Large Institutional Uses",
+              "general_lu": "Institutional",
+              "current_zname": "Open Space Residential / Low Density District",
+              "current_ztype": "R"
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X087",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 6,
+              "different_owner_neighbors": 6
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{21A56F52-A9F3-402F-8F1E-971063473563}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "PGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          }
+        ]
+      },
+      "context_sha256": "ff337270d6ddd0e19ef9409b0488c7f1ee9adafa084c7d2ed04776a147b64f75",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "confirmed",
+              "upgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "87 lot",
+                "prop lots 87"
+              ],
+              [
+                "84 unit",
+                "prop du 84"
+              ],
+              [
+                "103.4 meter",
+                "103 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "4455000",
+                "4,455,000"
+              ],
+              [
+                "buyer is llc",
+                "buyer is llc true",
+                "llc buyer",
+                "limited liability"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "Open Space Residential / Low Density District"
+              ],
+              [
+                "Major Schools, Cemeteries, Public Buildings and Large Institutional Uses",
+                "Major Schools",
+                "Institutional"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "6 neighbor",
+                "six neighbor"
+              ],
+              [
+                "6 different owner",
+                "six different owner",
+                "6 distinct owner",
+                "six distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-088",
+      "case_type": "active_subdivision+assemblage+ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "assemblage",
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X088",
+        "parcel": {
+          "pidn": "P2X088",
+          "owner": "Drew Parker",
+          "address": "188 Cedar Road",
+          "assessed_value": 293290.0,
+          "acres": 19.17,
+          "property_class": "F",
+          "sale_date": "08-APR-2026",
+          "sale_price": 1100000.0,
+          "previous_owner": "Hayden Ross",
+          "municipality": "NORTH CODORUS TWP",
+          "school_district": "024",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [
+          {
+            "year": 2026,
+            "authority": "COUNTY",
+            "amount": 87.46,
+            "owner": "Casey Morgan",
+            "pidn": "P2X088"
+          },
+          {
+            "year": 2026,
+            "authority": "MUNICIPAL",
+            "amount": 12.71,
+            "owner": "Casey Morgan",
+            "pidn": "P2X088"
+          },
+          {
+            "year": 2026,
+            "authority": "SCHOOL",
+            "amount": 154.0,
+            "owner": "Casey Morgan",
+            "pidn": "P2X088"
+          }
+        ],
+        "neighbors": [
+          {
+            "pidn": "P2X088N01",
+            "owner": "Robin Carter",
+            "assessed_value": 93480.0,
+            "acres": 2.0,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N02",
+            "owner": "Alex Monroe",
+            "assessed_value": 172080.0,
+            "acres": 1.561,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N03",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 120550.0,
+            "acres": 1.4,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N04",
+            "owner": "Devon Hayes",
+            "assessed_value": 162290.0,
+            "acres": 1.042,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 1
+          },
+          {
+            "pidn": "P2X088N05",
+            "owner": "Skyler Grant",
+            "assessed_value": 147100.0,
+            "acres": 1.02,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N06",
+            "owner": "Peyton Walsh",
+            "assessed_value": 146010.0,
+            "acres": 1.514,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N07",
+            "owner": "Avery Bennett",
+            "assessed_value": 125400.0,
+            "acres": 1.18,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N08",
+            "owner": "Morgan Ellis",
+            "assessed_value": 52280.0,
+            "acres": 6.23,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N09",
+            "owner": "Drew Parker",
+            "assessed_value": 2620.0,
+            "acres": 4.19,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N10",
+            "owner": "Jordan Patel",
+            "assessed_value": 220000.0,
+            "acres": 9.82,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N11",
+            "owner": "Drew Parker",
+            "assessed_value": 1250.0,
+            "acres": 9.09,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N12",
+            "owner": "Taylor Brooks",
+            "assessed_value": 39630.0,
+            "acres": 2.9,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X088N13",
+            "owner": "Jordan Patel",
+            "assessed_value": 780.0,
+            "acres": 0.21,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "25-0150",
+            "distance_m": 127.5,
+            "evidence": {
+              "prop_du": 1,
+              "date_rcvd": "2025-08-07T05:00:00+00:00",
+              "prop_lots": 3,
+              "pt_subdiv": "YES",
+              "plan_title": "Red Maple Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "NO",
+              "total_acres": 38.1
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X088",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 11,
+              "different_owner_neighbors": 10
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X088",
+            "distance_m": null,
+            "evidence": {
+              "price": 1100000,
+              "saledt": "08-APR-2026",
+              "prev_owner": "Hayden Ross",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{CA0F726D-7576-4550-ADEF-EEF9553F92B6}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Rural Open Space Preservation",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Rural Agricultural Conservation",
+              "current_ztype": "A"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "tax_distress",
+            "signal_weight": 0.1,
+            "source_table": "staging.tax_claims",
+            "source_id": "P2X088",
+            "distance_m": null,
+            "evidence": {
+              "total_owed": 254.17,
+              "oldest_year": 2026,
+              "years_delinquent": 1
+            }
+          },
+          {
+            "signal_key": "ag_security",
+            "signal_weight": 0.0,
+            "source_table": "staging.ag_security",
+            "source_id": "11-09-2010",
+            "distance_m": null,
+            "evidence": {
+              "book": "2094",
+              "flag": null,
+              "page": "4576",
+              "district": "40",
+              "res_date": "2010-09-21T04:00:00+00:00",
+              "res_acres": 14.33,
+              "instrument": "2010047436",
+              "resolution": "11-09-2010",
+              "last_review": null
+            }
+          }
+        ]
+      },
+      "context_sha256": "29b6027d16175f189c0478dfffb2f2d0c208e687241a6fcc84d2d5045ccd7bad",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "confirmed",
+              "upgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "3 lot",
+                "three lot",
+                "prop lots 3"
+              ],
+              [
+                "1 unit",
+                "one unit",
+                "prop du 1"
+              ],
+              [
+                "127.5 meter",
+                "128 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "11 neighbor",
+                "eleven neighbor"
+              ],
+              [
+                "10 different owner",
+                "ten different owner",
+                "10 distinct owner",
+                "ten distinct owner"
+              ],
+              [
+                "delinquent neighbor",
+                "tax delinquency",
+                "distress evidence"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "1100000",
+                "1,100,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Rural Agricultural Conservation"
+              ],
+              [
+                "Rural Open Space Preservation",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-082",
+      "case_type": "ownership_change+vacancy+zoning_mismatch",
+      "signal_combination": [
+        "ownership_change",
+        "vacancy",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X082",
+        "parcel": {
+          "pidn": "P2X082",
+          "owner": "Jordan Patel",
+          "address": "182 Cedar Road",
+          "assessed_value": 35300.0,
+          "acres": 1.345,
+          "property_class": "R",
+          "sale_date": "18-JUN-2026",
+          "sale_price": 80000.0,
+          "previous_owner": "Taylor Brooks",
+          "municipality": "FAIRVIEW TWP",
+          "school_district": "17F",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X082N01",
+            "owner": "Jordan Patel",
+            "assessed_value": 46130.0,
+            "acres": 3.75,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X082N02",
+            "owner": "Casey Morgan",
+            "assessed_value": 140760.0,
+            "acres": 13.18,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X082N03",
+            "owner": "Riley Turner",
+            "assessed_value": 216220.0,
+            "acres": 1.05,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.12,
+            "source_table": "staging.structures",
+            "source_id": "P2X082",
+            "distance_m": null,
+            "evidence": {
+              "class": "R",
+              "price": 80000,
+              "aprtotal": 35300,
+              "structure_count": 0
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X082",
+            "distance_m": null,
+            "evidence": {
+              "price": 80000,
+              "saledt": "18-JUN-2026",
+              "prev_owner": "Taylor Brooks",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{31399988-FBDB-4A48-9410-B5F98DCBC98C}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Rural Conservation",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Rural Living",
+              "current_ztype": "R"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "zoning_constraint",
+            "signal_weight": -0.05,
+            "source_table": "staging.zoning_overlays",
+            "source_id": "{4736C953-1B0A-4109-AE03-E2C6E68D9BB1}",
+            "distance_m": null,
+            "evidence": {
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/ZONING_OVERLAYS/FeatureServer/0",
+              "description": "CSZ - Conical Surface Zone",
+              "municipality": "FAIRVIEW TWP",
+              "overlay_name": "Airport Overlay Zoning District",
+              "overlay_type": "AIRPORT"
+            }
+          },
+          {
+            "signal_key": "soil_constraint",
+            "signal_weight": -0.08,
+            "source_table": "staging.soils",
+            "source_id": "4490",
+            "distance_m": null,
+            "evidence": {
+              "drainage": "Well drained",
+              "slope_high": 25,
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Soils/FeatureServer/0",
+              "hydric_rating": "Not Hydric",
+              "map_unit_name": "BRECKNOCK CHANNERY SILT LOAM, 8 TO 25 PERCENT SLOPES, VERY STONY",
+              "septic_rating": "Very limited",
+              "map_unit_symbol": "BsD",
+              "hydrologic_group": "B",
+              "representative_slope": 20.0
+            }
+          }
+        ]
+      },
+      "context_sha256": "13633114fa5cec3e41253e1bc075d3e5b7a0a870349ada7b832f32b72e7fb66e",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "structure count 0",
+                "0 structure",
+                "zero structure",
+                "no structure"
+              ],
+              [
+                "35300",
+                "35,300"
+              ],
+              [
+                "class r",
+                "r class",
+                "residential class",
+                "data gap"
+              ]
+            ],
+            "forbidden_claims": [
+              "demolished",
+              "abandoned",
+              "development ready"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "80000",
+                "80,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Rural Living"
+              ],
+              [
+                "Rural Conservation",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-045",
+      "case_type": "ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X045",
+        "parcel": {
+          "pidn": "P2X045",
+          "owner": "Devon Hayes",
+          "address": "145 Cedar Road",
+          "assessed_value": 40320.0,
+          "acres": 2.46,
+          "property_class": "R",
+          "sale_date": "29-MAY-2026",
+          "sale_price": 159000.0,
+          "previous_owner": "Skyler Grant",
+          "municipality": "MONAGHAN TWP",
+          "school_district": "014",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X045N01",
+            "owner": "Peyton Walsh",
+            "assessed_value": 119880.0,
+            "acres": 1.48,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X045N02",
+            "owner": "Avery Bennett",
+            "assessed_value": 399600.0,
+            "acres": 5.73,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X045N03",
+            "owner": "Morgan Ellis",
+            "assessed_value": 43560.0,
+            "acres": 3.18,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X045",
+            "distance_m": null,
+            "evidence": {
+              "price": 159000,
+              "saledt": "29-MAY-2026",
+              "prev_owner": "Skyler Grant",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{B0627D25-539E-4A89-BE33-640E237E57C6}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Rural Conservation / Open Space",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Rural Residential",
+              "current_ztype": "R"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "local_traffic_activity",
+            "signal_weight": 0.01,
+            "source_table": "staging.local_traffic_counts",
+            "source_id": "{A10EEFA2-5662-4B9E-B87C-7E399F744142}",
+            "distance_m": 278.9,
+            "evidence": {
+              "volume": 696,
+              "purpose": "HPMS",
+              "count_type": "VOLUME",
+              "count_year": 2026,
+              "counter_id": "23586",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Traffic_Counts/FeatureServer/0"
+            }
+          }
+        ]
+      },
+      "context_sha256": "5d9614acc8e8791f18f2932a134985401becaf29fbdcb736f14e19473f89626e",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "159000",
+                "159,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Rural Residential"
+              ],
+              [
+                "Rural Conservation / Open Space",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-097",
+      "case_type": "active_subdivision+ownership_change+vacancy+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "ownership_change",
+        "vacancy",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X097",
+        "parcel": {
+          "pidn": "P2X097",
+          "owner": "North Valley Holdings LLC",
+          "address": "197 Cedar Road",
+          "assessed_value": 240750.0,
+          "acres": 5.75,
+          "property_class": "I",
+          "sale_date": "30-JAN-2026",
+          "sale_price": 68000.0,
+          "previous_owner": "Granite Creek Company",
+          "municipality": "FAIRVIEW TWP",
+          "school_district": "17F",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X097N01",
+            "owner": "Silver Oak Holdings LLC",
+            "assessed_value": 442220.0,
+            "acres": 8.255,
+            "property_class": "I",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X097N02",
+            "owner": "Casey Morgan",
+            "assessed_value": 33750.0,
+            "acres": 1.0,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "25-0133",
+            "distance_m": 36.4,
+            "evidence": {
+              "prop_du": 0,
+              "date_rcvd": "2025-07-10T05:00:00+00:00",
+              "prop_lots": 0,
+              "pt_subdiv": "NO",
+              "plan_title": "North Valley Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "YES",
+              "total_acres": 5.0
+            }
+          },
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.12,
+            "source_table": "staging.structures",
+            "source_id": "P2X097",
+            "distance_m": null,
+            "evidence": {
+              "class": "I",
+              "price": 68000,
+              "aprtotal": 240750,
+              "structure_count": 0
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X097",
+            "distance_m": null,
+            "evidence": {
+              "price": 68000,
+              "saledt": "30-JAN-2026",
+              "prev_owner": "Granite Creek Company",
+              "buyer_is_llc": true
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{EA22943E-16A6-480D-B98D-AD84CCDC6E35}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Community Mixed Use",
+              "general_lu": "Mixed Use - Residential and Commerical",
+              "current_zname": "Commercial Business",
+              "current_ztype": "C"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{3ED5ABF1-6710-4EC1-A155-48D8B0C352AB}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "PGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          },
+          {
+            "signal_key": "environmental_diligence",
+            "signal_weight": -0.05,
+            "source_table": "staging.environmental_diligence_sites",
+            "source_id": "active_storage_tank:6870",
+            "distance_m": 195.2,
+            "evidence": {
+              "site_name": "PA0302-658 WYNDAMERE RD",
+              "source_url": "https://gis.dep.pa.gov/depgisprd/rest/services/emappa/eMapPA_External/FeatureServer/171",
+              "source_layer": "active_storage_tank",
+              "facility_type": "Active regulated storage tank facility",
+              "screening_only": true,
+              "facility_status": "active"
+            }
+          }
+        ]
+      },
+      "context_sha256": "0ea6dfd13927c5aff66baa53391a70abcbc98657b416a4591cca36faad4dfa7d",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "0 lot",
+                "zero lot",
+                "prop lots 0"
+              ],
+              [
+                "0 unit",
+                "zero unit",
+                "prop du 0"
+              ],
+              [
+                "36.4 meter",
+                "36 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "structure count 0",
+                "0 structure",
+                "zero structure",
+                "no structure"
+              ],
+              [
+                "240750",
+                "240,750"
+              ],
+              [
+                "class I",
+                "I class",
+                "data gap"
+              ]
+            ],
+            "forbidden_claims": [
+              "demolished",
+              "abandoned",
+              "development ready"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "68000",
+                "68,000"
+              ],
+              [
+                "buyer is llc",
+                "buyer is llc true",
+                "llc buyer",
+                "limited liability"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Commercial Business"
+              ],
+              [
+                "Community Mixed Use",
+                "Mixed Use - Residential and Commerical",
+                "Mixed Use "
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-099",
+      "case_type": "assemblage+ownership_change+vacancy+zoning_mismatch",
+      "signal_combination": [
+        "assemblage",
+        "ownership_change",
+        "vacancy",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X099",
+        "parcel": {
+          "pidn": "P2X099",
+          "owner": "Taylor Brooks",
+          "address": "199 Cedar Road",
+          "assessed_value": 21150.0,
+          "acres": 4.7,
+          "property_class": "R",
+          "sale_date": "10-JUL-2026",
+          "sale_price": 75000.0,
+          "previous_owner": "Casey Morgan",
+          "municipality": "FAIRVIEW TWP",
+          "school_district": "17F",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X099N01",
+            "owner": "Riley Turner",
+            "assessed_value": 233080.0,
+            "acres": 17.8,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X099N02",
+            "owner": "Cameron Reed Family Trust",
+            "assessed_value": 5990.0,
+            "acres": 1.33,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X099N03",
+            "owner": "Quinn Foster",
+            "assessed_value": 1080.0,
+            "acres": 13.998,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X099N04",
+            "owner": "Drew Parker",
+            "assessed_value": 13500.0,
+            "acres": 3.0,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X099N05",
+            "owner": "Hayden Ross",
+            "assessed_value": 950.0,
+            "acres": 12.38,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X099N06",
+            "owner": "Robin Carter",
+            "assessed_value": 320.0,
+            "acres": 4.11,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X099N07",
+            "owner": "Quinn Foster",
+            "assessed_value": 240.0,
+            "acres": 3.094,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.12,
+            "source_table": "staging.structures",
+            "source_id": "P2X099",
+            "distance_m": null,
+            "evidence": {
+              "class": "R",
+              "price": 75000,
+              "aprtotal": 21150,
+              "structure_count": 0
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X099",
+            "distance_m": null,
+            "evidence": {
+              "price": 75000,
+              "saledt": "10-JUL-2026",
+              "prev_owner": "Casey Morgan",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{31399988-FBDB-4A48-9410-B5F98DCBC98C}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Rural Conservation",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Rural Living",
+              "current_ztype": "R"
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X099",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 7,
+              "different_owner_neighbors": 6
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "soil_constraint",
+            "signal_weight": -0.08,
+            "source_table": "staging.soils",
+            "source_id": "4155",
+            "distance_m": null,
+            "evidence": {
+              "drainage": "Moderately well drained",
+              "slope_high": 25,
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Soils/FeatureServer/0",
+              "hydric_rating": "Not Hydric",
+              "map_unit_name": "LEWISBERRY AND LANSDALE SOILS, 8 TO 25 PERCENT SLOPES, VERY STONY",
+              "septic_rating": "Very limited",
+              "map_unit_symbol": "LSD",
+              "hydrologic_group": "A",
+              "representative_slope": 20.0
+            }
+          }
+        ]
+      },
+      "context_sha256": "6e5e45fd061f5f9f4dbad92900491e03f3fb189e638e974dc763be2d1f09da8f",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "structure count 0",
+                "0 structure",
+                "zero structure",
+                "no structure"
+              ],
+              [
+                "21150",
+                "21,150"
+              ],
+              [
+                "class r",
+                "r class",
+                "residential class",
+                "data gap"
+              ]
+            ],
+            "forbidden_claims": [
+              "demolished",
+              "abandoned",
+              "development ready"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "75000",
+                "75,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Rural Living"
+              ],
+              [
+                "Rural Conservation",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "7 neighbor",
+                "seven neighbor"
+              ],
+              [
+                "6 different owner",
+                "six different owner",
+                "6 distinct owner",
+                "six distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-067",
+      "case_type": "active_subdivision+ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X067",
+        "parcel": {
+          "pidn": "P2X067",
+          "owner": "Taylor Brooks",
+          "address": "167 Cedar Road",
+          "assessed_value": 102850.0,
+          "acres": 0.165,
+          "property_class": "R",
+          "sale_date": "20-JUL-2026",
+          "sale_price": 257000.0,
+          "previous_owner": "Casey Morgan",
+          "municipality": "YORK TWP",
+          "school_district": "004",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X067N01",
+            "owner": "Riley Turner",
+            "assessed_value": 116030.0,
+            "acres": 0.302,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X067N02",
+            "owner": "Cameron Reed",
+            "assessed_value": 134110.0,
+            "acres": 0.165,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X067N03",
+            "owner": "Clearwater Company",
+            "assessed_value": 31410.0,
+            "acres": 0.443,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "26-0023",
+            "distance_m": 230.7,
+            "evidence": {
+              "prop_du": 0,
+              "date_rcvd": "2026-02-06T05:00:00+00:00",
+              "prop_lots": 1,
+              "pt_subdiv": "NO",
+              "plan_title": "Silver Oak Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "YES",
+              "total_acres": 5.1
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X067",
+            "distance_m": null,
+            "evidence": {
+              "price": 257000,
+              "saledt": "20-JUL-2026",
+              "prev_owner": "Casey Morgan",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{D01F17E6-934C-4137-86B3-137D84ABD5C6}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Low / Medium Density Residential",
+              "general_lu": "Medium Density Residential",
+              "current_zname": "Commercial Shopping",
+              "current_ztype": "C"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{21A56F52-A9F3-402F-8F1E-971063473563}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "PGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          },
+          {
+            "signal_key": "environmental_diligence",
+            "signal_weight": -0.05,
+            "source_table": "staging.environmental_diligence_sites",
+            "source_id": "land_recycling_cleanup:14352780",
+            "distance_m": 85.4,
+            "evidence": {
+              "site_name": "KWIK FILL S0036",
+              "source_url": "https://gis.dep.pa.gov/depgisprd/rest/services/Assessments/AssessmentLayers/MapServer/5",
+              "source_layer": "land_recycling_cleanup",
+              "facility_type": "GROUNDWATER MEDIA",
+              "screening_only": true,
+              "facility_status": "ACTIVE"
+            }
+          }
+        ]
+      },
+      "context_sha256": "7c8e7de48c44452d3df38ffe96585cea1fe3427e80bc49f10770991e07ac0c31",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "1 lot",
+                "one lot",
+                "prop lots 1"
+              ],
+              [
+                "0 unit",
+                "zero unit",
+                "prop du 0"
+              ],
+              [
+                "230.7 meter",
+                "231 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "257000",
+                "257,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "Commercial Shopping"
+              ],
+              [
+                "Low / Medium Density Residential",
+                "Medium Density Residential"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-062",
+      "case_type": "active_subdivision+assemblage+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "assemblage",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X062",
+        "parcel": {
+          "pidn": "P2X062",
+          "owner": "Highland Park Company",
+          "address": "162 Cedar Road",
+          "assessed_value": 2941180.0,
+          "acres": 33.093,
+          "property_class": "F",
+          "sale_date": "19-JUL-1989",
+          "sale_price": 1.0,
+          "previous_owner": "Peyton Walsh",
+          "municipality": "JACKSON TWP",
+          "school_district": "024",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X062N01",
+            "owner": "Avery Bennett",
+            "assessed_value": 162070.0,
+            "acres": 3.99,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X062N02",
+            "owner": "Estate of Morgan Ellis",
+            "assessed_value": 432480.0,
+            "acres": 1.54,
+            "property_class": "C",
+            "total_owed": 0.0,
+            "years_delinquent": 1
+          },
+          {
+            "pidn": "P2X062N03",
+            "owner": "Jordan Patel",
+            "assessed_value": 100380.0,
+            "acres": 0.4,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X062N04",
+            "owner": "Taylor Brooks",
+            "assessed_value": 129720.0,
+            "acres": 0.73,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X062N05",
+            "owner": "Casey Morgan",
+            "assessed_value": 226030.0,
+            "acres": 112.34,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X062N06",
+            "owner": "Riley Turner",
+            "assessed_value": 237980.0,
+            "acres": 10.29,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "24-0139",
+            "distance_m": 86.8,
+            "evidence": {
+              "prop_du": 0,
+              "date_rcvd": "2024-07-20T05:00:00+00:00",
+              "prop_lots": 1,
+              "pt_subdiv": "NO",
+              "plan_title": "Highland Park Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "YES",
+              "total_acres": 34.8
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{04F486C0-4152-4B06-93BF-435DB226B7B9}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Rural Conservation",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Industrial",
+              "current_ztype": "I"
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X062",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 6,
+              "different_owner_neighbors": 6
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "environmental_diligence",
+            "signal_weight": -0.05,
+            "source_table": "staging.environmental_diligence_sites",
+            "source_id": "active_storage_tank:1607",
+            "distance_m": 296.0,
+            "evidence": {
+              "site_name": "MARTINS POTATO CHIPS",
+              "source_url": "https://gis.dep.pa.gov/depgisprd/rest/services/emappa/eMapPA_External/FeatureServer/171",
+              "source_layer": "active_storage_tank",
+              "facility_type": "Active regulated storage tank facility",
+              "screening_only": true,
+              "facility_status": "active"
+            }
+          }
+        ]
+      },
+      "context_sha256": "3841249ca1fb1aed819f7cf814b8f116d5ffb60a7ac6d9c407906453b4211aea",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "1 lot",
+                "one lot",
+                "prop lots 1"
+              ],
+              [
+                "0 unit",
+                "zero unit",
+                "prop du 0"
+              ],
+              [
+                "86.8 meter",
+                "87 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "Industrial"
+              ],
+              [
+                "Rural Conservation",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "6 neighbor",
+                "six neighbor"
+              ],
+              [
+                "6 different owner",
+                "six different owner",
+                "6 distinct owner",
+                "six distinct owner"
+              ],
+              [
+                "delinquent neighbor",
+                "tax delinquency",
+                "distress evidence"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-080",
+      "case_type": "assemblage+vacancy+zoning_mismatch",
+      "signal_combination": [
+        "assemblage",
+        "vacancy",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X080",
+        "parcel": {
+          "pidn": "P2X080",
+          "owner": "Avery Bennett",
+          "address": "180 Cedar Road",
+          "assessed_value": 0.0,
+          "acres": 20.31,
+          "property_class": "R",
+          "sale_date": "26-JUN-2009",
+          "sale_price": 1.0,
+          "previous_owner": "Morgan Ellis",
+          "municipality": "MANCHESTER TWP",
+          "school_district": "002",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X080N01",
+            "owner": "Avery Bennett",
+            "assessed_value": 0.0,
+            "acres": 6.22,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N02",
+            "owner": "Avery Bennett",
+            "assessed_value": 0.0,
+            "acres": 1.224,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N03",
+            "owner": "Jordan Patel",
+            "assessed_value": 0.0,
+            "acres": 1.34,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N04",
+            "owner": "Taylor Brooks",
+            "assessed_value": 399080.0,
+            "acres": 0.63,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N05",
+            "owner": "Casey Morgan",
+            "assessed_value": 592000.0,
+            "acres": 0.648,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N06",
+            "owner": "Riley Turner",
+            "assessed_value": 355725.0,
+            "acres": 0.646,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N07",
+            "owner": "Cameron Reed",
+            "assessed_value": 534260.0,
+            "acres": 0.564,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N08",
+            "owner": "Quinn Foster",
+            "assessed_value": 464000.0,
+            "acres": 0.589,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N09",
+            "owner": "Drew Parker",
+            "assessed_value": 367630.0,
+            "acres": 0.65,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N10",
+            "owner": "Hayden Ross",
+            "assessed_value": 454130.0,
+            "acres": 0.682,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N11",
+            "owner": "Robin Carter",
+            "assessed_value": 406550.0,
+            "acres": 0.593,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N12",
+            "owner": "Alex Monroe",
+            "assessed_value": 443420.0,
+            "acres": 0.547,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N13",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 389940.0,
+            "acres": 0.717,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N14",
+            "owner": "Devon Hayes",
+            "assessed_value": 608110.0,
+            "acres": 0.673,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N15",
+            "owner": "Skyler Grant",
+            "assessed_value": 373300.0,
+            "acres": 0.703,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N16",
+            "owner": "Peyton Walsh",
+            "assessed_value": 441690.0,
+            "acres": 4.46,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N17",
+            "owner": "Jordan Patel",
+            "assessed_value": 0.0,
+            "acres": 5.23,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N18",
+            "owner": "Jordan Patel",
+            "assessed_value": 0.0,
+            "acres": 8.13,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X080N19",
+            "owner": "Avery Bennett",
+            "assessed_value": 227850.0,
+            "acres": 105.0,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.12,
+            "source_table": "staging.structures",
+            "source_id": "P2X080",
+            "distance_m": null,
+            "evidence": {
+              "class": "R",
+              "price": 1,
+              "aprtotal": 0,
+              "structure_count": 0
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X080",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 17,
+              "different_owner_neighbors": 15
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{45E3CC0C-ADF2-4EA9-B0D0-505F917334A2}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Parks, Recreation and Open Space (Public and Private)",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Open Space Residential / Agricultural District",
+              "current_ztype": "A"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "penndot_project",
+            "signal_weight": 0.03,
+            "source_table": "staging.penndot_projects",
+            "source_id": "87689",
+            "distance_m": 778.3,
+            "evidence": {
+              "cost": 3450000.0,
+              "status": "Active",
+              "end_date": "2028-04-11",
+              "project_id": "87689",
+              "source_url": "https://gis.penndot.gov/arcgis/rest/services/paprojects/paprojects/MapServer",
+              "start_date": "2027-04-12",
+              "description": "Bridge Improvement",
+              "municipality": null,
+              "project_name": "Bull Road ov Little Conew",
+              "project_type": "BRPL"
+            }
+          },
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{21A56F52-A9F3-402F-8F1E-971063473563}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "PGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          }
+        ]
+      },
+      "context_sha256": "9d33fc38f4f1f9b685ae44f895deeb81879433ae773b09a3926389d9b697c823",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "structure count 0",
+                "0 structure",
+                "zero structure",
+                "no structure"
+              ],
+              [
+                "0",
+                "zero"
+              ],
+              [
+                "class r",
+                "r class",
+                "residential class",
+                "data gap"
+              ]
+            ],
+            "forbidden_claims": [
+              "demolished",
+              "abandoned",
+              "development ready"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "17 neighbor",
+                "seventeen neighbor"
+              ],
+              [
+                "15 different owner",
+                "fifteen different owner",
+                "15 distinct owner",
+                "fifteen distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "Open Space Residential / Agricultural District"
+              ],
+              [
+                "Parks, Recreation and Open Space (Public and Private)",
+                "Parks",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-077",
+      "case_type": "assemblage+ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "assemblage",
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X077",
+        "parcel": {
+          "pidn": "P2X077",
+          "owner": "Willow Bend Holdings LLC",
+          "address": "177 Cedar Road",
+          "assessed_value": 302900.0,
+          "acres": 43.492,
+          "property_class": "F",
+          "sale_date": "24-OCT-2025",
+          "sale_price": 1184000.0,
+          "previous_owner": "Highland Park Company",
+          "municipality": "YORK TWP",
+          "school_district": "004",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X077N01",
+            "owner": "Peyton Walsh",
+            "assessed_value": 458970.0,
+            "acres": 4.06,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N02",
+            "owner": "Avery Bennett",
+            "assessed_value": 323170.0,
+            "acres": 1.1,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N03",
+            "owner": "Morgan Ellis",
+            "assessed_value": 484760.0,
+            "acres": 0.9,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N04",
+            "owner": "Jordan Patel",
+            "assessed_value": 410470.0,
+            "acres": 1.58,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N05",
+            "owner": "Taylor Brooks",
+            "assessed_value": 425020.0,
+            "acres": 1.22,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N06",
+            "owner": "Casey Morgan",
+            "assessed_value": 471430.0,
+            "acres": 1.35,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N07",
+            "owner": "Pine Hollow Water Company",
+            "assessed_value": 0.0,
+            "acres": 0.692,
+            "property_class": "E",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N08",
+            "owner": "Cameron Reed",
+            "assessed_value": 133880.0,
+            "acres": 3.513,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N09",
+            "owner": "Quinn Foster",
+            "assessed_value": 851180.0,
+            "acres": 5.03,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N10",
+            "owner": "Drew Parker",
+            "assessed_value": 440000.0,
+            "acres": 4.7,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N11",
+            "owner": "Hayden Ross",
+            "assessed_value": 181040.0,
+            "acres": 20.58,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 1
+          },
+          {
+            "pidn": "P2X077N12",
+            "owner": "Robin Carter",
+            "assessed_value": 513480.0,
+            "acres": 3.46,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N13",
+            "owner": "Alex Monroe",
+            "assessed_value": 182540.0,
+            "acres": 24.86,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N14",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 738070.0,
+            "acres": 2.76,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N15",
+            "owner": "Devon Hayes",
+            "assessed_value": 591320.0,
+            "acres": 1.263,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N16",
+            "owner": "Skyler Grant",
+            "assessed_value": 623950.0,
+            "acres": 1.129,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X077N17",
+            "owner": "Peyton Walsh",
+            "assessed_value": 2820.0,
+            "acres": 2.54,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X077",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 17,
+              "different_owner_neighbors": 17
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X077",
+            "distance_m": null,
+            "evidence": {
+              "price": 1184000,
+              "saledt": "24-OCT-2025",
+              "prev_owner": "Highland Park Company",
+              "buyer_is_llc": true
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{5F53BCE6-F3C7-488E-ADF1-CF9FC91BC83C}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Agriculture / Low Density Residential",
+              "general_lu": "Low Density Residential",
+              "current_zname": "Residential Agricultural",
+              "current_ztype": "A"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "ag_security",
+            "signal_weight": 0.0,
+            "source_table": "staging.ag_security",
+            "source_id": "89-22",
+            "distance_m": null,
+            "evidence": {
+              "book": "102W",
+              "flag": null,
+              "page": "0922",
+              "district": "54",
+              "res_date": "1989-05-17T04:00:00+00:00",
+              "res_acres": 48.0,
+              "instrument": "1989022436",
+              "resolution": "89-22",
+              "last_review": null
+            }
+          }
+        ]
+      },
+      "context_sha256": "72d5093fe2181c772b30163955633e8dea7979312fda0db43f81b03a491948c4",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "17 neighbor",
+                "seventeen neighbor"
+              ],
+              [
+                "17 different owner",
+                "seventeen different owner",
+                "17 distinct owner",
+                "seventeen distinct owner"
+              ],
+              [
+                "delinquent neighbor",
+                "tax delinquency",
+                "distress evidence"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "1184000",
+                "1,184,000"
+              ],
+              [
+                "buyer is llc",
+                "buyer is llc true",
+                "llc buyer",
+                "limited liability"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Residential Agricultural"
+              ],
+              [
+                "Agriculture / Low Density Residential",
+                "Low Density Residential"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-056",
+      "case_type": "active_subdivision+assemblage+ownership_change",
+      "signal_combination": [
+        "active_subdivision",
+        "assemblage",
+        "ownership_change"
+      ],
+      "context": {
+        "pidn": "P2X056",
+        "parcel": {
+          "pidn": "P2X056",
+          "owner": "Drew Parker",
+          "address": "156 Cedar Road",
+          "assessed_value": 565120.0,
+          "acres": 2.49,
+          "property_class": "A",
+          "sale_date": "13-JAN-2026",
+          "sale_price": 1335000.0,
+          "previous_owner": "Blue Heron Holdings LLC",
+          "municipality": "NORTH CODORUS TWP",
+          "school_district": "024",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [
+          {
+            "year": 2025,
+            "authority": "COUNTY",
+            "amount": 0.0,
+            "owner": "Avery Bennett",
+            "pidn": "P2X056"
+          },
+          {
+            "year": 2025,
+            "authority": "MUNICIPAL",
+            "amount": 0.0,
+            "owner": "Avery Bennett",
+            "pidn": "P2X056"
+          },
+          {
+            "year": 2025,
+            "authority": "SCHOOL",
+            "amount": 0.0,
+            "owner": "Avery Bennett",
+            "pidn": "P2X056"
+          }
+        ],
+        "neighbors": [
+          {
+            "pidn": "P2X056N01",
+            "owner": "Robin Carter",
+            "assessed_value": 284080.0,
+            "acres": 1.85,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X056N02",
+            "owner": "Alex Monroe",
+            "assessed_value": 277810.0,
+            "acres": 1.503,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X056N03",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 228120.0,
+            "acres": 1.03,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X056N04",
+            "owner": "Devon Hayes",
+            "assessed_value": 242330.0,
+            "acres": 0.93,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X056N05",
+            "owner": "Skyler Grant",
+            "assessed_value": 155410.0,
+            "acres": 3.45,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X056N06",
+            "owner": "Mill Creek Holdings LLC",
+            "assessed_value": 1499030.0,
+            "acres": 12.55,
+            "property_class": "A",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "24-0055",
+            "distance_m": 10.0,
+            "evidence": {
+              "prop_du": 3,
+              "date_rcvd": "2024-03-25T05:00:00+00:00",
+              "prop_lots": 1,
+              "pt_subdiv": "NO",
+              "plan_title": "Red Maple Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "YES",
+              "total_acres": 2.5
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X056",
+            "distance_m": null,
+            "evidence": {
+              "price": 1335000,
+              "saledt": "13-JAN-2026",
+              "prev_owner": "Blue Heron Holdings LLC",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X056",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 6,
+              "different_owner_neighbors": 6
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{3BC4A762-9B98-43F3-A2D6-6E1F50E3D33F}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "SGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          },
+          {
+            "signal_key": "environmental_diligence",
+            "signal_weight": -0.05,
+            "source_table": "staging.environmental_diligence_sites",
+            "source_id": "active_storage_tank:5445",
+            "distance_m": 300.3,
+            "evidence": {
+              "site_name": "DIGGING & RIGGING",
+              "source_url": "https://gis.dep.pa.gov/depgisprd/rest/services/emappa/eMapPA_External/FeatureServer/171",
+              "source_layer": "active_storage_tank",
+              "facility_type": "Active regulated storage tank facility",
+              "screening_only": true,
+              "facility_status": "active"
+            }
+          },
+          {
+            "signal_key": "soil_constraint",
+            "signal_weight": -0.08,
+            "source_table": "staging.soils",
+            "source_id": "1559",
+            "distance_m": null,
+            "evidence": {
+              "drainage": "Somewhat excessively drained",
+              "slope_high": 35,
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Soils/FeatureServer/0",
+              "hydric_rating": "Not Hydric",
+              "map_unit_name": "MT. AIRY AND MANOR SOILS, 25 TO 35 PERCENT SLOPES",
+              "septic_rating": "Very limited",
+              "map_unit_symbol": "MOE",
+              "hydrologic_group": "C",
+              "representative_slope": 30.0
+            }
+          }
+        ]
+      },
+      "context_sha256": "769371f50fe925fcd6fbfb5c28dea6c4d8cd904ad0f7f3d59b4f8db018eead43",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "confirmed",
+              "upgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "1 lot",
+                "one lot",
+                "prop lots 1"
+              ],
+              [
+                "3 unit",
+                "three unit",
+                "prop du 3"
+              ],
+              [
+                "10 meter",
+                "ten meter",
+                "10 meter",
+                "ten meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "1335000",
+                "1,335,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "6 neighbor",
+                "six neighbor"
+              ],
+              [
+                "6 different owner",
+                "six different owner",
+                "6 distinct owner",
+                "six distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-075",
+      "case_type": "assemblage+ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "assemblage",
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X075",
+        "parcel": {
+          "pidn": "P2X075",
+          "owner": "Laurel Grove Holdings LLC",
+          "address": "175 Cedar Road",
+          "assessed_value": 162180.0,
+          "acres": 4.87,
+          "property_class": "C",
+          "sale_date": "10-SEP-2025",
+          "sale_price": 500000.0,
+          "previous_owner": "Jamie Sullivan",
+          "municipality": "CONEWAGO TWP",
+          "school_district": "012",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X075N01",
+            "owner": "Devon Hayes",
+            "assessed_value": 129690.0,
+            "acres": 1.0,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X075N02",
+            "owner": "Skyler Grant",
+            "assessed_value": 118190.0,
+            "acres": 4.88,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X075N03",
+            "owner": "Peyton Walsh",
+            "assessed_value": 136580.0,
+            "acres": 1.0,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X075N04",
+            "owner": "Avery Bennett",
+            "assessed_value": 13630.0,
+            "acres": 21.77,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X075N05",
+            "owner": "Morgan Ellis",
+            "assessed_value": 242590.0,
+            "acres": 2.02,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X075N06",
+            "owner": "Jordan Patel",
+            "assessed_value": 92820.0,
+            "acres": 3.18,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X075",
+            "distance_m": null,
+            "evidence": {
+              "price": 500000,
+              "saledt": "10-SEP-2025",
+              "prev_owner": "Jamie Sullivan",
+              "buyer_is_llc": true
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{DEA5BA45-9BDC-4A7E-A472-F0F59C2804B8}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Residential",
+              "general_lu": "Unspecified Residential Density",
+              "current_zname": "Agricultural",
+              "current_ztype": "A"
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X075",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 6,
+              "different_owner_neighbors": 6
+            }
+          }
+        ],
+        "context_signals": []
+      },
+      "context_sha256": "5ed82d235bee28d57830d15006607a0e21c3597edb6d3af7f4b23d27f64c60a8",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "500000",
+                "500,000"
+              ],
+              [
+                "buyer is llc",
+                "buyer is llc true",
+                "llc buyer",
+                "limited liability"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "Agricultural"
+              ],
+              [
+                "Residential",
+                "Unspecified Residential Density"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "6 neighbor",
+                "six neighbor"
+              ],
+              [
+                "6 different owner",
+                "six different owner",
+                "6 distinct owner",
+                "six distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-024",
+      "case_type": "assemblage+ownership_change",
+      "signal_combination": [
+        "assemblage",
+        "ownership_change"
+      ],
+      "context": {
+        "pidn": "P2X024",
+        "parcel": {
+          "pidn": "P2X024",
+          "owner": "Drew Parker",
+          "address": "124 Cedar Road",
+          "assessed_value": 711450.0,
+          "acres": 0.993,
+          "property_class": "R",
+          "sale_date": "16-FEB-2026",
+          "sale_price": 1450000.0,
+          "previous_owner": "Hayden Ross",
+          "municipality": "SPRING GARDEN TWP",
+          "school_district": "030",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X024N01",
+            "owner": "Robin Carter",
+            "assessed_value": 440140.0,
+            "acres": 0.688,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X024N02",
+            "owner": "Alex Monroe",
+            "assessed_value": 368360.0,
+            "acres": 0.747,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X024N03",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 355730.0,
+            "acres": 0.747,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X024N04",
+            "owner": "Devon Hayes",
+            "assessed_value": 393860.0,
+            "acres": 0.729,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X024N05",
+            "owner": "Skyler Grant",
+            "assessed_value": 352630.0,
+            "acres": 0.68,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X024N06",
+            "owner": "Peyton Walsh",
+            "assessed_value": 386040.0,
+            "acres": 0.687,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X024N07",
+            "owner": "Avery Bennett",
+            "assessed_value": 341230.0,
+            "acres": 0.67,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X024",
+            "distance_m": null,
+            "evidence": {
+              "price": 1450000,
+              "saledt": "16-FEB-2026",
+              "prev_owner": "Hayden Ross",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X024",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 7,
+              "different_owner_neighbors": 7
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{21A56F52-A9F3-402F-8F1E-971063473563}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "PGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          }
+        ]
+      },
+      "context_sha256": "57fb63cbe4481a5ae1d49d058ec9e17a03b466247abb675a33476a27e8d8017e",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "1450000",
+                "1,450,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "7 neighbor",
+                "seven neighbor"
+              ],
+              [
+                "7 different owner",
+                "seven different owner",
+                "7 distinct owner",
+                "seven distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-044",
+      "case_type": "ownership_change+vacancy",
+      "signal_combination": [
+        "ownership_change",
+        "vacancy"
+      ],
+      "context": {
+        "pidn": "P2X044",
+        "parcel": {
+          "pidn": "P2X044",
+          "owner": "Jamie Sullivan",
+          "address": "144 Cedar Road",
+          "assessed_value": 29120.0,
+          "acres": 0.493,
+          "property_class": "R",
+          "sale_date": "30-MAR-2026",
+          "sale_price": 99900.0,
+          "previous_owner": "Willow Bend Holdings LLC",
+          "municipality": "SPRING GROVE BORO",
+          "school_district": "024",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X044N01",
+            "owner": "Highland Park Township",
+            "assessed_value": 0.0,
+            "acres": 21.4,
+            "property_class": "E",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X044N02",
+            "owner": "Peyton Walsh",
+            "assessed_value": 242070.0,
+            "acres": 0.459,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X044N03",
+            "owner": "Avery Bennett",
+            "assessed_value": 0.0,
+            "acres": 0.537,
+            "property_class": "E",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X044N04",
+            "owner": "Morgan Ellis",
+            "assessed_value": 282330.0,
+            "acres": 0.498,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.12,
+            "source_table": "staging.structures",
+            "source_id": "P2X044",
+            "distance_m": null,
+            "evidence": {
+              "class": "R",
+              "price": 99900,
+              "aprtotal": 29120,
+              "structure_count": 0
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X044",
+            "distance_m": null,
+            "evidence": {
+              "price": 99900,
+              "saledt": "30-MAR-2026",
+              "prev_owner": "Willow Bend Holdings LLC",
+              "buyer_is_llc": false
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{D1BD4548-C336-4792-B184-31CBA8329B50}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "SGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          }
+        ]
+      },
+      "context_sha256": "3d97a495d1845db94432d748dac2351c7d6197508a2ff3975e2f2066e1484480",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "structure count 0",
+                "0 structure",
+                "zero structure",
+                "no structure"
+              ],
+              [
+                "29120",
+                "29,120"
+              ],
+              [
+                "class r",
+                "r class",
+                "residential class",
+                "data gap"
+              ]
+            ],
+            "forbidden_claims": [
+              "demolished",
+              "abandoned",
+              "development ready"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "99900",
+                "99,900"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-089",
+      "case_type": "active_subdivision+assemblage+ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "assemblage",
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X089",
+        "parcel": {
+          "pidn": "P2X089",
+          "owner": "Hayden Ross",
+          "address": "189 Cedar Road",
+          "assessed_value": 76820.0,
+          "acres": 1.246,
+          "property_class": "R",
+          "sale_date": "17-APR-2026",
+          "sale_price": 80000.0,
+          "previous_owner": "Robin Carter",
+          "municipality": "NORTH CODORUS TWP",
+          "school_district": "024",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X089N01",
+            "owner": "Alex Monroe",
+            "assessed_value": 6970.0,
+            "acres": 12.78,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X089N02",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 174360.0,
+            "acres": 4.74,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X089N03",
+            "owner": "Devon Hayes",
+            "assessed_value": 93290.0,
+            "acres": 0.24,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X089N04",
+            "owner": "Skyler Grant",
+            "assessed_value": 84950.0,
+            "acres": 0.2,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X089N05",
+            "owner": "Peyton Walsh",
+            "assessed_value": 99490.0,
+            "acres": 0.223,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X089N06",
+            "owner": "Avery Bennett",
+            "assessed_value": 130070.0,
+            "acres": 0.31,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "25-0242",
+            "distance_m": 237.0,
+            "evidence": {
+              "prop_du": 1,
+              "date_rcvd": "2025-12-18T05:00:00+00:00",
+              "prop_lots": 1,
+              "pt_subdiv": "YES",
+              "plan_title": "Blue Heron Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "NO",
+              "total_acres": 1.4
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X089",
+            "distance_m": null,
+            "evidence": {
+              "price": 80000,
+              "saledt": "17-APR-2026",
+              "prev_owner": "Robin Carter",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{CA0F726D-7576-4550-ADEF-EEF9553F92B6}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Rural Open Space Preservation",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Rural Agricultural Conservation",
+              "current_ztype": "A"
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X089",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 6,
+              "different_owner_neighbors": 6
+            }
+          }
+        ],
+        "context_signals": []
+      },
+      "context_sha256": "09780c2ac6dc3be6f1111c1e6da4fae2aba135cdf12a355e0bfc2e61a3e3b031",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "1 lot",
+                "one lot",
+                "prop lots 1"
+              ],
+              [
+                "1 unit",
+                "one unit",
+                "prop du 1"
+              ],
+              [
+                "237 meter",
+                "237 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "80000",
+                "80,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Rural Agricultural Conservation"
+              ],
+              [
+                "Rural Open Space Preservation",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "6 neighbor",
+                "six neighbor"
+              ],
+              [
+                "6 different owner",
+                "six different owner",
+                "6 distinct owner",
+                "six distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-084",
+      "case_type": "active_subdivision+assemblage+ownership_change+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "assemblage",
+        "ownership_change",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X084",
+        "parcel": {
+          "pidn": "P2X084",
+          "owner": "Casey Morgan",
+          "address": "184 Cedar Road",
+          "assessed_value": 127480.0,
+          "acres": 78.0,
+          "property_class": "F",
+          "sale_date": "18-FEB-2026",
+          "sale_price": 1375000.0,
+          "previous_owner": "Riley Turner",
+          "municipality": "CARROLL TWP",
+          "school_district": "014",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X084N01",
+            "owner": "Cameron Reed",
+            "assessed_value": 124830.0,
+            "acres": 2.28,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N02",
+            "owner": "Quinn Foster",
+            "assessed_value": 148650.0,
+            "acres": 0.8,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N03",
+            "owner": "Drew Parker",
+            "assessed_value": 124160.0,
+            "acres": 0.66,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N04",
+            "owner": "Hayden Ross",
+            "assessed_value": 285860.0,
+            "acres": 1.34,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N05",
+            "owner": "Robin Carter",
+            "assessed_value": 44700.0,
+            "acres": 2.44,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N06",
+            "owner": "Robin Carter",
+            "assessed_value": 169870.0,
+            "acres": 1.07,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N07",
+            "owner": "Alex Monroe",
+            "assessed_value": 134450.0,
+            "acres": 1.11,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N08",
+            "owner": "Jamie Sullivan",
+            "assessed_value": 30750.0,
+            "acres": 6.15,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N09",
+            "owner": "Devon Hayes",
+            "assessed_value": 173310.0,
+            "acres": 10.17,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N10",
+            "owner": "Skyler Grant",
+            "assessed_value": 470.0,
+            "acres": 6.06,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N11",
+            "owner": "Peyton Walsh Family Trust",
+            "assessed_value": 141440.0,
+            "acres": 5.15,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N12",
+            "owner": "Avery Bennett",
+            "assessed_value": 158640.0,
+            "acres": 0.703,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N13",
+            "owner": "Morgan Ellis",
+            "assessed_value": 173290.0,
+            "acres": 0.799,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N14",
+            "owner": "Jordan Patel",
+            "assessed_value": 250170.0,
+            "acres": 6.3,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N15",
+            "owner": "Taylor Brooks",
+            "assessed_value": 3160.0,
+            "acres": 41.07,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N16",
+            "owner": "Meadow Brook Municipal Authority",
+            "assessed_value": 0.0,
+            "acres": 5.39,
+            "property_class": "E",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N17",
+            "owner": "Riley Turner",
+            "assessed_value": 181250.0,
+            "acres": 2.3,
+            "property_class": "C",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N18",
+            "owner": "Stone Bridge Company",
+            "assessed_value": 1233430.0,
+            "acres": 45.42,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X084N19",
+            "owner": "Clearwater Company",
+            "assessed_value": 3840.0,
+            "acres": 0.678,
+            "property_class": "U",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "26-0100",
+            "distance_m": 133.0,
+            "evidence": {
+              "prop_du": 1,
+              "date_rcvd": "2026-06-01T05:00:00+00:00",
+              "prop_lots": 2,
+              "pt_subdiv": "YES",
+              "plan_title": "Meadow Brook Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "NO",
+              "total_acres": 75.2
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X084",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 19,
+              "different_owner_neighbors": 18
+            }
+          },
+          {
+            "signal_key": "ownership_change",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "P2X084",
+            "distance_m": null,
+            "evidence": {
+              "price": 1375000,
+              "saledt": "18-FEB-2026",
+              "prev_owner": "Riley Turner",
+              "buyer_is_llc": false
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{823A3509-D1B7-4AFE-9F43-A47A422C51D9}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Rural Conservation / Open Space",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Agricultural-Conservation Zone",
+              "current_ztype": "A"
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "penndot_project",
+            "signal_weight": 0.03,
+            "source_table": "staging.penndot_projects",
+            "source_id": "99940",
+            "distance_m": 109.0,
+            "evidence": {
+              "cost": 1100000.0,
+              "status": "Candidate",
+              "end_date": null,
+              "project_id": "99940",
+              "source_url": "https://gis.penndot.gov/arcgis/rest/services/paprojects/paprojects/MapServer",
+              "start_date": "2030-03-02",
+              "description": "Resurface",
+              "municipality": "201",
+              "project_name": "Campground Rd Resurfacing",
+              "project_type": "409EM"
+            }
+          },
+          {
+            "signal_key": "ag_security",
+            "signal_weight": 0.0,
+            "source_table": "staging.ag_security",
+            "source_id": "2007-18",
+            "distance_m": null,
+            "evidence": {
+              "book": "1908",
+              "flag": null,
+              "page": "2543",
+              "district": "20",
+              "res_date": "2007-07-09T04:00:00+00:00",
+              "res_acres": 67.03,
+              "instrument": "2007053191",
+              "resolution": "2007-18",
+              "last_review": null
+            }
+          }
+        ]
+      },
+      "context_sha256": "336886e72d5b6a952c3a064ac164a6f17986c1fa8f428204b7cfbf7d440b00f8",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "2 lot",
+                "two lot",
+                "prop lots 2"
+              ],
+              [
+                "1 unit",
+                "one unit",
+                "prop du 1"
+              ],
+              [
+                "133 meter",
+                "133 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "19 neighbor",
+                "nineteen neighbor"
+              ],
+              [
+                "18 different owner",
+                "eighteen different owner",
+                "18 distinct owner",
+                "eighteen distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "ownership_change",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "1375000",
+                "1,375,000"
+              ],
+              [
+                "buyer is llc false",
+                "not an llc",
+                "non llc",
+                "individual buyer"
+              ]
+            ],
+            "forbidden_claims": [
+              "distressed",
+              "developer buyer",
+              "development intent",
+              "arm's length"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "Agricultural-Conservation Zone"
+              ],
+              [
+                "Rural Conservation / Open Space",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-093",
+      "case_type": "active_subdivision+assemblage+vacancy+zoning_mismatch",
+      "signal_combination": [
+        "active_subdivision",
+        "assemblage",
+        "vacancy",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X093",
+        "parcel": {
+          "pidn": "P2X093",
+          "owner": "Willow Bend Holdings LLC",
+          "address": "193 Cedar Road",
+          "assessed_value": 442220.0,
+          "acres": 8.255,
+          "property_class": "I",
+          "sale_date": "16-APR-2026",
+          "sale_price": 1.0,
+          "previous_owner": "Willow Bend Holdings LLC",
+          "municipality": "FAIRVIEW TWP",
+          "school_district": "17F",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X093N01",
+            "owner": "Skyler Grant",
+            "assessed_value": 104520.0,
+            "acres": 0.8,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X093N02",
+            "owner": "Peyton Walsh",
+            "assessed_value": 33750.0,
+            "acres": 1.0,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X093N03",
+            "owner": "Cedar Ridge Holdings LLC",
+            "assessed_value": 582460.0,
+            "acres": 11.19,
+            "property_class": "I",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X093N04",
+            "owner": "Morgan Ellis",
+            "assessed_value": 139110.0,
+            "acres": 0.29,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X093N05",
+            "owner": "Granite Creek Holdings LLC",
+            "assessed_value": 462100.0,
+            "acres": 8.671,
+            "property_class": "I",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X093N06",
+            "owner": "Silver Oak Holdings LLC",
+            "assessed_value": 240750.0,
+            "acres": 5.75,
+            "property_class": "I",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "signal_weight": 0.3,
+            "source_table": "staging.planning_subdivisions",
+            "source_id": "24-0007",
+            "distance_m": 154.3,
+            "evidence": {
+              "prop_du": 0,
+              "date_rcvd": "2024-01-10T05:00:00+00:00",
+              "prop_lots": 4,
+              "pt_subdiv": "YES",
+              "plan_title": "Willow Bend Plan",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/PLANNING_Subdivisions/FeatureServer/0",
+              "pt_land_dev": "YES",
+              "total_acres": 40.2
+            }
+          },
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.12,
+            "source_table": "staging.structures",
+            "source_id": "P2X093",
+            "distance_m": null,
+            "evidence": {
+              "class": "I",
+              "price": 1,
+              "aprtotal": 442220,
+              "structure_count": 0
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{EA22943E-16A6-480D-B98D-AD84CCDC6E35}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Community Mixed Use",
+              "general_lu": "Mixed Use - Residential and Commerical",
+              "current_zname": "Commercial Business",
+              "current_ztype": "C"
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X093",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 6,
+              "different_owner_neighbors": 6
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "growth_area",
+            "signal_weight": 0.02,
+            "source_table": "staging.growth_areas",
+            "source_id": "{3ED5ABF1-6710-4EC1-A155-48D8B0C352AB}",
+            "distance_m": null,
+            "evidence": {
+              "ga_type": "PGA",
+              "ga_status": "EST",
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Growth_Areas/FeatureServer/0"
+            }
+          },
+          {
+            "signal_key": "environmental_diligence",
+            "signal_weight": -0.05,
+            "source_table": "staging.environmental_diligence_sites",
+            "source_id": "active_storage_tank:12196",
+            "distance_m": 408.7,
+            "evidence": {
+              "site_name": "DIETERS IND",
+              "source_url": "https://gis.dep.pa.gov/depgisprd/rest/services/emappa/eMapPA_External/FeatureServer/171",
+              "source_layer": "active_storage_tank",
+              "facility_type": "Active regulated storage tank facility",
+              "screening_only": true,
+              "facility_status": "active"
+            }
+          }
+        ]
+      },
+      "context_sha256": "77fa5a1615b9c34018145045c9a18840818339cef0b7905fa444acfbcfa57a91",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "active_subdivision",
+            "accepted_statuses": [
+              "confirmed",
+              "upgraded"
+            ],
+            "accepted_significance": [
+              "high",
+              "medium"
+            ],
+            "required_fact_groups": [
+              [
+                "4 lot",
+                "four lot",
+                "prop lots 4"
+              ],
+              [
+                "0 unit",
+                "zero unit",
+                "prop du 0"
+              ],
+              [
+                "154.3 meter",
+                "154 meter"
+              ]
+            ],
+            "forbidden_claims": [
+              "approved",
+              "entitled",
+              "owner filed",
+              "development intent"
+            ]
+          },
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "structure count 0",
+                "0 structure",
+                "zero structure",
+                "no structure"
+              ],
+              [
+                "442220",
+                "442,220"
+              ],
+              [
+                "class I",
+                "I class",
+                "data gap"
+              ]
+            ],
+            "forbidden_claims": [
+              "demolished",
+              "abandoned",
+              "development ready"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Commercial Business"
+              ],
+              [
+                "Community Mixed Use",
+                "Mixed Use - Residential and Commerical",
+                "Mixed Use "
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "6 neighbor",
+                "six neighbor"
+              ],
+              [
+                "6 different owner",
+                "six different owner",
+                "6 distinct owner",
+                "six distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    },
+    {
+      "id": "p2x-078",
+      "case_type": "assemblage+vacancy+zoning_mismatch",
+      "signal_combination": [
+        "assemblage",
+        "vacancy",
+        "zoning_mismatch"
+      ],
+      "context": {
+        "pidn": "P2X078",
+        "parcel": {
+          "pidn": "P2X078",
+          "owner": "Skyler Grant",
+          "address": "178 Cedar Road",
+          "assessed_value": 820.0,
+          "acres": 10.68,
+          "property_class": "F",
+          "sale_date": "25-MAY-2004",
+          "sale_price": 1.0,
+          "previous_owner": "Skyler Grant",
+          "municipality": "FAIRVIEW TWP",
+          "school_district": "17F",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [
+          {
+            "pidn": "P2X078N01",
+            "owner": "Peyton Walsh",
+            "assessed_value": 158490.0,
+            "acres": 6.02,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X078N02",
+            "owner": "Peyton Walsh",
+            "assessed_value": 630.0,
+            "acres": 8.16,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X078N03",
+            "owner": "Avery Bennett",
+            "assessed_value": 195200.0,
+            "acres": 6.22,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X078N04",
+            "owner": "Morgan Ellis",
+            "assessed_value": 237650.0,
+            "acres": 4.98,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X078N05",
+            "owner": "Jordan Patel",
+            "assessed_value": 197640.0,
+            "acres": 6.35,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X078N06",
+            "owner": "Taylor Brooks",
+            "assessed_value": 232273.0,
+            "acres": 5.89,
+            "property_class": "R",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X078N07",
+            "owner": "Casey Morgan",
+            "assessed_value": 270.0,
+            "acres": 3.56,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          },
+          {
+            "pidn": "P2X078N08",
+            "owner": "Riley Turner",
+            "assessed_value": 1670.0,
+            "acres": 21.63,
+            "property_class": "F",
+            "total_owed": 0.0,
+            "years_delinquent": 0
+          }
+        ],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.12,
+            "source_table": "staging.structures",
+            "source_id": "P2X078",
+            "distance_m": null,
+            "evidence": {
+              "class": "F",
+              "price": 1,
+              "aprtotal": 820,
+              "structure_count": 0
+            }
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "signal_weight": 0.1,
+            "source_table": "staging.future_landuse",
+            "source_id": "{31399988-FBDB-4A48-9410-B5F98DCBC98C}",
+            "distance_m": null,
+            "evidence": {
+              "future_lu": "Rural Conservation",
+              "general_lu": "Conservation / Open Space",
+              "current_zname": "Rural Living",
+              "current_ztype": "R"
+            }
+          },
+          {
+            "signal_key": "assemblage",
+            "signal_weight": 0.06,
+            "source_table": "staging.parcels",
+            "source_id": "P2X078",
+            "distance_m": null,
+            "evidence": {
+              "neighbor_parcels": 8,
+              "different_owner_neighbors": 7
+            }
+          }
+        ],
+        "context_signals": [
+          {
+            "signal_key": "soil_constraint",
+            "signal_weight": -0.08,
+            "source_table": "staging.soils",
+            "source_id": "4155",
+            "distance_m": null,
+            "evidence": {
+              "drainage": "Moderately well drained",
+              "slope_high": 25,
+              "source_url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Soils/FeatureServer/0",
+              "hydric_rating": "Not Hydric",
+              "map_unit_name": "LEWISBERRY AND LANSDALE SOILS, 8 TO 25 PERCENT SLOPES, VERY STONY",
+              "septic_rating": "Very limited",
+              "map_unit_symbol": "LSD",
+              "hydrologic_group": "A",
+              "representative_slope": 20.0
+            }
+          }
+        ]
+      },
+      "context_sha256": "97d96f9ec84f0dc8617d615d770254918aca894b1a771d7c49136d5cf62717c8",
+      "labels": {
+        "signals": [
+          {
+            "signal_key": "vacancy",
+            "accepted_statuses": [
+              "confirmed",
+              "upgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "structure count 0",
+                "0 structure",
+                "zero structure",
+                "no structure"
+              ],
+              [
+                "820"
+              ],
+              [
+                "class f",
+                "f class",
+                "vacant land"
+              ]
+            ],
+            "forbidden_claims": [
+              "demolished",
+              "abandoned",
+              "development ready"
+            ]
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "accepted_statuses": [
+              "downgraded",
+              "irrelevant"
+            ],
+            "accepted_significance": [
+              "low",
+              "none"
+            ],
+            "required_fact_groups": [
+              [
+                "Rural Living"
+              ],
+              [
+                "Rural Conservation",
+                "Conservation / Open Space"
+              ]
+            ],
+            "forbidden_claims": [
+              "rezoning",
+              "upzoning",
+              "approved",
+              "policy change"
+            ]
+          },
+          {
+            "signal_key": "assemblage",
+            "accepted_statuses": [
+              "confirmed",
+              "downgraded"
+            ],
+            "accepted_significance": [
+              "medium",
+              "low"
+            ],
+            "required_fact_groups": [
+              [
+                "8 neighbor",
+                "eight neighbor"
+              ],
+              [
+                "7 different owner",
+                "seven different owner",
+                "7 distinct owner",
+                "seven distinct owner"
+              ],
+              [
+                "no delinquency",
+                "no tax delinquency",
+                "no distress",
+                "none delinquent"
+              ]
+            ],
+            "forbidden_claims": [
+              "coordinated acquisition",
+              "motivated seller",
+              "development intent"
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "rubric_generated_requires_human_confirmation",
+        "rubric": "pass2_expanded_v1"
+      }
+    }
+  ]
+}

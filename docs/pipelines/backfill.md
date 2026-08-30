@@ -1,104 +1,83 @@
-# Backfill Strategy
+# Initial Load and Backfill
 
-On Day 1, every pipeline runs in "backfill mode" to populate the database with as much data as possible. After that, scheduled runs maintain freshness.
+CountyIQ has no separate `backfill` mode or `full_history` asset config. Most
+source assets fetch the source's current complete snapshot, so their first
+successful materialization establishes the baseline. SCD2 history starts from
+that baseline and grows on later refreshes; CountyIQ cannot promise history a
+source does not publish.
 
-## Full Snapshot Sources (No Backfill Problem)
+## Before the First Run
 
-These sources return the complete dataset on every pull. The first run IS the backfill.
+1. Apply the full Alembic chain.
+2. Configure database and source credentials.
+3. Configure Cloudflare R2 and set `COUNTYIQ_ARCHIVE_STRICT=true` so a missing
+   raw-source archive fails visibly in production.
+4. Confirm the separate Dagster database and persistent archive mount are
+   healthy.
+5. Leave model-backed enrichment until deterministic source loads and their
+   asset checks have passed.
 
-| Source | # | What You Get on First Run |
-|---|---|---|
-| York County GIS Portal (49 layers) | 1 | All 176K+ parcels with full attribute history (sale dates, previous owners, previous prices) |
-| FEMA Flood Hazard Layer | 3 | Complete flood zone boundaries |
-| PA Open Data Portal | 4 | Full datasets via SODA API |
-| PennDOT Open Data | 5 | Full road/bridge/infrastructure datasets |
-| PennDOT Projects | 13 | All project records with status history |
-| PA DOS Business Entities | 8 | Full business registry via data.pa.gov |
-| PLCB Liquor Licenses | 22 | Complete bulk CSV of all licenses |
-| PALS Professional Licenses | 21 | Searchable — can pull everything |
-| Assessment Database | 2 | Current records (value history available per-property via scraping) |
-| PA DEP eFACTS | 17 | Searchable by county — can pull all York County records |
+## Materialization Order
 
-**Dagster approach:** Each asset has a `backfill` config option:
+Use the registered jobs in the Dagster UI:
 
-```python
-from dagster import asset, Config
+1. `arcgis_refresh` establishes parcels and reference layers.
+2. `radar_refresh`, `scraper_refresh`, `pa_dos_refresh`, `bulk_refresh`, and
+   `fema_refresh` load the remaining source groups. These groups are independent
+   and may run in parallel within source rate and host-memory limits.
+3. Run `deterministic_enrichment_refresh` after the source checks pass. It
+   rebuilds municipality joins, deterministic signals, stable owner identity,
+   parcel/feed events, and momentum without making a model call.
+4. Estimate the paid work before enabling any model-backed asset:
 
-class SourceConfig(Config):
-    full_history: bool = False   # True on first run (backfill), False on scheduled runs
+   ```bash
+   cd pipelines
+   .venv/bin/python scripts/estimate_llm_backfill.py \
+     --output /tmp/countyiq-backfill-estimate.json
+   ```
 
-@asset
-def parcels_arcgis(config: SourceConfig):
-    if config.full_history:
-        # Paginate through ALL 176K records
-        return fetch_all_records(offset=0, limit=None)
-    else:
-        # Fetch only records modified since last run
-        last_run = get_last_materialization_time()
-        return fetch_records_modified_since(last_run)
-```
+   The estimator is read-only, uses the production selectors and prompt
+   builders, and does not read an API key or call a model provider. Review its
+   per-pass candidate counts, assumptions, and retry ceiling before launching
+   a pass-specific job. Runtime pass gates are shown as status but do not zero
+   the hypothetical estimate: the purpose is to price work while those gates
+   are still safely disabled. Explicit runs default to 25 outer work items via
+   `COUNTYIQ_PASS{N}_MAX_ITEMS`; raise that finite cap only for an approved batch.
+5. Run model-backed passes individually in dependency order after approving a
+   budget and inspecting a capped pilot: `proceedings_extraction_refresh`,
+   `entity_verification_refresh`, `signal_validation_refresh`, then
+   `brief_generation_refresh`. `county_narratives_refresh` remains outside the
+   alpha backfill. All passes are disabled by default and must be enabled one at
+   a time for the approved operator run.
 
-To trigger backfill from the Dagster UI: select the asset → Materialize → set `full_history: true`.
+Do not use `enrichment_refresh` for the initial load. It selects the entire
+`enrichment` group, which mixes the seven deterministic assets with Passes 0-4.
+It remains registered for an explicitly funded full-group rebuild, but is not
+a cost-isolated path.
 
-## Archive-Scrapeable Sources (One-Time Deep Scrape)
+County Scout discovery and monitoring do not block the initial product data
+load. The manual jobs in `pipelines/countyiq/jobs/__init__.py` rerun a specific
+source or intelligence pass; they are not a second backfill implementation.
 
-These sources have archive pages that go back months or years. The Day 1 backfill scrapes ALL available archive pages, not just the first page.
+Public-proceedings history is limited to documents reachable through each
+configured municipal archive. Each run is bounded (250 document requests total
+and 25 per governing body by default), processes likely-newer documents first,
+and resumes from persisted URL/content-hash rows. Run metadata reports deferred
+documents. An interrupted, capped, or partial source run still makes the LLM
+estimate a lower bound for not-yet-retrieved history even though its counts are
+exact for rows currently in PostgreSQL.
 
-| Source | # | Archive Depth | Backfill Approach |
-|---|---|---|---|
-| Commissioners Meetings | 15 | Meeting archives going back years | Scrape all archive pages; download all available PDFs |
-| YCPC Subdivision Activity | 16 | Activity logs with historical entries | Scrape full activity list |
-| Conservation District (YCCD) | 11 | PDF reports archive | Download all available PDFs |
-| County Bids | 12 | Archive of past bids | Scrape all pages including closed/expired bids |
-| York City RFPs | 18 | Past RFP listings | Scrape full listing history |
+## Acceptance
 
-## Current-Only Sources (History Starts at Launch)
+An initial load is not complete merely because the Dagster run is green:
 
-These sources only show what's currently posted. There's no practical way to retrieve historical data. History builds forward from Day 1.
+- review asset-check results and source row counts;
+- inspect warnings for partial pagination, skipped archives, robots rules, and
+  scraper failures;
+- sample parcel, owner, development, and proceeding records through the API;
+- review the first model-backed outputs before enabling their weekly schedule;
+- record actual duration, row counts, archive volume, and model spend for the
+  next capacity estimate.
 
-| Source | # | What You Miss | Acceptable? |
-|---|---|---|---|
-| CRIMEWATCH | 19 | Incidents older than what's currently displayed | Yes — police blotter value is in recent patterns, not 2-year-old incidents |
-| Sheriff Sales | 9 | Past sales that have already been removed from the site | Yes — GIS parcel data includes sale history (dates + prices) as a partial substitute |
-| Tax Claim Bureau | 14 | Previously resolved delinquencies | Yes — current delinquencies are what matter |
-| Inmate Records | 20 | Past bookings/releases | Yes — current status is primary use case |
-
-## Formal Request Sources (Their Timeline)
-
-| Source | # | Action | Backfill Depends On |
-|---|---|---|---|
-| Recorder of Deeds | 7 | File RTK request | Whatever format/timespan they provide |
-| UJS Court Records | 6 | File AOPC application | Scope of access granted |
-
-## Day 1 Execution Order
-
-The backfill should run in a specific order because of asset dependencies (entity resolution needs source data first):
-
-```
-Phase 1: Full snapshot sources (parallel where memory allows)
-  ├── GIS Portal (all 49 layers)     ~30 min (176K parcels + geometry)
-  ├── FEMA Flood Layer                ~2 min
-  ├── PA Open Data                    ~5 min
-  ├── PennDOT (Open Data + Projects)  ~10 min
-  ├── PA DOS Business                 ~5 min
-  ├── PLCB Licenses (CSV)             ~1 min
-  └── PALS Licenses                   ~15 min
-
-Phase 2: Scraper sources (sequential — respect source rate limits)
-  ├── Assessment Database             ~2-4 hours (176K properties, throttled)
-  ├── CRIMEWATCH                      ~10 min
-  ├── DEP eFACTS                      ~20 min
-  ├── Sheriff Sales + Tax Claim       ~10 min
-  ├── County Bids + York City RFPs    ~5 min
-  └── Commissioners + YCPC + YCCD     ~15 min
-
-Phase 3: Enrichment (after all sources complete)
-  └── Entity Resolution               ~20 min
-
-Phase 4: Frontend data generation
-  └── Vector tile generation           ~15 min
-
-Total estimated Day 1 backfill: ~4-6 hours
-```
-
-Run this on a weekday morning so you can monitor via the Dagster UI and Slack. Trigger Phase 1 assets manually, let Dagster's dependency graph handle the rest.
+There is no supported vector-tile generation phase. The current map consumes
+bounded API GeoJSON as documented in `docs/frontend/architecture.md`.

@@ -6,7 +6,7 @@ description: |
 
 # CountyIQ Development Skill
 
-CountyIQ is a York County civic intelligence platform with a monorepo containing:
+CountyIQ is a York County real-estate intelligence platform with a monorepo containing:
 
 - `frontend/`: React application
 - `api/`: FastAPI service
@@ -33,7 +33,8 @@ Only read the docs you need. Treat the files below as the current source of trut
 | `docs/pipelines/code-structure.md` | Dagster/package layout |
 | `docs/products/county-scout.md` | County Scout product notes |
 
-Historical plans, implementation phases, and draft research have been moved under `archives/docs/`. Do not treat them as current unless the active docs explicitly send you there.
+Superseded plans and one-off research are intentionally absent from the working
+tree; use git history when historical context is genuinely needed.
 
 ## Hard Rules
 
@@ -66,25 +67,31 @@ Historical plans, implementation phases, and draft research have been moved unde
 
 ## Current Deployment Reality
 
-- The active deployment direction is containerized VPS plus Cloudflare.
-- Hostinger is the current preferred provider to evaluate.
-- Hetzner references are historical context only.
-- The old AWS/Terraform stack lives under `archives/infrastructure/aws-terraform/` and is not the current source of truth.
+- Nothing is deployed yet. The intended deployment is Docker Compose on
+  Hetzner plus Cloudflare; treat it as a target architecture until a live
+  environment is explicitly verified.
+- Netcup is the fallback VPS provider.
+- AWS/Lambda/Terraform deployment paths are legacy.
 
 ## LLM Harness Reality
 
 The intelligence passes currently use the shared harness in `pipelines/countyiq/lib/llm_harness.py`.
 
-- Pass 0 prefers `COUNTYIQ_PASS0_MODEL`
-- Passes 1-4 prefer `COUNTYIQ_PASS{N}_MODEL`, then fall back to `COUNTYIQ_OPENROUTER_MODEL`
+- Passes 0-4 resolve `COUNTYIQ_PASS{N}_MODEL`, then the evaluated code
+  default, then `COUNTYIQ_OPENROUTER_MODEL`
 - `COUNTYIQ_THINKING` is the global fallback; passes can override it with `COUNTYIQ_PASS{N}_THINKING`
 - `COUNTYIQ_ARCHIVE_DIR` controls runtime archive output
+- Every pass sends its static instruction block as a system message
+  (`system_prompt` on `HarnessConfig`) so providers with implicit prompt
+  caching reuse it; keep static text in the `*_SYSTEM_PROMPT` constants and
+  per-item data in the user templates when editing prompts
+- Other knobs: `COUNTYIQ_PASS{N}_REASONING_EFFORT`, `COUNTYIQ_PASS1_TRIALS` /
+  `COUNTYIQ_PASS2_TRIALS` (N-trial voting), `COUNTYIQ_PASS1_ESCALATION_MODEL`
+  (abstention cascade), `COUNTYIQ_PASS0_PDF_ENGINE` (default `native`)
 
-Current operator defaults:
-
-- Pass 0 operator default: `x-ai/grok-4.1-fast`
-- Later-pass operator default: `xiaomi/mimo-v2-flash`
-- Qwen 3.5 remains a live evaluation candidate
+Current model defaults and their evidence live in `docs/decisions.md` and
+`pipelines/countyiq/lib/pass_llm_config.py`. Do not copy model slugs into this
+skill; they change independently.
 
 ## Task Routing
 
@@ -135,6 +142,5 @@ Read:
 - `docs/open-items.md`
 - `docs/decisions.md`
 
-Then assume:
-
-- AWS/Lambda-era material outside the archive is legacy unless the user explicitly wants it preserved.
+Then assume AWS/Lambda/Terraform material is legacy unless the user explicitly
+wants it restored from git history.

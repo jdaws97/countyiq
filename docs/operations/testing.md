@@ -1,252 +1,135 @@
-# Testing Strategy
+# Testing and Verification
 
-## Testing Strategy
+Verification is layered. A narrow unit test cannot prove Dagster registration,
+database migrations, a production bundle, or a real browser flow.
 
-### Guiding Principle
+## Pipeline
 
-Practical tests that catch real problems before merge. No mocks, no fake data fixtures, no elaborate test infrastructure. Three layers: CI catches code bugs, smoke tests catch deploy problems, Dagster asset checks catch data quality issues in production.
-
-### Layer 1: Pre-Merge Checks (GitHub Actions CI)
-
-A new workflow that runs on **pull requests** to `main` (not on push — the deploy workflows handle push). Tests must pass before the PR can be merged.
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'pipelines/**'
-      - 'api/**'
-      - 'frontend/**'
-      - '.github/workflows/ci.yml'
-
-jobs:
-  lint-and-type-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dev dependencies
-        run: pip install ruff mypy
-
-      - name: Lint (ruff)
-        run: ruff check pipelines/ api/
-
-      - name: Type check (mypy)
-        run: mypy pipelines/ api/ --ignore-missing-imports
-
-  pipeline-schema-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install -e pipelines/[dev]
-
-      - name: Run schema validation tests
-        run: pytest pipelines/tests/ -v
-
-  frontend-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install and build
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-```
-
-**What this catches:**
-- Syntax errors, unused imports, formatting issues (ruff)
-- Type mismatches, missing attributes (mypy)
-- Schema/parsing regressions (pytest)
-- Frontend build failures (npm)
-
-**What this intentionally does NOT do:**
-- Hit live APIs (flaky, slow, rate limits)
-- Require a database (no Docker Postgres in CI)
-- Run integration tests (that's what Dagster asset checks do in production)
-
-### Schema Validation Tests
-
-Each pipeline source defines its expected output schema. Tests verify that the parsing logic produces the right structure. These use sample response fixtures (a small saved JSON/HTML file checked into the repo).
-
-```
-pipelines/
-├── tests/
-│   ├── conftest.py
-│   ├── fixtures/              # Small sample responses from each source
-│   │   ├── parcels_sample.json
-│   │   ├── crimewatch_sample.html
-│   │   ├── plcb_sample.csv
-│   │   └── ...
-│   ├── test_arcgis_parser.py
-│   ├── test_crimewatch_parser.py
-│   ├── test_plcb_parser.py
-│   └── ...
-```
-
-**Example test:**
-
-```python
-# pipelines/tests/test_arcgis_parser.py
-import json
-from pathlib import Path
-from pipelines.lib.parsers.arcgis import parse_parcels_response
-
-FIXTURES = Path(__file__).parent / "fixtures"
-
-def test_parcels_parser_returns_expected_fields():
-    """Verify the parser produces all required columns."""
-    sample = json.loads((FIXTURES / "parcels_sample.json").read_text())
-    records = parse_parcels_response(sample)
-
-    assert len(records) > 0
-    required_fields = ["pidn", "owner_full", "propadr", "aprtotal", "saledt", "price"]
-    for field in required_fields:
-        assert field in records[0], f"Missing required field: {field}"
-
-
-def test_parcels_parser_handles_null_values():
-    """Verify the parser doesn't crash on null/missing fields."""
-    sample = json.loads((FIXTURES / "parcels_sample.json").read_text())
-    # Null out some fields to simulate real-world data
-    sample["features"][0]["attributes"]["PRICE"] = None
-    records = parse_parcels_response(sample)
-    assert records[0]["price"] is None
-```
-
-**Effort per source:** ~1-2 test functions, ~15 minutes to write. The fixtures are just a small copy-paste from a real API response (already captured during feasibility testing).
-
-### Layer 2: Smoke Test on Deploy
-
-After the Dagster deploy workflow restarts services, verify they came up cleanly. Added as a final step in the `deploy-dagster.yml` workflow:
-
-```yaml
-      # After Watchtower pulls new image, verify via API health endpoint
-      - name: Smoke test
-        run: |
-          sleep 60  # Wait for Watchtower to pull
-          curl -f https://countyiq.com/api/health
-```
-
-You can also verify Dagster definitions loaded correctly by SSHing into the VPS:
+Install exactly what is locked and run the non-integration suite:
 
 ```bash
-# Smoke test: verify Dagster loaded all definitions
-ssh countyiq 'docker exec countyiq-dagster dagster definitions list'
+cd pipelines
+uv sync --locked --extra dev
+.venv/bin/python -m pytest tests/ -q -k "not integration"
 ```
 
-**What this catches:** Missing imports, broken config files, dependency issues that only surface when Dagster tries to load the full asset graph. These don't show up in unit tests because unit tests don't import the full Dagster definitions.
+For asset, job, schedule, resource, or configuration wiring changes, also load
+the complete definitions graph:
 
-### Layer 3: Data Quality Checks (Dagster Asset Checks)
-
-These run in production as part of the pipeline, not in CI. After each asset materializes, Dagster validates the output.
-
-```python
-# pipelines/lib/checks.py
-from dagster import asset_check, AssetCheckResult, AssetCheckSeverity
-
-@asset_check(asset="parcels_arcgis")
-def parcels_record_count(context):
-    """Verify parcel count is within expected range."""
-    conn = get_connection()
-    count = conn.execute(
-        "SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL"
-    ).scalar()
-
-    passed = 150_000 < count < 200_000  # Expected ~176K
-    return AssetCheckResult(
-        passed=passed,
-        severity=AssetCheckSeverity.WARN,
-        metadata={"record_count": count},
-        description=f"Got {count:,} records (expected 150K-200K)"
-    )
-
-
-@asset_check(asset="parcels_arcgis")
-def parcels_no_null_pidn(context):
-    """Verify no parcel records have null PIDN."""
-    conn = get_connection()
-    null_count = conn.execute(
-        "SELECT COUNT(*) FROM staging.parcels WHERE valid_to IS NULL AND pidn IS NULL"
-    ).scalar()
-
-    return AssetCheckResult(
-        passed=null_count == 0,
-        severity=AssetCheckSeverity.ERROR,
-        metadata={"null_pidn_count": null_count}
-    )
-
-
-@asset_check(asset="crimewatch_incidents")
-def crimewatch_not_empty(context):
-    """Verify scraper returned at least some incidents."""
-    conn = get_connection()
-    today_count = conn.execute(
-        "SELECT COUNT(*) FROM staging.crimewatch WHERE DATE(created_at) = CURRENT_DATE"
-    ).scalar()
-
-    return AssetCheckResult(
-        passed=today_count > 0,
-        severity=AssetCheckSeverity.WARN,
-        metadata={"today_count": today_count},
-        description=f"Got {today_count} incidents today"
-    )
+```bash
+cd pipelines
+.venv/bin/python -c "from countyiq.definitions import defs; print('definitions OK')"
 ```
 
-**Failed checks trigger the Slack alerting pipeline** described in the Error Handling section:
-- `WARN` severity → `#alerts-warning`
-- `ERROR` severity → `#alerts-critical`
+Parser tests use small captured source fixtures. Network calls and model calls
+do not belong in the normal unit suite. Live source checks are manual and
+targeted because public sites are slow and fragile.
 
-### What Each Layer Catches
+## API
 
-| Problem | Layer 1 (CI) | Layer 2 (Smoke) | Layer 3 (Checks) |
-|---|---|---|---|
-| Syntax error in pipeline code | ✅ ruff | | |
-| Type mismatch in function call | ✅ mypy | | |
-| Parser returns wrong columns | ✅ pytest | | |
-| Missing import after refactor | ✅ mypy | ✅ definition load | |
-| Broken Dagster config | | ✅ definition load | |
-| Website changed HTML structure | | | ✅ schema check |
-| API returned 0 records | | | ✅ count check |
-| Source went offline | | | ✅ run failure → retry → alert |
-| Database constraint violation | | | ✅ run failure → alert |
-| Frontend won't build | ✅ npm build | | |
+Fast unit tests do not require Postgres:
 
-### Dev Dependencies
-
-```toml
-# pipelines/pyproject.toml [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.4",
-    "mypy>=1.10",
-]
+```bash
+uv sync --project api --locked
+api/.venv/bin/python -m pytest api/unit_tests -q
 ```
 
-### What's Intentionally NOT Included
+Contract tests use the dedicated `postgres-test` container on port 5433. The
+session fixture starts the container, creates `countyiq_test`, applies every
+migration, resets only the test tables, seeds a minimal York-shaped dataset,
+and calls FastAPI with `TestClient`.
 
-| Approach | Why Skipped |
-|---|---|
-| Integration tests with live APIs | Flaky, slow, may hit rate limits; asset checks cover this in production |
-| Docker Postgres in CI | Adds build time and complexity; schema migration testing is done locally (see Alembic section) |
-| End-to-end frontend tests (Cypress, Playwright) | Overkill for MVP; manual browser testing is fine initially |
-| Code coverage requirements | Chasing coverage percentages leads to bad tests; focus on meaningful assertions |
-| Snapshot testing | Brittle; breaks on any output change even if the change is correct |
+```bash
+cd pipelines
+docker compose up -d postgres-test
+cd ..
+uv sync --project api --locked
+api/.venv/bin/python -m pytest api/tests -v
+```
+
+Never point contract tests at the development or production `countyiq`
+database; the fixture truncates its dedicated schema state.
+
+Current contract coverage includes health, property details, municipality
+details, the unified feed, radar, owner briefs/relationships, and the response
+fields shared with the frontend.
+
+## Database and Migrations
+
+For a clean migration-chain check:
+
+```bash
+cd pipelines
+docker compose up -d postgres-test
+DATABASE_HOST=localhost \
+DATABASE_PORT=5433 \
+DATABASE_NAME=countyiq_test \
+DATABASE_USER=dagster_admin \
+DATABASE_PASSWORD=localtest \
+DATABASE_URL=postgresql://dagster_admin:localtest@localhost:5433/countyiq_test \
+  uv run --locked alembic upgrade head
+```
+
+The PostGIS extensions and base schemas from the ordered `init-db/*.sql`
+scripts must exist before Alembic runs. Use `docker compose down -v` only when
+an intentional, fully destructive test-volume reset is required.
+
+## Frontend
+
+```bash
+cd frontend
+npm ci
+npx tsc -b
+npm run lint
+npm run build
+```
+
+Run the production build whenever routing, bundling, dependencies, or shared
+types change. Meaningful UI changes also require a real Playwright browser
+check:
+
+1. start the Vite dev server or production preview;
+2. open the changed route;
+3. exercise navigation and the relevant interaction;
+4. inspect browser console and failed requests;
+5. recheck at a narrow viewport when layout is affected.
+
+## Container Builds
+
+Both Python images install from checked-in uv lockfiles:
+
+```bash
+docker build -f api/Dockerfile -t countyiq-api:test .
+docker build -f pipelines/Dockerfile -t countyiq-pipelines:test .
+```
+
+The API image health endpoint is `/api/health`. The Dagster image must load
+`countyiq.definitions` and expose `/server_info`.
+
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs:
+
+- the locked pipeline environment, definitions smoke test, and non-integration
+  pipeline suite;
+- the locked API environment and API unit tests;
+- frontend clean install, typecheck, and lint.
+
+`.github/workflows/api-contract-tests.yml` additionally starts the dedicated
+PostGIS test container and runs the migration-backed API contract suite for API
+or pipeline changes.
+
+## Production Data Checks
+
+Dagster asset checks are registered separately from assets and run against
+materialized data. They cover record counts, schema drift, and enrichment
+integrity. They complement tests; they do not replace parser, migration,
+contract, or browser verification.
+
+For each source refresh, operators should be able to answer:
+
+- Did raw payload archival succeed?
+- Is the current row count plausible relative to the prior materialization?
+- Did schema fields disappear or change type?
+- Did SCD2 expiration/insertion behave as expected?
+- Are downstream event and enrichment counts explainable?

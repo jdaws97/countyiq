@@ -24,6 +24,7 @@ from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.fema import parse_fema_geojson
 from countyiq.lib.scd import scd2_upsert_geom
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -97,7 +98,9 @@ def _fetch_all_pages(base_url: str, layer_id: int, dfirm_id: str, context) -> di
         all_features.extend(features)
         context.log.info(f"  Got {len(features)} features (total: {len(all_features)})")
 
-        if not page.get("exceededTransferLimit"):
+        # Some ArcGIS services incorrectly retain exceededTransferLimit=true
+        # after the final offset. An empty page is always terminal.
+        if not features or not page.get("exceededTransferLimit"):
             break
         offset += PAGE_SIZE
 
@@ -105,7 +108,7 @@ def _fetch_all_pages(base_url: str, layer_id: int, dfirm_id: str, context) -> di
 
 
 @asset(
-    group_name="bulk",
+    group_name="fema",
     description="FEMA NFHL flood hazard zones → staging.flood_zones",
     kinds={"postgres", "geojson"},
 )
@@ -117,6 +120,9 @@ def fema_flood_zones(
     """Fetch FEMA flood zone polygons, parse, and SCD2 upsert."""
 
     county = get_county_config()
+    authorization = authorize_source(database, source_key="fema_nfhl", acquisition_method="arcgis_rest", asset_key="fema_flood_zones", dagster_run_id=context.run_id)
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
 
     # 1. Fetch all pages from FEMA MapServer
     geojson = _fetch_all_pages(
@@ -194,8 +200,14 @@ fema_record_count_nonzero = make_row_count_check(
 
 
 @asset_check(asset=fema_flood_zones)
-def fema_schema_drift() -> AssetCheckResult:
+def fema_schema_drift(database: DatabaseResource) -> AssetCheckResult:
     """Verify FEMA MapServer still has the expected fields."""
+    authorize_source(
+        database,
+        source_key="fema_nfhl",
+        acquisition_method="arcgis_rest",
+        asset_key="fema_schema_drift",
+    )
     county = get_county_config()
     try:
         url = f"{county.fema_nfhl_url}/{county.fema_flood_layer}?f=json"

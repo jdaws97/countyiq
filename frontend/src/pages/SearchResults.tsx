@@ -30,53 +30,60 @@ export default function SearchResults() {
   const [description, setDescription] = useState<string>('')
   const [aggLabel, setAggLabel] = useState<string>('')
   const [aggValue, setAggValue] = useState<string>('')
-  const [loading, setLoading] = useState(true)
+  // Loading is derived (resolved query vs current query) so the effect never
+  // sets state synchronously; cache hits resolve through a microtask.
+  const [resolvedQuery, setResolvedQuery] = useState<string | null>(null)
+  const loading = query.length >= 2 && resolvedQuery !== query
 
   useEffect(() => {
-    if (query.length < 2) {
-      setResults([])
-      setLoading(false)
-      return
-    }
+    if (query.length < 2) return
+    let cancelled = false
 
-    // Check cache first
     const cached = searchCache[query]
-    if (cached) {
-      setMode(cached.mode)
-      setDescription(cached.description)
-      setAggLabel(cached.label || '')
-      setAggValue(cached.value || '')
-      setResults(cached.results)
-      setLoading(false)
-      return
-    }
+    const load: Promise<SearchCacheEntry | null> = cached
+      ? Promise.resolve(cached)
+      : fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100`)
+          .then(r => {
+            if (!r.ok) throw new Error(`Search failed (${r.status})`)
+            return r.json()
+          })
+          .then((data: SearchResponse) => {
+            if (data.mode === 'redirect' && data.redirect_path) {
+              if (!cancelled) navigate(data.redirect_path)
+              return null
+            }
+            const entry: SearchCacheEntry = {
+              mode: data.mode,
+              description: data.description || '',
+              results: data.results || [],
+              label: data.label,
+              value: data.value,
+            }
+            searchCache[query] = entry
+            return entry
+          })
 
-    setLoading(true)
-    fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100`)
-      .then(r => {
-        if (!r.ok) throw new Error(`Search failed (${r.status})`)
-        return r.json()
-      })
-      .then((data: SearchResponse) => {
-        if (data.mode === 'redirect' && data.redirect_path) {
-          navigate(data.redirect_path)
-          return
-        }
-        setMode(data.mode)
-        setDescription(data.description || '')
-        setAggLabel(data.label || '')
-        setAggValue(data.value || '')
-        setResults(data.results || [])
-        setLoading(false)
-        searchCache[query] = { mode: data.mode, description: data.description || '', results: data.results || [], label: data.label, value: data.value }
+    load
+      .then((entry) => {
+        if (cancelled || entry === null) return
+        setMode(entry.mode)
+        setDescription(entry.description)
+        setAggLabel(entry.label || '')
+        setAggValue(entry.value || '')
+        setResults(entry.results)
+        setResolvedQuery(query)
       })
       .catch((error) => {
+        if (cancelled) return
         console.error('Search request failed', error)
         setResults([])
         setDescription('Search is temporarily unavailable.')
-        setLoading(false)
+        setResolvedQuery(query)
       })
-  }, [query])
+    return () => {
+      cancelled = true
+    }
+  }, [query, navigate])
 
   return (
     <PageShell maxWidth={1200}>

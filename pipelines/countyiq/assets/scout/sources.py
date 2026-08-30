@@ -27,13 +27,14 @@ from countyiq.lib.scout.persistence import (
     promote_source_registry,
     upsert_source_candidates,
 )
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
 
 @asset(
     group_name="scout",
-    description="Discover, classify, score, and promote York County public-intelligence sources.",
+    description="Discover, classify, score, and promote active-county public-intelligence sources.",
     kinds={"postgres", "requests"},
 )
 def county_scout_discovery(
@@ -41,9 +42,18 @@ def county_scout_discovery(
     database: DatabaseResource,
     s3: S3StorageResource,
 ) -> MaterializeResult:
-    """Discover York County source candidates and promote the strongest ones."""
+    """Discover active-county source candidates and promote the strongest ones."""
     county_key = os.environ.get("COUNTY", "york")
     county = get_county_config(county_key)
+    authorization = authorize_source(
+        database,
+        source_key="county_scout",
+        acquisition_method="dynamic_discovery_crawl",
+        asset_key="county_scout_discovery",
+        dagster_run_id=context.run_id,
+    )
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
 
     candidates, observations = discover_county_sources(county_key=county_key)
     promoted = select_promoted_candidates(candidates)
@@ -99,6 +109,15 @@ def county_scout_monitor(
     """Monitor already-promoted source registry entries."""
     county_key = os.environ.get("COUNTY", "york")
     county = get_county_config(county_key)
+    authorization = authorize_source(
+        database,
+        source_key="county_scout",
+        acquisition_method="dynamic_source_monitor",
+        asset_key="county_scout_monitor",
+        dagster_run_id=context.run_id,
+    )
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
 
     registry_rows = fetch_registry_sources(database, county_key)
     if not registry_rows:

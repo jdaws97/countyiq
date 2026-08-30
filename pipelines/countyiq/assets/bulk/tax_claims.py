@@ -6,10 +6,12 @@ Records: ~9,000 delinquent parcels (~37K authority-year rows)
 Schedule: Weekly (Sunday, bulk_refresh job via group_name="bulk")
 """
 
+import gc
+import os
+import tempfile
 from datetime import date
 
 import pdfplumber
-import requests
 from dagster import (
     asset,
     asset_check,
@@ -22,8 +24,10 @@ from dagster import (
 
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
+from countyiq.lib.http_retry import get_with_retry
 from countyiq.lib.parsers.tax_claims import parse_tax_claims_text
 from countyiq.lib.scd import scd2_upsert
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
@@ -63,26 +67,32 @@ def tax_claims(
 ) -> MaterializeResult:
     """Download tax claim PDF, parse all pages, SCD2 upsert."""
     county = get_county_config()
+    authorization = authorize_source(
+        database,
+        source_key="tax_claims",
+        acquisition_method="official_pdf",
+        asset_key="tax_claims",
+        dagster_run_id=context.run_id,
+    )
+    require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
 
-    # 1. Download PDF
+    # 1. Download PDF. The county's CivicPlus DocumentCenter returns
+    # intermittent 404s for documents that exist (observed 2026-08-02), so
+    # retry transient failures rather than killing the weekly run.
     context.log.info(f"Downloading tax claim PDF from {county.tax_claims_pdf_url}")
-    resp = requests.get(county.tax_claims_pdf_url, timeout=REQUEST_TIMEOUT)
-    resp.raise_for_status()
+    resp = get_with_retry(county.tax_claims_pdf_url, timeout=REQUEST_TIMEOUT)
     pdf_bytes = resp.content
     context.log.info(f"Downloaded {len(pdf_bytes)} bytes")
 
     # 2. Archive raw PDF to S3
     s3.archive(f"{county.s3_prefix}/bulk/tax_claims", pdf_bytes, filename="listing.pdf")
 
-    # 3. Save PDF to disk and extract text page-by-page.
-    #    pdfplumber.open() loads the entire PDF structure into memory,
-    #    which can exceed available RAM on a 4GB VPS for 200+ page PDFs.
-    #    Instead, use PyPDF2 to split into single-page PDFs on disk,
-    #    then pdfplumber extracts one page at a time.
-    import tempfile, os as _os, gc
+    # 3. Save PDF to disk and extract text in small page chunks so pdfplumber
+    #    does not retain every page object for the 200+ page listing.
     tmpdir = tempfile.mkdtemp(prefix="taxclaims_")
-    txt_path = _os.path.join(tmpdir, "all_text.txt")
-    pdf_path = _os.path.join(tmpdir, "source.pdf")
+    txt_path = os.path.join(tmpdir, "all_text.txt")
+    pdf_path = os.path.join(tmpdir, "source.pdf")
 
     try:
         # Write PDF to disk and free the bytes

@@ -9,38 +9,48 @@ import type { AssemblageCluster, AssemblageResponse } from '../types/api'
 export default function Assemblage() {
   const navigate = useNavigate()
   const [clusters, setClusters] = useState<AssemblageCluster[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [minParcels, setMinParcels] = useState('3')
   const [expanded, setExpanded] = useState<string | null>(null)
+  // Loading is derived (resolved key vs requested key) so the effect never
+  // sets state synchronously; the cache hit resolves through the same
+  // promise chain (a microtask) instead of a synchronous setState.
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null)
+  const loading = resolvedKey !== `assemblage_${minParcels}`
 
   useEffect(() => {
     const cacheKey = `assemblage_${minParcels}`
+    let cancelled = false
     const cached = window.__assemblageCache?.[cacheKey]
-    if (cached) {
-      setClusters(cached)
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    fetch(`/api/scores/assemblage?min_parcels=${minParcels}&min_acres=0.5&limit=50`)
-      .then(r => {
-        if (!r.ok) throw new Error(`Assemblage request failed (${r.status})`)
-        return r.json()
-      })
-      .then((d: AssemblageResponse) => {
-        const items = d.clusters || []
+    const load: Promise<AssemblageCluster[]> = cached
+      ? Promise.resolve(cached)
+      : fetch(`/api/scores/assemblage?min_parcels=${minParcels}&min_acres=0.5&limit=50`)
+          .then(r => {
+            if (!r.ok) throw new Error(`Assemblage request failed (${r.status})`)
+            return r.json()
+          })
+          .then((d: AssemblageResponse) => {
+            const items = d.clusters || []
+            if (!window.__assemblageCache) window.__assemblageCache = {}
+            window.__assemblageCache[cacheKey] = items
+            return items
+          })
+    load
+      .then((items) => {
+        if (cancelled) return
         setClusters(items)
-        if (!window.__assemblageCache) window.__assemblageCache = {}
-        window.__assemblageCache[cacheKey] = items
-        setLoading(false)
+        setError(null)
+        setResolvedKey(cacheKey)
       })
       .catch((err) => {
+        if (cancelled) return
         console.error('Failed to load assemblage clusters', err)
         setError(err.message)
-        setLoading(false)
+        setResolvedKey(cacheKey)
       })
+    return () => {
+      cancelled = true
+    }
   }, [minParcels])
 
   return (
@@ -107,10 +117,10 @@ export default function Assemblage() {
               >
                 <div>
                   <div style={{ fontFamily: 'var(--font-sans)', fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {c.seed_owner}
+                    {c.seed_address || c.seed_pidn}
                   </div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {c.seed_address || c.seed_pidn} · {getSchoolDistrictLabel(c.school_dis)} · {getPropertyClassLabel(c.seed_class)}
+                    {c.seed_pidn} · {getSchoolDistrictLabel(c.school_dis)} · {getPropertyClassLabel(c.seed_class)}
                   </div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
@@ -154,38 +164,22 @@ export default function Assemblage() {
                 </div>
               )}
               {isExpanded && (() => {
-                // Compute ownership breakdown
-                const allParcels = [{ owner: c.seed_owner, pidn: c.seed_pidn }, ...(c.neighbors || []).map(n => ({ owner: n.owner, pidn: n.pidn }))]
-                const ownerCounts: Record<string, number> = {}
-                allParcels.forEach(p => { ownerCounts[p.owner] = (ownerCounts[p.owner] || 0) + 1 })
-                const totalInCluster = allParcels.length
-                const sortedOwners = Object.entries(ownerCounts).sort((a, b) => b[1] - a[1])
-
                 return (
                 <div style={{ borderTop: '1px solid var(--border)' }}>
-                  {/* Ownership breakdown */}
+                  {/* Ownership is useful as an aggregate without exposing claimant names. */}
                   <div style={{ padding: '12px 24px', background: 'rgba(74,127,255,0.05)', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>Ownership Concentration</div>
-                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                      {sortedOwners.slice(0, 4).map(([owner, count]) => (
-                        <div key={owner} style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                          <span style={{ color: count > 1 ? 'var(--accent-blue)' : 'var(--text-muted)', fontWeight: count > 1 ? 600 : 400 }}>
-                            {owner.substring(0, 25)}{owner.length > 25 ? '...' : ''}
-                          </span>
-                          <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-                            {count}/{totalInCluster} ({Math.round(count / totalInCluster * 100)}%)
-                          </span>
-                        </div>
-                      ))}
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 5 }}>Ownership Complexity</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
+                      {c.unique_owners} owner records across {c.adjacent_count + 1} parcels. Names are not displayed in this derived assemblage view.
                     </div>
                   </div>
 
                   <div style={{ padding: '10px 24px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px' }}>
-                    <div>Owner</div><div>Address</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div>Status</div>
+                    <div>Parcel</div><div>Address</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div>Status</div>
                   </div>
                   {/* Seed parcel */}
                   <Link to={`/property/${c.seed_pidn}`} style={{ textDecoration: 'none', color: 'inherit', display: 'grid', gridTemplateColumns: '1fr 1fr 100px 70px 100px', padding: '10px 20px', background: 'rgba(224,82,82,0.08)', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{c.seed_owner}</div>
+                    <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{c.seed_pidn}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{c.seed_address}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{formatCurrencyCompact(c.seed_assessed)}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, textAlign: 'right' }}>{c.seed_acres?.toFixed(1)}</div>
@@ -204,7 +198,7 @@ export default function Assemblage() {
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-card-hover)' }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = j % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
                     >
-                      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>{n.owner}</div>
+                      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>{n.pidn}</div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{n.address}</div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{formatCurrencyCompact(n.assessed)}</div>
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, textAlign: 'right' }}>{n.acres ? Number(n.acres).toFixed(1) : '--'}</div>

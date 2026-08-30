@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Query
 
 from api.lib.database import get_cursor
+from api.lib.source_policy import require_source_use
 
 router = APIRouter(tags=["licenses"])
 
@@ -12,7 +13,7 @@ def list_licenses(
     municipality: str | None = Query(default=None),
     license_type: str | None = Query(default=None),
     status: str = Query(default="Active"),
-    limit: int = Query(default=200, le=500),
+    limit: int = Query(default=200, ge=1, le=500),
 ) -> dict:
     """List PLCB liquor licenses with filtering."""
     where = "WHERE valid_to IS NULL"
@@ -29,12 +30,13 @@ def list_licenses(
         params["ltype"] = license_type
 
     with get_cursor() as cur:
+        require_source_use(cur, "plcb_licenses", "derived_product", conceal=False)
         cur.execute(f"""
-            SELECT licensee, premises_name, premises_address, license_type,
+            SELECT NULL::text AS licensee, premises_name, premises_address, license_type,
                    status, municipality, last_issue_date, expiration_date
             FROM staging.plcb_licenses
             {where}
-            ORDER BY licensee
+            ORDER BY premises_name NULLS LAST, premises_address
             LIMIT %(limit)s
         """, params)
         licenses = cur.fetchall()
