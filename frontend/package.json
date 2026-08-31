@@ -14,7 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@deck.gl/core": "^9.2.11",
+    "@deck.gl/core": "^9.3.10",
     "@deck.gl/layers": "^9.2.11",
     "@deck.gl/react": "^9.2.11",
     "maplibre-gl": "^5.21.1",
