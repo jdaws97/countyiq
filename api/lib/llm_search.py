@@ -137,7 +137,9 @@ def resolve_search_models() -> list[str]:
 
 def parse_query_with_llm(query: str) -> dict | None:
     """Send a natural-language query to OpenRouter and return structured intent."""
-    api_key = os.environ.get("OPENROUTER_API_KEY")
+    # Public search uses a separately scoped provider key.  The offline
+    # pipeline credential is deliberately unavailable to the API container.
+    api_key = os.environ.get("COUNTYIQ_SEARCH_API_KEY")
     if not api_key:
         return None
 

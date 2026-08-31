@@ -17,6 +17,7 @@ from countyiq.lib.scout.models import (
     RegistryMonitorRecord,
     ScoutSeed,
 )
+from countyiq.lib.robots import get_public_with_redirects
 from countyiq.lib.scout.seeds import get_scout_seeds
 
 PROMOTION_THRESHOLD = 70
@@ -430,7 +431,12 @@ def probe_url(session: requests.Session, url: str) -> ProbeResult:
     """Probe a URL and return normalized metadata for scoring."""
     started = time.monotonic()
     try:
-        response = session.get(url, timeout=30, allow_redirects=True, stream=True)
+        response = get_public_with_redirects(
+            session,
+            url,
+            timeout=30,
+            stream=True,
+        )
         status_code = response.status_code
         raw_bytes = _read_limited_body(response)
         response.close()
@@ -463,7 +469,11 @@ def probe_url(session: requests.Session, url: str) -> ProbeResult:
             title=title,
             text_content=text_content,
             response_ms=response_ms,
-            content_hash=hashlib.sha1(raw_bytes).hexdigest() if raw_bytes else None,
+            content_hash=(
+                hashlib.sha1(raw_bytes, usedforsecurity=False).hexdigest()
+                if raw_bytes
+                else None
+            ),
             etag=response.headers.get("ETag"),
             last_modified=response.headers.get("Last-Modified"),
             probe_status=probe_status,
@@ -745,7 +755,12 @@ def make_source_key(county_key: str, seed_slug: str, normalized_url: str) -> str
     """Build a stable, human-readable source key."""
     parsed = urlsplit(normalized_url)
     path_slug = slugify(f"{parsed.netloc}-{parsed.path.strip('/') or 'root'}")
-    digest = hashlib.sha1(normalized_url.encode("utf-8")).hexdigest()[:8]
+    # SHA-1 is retained only for stable, pre-existing source identifiers. It
+    # is not used for authentication, signatures, or integrity decisions.
+    digest = hashlib.sha1(
+        normalized_url.encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()[:8]
     key = f"{county_key}-{seed_slug}-{path_slug[:48]}-{digest}"
     return key[:96]
 

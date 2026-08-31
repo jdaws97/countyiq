@@ -8,6 +8,7 @@ from api.lib.llm_search import (
     ALLOWED_REDIRECT_PATHS,
     DEFAULT_MODELS,
     SYSTEM_PROMPT,
+    parse_query_with_llm,
     resolve_search_models,
 )
 from api.routes import search as search_route
@@ -77,6 +78,19 @@ def test_search_does_not_use_llm_just_because_provider_key_exists(monkeypatch):
     )
 
     assert response["mode"] == "fuzzy"
+
+
+def test_search_parser_never_falls_back_to_offline_pipeline_key(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "offline-pipeline-key")
+    monkeypatch.delenv("COUNTYIQ_SEARCH_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "api.lib.llm_search.requests.post",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("provider must not be called")
+        ),
+    )
+
+    assert parse_query_with_llm("find industrial parcels") is None
 
 
 def test_search_llm_requires_explicit_opt_in(monkeypatch):

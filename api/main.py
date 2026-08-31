@@ -3,12 +3,20 @@
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from psycopg2 import Error as PostgresError
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from api.lib.database import close_pool
+from api.lib.database import close_pool, get_cursor
 from api.lib.response_types import HealthResponse
-from api.lib.settings import county_metadata, cors_origins, restricted_distress_enabled
+from api.lib.settings import (
+    api_docs_enabled,
+    county_metadata,
+    cors_origins,
+    restricted_distress_enabled,
+    trusted_hosts,
+)
 from api.routes.delinquent import router as delinquent_router
 from api.routes.feed import router as feed_router
 from api.routes.layers import router as layers_router
@@ -24,7 +32,7 @@ from api.routes.scout import router as scout_router
 from api.routes.search import router as search_router
 from api.routes.stats import router as stats_router
 
-load_dotenv()  # Load .env file (OPENROUTER_API_KEY, etc.)
+load_dotenv()  # Local development only; production Compose passes an allowlist.
 
 
 @asynccontextmanager
@@ -37,8 +45,16 @@ app = FastAPI(
     title="CountyIQ API",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/api/docs" if api_docs_enabled() else None,
+    redoc_url=None,
+    openapi_url="/api/openapi.json" if api_docs_enabled() else None,
 )
 
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=trusted_hosts(),
+    www_redirect=False,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),
@@ -49,7 +65,22 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health() -> HealthResponse:
-    """Minimal health route for smoke tests and container health checks."""
+    """Process liveness check that does not depend on downstream services."""
+    return {"status": "ok"}
+
+
+@app.get("/api/ready")
+def readiness() -> HealthResponse:
+    """Return success only when the API can query its production dependency."""
+    try:
+        with get_cursor() as cur:
+            cur.execute("SELECT 1 AS ready")
+            row = cur.fetchone()
+    except PostgresError as exc:
+        raise HTTPException(status_code=503, detail="database unavailable") from exc
+
+    if not row or row["ready"] != 1:
+        raise HTTPException(status_code=503, detail="database unavailable")
     return {"status": "ok"}
 
 

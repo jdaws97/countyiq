@@ -10,6 +10,26 @@ def test_health_route(client):
     assert response.json() == {"status": "ok"}
 
 
+def test_readiness_route_checks_database(client):
+    response = client.get("/api/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_api_uses_dedicated_read_only_database_role(client):
+    from api.lib.database import get_cursor
+
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT current_user AS username, "
+            "current_setting('transaction_read_only') AS read_only"
+        )
+        row = cur.fetchone()
+
+    assert row == {"username": "countyiq_api_test", "read_only": "on"}
+
+
 def test_ops_health_exposes_source_policy_review_state(client):
     response = client.get("/api/ops/health")
 

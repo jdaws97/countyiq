@@ -5,9 +5,9 @@ requires-python = ">=3.11"
 
 dependencies = [
     # Dagster core
-    "dagster==1.12.20",
-    "dagster-postgres==0.28.20",
-    "dagster-webserver==1.12.20",
+    "dagster==1.13.1",
+    "dagster-postgres==0.29.1",
+    "dagster-webserver==1.13.1",
 
     # Database
     "psycopg2-binary",

@@ -15,18 +15,20 @@ is stopping runaway spend, not precise accounting.
 import os
 import threading
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 
 class PerClientRateLimiter:
     """Token bucket per client key. Thread-safe; prunes idle buckets."""
 
-    def __init__(self, rate_per_minute: float, burst: int):
+    def __init__(self, rate_per_minute: float, burst: int, max_clients: int = 10_000):
         self._rate = rate_per_minute / 60.0
         self._burst = float(burst)
-        self._buckets: dict[str, list[float]] = {}  # key -> [tokens, last_update]
+        self._max_clients = max(1, max_clients)
+        self._buckets: OrderedDict[str, list[float]] = OrderedDict()
         self._lock = threading.Lock()
         self._last_prune = time.monotonic()
 
@@ -41,11 +43,14 @@ class PerClientRateLimiter:
 
             bucket = self._buckets.get(key)
             if bucket is None:
+                if len(self._buckets) >= self._max_clients:
+                    self._buckets.popitem(last=False)
                 bucket = [self._burst, now]
                 self._buckets[key] = bucket
             else:
                 bucket[0] = min(self._burst, bucket[0] + (now - bucket[1]) * self._rate)
                 bucket[1] = now
+                self._buckets.move_to_end(key)
 
             if bucket[0] >= 1.0:
                 bucket[0] -= 1.0
@@ -79,19 +84,18 @@ class DailyBudget:
 
 
 def client_ip(request: Request) -> str:
-    """Best-effort client IP behind Cloudflare -> Caddy -> uvicorn."""
-    cf_ip = request.headers.get("cf-connecting-ip")
-    if cf_ip:
-        return cf_ip.strip()
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Return Uvicorn's validated peer address.
+
+    Caddy overwrites X-Forwarded-For and Uvicorn only accepts it from the
+    private proxy network.  Reading forwarding headers here would reintroduce
+    a spoofing bypass for callers that can reach the origin directly.
+    """
     return request.client.host if request.client else "unknown"
 
 
 def _env_int(name: str, default: int) -> int:
     try:
-        return int(os.environ.get(name, default))
+        return max(1, int(os.environ.get(name, default)))
     except ValueError:
         return default
 
@@ -100,5 +104,25 @@ def _env_int(name: str, default: int) -> int:
 llm_search_limiter = PerClientRateLimiter(
     rate_per_minute=_env_int("COUNTYIQ_SEARCH_RATE_PER_MIN", 10),
     burst=_env_int("COUNTYIQ_SEARCH_BURST", 5),
+    max_clients=_env_int("COUNTYIQ_RATE_LIMIT_MAX_CLIENTS", 10_000),
 )
 llm_search_daily_budget = DailyBudget(_env_int("COUNTYIQ_SEARCH_DAILY_LLM_BUDGET", 2000))
+
+# Owner/entity profiles aggregate portfolio relationships and are the most
+# scrape-sensitive public read surface.  This is a second line of defense
+# behind Cloudflare; each Uvicorn worker maintains its own conservative bucket.
+sensitive_read_limiter = PerClientRateLimiter(
+    rate_per_minute=_env_int("COUNTYIQ_SENSITIVE_RATE_PER_MIN", 30),
+    burst=_env_int("COUNTYIQ_SENSITIVE_BURST", 10),
+    max_clients=_env_int("COUNTYIQ_RATE_LIMIT_MAX_CLIENTS", 10_000),
+)
+
+
+def enforce_sensitive_read_limit(request: Request) -> None:
+    if sensitive_read_limiter.allow(client_ip(request)):
+        return
+    raise HTTPException(
+        status_code=429,
+        detail="Request rate limit exceeded; try again shortly.",
+        headers={"Retry-After": "30"},
+    )

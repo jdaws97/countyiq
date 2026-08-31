@@ -2,11 +2,14 @@
 
 from api.lib.settings import (
     LOCAL_CORS_ORIGINS,
+    LOCAL_TRUSTED_HOSTS,
+    api_docs_enabled,
     county_metadata,
     cors_origins,
     llm_search_enabled,
     open_data_source_key,
     restricted_distress_enabled,
+    trusted_hosts,
 )
 
 
@@ -40,6 +43,31 @@ def test_llm_search_defaults_off_and_requires_explicit_opt_in(monkeypatch):
 
     monkeypatch.setenv("COUNTYIQ_SEARCH_LLM_ENABLED", "true")
     assert llm_search_enabled() is True
+
+
+def test_api_docs_default_off_and_require_explicit_opt_in(monkeypatch):
+    monkeypatch.delenv("COUNTYIQ_EXPOSE_API_DOCS", raising=False)
+    assert api_docs_enabled() is False
+
+    monkeypatch.setenv("COUNTYIQ_EXPOSE_API_DOCS", "true")
+    assert api_docs_enabled() is True
+
+
+def test_trusted_hosts_rejects_wildcard_urls_and_paths(monkeypatch):
+    monkeypatch.setenv(
+        "COUNTYIQ_TRUSTED_HOSTS",
+        "api.countyiq.example, *.internal.example, *, https://bad.example, "
+        "bad.example/path",
+    )
+
+    assert trusted_hosts() == [
+        "api.countyiq.example",
+        "*.internal.example",
+        *LOCAL_TRUSTED_HOSTS,
+    ]
+
+    monkeypatch.setenv("COUNTYIQ_TRUSTED_HOSTS", "*, https://bad.example")
+    assert trusted_hosts() == list(LOCAL_TRUSTED_HOSTS)
 
 
 def test_county_metadata_defaults_and_non_york_derivation(monkeypatch):

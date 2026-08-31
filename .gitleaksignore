@@ -1,0 +1,10 @@
+# Reviewed false positives in historical commits. Keep these fingerprint-scoped:
+# do not broaden to a rule, path, or commit allowlist.
+# SQL column comparison in the Pass 4 self-join.
+e374872f240adf782805a0804ecd79674b48f68f:pipelines/countyiq/lib/pass4_county_narratives.py:generic-api-key:67
+# Ephemeral 12-character Vite/Playwright localhost session tokens from two
+# removed console logs; values differ per browser session and are not credentials.
+6cc5d45f79c0fd79d8115b34ad81bcd06ab6ab10:.playwright-mcp/console-2026-03-30T00-19-03-261Z.log:generic-api-key:1
+6cc5d45f79c0fd79d8115b34ad81bcd06ab6ab10:.playwright-mcp/console-2026-03-29T23-51-55-629Z.log:generic-api-key:5
+# UUID-shaped public image lookup key in a removed parser fixture.
+502f075a77942acbd08b6bebf513f0a93a7ff076:pipelines/tests/fixtures/assessment_printable_summary.html:generic-api-key:148

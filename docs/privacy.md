@@ -19,6 +19,8 @@ before the product is promoted broadly.
 - Watchlists stay in the user's browser; there is no server-side watch profile.
 - Natural-language search has per-client rate limits and a daily LLM-call
   budget.
+- Owner/entity portfolio routes have a separate per-client anti-scraping
+  throttle. It limits bulk access but does not create an authorization policy.
 - Browser CORS access is limited to explicit origins; wildcard origins are
   rejected.
 - Source and model archives are operational artifacts, not API responses.
@@ -47,11 +49,9 @@ Before broader customer distribution:
 2. Define export limits separately from ordinary page/API access.
 3. Configure and verify the final frontend origin if production is not
    same-origin.
-4. Apply rate limits to person- and owner-centric endpoints, not only LLM
-   search.
-5. Review the final fields and derived rankings with qualified privacy and data
+4. Review the final fields and derived rankings with qualified privacy and data
    counsel; public-record status alone is not the review standard.
-6. Define correction and source-attribution handling for challenged records.
+5. Define correction and source-attribution handling for challenged records.
 
 Authentication technology and paid tiers are intentionally undecided until
 customer use establishes which workflows need protection. The codebase should

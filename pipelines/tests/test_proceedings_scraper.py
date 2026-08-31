@@ -148,6 +148,12 @@ class _Log:
         pass
 
 
+@pytest.fixture(autouse=True)
+def _allow_reserved_example_domains(monkeypatch):
+    """HTTP behavior tests mock transport; URL-safety tests live separately."""
+    monkeypatch.setattr("countyiq.lib.robots.assert_public_http_url", lambda _url: None)
+
+
 class _Response:
     def __init__(
         self,

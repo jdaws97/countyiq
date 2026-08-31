@@ -80,3 +80,6 @@ durable architectural decisions belong in `docs/decisions.md`.
 - Keep `.env.example`, deploy scripts, and model-default documentation aligned.
 - Add automated backup-restore verification when manual monthly checks become
   unreliable or burdensome.
+- Complete a live external security/load scan after Cloudflare and the Hetzner
+  origin exist; repository checks cannot validate WAF, firewall, TLS, SSH, or
+  real proxy behavior before deployment.

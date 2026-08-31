@@ -103,7 +103,8 @@ docker build -f api/Dockerfile -t countyiq-api:test .
 docker build -f pipelines/Dockerfile -t countyiq-pipelines:test .
 ```
 
-The API image health endpoint is `/api/health`. The Dagster image must load
+The API liveness endpoint is `/api/health`; container readiness uses
+`/api/ready`, which also verifies a database query. The Dagster image must load
 `countyiq.definitions` and expose `/server_info`.
 
 ## Continuous Integration
@@ -114,10 +115,21 @@ The API image health endpoint is `/api/health`. The Dagster image must load
   pipeline suite;
 - the locked API environment and API unit tests;
 - frontend clean install, typecheck, and lint.
+- npm and Python dependency vulnerability audits;
+- production Compose and Caddy configuration validation.
 
 `.github/workflows/api-contract-tests.yml` additionally starts the dedicated
 PostGIS test container and runs the migration-backed API contract suite for API
 or pipeline changes.
+
+`.github/workflows/security.yml` runs dependency review on pull requests and
+CodeQL for Python and TypeScript on pushes, pull requests, and a weekly
+schedule. Actions are pinned to full commit SHAs. Local release review should
+also run Gitleaks against the exact working tree; CI repeats that scan.
+
+The API contract fixture provisions the same dedicated read-only database role
+used by production and asserts the API connection has
+`transaction_read_only=on`.
 
 ## Production Data Checks
 

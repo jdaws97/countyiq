@@ -7,9 +7,10 @@ resolved owner row, and owner_id is stable across rebuilds.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.lib.database import get_cursor
+from api.lib.rate_limit import enforce_sensitive_read_limit
 from api.lib.settings import open_data_source_key, restricted_distress_enabled
 from api.lib.source_policy import (
     PUBLIC_ORGANIZATION_TYPES,
@@ -18,7 +19,10 @@ from api.lib.source_policy import (
     source_use_allowed,
 )
 
-router = APIRouter(tags=["owners"])
+router = APIRouter(
+    tags=["owners"],
+    dependencies=[Depends(enforce_sensitive_read_limit)],
+)
 
 
 def _fetch_owner_brief(cur, canonical_name: str) -> dict | None:

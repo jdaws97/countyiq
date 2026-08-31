@@ -21,7 +21,7 @@ surface is:
 
 | Area | Routes |
 |---|---|
-| Health and summary | `/api/health`, `/api/ops/health`, `/api/stats` |
+| Health and summary | `/api/health`, `/api/ready`, `/api/ops/health`, `/api/stats` |
 | Parcels | `/api/parcels/bbox`, `/api/parcels/summary`, `/api/parcels/{pidn}` |
 | Owners | `/api/owners/top`, `/api/owners/{owner_id}` |
 | Municipalities and layers | `/api/municipalities`, `/api/municipalities/{name}`, `/api/layers/{layer_name}` |
@@ -97,11 +97,24 @@ hosted on a separate production origin, set a comma-separated
 
 ## Database Connections
 
-Each of the two Uvicorn worker processes owns a thread-safe psycopg2 pool.
+Each of the two Uvicorn worker processes owns a thread-safe psycopg2 pool using
+the dedicated `DATABASE_API_USER` login. That role has `SELECT` only on the
+serving schemas, defaults every transaction to read-only, and has server-side
+statement and idle-transaction timeouts. The administrator credential is not
+present in the API container. Grants are refreshed after every migration by
+`pipelines/init-db/03-api-role.sh`.
+
 `DATABASE_POOL_MIN` defaults to 1 and `DATABASE_POOL_MAX` to 8, so the API is
 bounded at 16 connections instead of creating a new PostgreSQL connection per
 request. Broken connections are discarded and the pool closes during FastAPI
 shutdown.
+
+The API accepts `COUNTYIQ_TRUSTED_HOSTS` plus loopback/test hostnames required
+for internal health checks; unrestricted wildcard, URL, and path values are
+rejected. Public documentation routes are disabled unless
+`COUNTYIQ_EXPOSE_API_DOCS=true`. Owner/entity portfolio routes have a dedicated
+per-client abuse throttle. Caddy validates Cloudflare's proxy ranges and
+overwrites the forwarding chain before Uvicorn interprets it.
 
 ## Container and Deployment
 

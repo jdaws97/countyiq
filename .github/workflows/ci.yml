@@ -7,10 +7,26 @@ on:
     branches: [main]
 
 jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository history for secrets
+        run: >-
+          docker run --rm
+          -v "$PWD:/repo:ro"
+          zricethezav/gitleaks@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854
+          git /repo --redact --no-banner
+
   pipeline-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -29,10 +45,16 @@ jobs:
       - name: Run pipeline unit tests
         run: uv run --project pipelines pytest pipelines/tests/ -q -k "not integration"
 
+      - name: Audit pipeline dependencies
+        run: uvx pip-audit --path pipelines/.venv/lib/python3.11/site-packages
+
+      - name: Scan pipeline source for high-severity Python issues
+        run: uvx bandit==1.9.4 -r pipelines/countyiq -q -lll
+
   api-unit-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -48,12 +70,18 @@ jobs:
       - name: Run API unit tests
         run: uv run --project api pytest api/unit_tests -q
 
+      - name: Audit API dependencies
+        run: uvx pip-audit --path api/.venv/lib/python3.11/site-packages
+
+      - name: Scan API source for high-severity Python issues
+        run: uvx bandit==1.9.4 -r api -x api/tests,api/unit_tests,api/.venv -q -lll
+
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
@@ -62,6 +90,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
 
       - name: Type check
         working-directory: frontend
@@ -74,3 +106,19 @@ jobs:
       - name: Build production bundle
         working-directory: frontend
         run: npm run build
+
+  deployment-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate production Compose configuration
+        run: |
+          cp .env.example .env
+          sed -i 's/CHANGE_ME_STRONG_PASSWORD/ci-admin-password-000000000000000000000000000000000000/g' .env
+          sed -i 's/CHANGE_ME_PIPELINE_PASSWORD/ci-pipeline-password-00000000000000000000000000000000000/g' .env
+          sed -i 's/CHANGE_ME_API_PASSWORD/ci-api-password-00000000000000000000000000000000000000/g' .env
+          docker compose -f docker/docker-compose.yml config --quiet
+
+      - name: Validate Caddy configuration
+        run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 caddy validate --config /etc/caddy/Caddyfile

@@ -94,9 +94,15 @@ Relevant env vars: `OPENROUTER_API_KEY`, `COUNTYIQ_PASS{0-4}_MODEL`,
 `COUNTYIQ_OPENROUTER_MODEL`, `COUNTYIQ_THINKING`, `COUNTYIQ_ARCHIVE_DIR`,
 `COUNTYIQ_ARCHIVE_STRICT`, `COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS`,
 `COUNTYIQ_PASS2_TRIALS`,
-`COUNTYIQ_SEARCH_LLM_ENABLED`,
+`COUNTYIQ_SEARCH_LLM_ENABLED`, `COUNTYIQ_SEARCH_API_KEY`,
 `COUNTYIQ_SEARCH_RATE_PER_MIN`, `COUNTYIQ_SEARCH_DAILY_LLM_BUDGET`, and the
 default-off `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS` deployment gate.
+
+The production Compose boundary uses an independent read-only API database
+role, withholds pipeline/R2/Slack secrets from the API, runs application
+containers as a non-root UID, validates proxy-derived client addresses, and
+keeps public API docs off by default. The 2026-08-30 repository security review
+and remaining live-environment gates are in `docs/operations/security.md`.
 
 ## Source Posture (2026-08-28)
 

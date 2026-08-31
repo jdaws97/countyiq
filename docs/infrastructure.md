@@ -47,8 +47,14 @@ DATABASE_NAME=countyiq
 DATABASE_USER=dagster_admin
 DATABASE_PASSWORD=...
 DATABASE_URL=postgresql://dagster_admin:...@postgres:5432/countyiq
+DATABASE_PIPELINE_USER=countyiq_pipeline
+DATABASE_PIPELINE_PASSWORD=...
+DATABASE_API_USER=countyiq_api
+DATABASE_API_PASSWORD=...
 
 OPENROUTER_API_KEY=...
+# Optional public search uses a separate, restricted provider key.
+COUNTYIQ_SEARCH_API_KEY=
 # Optional overrides; leave unset to use the evaluated defaults in
 # pipelines/countyiq/lib/pass_llm_config.py.
 COUNTYIQ_PASS0_MODEL=
@@ -61,6 +67,8 @@ COUNTYIQ_SEARCH_MODEL=
 COUNTYIQ_THINKING=true
 COUNTYIQ_ARCHIVE_DIR=/opt/countyiq/archives
 COUNTYIQ_ARCHIVE_STRICT=true
+COUNTYIQ_TRUSTED_HOSTS=api.example.com
+COUNTYIQ_EXPOSE_API_DOCS=false
 
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
@@ -75,12 +83,28 @@ Notes:
 - Search can use `COUNTYIQ_SEARCH_MODEL`, then its dedicated low-cost model
   pool. It does not inherit the offline pipeline model.
 - `COUNTYIQ_THINKING` is only the global fallback; pass-specific overrides are supported.
+- The API container receives neither the administrator database credential nor
+  pipeline/R2/Slack credentials. `03-api-role.sh` creates and refreshes its
+  read-only grants after migrations.
+- Scheduled Dagster containers receive an allowlist of pipeline settings—not
+  the complete `.env`—and use a non-superuser writer created by
+  `02-runtime-role.sh`. Only the short-lived `migrate` service and host backup
+  job use the database administrator credential.
 
 ## Access Model
 
 - Public traffic should only reach Cloudflare and Caddy.
 - Postgres and Dagster should stay private to the host and SSH tunnels.
 - SSH key auth only.
+- Restrict origin HTTP(S) firewall rules to Cloudflare's published networks;
+  direct origin access bypasses edge WAF controls even though Caddy still
+  rejects spoofed proxy headers.
+- API and pipeline containers run as UID 10001 with dropped capabilities;
+  Postgres is isolated on an internal network and Caddy cannot reach it.
+- API, pipeline, and Caddy internet egress use separate bridge networks, so
+  outbound access does not also create a shared lateral-movement network.
+- External runtime images and Dockerfile bases are pinned by digest; Dependabot
+  proposes reviewed digest updates rather than silently changing a deployment.
 
 ## Backups And Archives
 
@@ -89,6 +113,8 @@ Notes:
 - LLM output archives: `COUNTYIQ_ARCHIVE_DIR`
 
 The archives are operational artifacts, not core repo content. They should not be committed to git.
+Each database dump is validated as a readable custom-format archive and
+uploaded with a SHA-256 sidecar. A successful dump check is not a restore test.
 
 ## Delivery
 

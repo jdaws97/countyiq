@@ -26,6 +26,8 @@ DB_ENV = {
     "DATABASE_PASSWORD": "localtest",
     "DATABASE_URL": "postgresql://dagster_admin:localtest@localhost:5433/countyiq_test",
 }
+API_DB_USER = "countyiq_api_test"
+API_DB_PASSWORD = "test-api-role-password-000000000000000000000000"
 
 TEST_PIDN = "0000000000001"
 SECOND_PIDN = "0000000000002"
@@ -92,6 +94,27 @@ def _wait_for_database() -> None:
             last_error = exc
             time.sleep(1)
     raise RuntimeError("Timed out waiting for postgres-test to accept connections") from last_error
+
+
+def _provision_api_role() -> None:
+    _run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "-e",
+            f"DATABASE_API_USER={API_DB_USER}",
+            "-e",
+            f"DATABASE_API_PASSWORD={API_DB_PASSWORD}",
+            "-e",
+            f"POSTGRES_DB={DB_ENV['DATABASE_NAME']}",
+            "postgres-test",
+            "bash",
+            "/docker-entrypoint-initdb.d/03-api-role.sh",
+        ],
+        cwd=PIPELINES_DIR,
+    )
 
 
 def _reset_tables(cur) -> None:
@@ -726,6 +749,14 @@ def prepared_database() -> None:
             _reset_tables(cur)
             _seed_contract_data(cur)
         conn.commit()
+
+    _provision_api_role()
+    os.environ.update(
+        {
+            "DATABASE_USER": API_DB_USER,
+            "DATABASE_PASSWORD": API_DB_PASSWORD,
+        }
+    )
 
 
 @pytest.fixture()
