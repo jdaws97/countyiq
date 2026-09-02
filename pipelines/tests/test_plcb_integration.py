@@ -10,7 +10,7 @@ import psycopg2
 def _pg_available():
     try:
         conn = psycopg2.connect(
-            host="localhost", port=5433, dbname="countyiq",
+            host="localhost", port=5433, dbname="countyiq_test",
             user="dagster_admin", password="localtest", connect_timeout=3,
         )
         conn.close()
@@ -18,10 +18,13 @@ def _pg_available():
     except Exception:
         return False
 
-pytestmark = pytest.mark.skipif(
-    not _pg_available(),
-    reason="Local Docker Postgres not running on port 5433",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _pg_available(),
+        reason="Local Docker Postgres not running on port 5433",
+    ),
+]
 
 
 def test_plcb_parser_to_staging():
@@ -35,7 +38,7 @@ def test_plcb_parser_to_staging():
     assert len(records) == 5
 
     conn = psycopg2.connect(
-        host="localhost", port=5433, dbname="countyiq",
+        host="localhost", port=5433, dbname="countyiq_test",
         user="dagster_admin", password="localtest",
     )
     conn.autocommit = True

@@ -464,7 +464,7 @@ def test_site_readiness_score_rebuild_uses_replacement_signals() -> None:
         database = DatabaseResource(
             host=os.environ.get("DATABASE_HOST", "localhost"),
             port=int(os.environ.get("DATABASE_PORT", "5433")),
-            dbname=os.environ.get("DATABASE_NAME", "countyiq"),
+            dbname=os.environ.get("DATABASE_NAME", "countyiq_test"),
             user=os.environ.get("DATABASE_USER", "dagster_admin"),
             password=os.environ.get("DATABASE_PASSWORD", "localtest"),
         )
@@ -483,10 +483,10 @@ def test_site_readiness_score_rebuild_uses_replacement_signals() -> None:
                 """,
                 (pidn,),
             )
-            # v6: momentum = park 0.18 + growth 0.02 = 20; opportunity uses the
+            # v7: momentum = park 0.18 + growth 0.02 = 20; opportunity uses the
             # back-tested weights park 0.22 + growth 0.05 + soil -0.03 = 24;
             # readiness = 50 + 25 + 10 - 15 = 70.
-            assert cursor.fetchone() == (20, 24, 70, True, 6)
+            assert cursor.fetchone() == (20, 24, 70, True, 7)
     finally:
         with connection.cursor() as cursor:
             cursor.execute("TRUNCATE public.development_momentum")

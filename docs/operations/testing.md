@@ -25,6 +25,25 @@ Parser tests use small captured source fixtures. Network calls and model calls
 do not belong in the normal unit suite. Live source checks are manual and
 targeted because public sites are slow and fragile.
 
+Integration tests (`-m integration`) are destructive: they delete and truncate
+staging tables and append to audit ledgers. They may only run against the
+dedicated `countyiq_test` database on the `postgres-test` container, migrated
+to the repository head first:
+
+```bash
+cd pipelines
+DATABASE_URL=postgresql://dagster_admin:localtest@localhost:5433/countyiq_test \
+  .venv/bin/alembic upgrade head
+DATABASE_NAME=countyiq_test .venv/bin/python -m pytest tests/ -q -m integration
+```
+
+`tests/conftest.py` wraps `psycopg2.connect` for every test session and
+refuses the live `countyiq` database by name, including through
+`DatabaseResource` and DSN strings, because a test that defaulted to it
+deleted all 175,935 local parcels on 2026-09-02. Set
+`COUNTYIQ_ALLOW_LIVE_DB_TESTS=1` only for a deliberate, read-only check
+against a disposable restore.
+
 ## API
 
 Fast unit tests do not require Postgres:

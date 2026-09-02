@@ -25,7 +25,7 @@ def db_conn():
     conn = psycopg2.connect(
         host="localhost",
         port=5433,
-        dbname="countyiq",
+        dbname="countyiq_test",
         user="dagster_admin",
         password="localtest",
     )

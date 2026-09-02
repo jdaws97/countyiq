@@ -13,12 +13,14 @@ import pytest
 from countyiq.lib.parsers.arcgis_parcels import parse_parcels_features
 from countyiq.lib.scd import scd2_upsert
 
+pytestmark = pytest.mark.integration
+
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 DB_PARAMS = {
     "host": os.environ.get("DATABASE_HOST", "localhost"),
     "port": int(os.environ.get("DATABASE_PORT", "5433")),
-    "dbname": os.environ.get("DATABASE_NAME", "countyiq"),
+    "dbname": "countyiq_test",
     "user": os.environ.get("DATABASE_USER", "dagster_admin"),
     "password": os.environ.get("DATABASE_PASSWORD", "localtest"),
 }

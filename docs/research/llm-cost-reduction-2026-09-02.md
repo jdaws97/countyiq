@@ -243,12 +243,27 @@ price gap. GLM remains the Pass 1 candidate on partition quality but needs
 the identifier-copying discipline fixed (a prompt instruction or a cheaper
 repair retry) before it clears the gate; Luna stays the default.
 
-The live Pass 1 shadow could not run: the local `staging.parcels` table held
-zero rows at 20:17 UTC after something issued a full DELETE (175,935 rows;
-the 19:26 UTC `arcgis_refresh` reported "expired 0, inserted 0" with the
-guard passing). `arcgis_refresh` followed by `deterministic_enrichment_refresh`
-restores it. Every Pass 1, Pass 2, and Pass 3 live context depends on that
-table, so restore it before any live shadow or canary.
+The live Pass 1 shadow was delayed because the local `staging.parcels` table
+held zero rows at 20:17 UTC: an integration test whose connection defaulted
+to the live `countyiq` database ran `DELETE FROM staging.parcels`
+(175,935 rows). The table was restored from the pre-test snapshot, every
+integration test now targets `countyiq_test`, and `pipelines/tests/conftest.py`
+refuses connections to `countyiq` for the whole test session.
+
+Live Pass 1 shadow, 12 current clusters from the committed name selectors,
+no labels (`eval/results/challenger_*_live_shadow_20260902T21*.json`):
+
+| Model | Valid JSON | Fabricated PIDNs | Gate accepted | Abstained / rejected pairs | Cost |
+|---|---:|---:|---:|---:|---:|
+| Luna low | 12/12 | 0 | 12/12 | 3 / 1 | $0.0245 |
+| GLM 5.3 Flash | 12/12 | 0 | 9/12 | 5 / 13 | $0.0107 |
+
+GLM's three rejections were unknown evidence markers in relationship evidence
+and rejected-match names not in the candidate cluster, the same identifier
+discipline gap seen on the frozen corpus. It also rejected 13 pairs where Luna
+rejected one; without labels that is a difference to adjudicate, not a score.
+Luna stays the Pass 1 default; GLM is worth a prompt iteration on identifier
+copying because its partition quality and price remain attractive.
 
 ### 4e. Pass 3, 4 frozen brief cases
 
