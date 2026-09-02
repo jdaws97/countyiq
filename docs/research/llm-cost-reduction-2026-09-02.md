@@ -265,6 +265,49 @@ rejected one; without labels that is a difference to adjudicate, not a score.
 Luna stays the Pass 1 default; GLM is worth a prompt iteration on identifier
 copying because its partition quality and price remain attractive.
 
+## 10. Human adjudication of the live shadow (2026-09-02)
+
+Both models' full outputs were read against the gathered records for all 12
+clusters. Clusters 0, 1, 2, 3, 5, and 6 are person-name clusters that the
+production selector no longer sends; they are judged here only for model
+behavior.
+
+| Cluster | Names | Partitions | Verdict | Why |
+|---|---|---|---|---|
+| 0 | Jacobs / Jacobson | identical (both reject) | tie | Different surnames and parcels; both correct |
+| 1 | Kottcamp Thomas S / Tom A, same spouse, same address | Luna: two entities; GLM: abstain | GLM | Same address and spouse with a middle-initial conflict is exactly the abstain case; Luna asserted distinct entities at 0.82 |
+| 2 | Hinderer Jeffery / Jeffrey | identical (merge) | tie | Adjacent Susquehanna Trl parcels, same couple |
+| 3 | Sanders Karen E / Perry S & Karen E | Luna: two entities; GLM: merge | Luna | An individual and a couple are different owners of record; GLM also rejected prior-owner names that were never candidates (gate failure) |
+| 4 | Four South George LLCs / LP | identical (four entities) | Luna | Same partition; GLM labeled a seller as `shares_address_with` and abstained on an entity it had already assigned |
+| 5 | Four Haggerty variants | Luna: four entities + abstain; GLM: merge three Theresa variants, abstain on Colby | GLM | Same couple names, same township, two parcels on the same street; middle-initial-only differences support the merge and the Colby abstention is right |
+| 6 | Reynoso / Ynfante variants | identical (three Fran variants merged, Yris separate) | Luna | Same partition; GLM added "family connection" and "consistent with" speculation the records do not support |
+| 7 | Bell Plus variants + Stone Ridge | identical | Luna | Same partition; GLM cited a relationship target it altered from the input (gate failure) and labeled sellers as address-sharing |
+| 8 | Nine "X PROPERTY LLC" | identical (nine entities) | Luna | Same partition; GLM abstained on three LLCs with distinct DOS numbers that merely share a registered office, which is a relationship, not a merge question |
+| 9 | Seven York Water variants | identical (one entity) | Luna | Same partition; GLM put two refs in one marker and cited a corporate name not in the input (gate failure) |
+| 10 | West Manchester Township, authorities, cemetery | identical except Shiloh Water (Luna: own entity; GLM: abstain) | tie | GLM's Shiloh abstention is reasonable; its `controls` relationships are inference, not record evidence |
+| 11 | Ten "X HOLDINGS LLC" | identical (ten entities) | tie | Both correct; GLM adds narrative color |
+
+Scorecard: Luna 6, GLM 2, tie 4. Partitions differed on only three
+clusters, all person clusters, and GLM had the better-calibrated answer on two
+of them (abstain on a middle-initial conflict; merge middle-initial-only
+variants of the same couple). Luna's characteristic fault is asserting
+distinct entities at 0.82–0.98 confidence where the evidence calls for an
+abstention. GLM's faults are hygiene, not judgment: relationship types that do
+not match the evidence (sellers labeled `shares_address_with`), identifiers
+copied loosely (prior owners as rejected-match names, two refs in one
+bracket, an altered corporate name), and speculative "consistent with"
+phrasing. On the six organization clusters that production will actually
+send, the two models produced identical partitions and GLM failed the gate on
+two.
+
+Decision: Luna remains the Pass 1 default. GLM becomes a candidate again only
+after a prompt revision that (a) restricts `relationship_type` to what the
+cited record shows, (b) restricts rejected-match and relationship names to
+printed candidates, and (c) forbids more than one ref per bracket; rerun the
+frozen and live lanes afterward. The cheapest quality gain for Luna itself is
+an instruction to abstain rather than assert distinct entities when names
+share an address or spouse and differ only in a middle initial.
+
 ### 4e. Pass 3, 4 frozen brief cases
 
 Only Solar Pro 4 passed a case end to end (required facts 4/4 for GLM and
