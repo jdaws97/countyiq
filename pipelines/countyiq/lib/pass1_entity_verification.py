@@ -361,6 +361,28 @@ Every reasoning field, relationship evidence string, and rejection/abstention
 reason must cite one or more printed refs inline as
 [Evidence: group:identifier]; end each factual sentence with its marker.
 
+RULES FOR NAMES, RELATIONSHIPS, AND CITATIONS:
+- rejected_matches name_a/name_b, abstention names, and relationship
+  related_entity must be names printed under CANDIDATE NAMES. A prior owner,
+  seller, buyer, or any other name that appears only inside a record is not a
+  candidate: mention it in reasoning if relevant, never in those fields.
+- relationship_type must be what the cited record shows. Use
+  shares_address_with only when two candidates list the same address in the
+  input; controls, officer_of, registered_agent_for, or subsidiary_of only
+  when a corporate or license record states that role; same_person only for
+  name variants you did not merge. A sale between two parties is not a
+  relationship type.
+- One ref per bracket: write [Evidence: parcels:A] [Evidence: parcels:B],
+  never [Evidence: parcels:A; parcels:B].
+- When two candidate names share a parcel address or a co-owner name and
+  differ only by a middle initial, nickname, or spelling variant, do not
+  place them in separate entities with high confidence. Either merge them
+  citing the shared address or co-owner evidence, or list them together
+  under abstentions with the conflict stated.
+- Reasoning states what the records show. Do not add interpretation such as
+  "consistent with", "suggesting", or motive; if a fact is not in a record,
+  say the records do not establish it.
+
 OUTPUT FORMAT:
 {{
   "entities": [

@@ -308,6 +308,53 @@ frozen and live lanes afterward. The cheapest quality gain for Luna itself is
 an instruction to abstain rather than assert distinct entities when names
 share an address or spouse and differ only in a middle initial.
 
+## 11. Revised Pass 1 prompt, second round (same day, $0.07)
+
+The Pass 1 system prompt gained a "RULES FOR NAMES, RELATIONSHIPS, AND
+CITATIONS" block implementing (a) through (c) above plus the abstain-or-merge
+rule for middle-initial, nickname, and spelling variants and a ban on
+interpretive phrasing. Both models were rerun on the frozen gold (8 cases)
+and the live shadow (same 12 clusters).
+
+| Lane | Model | Before revision | After revision |
+|---|---|---|---|
+| Frozen partitions correct | Luna high | 7/8 | 6/8 |
+| Frozen gate accepted | Luna high | 7/8 | 8/8 |
+| Frozen partitions correct | Luna low | 5/8 | 5/8 |
+| Frozen partitions correct | GLM 5.3 Flash | 7/8 | 7/8 |
+| Frozen gate accepted | GLM 5.3 Flash | 4/8 | 7/8 |
+| Live gate accepted | Luna low | 12/12 | 12/12 |
+| Live gate accepted | GLM 5.3 Flash | 9/12 | 12/12 |
+| Live cost, 12 clusters | Luna low / GLM | $0.0245 / $0.0107 | $0.0231 / $0.0175 |
+
+Second adjudication of the live clusters (same method as section 10):
+
+| Cluster | Change | Verdict |
+|---|---|---|
+| 1 Kottcamp | Luna now abstains as GLM does | tie (both correct) |
+| 2 Hinderer | Both now abstain instead of merging; the merge was correct in round one | tie, and a cost of the new rule |
+| 3 Sanders | GLM still merges the individual into the couple; Luna keeps them apart | Luna |
+| 4 South George | GLM's rejections shrank from six to two, no seller relationships | tie |
+| 5 Haggerty | GLM merges the three Theresa variants and abstains on Colby; Luna abstains on all four | GLM |
+| 6 Reynoso | Identical partitions; GLM's speculation is gone | tie |
+| 7, 8, 9, 11 | Identical partitions; GLM's gate failures are gone | tie |
+| 10 West Manchester | Luna merged the general authority with the sewer authority and split "TOWNSHIP THE" from the township, neither supported; GLM kept the round-one partition | GLM |
+
+Round two: GLM 2, Luna 1, tie 9, with both models accepted by the gate on
+every live cluster and identical partitions on all six organization clusters.
+The revision fixed GLM's hygiene faults completely and cost it about 60% more
+output tokens; it was neutral to slightly negative for Luna, which lost one
+correct merge to abstention and produced one unsupported merge.
+
+Decision: keep the revised prompt. GLM 5.3 Flash is now promotable for the
+Pass 1 canary through `COUNTYIQ_PASS1_MODEL=z-ai/glm-5.3-flash` with
+`COUNTYIQ_PASS1_ESCALATION_MODEL=openai/gpt-5.6-luna` for abstentions; at
+adaptive N=3 voting it costs less than a single Luna call per cluster. The
+code default stays Luna until the canary's live gate rate and sampled audit
+hold. Both models still disagree on whether an individual owner and a couple
+that includes that individual are one entity (cluster 3); the product should
+decide that rule and put it in the prompt rather than leave it to the model.
+
 ### 4e. Pass 3, 4 frozen brief cases
 
 Only Solar Pro 4 passed a case end to end (required facts 4/4 for GLM and
