@@ -14,17 +14,23 @@ Populates public.owners and public.owner_source_links with:
 import json
 import re
 
-from psycopg2.extras import execute_values
-
 from dagster import (
-    asset,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
+    asset,
 )
+from psycopg2.extras import execute_values
 
+from countyiq.lib.entity_types import (
+    BUSINESS_INDICATORS,
+    GOVERNMENT_INDICATORS,
+    TRUST_INDICATORS,
+    classify_entity,
+)
 from countyiq.resources.database import DatabaseResource
 
+__all__ = ["classify_entity", "classify_group", "owners"]
 
 # Suffixes to strip for normalization
 _ENTITY_SUFFIXES = re.compile(
@@ -36,26 +42,11 @@ _ENTITY_SUFFIXES = re.compile(
     re.IGNORECASE,
 )
 
-_GOVERNMENT_INDICATORS = re.compile(
-    r'\b(COUNTY OF|COMMONWEALTH|TOWNSHIP|BOROUGH|CITY OF|'
-    r'SCHOOL DIST\w*|AUTHORITY|STATE OF|UNITED STATES)\b',
-    re.IGNORECASE,
-)
-
-_TRUST_INDICATORS = re.compile(
-    r'\b(TRUST|ESTATE|REVOCABLE|IRREVOCABLE)\b',
-    re.IGNORECASE,
-)
-
-_BUSINESS_INDICATORS = re.compile(
-    r'\b(LLC|INC|CORP|CORPORATION|LTD|LP|LLP|'
-    r'ASSOCIATES|ASSOCIATION|FOUNDATION|PROPERTIES|REALTY|'
-    r'INVESTMENTS|HOLDINGS|PARTNERS|GROUP|ENTERPRISES|'
-    r'CAPITAL|MANAGEMENT|DEVELOPMENT|VENTURES|BANK|'
-    r'CHURCH|SYNAGOGUE|MOSQUE|SOCIETY|CLUB|LODGE|'
-    r'SCHOOL|UNIVERSITY|COLLEGE|HOSPITAL)\b',
-    re.IGNORECASE,
-)
+# Name-type indicators live in countyiq.lib.entity_types so the Pass 1
+# cluster selector and owner resolution agree on what an organization is.
+_GOVERNMENT_INDICATORS = GOVERNMENT_INDICATORS
+_TRUST_INDICATORS = TRUST_INDICATORS
+_BUSINESS_INDICATORS = BUSINESS_INDICATORS
 
 # Minimum useful mailing address for ambiguity detection; anything shorter is
 # likely a fragment ("YORK PA") and not a meaningful comparison key.
@@ -104,19 +95,6 @@ def normalize_mail_addr(addr: str | None) -> str:
     a = re.sub(r'[^A-Z0-9 ]', ' ', addr.upper())
     a = re.sub(r'\s+', ' ', a).strip()
     return a if len(a) >= _MIN_MAIL_ADDR_LEN else ""
-
-
-def classify_entity(name: str) -> str:
-    """Classify one owner-name variant."""
-    if not name:
-        return "unknown"
-    if _GOVERNMENT_INDICATORS.search(name):
-        return "government"
-    if _TRUST_INDICATORS.search(name):
-        return "trust"
-    if _BUSINESS_INDICATORS.search(name):
-        return "business"
-    return "person"
 
 
 # Ordered most-specific first: a group with any government variant is
@@ -180,7 +158,7 @@ class _UnionFind:
 
 @asset(
     group_name="enrichment",
-    deps=["municipality_join"],
+    deps=["municipality_join", "entity_verification"],
     description=(
         "Entity resolution — single owner identity space across parcels, "
         "tax claims, PLCB licenses, and the Pass 1 entity graph"

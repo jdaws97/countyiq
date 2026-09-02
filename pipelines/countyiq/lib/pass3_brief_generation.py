@@ -19,13 +19,14 @@ import json
 
 from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.intelligence_common import (
-    PARCEL_QUERY,
     ENTITY_GRAPH_QUERY,
+    PARCEL_QUERY,
     PORTFOLIO_QUERY,
-    format_parcel_context,
     format_entity_context,
+    format_parcel_context,
 )
-
+from countyiq.lib.pass2_signal_validation import SERVING_VALIDATION_STATUSES
+from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, PASS3_FIELD_CONTRACT
 
 # =============================================================================
 # CONSTANTS
@@ -51,7 +52,10 @@ BRIEF_QUALIFYING_SIGNIFICANCE = {"high", "medium"}
 _P3_SYSTEM_TEMPLATE = """You are a county intelligence analyst writing a development brief for a parcel in {county_context}. A real-estate investor will read this brief and decide whether to pursue, watchlist, or pass on the parcel.
 
 CONSTRAINTS:
-1. Every claim in the brief MUST cite its source signal using the format [Signal: signal_key].
+1. assessment_reasoning, top_risk, and brief MUST cite their source signals
+   using the format [Signal: signal_key]; end each factual sentence with its
+   marker. Copy only signal keys listed under VALIDATED SIGNALS, and list
+   every used key in citations.
 2. Do not invent market values, price projections, cap rates, or any numbers not present in the data above.
 3. Do not provide legal or financial advice.
 4. If signals conflict (opportunity vs constraint), you MUST acknowledge the tension explicitly.
@@ -63,7 +67,7 @@ OUTPUT FORMAT — return ONE valid JSON object. Emit fields in this exact order 
   "recommendation": "pursue_now" | "watchlist" | "pass",
   "urgency": "urgent_30d" | "near_term_90d" | "long_term_12mo" | "none",
   "top_signal_key": "<the single most load-bearing signal_key, or null>",
-  "top_risk": "<one-sentence description of the biggest risk>",
+  "top_risk": "<one cited sentence describing the biggest risk>",
   "evidence_strength": "strong" | "moderate" | "weak",
   "confidence": <float in [0.0, 1.0] — how sure you are the recommendation is correct given only the signals>,
   "assessment": "strong_opportunity" | "emerging" | "speculative" | "constrained" | "not_actionable",
@@ -95,9 +99,17 @@ VALIDATED SIGNALS:
 
 Write the brief for this parcel. Emit ONLY the JSON object."""
 
-# Final system string sent to the API (single braces).
-BRIEF_GENERATION_SYSTEM_PROMPT = _P3_SYSTEM_TEMPLATE.format(
-    county_context=county_prompt_context()
+# Final system string sent to the API (single braces). The static field
+# contract and citation-format blocks restate the enforced contract and push
+# the byte-identical prefix past the provider caching minimum
+# (prompt_prefix.py). pass_schemas imports this module, so the schema itself
+# cannot be rendered here.
+BRIEF_GENERATION_SYSTEM_PROMPT = (
+    _P3_SYSTEM_TEMPLATE.format(county_context=county_prompt_context())
+    + "\n\n"
+    + PASS3_FIELD_CONTRACT
+    + "\n\n"
+    + CITATION_FORMAT_BLOCK
 )
 
 
@@ -210,7 +222,8 @@ def should_generate_brief(validated_signals: list[dict]) -> bool:
     if not validated_signals:
         return False
     return any(
-        sig.get("adjusted_significance") in BRIEF_QUALIFYING_SIGNIFICANCE
+        sig.get("validation_status") in SERVING_VALIDATION_STATUSES
+        and sig.get("adjusted_significance") in BRIEF_QUALIFYING_SIGNIFICANCE
         for sig in validated_signals
     )
 
@@ -330,11 +343,13 @@ def gather_brief_context(cursor, pidn: str) -> dict:
             adjusted_significance,
             validation_reasoning,
             claim,
+            evidence_data,
             cross_references,
             source_url,
             internal_url
         FROM public.evidence
         WHERE pidn = %(pidn)s
+          AND validation_status IN ('confirmed', 'upgraded', 'downgraded')
           AND adjusted_significance IN ('high', 'medium', 'low')
         ORDER BY
             CASE adjusted_significance
@@ -350,9 +365,18 @@ def gather_brief_context(cursor, pidn: str) -> dict:
     validated_signals = []
     for row in evidence_rows:
         r = dict(row)
-        # Parse key_facts from claim (semicolon-delimited)
-        claim = r.get("claim") or ""
-        key_facts = [f.strip() for f in claim.split(";") if f.strip()] if claim else []
+        # Feed the next pass structured source evidence, not earlier model prose.
+        evidence_data = r.get("evidence_data") or {}
+        if isinstance(evidence_data, str):
+            try:
+                evidence_data = json.loads(evidence_data)
+            except (json.JSONDecodeError, TypeError):
+                evidence_data = {}
+        key_facts = [
+            f"{key}={value}"
+            for key, value in sorted(evidence_data.items())
+            if value is not None
+        ] if isinstance(evidence_data, dict) else []
 
         # Parse cross_references from JSON
         cross_refs = r.get("cross_references")

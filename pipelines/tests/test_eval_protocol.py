@@ -21,9 +21,16 @@ from eval.protocol import (
     estimate_max_call_cost,
 )
 from eval.fixture_io import load_frozen_cases
-from eval.scoring import score_pass0, score_pass1, score_pass2, score_pass3
+from eval.scoring import (
+    enforce_production_gate,
+    score_pass0,
+    score_pass1,
+    score_pass2,
+    score_pass3,
+)
 from eval.challenger import (
     RECOMMENDED_JUDGE,
+    _fixture_cluster_names,
     _is_default_pass2_fixture,
     _mk_judge_config,
 )
@@ -39,6 +46,18 @@ def test_pass0_eval_uses_production_schema_system_and_native_pdf():
     assert config.json_schema == PASS0_EXTRACTION_SCHEMA
     assert config.system_prompt
     assert config.pdf_engine == "native"
+
+
+def test_production_gate_is_required_for_eval_promotion():
+    accepted = enforce_production_gate({"gold_pass": True}, [])
+    rejected = enforce_production_gate(
+        {"gold_pass": True},
+        ["unknown signal citation"],
+    )
+    assert accepted["gold_pass"] is True
+    assert accepted["production_gate_pass"] is True
+    assert rejected["gold_pass"] is False
+    assert rejected["production_gate_errors"] == ["unknown signal citation"]
 
 
 def test_pass1_eval_uses_production_system_and_effort():
@@ -265,6 +284,10 @@ def test_pass2_deidentification_preserves_roles_without_synthetic_name_artifacts
 
 def test_pass1_partition_scorer_accepts_human_partition_and_rejects_false_merge():
     case = load_frozen_cases(FIXTURES / "p1_frozen.json")[0]
+    assert _fixture_cluster_names(case) == [
+        "MARTIN MICHAEL L",
+        "MARTINSON MICHAEL E",
+    ]
     parsed = {
         "entities": [
             {"linked_records": {"parcels": ["P1A001"]}},
@@ -405,5 +428,5 @@ def test_pass3_scorer_requires_structured_decision_and_grounded_citations():
         }
     )
     assert score_pass3(parsed, case)["gold_pass"]
-    parsed["brief"] += "\n\nAn uncited factual paragraph."
+    parsed["brief"] = "An uncited factual paragraph with no signal marker."
     assert not score_pass3(parsed, case)["gold_pass"]

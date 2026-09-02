@@ -1,281 +1,194 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 
 import Badge from '../components/Badge'
 import IntelligenceEventCard from '../components/IntelligenceEventCard'
 import PageShell from '../components/PageShell'
 import Section from '../components/Section'
+import { Button, ButtonLink, EmptyState, PageHeader, StatusMessage } from '../components/ui'
 import { formatCurrencyCompact } from '../lib/format'
+import {
+  downloadText,
+  getComparison,
+  getEventTriage,
+  getLastWatchVisit,
+  getSavedSearches,
+  removeSavedSearch,
+  replaceInvestigationState,
+  setLastWatchVisit,
+  toCsv,
+  type PortableWorkspace,
+} from '../lib/investigationState'
 import { getPropertyClassLabel } from '../lib/propertyLabels'
 import { useFetchJson } from '../lib/useFetchJson'
 import {
   getEntityWatchlist,
   getProjectWatchlist,
   getWatchlist,
+  replaceWatchlists,
   toggleEntityWatch,
   toggleProjectWatch,
   toggleWatch,
   WATCHLIST_CAP,
 } from '../lib/watchlist'
-import type { IntelligenceFeedResponse, WatchlistSummaryResponse } from '../types/api'
+import type { IntelligenceEvent, IntelligenceFeedResponse, WatchlistSummaryResponse } from '../types/api'
 
 export default function Watchlist() {
   const [watched, setWatched] = useState<string[]>(() => getWatchlist())
   const [watchedProjects, setWatchedProjects] = useState(() => getProjectWatchlist())
   const [watchedEntities, setWatchedEntities] = useState(() => getEntityWatchlist())
+  const [savedSearches, setSavedSearches] = useState(() => getSavedSearches())
+  const [previousVisit] = useState(() => getLastWatchVisit())
+  const [workspaceMessage, setWorkspaceMessage] = useState<string | null>(null)
+  const importRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const refresh = () => {
       setWatched(getWatchlist())
       setWatchedProjects(getProjectWatchlist())
       setWatchedEntities(getEntityWatchlist())
+      setSavedSearches(getSavedSearches())
     }
     window.addEventListener('countyiq-watchlist-changed', refresh)
-    return () => window.removeEventListener('countyiq-watchlist-changed', refresh)
+    window.addEventListener('countyiq-investigation-changed', refresh)
+    return () => {
+      setLastWatchVisit()
+      window.removeEventListener('countyiq-watchlist-changed', refresh)
+      window.removeEventListener('countyiq-investigation-changed', refresh)
+    }
   }, [])
 
-  const url = watched.length > 0
-    ? `/api/parcels/summary?pidns=${watched.map(encodeURIComponent).join(',')}`
-    : null
+  const url = watched.length > 0 ? `/api/parcels/summary?pidns=${watched.map(encodeURIComponent).join(',')}` : null
   const { data, error, loading } = useFetchJson<WatchlistSummaryResponse>(url)
-  const parcelEventsUrl = watched.length > 0
-    ? `/api/feed?since_days=3650&limit=20&pidns=${encodeURIComponent(watched.join(','))}`
-    : null
-  const projectEventsUrl = watchedProjects.length > 0
-    ? `/api/feed?since_days=3650&limit=30&project_keys=${encodeURIComponent(watchedProjects.map((project) => project.key).join(','))}`
-    : null
-  const entityEventsUrl = watchedEntities.length > 0
-    ? `/api/feed?since_days=3650&limit=30&sort=latest&entity_ids=${watchedEntities.map((entity) => entity.id).join(',')}`
-    : null
-  const parcelEvents = useFetchJson<IntelligenceFeedResponse>(parcelEventsUrl)
-  const projectEvents = useFetchJson<IntelligenceFeedResponse>(projectEventsUrl)
-  const entityEvents = useFetchJson<IntelligenceFeedResponse>(entityEventsUrl)
+  const parcelEvents = useFetchJson<IntelligenceFeedResponse>(watched.length > 0 ? `/api/feed?since_days=3650&limit=30&pidns=${encodeURIComponent(watched.join(','))}` : null)
+  const projectEvents = useFetchJson<IntelligenceFeedResponse>(watchedProjects.length > 0 ? `/api/feed?since_days=3650&limit=30&project_keys=${encodeURIComponent(watchedProjects.map((project) => project.key).join(','))}` : null)
+  const entityEvents = useFetchJson<IntelligenceFeedResponse>(watchedEntities.length > 0 ? `/api/feed?since_days=3650&limit=30&sort=latest&entity_ids=${watchedEntities.map((entity) => entity.id).join(',')}` : null)
   const parcels = data?.parcels ?? []
   const missing = data?.missing ?? []
+  const changedCount = parcels.filter((parcel) => parcel.changed_recently).length
+  const allEvents = uniqueEvents([...(parcelEvents.data?.events ?? []), ...(projectEvents.data?.events ?? []), ...(entityEvents.data?.events ?? [])])
+  const newEvents = previousVisit ? allEvents.filter((event) => new Date(event.detected_at) > new Date(previousVisit)) : []
 
-  const unwatch = (pidn: string) => {
-    toggleWatch(pidn)
-    setWatched(getWatchlist())
+  const exportWorkspace = () => {
+    const workspace: PortableWorkspace = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      parcels: getWatchlist(),
+      projects: getProjectWatchlist(),
+      entities: getEntityWatchlist(),
+      savedSearches: getSavedSearches(),
+      comparison: getComparison(),
+      triage: getEventTriage(),
+    }
+    downloadText(`countyiq-workspace-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(workspace, null, 2), 'application/json')
+    setWorkspaceMessage('Workspace exported. Import the file in another browser to continue there.')
   }
 
-  const changedCount = parcels.filter((p) => p.changed_recently).length
+  const importWorkspace = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    file.text().then((text) => {
+      const workspace = JSON.parse(text) as PortableWorkspace
+      if (workspace.version !== 1 || !Array.isArray(workspace.parcels) || !Array.isArray(workspace.projects) || !Array.isArray(workspace.entities)) {
+        throw new Error('Not a CountyIQ workspace file')
+      }
+      if (!window.confirm('Importing this workspace will replace the current browser workspace. Continue?')) {
+        setWorkspaceMessage('Workspace import canceled; current browser data was kept.')
+        return
+      }
+      replaceWatchlists({ parcels: workspace.parcels, projects: workspace.projects, entities: workspace.entities })
+      replaceInvestigationState(workspace)
+      setWorkspaceMessage('Workspace imported into this browser.')
+    }).catch((reason: unknown) => setWorkspaceMessage(reason instanceof Error ? reason.message : 'Workspace import failed'))
+    event.target.value = ''
+  }
+
+  const exportParcels = () => {
+    const rows: Array<Array<string | number | boolean | null>> = [['PIDN', 'Address', 'Owner', 'Municipality', 'Assessed total', 'Class', 'Acres', 'Changed recently', 'Tax delinquency signal']]
+    for (const parcel of parcels) rows.push([parcel.pidn, parcel.propadr, parcel.owner_full, parcel.municipality, parcel.aprtotal, getPropertyClassLabel(parcel.class), parcel.acres, parcel.changed_recently, parcel.has_tax_delinquency])
+    downloadText(`countyiq-watched-parcels-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows), 'text/csv')
+  }
+
+  const nothingWatched = watched.length === 0 && watchedProjects.length === 0 && watchedEntities.length === 0
 
   return (
-    <PageShell maxWidth={1000}>
-      <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-gold)', marginBottom: 8 }}>
-          Watchlist
-        </div>
-        <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-          Watched Intelligence
-        </h1>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Badge color="var(--accent-blue)">
-            {watched.length}/{WATCHLIST_CAP} watched
-          </Badge>
-          <Badge color="var(--accent-cyan)">
-            {watchedProjects.length}/{WATCHLIST_CAP} projects
-          </Badge>
-          <Badge color="var(--accent-green)">
-            {watchedEntities.length}/{WATCHLIST_CAP} entities
-          </Badge>
-          {changedCount > 0 && (
-            <Badge color="var(--accent-gold)">{changedCount} changed in last 30 days</Badge>
-          )}
-        </div>
+    <PageShell maxWidth={1040}>
+      <PageHeader
+        eyebrow="Retained intelligence"
+        title="Watched Intelligence"
+        description="Return to the parcels, projects, entities, saved searches, and new evidence that matter to your current investigation."
+        meta={<><Badge color="var(--accent-blue)">{watched.length}/{WATCHLIST_CAP} parcels</Badge><Badge color="var(--accent-cyan)">{watchedProjects.length} projects</Badge><Badge color="var(--accent-green)">{watchedEntities.length} entities</Badge>{changedCount > 0 && <Badge color="var(--accent-gold)">{changedCount} parcels changed</Badge>}</>}
+        actions={<><Button tone="quiet" onClick={exportWorkspace}>Export workspace</Button><Button tone="quiet" onClick={() => importRef.current?.click()}>Import workspace</Button><input ref={importRef} className="sr-only" type="file" accept="application/json,.json" onChange={importWorkspace} /></>}
+      />
+
+      <div className="workspace-boundary">
+        <strong>Browser workspace</strong>
+        <span>CountyIQ has no customer accounts yet. Export/import gives you an explicit, portable file without creating insecure anonymous server data.</span>
       </div>
+      {workspaceMessage && <StatusMessage tone={workspaceMessage.includes('failed') || workspaceMessage.startsWith('Not') ? 'error' : 'success'}>{workspaceMessage}</StatusMessage>}
 
-      {loading && (
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '80px 0' }}>
-          Loading watchlist...
-        </div>
+      {newEvents.length > 0 && (
+        <div className="watch-alert"><strong>{newEvents.length} new watched event{newEvents.length === 1 ? '' : 's'} since your last visit.</strong><span>Review them in the watched evidence sections below.</span></div>
       )}
 
-      {!loading && error && (
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-red)', textAlign: 'center', padding: '80px 0' }}>
-          {error}
-        </div>
+      {nothingWatched && savedSearches.length === 0 && (
+        <EmptyState title="Start an investigation" actions={<><ButtonLink to="/feed" tone="primary">Browse intelligence feed</ButtonLink><ButtonLink to="/radar">Explore Radar</ButtonLink><ButtonLink to="/map">Open map</ButtonLink></>}>
+          Watch a parcel, project, or entity from any case file. CountyIQ will collect its source-backed events here and flag what changed since your last visit.
+        </EmptyState>
       )}
 
-      {!loading && !error && watched.length === 0 && watchedProjects.length === 0 && watchedEntities.length === 0 && (
-        <Section title="Nothing watched yet">
-          <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.7, color: 'var(--text-secondary)' }}>
-            Open an intelligence event or property page and press <strong>Watch</strong>.
-            Entities, projects, and parcels remain in this browser and their source-backed events appear here.
-          </div>
+      {savedSearches.length > 0 && (
+        <Section title={`Saved searches (${savedSearches.length})`}>
+          <div className="saved-search-list">{savedSearches.map((search) => <div className="saved-search" key={search.id}><Link to={search.path}>{search.name}</Link><span>{search.kind} · saved {new Date(search.createdAt).toLocaleDateString()}</span><Button tone="quiet" onClick={() => removeSavedSearch(search.id)}>Remove</Button></div>)}</div>
         </Section>
       )}
 
       {watchedEntities.length > 0 && (
-        <Section title={`Watched entities (${watchedEntities.length})`}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-            {watchedEntities.map((entity) => (
-              <div key={entity.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Link to={`/entity/${entity.id}`} style={{ textDecoration: 'none' }}>
-                  <Badge color="var(--accent-green)">{entity.name} →</Badge>
-                </Link>
-                <button
-                  onClick={() => toggleEntityWatch(entity)}
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 7px', cursor: 'pointer' }}
-                >
-                  remove
-                </button>
-              </div>
-            ))}
-          </div>
-          {entityEvents.loading && <LoadingLabel>Loading entity intelligence…</LoadingLabel>}
-          {entityEvents.error && <ErrorLabel>{entityEvents.error}</ErrorLabel>}
-          {!entityEvents.loading && !entityEvents.error && (entityEvents.data?.events.length ?? 0) === 0 && (
-            <EmptyLabel>No events are linked to these entities yet.</EmptyLabel>
-          )}
-          {(entityEvents.data?.events.length ?? 0) > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {entityEvents.data!.events.map((event) => <IntelligenceEventCard key={event.event_key} event={event} />)}
-            </div>
-          )}
-        </Section>
+        <WatchSection title={`Watched entities (${watchedEntities.length})`} events={entityEvents} previousVisit={previousVisit}>
+          {watchedEntities.map((entity) => <WatchChip key={entity.id} to={`/entity/${entity.id}`} label={entity.name} onRemove={() => toggleEntityWatch(entity)} />)}
+        </WatchSection>
       )}
 
       {watchedProjects.length > 0 && (
-        <Section title={`Watched projects (${watchedProjects.length})`}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-            {watchedProjects.map((project) => (
-              <div key={project.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Link to={`/project/${encodeURIComponent(project.key)}`} style={{ textDecoration: 'none' }}>
-                  <Badge color="var(--accent-cyan)">{project.name} →</Badge>
-                </Link>
-                <button
-                  onClick={() => toggleProjectWatch(project)}
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 7px', cursor: 'pointer' }}
-                >
-                  remove
-                </button>
-              </div>
-            ))}
-          </div>
-          {projectEvents.loading && <LoadingLabel>Loading project intelligence…</LoadingLabel>}
-          {projectEvents.error && <ErrorLabel>{projectEvents.error}</ErrorLabel>}
-          {!projectEvents.loading && !projectEvents.error && (projectEvents.data?.events.length ?? 0) === 0 && (
-            <EmptyLabel>No project events are available yet.</EmptyLabel>
-          )}
-          {(projectEvents.data?.events.length ?? 0) > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {projectEvents.data!.events.map((event) => <IntelligenceEventCard key={event.event_key} event={event} />)}
-            </div>
-          )}
-        </Section>
+        <WatchSection title={`Watched projects (${watchedProjects.length})`} events={projectEvents} previousVisit={previousVisit}>
+          {watchedProjects.map((project) => <WatchChip key={project.key} to={`/project/${encodeURIComponent(project.key)}`} label={project.name} onRemove={() => toggleProjectWatch(project)} />)}
+        </WatchSection>
       )}
+
+      {loading && <StatusMessage>Loading watched parcels…</StatusMessage>}
+      {!loading && error && <StatusMessage tone="error">{error}</StatusMessage>}
 
       {!loading && !error && parcels.length > 0 && (
-        <Section title={`Parcels (${parcels.length})`}>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
-            {parcels.map((p, i) => (
-              <div
-                key={p.pidn}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr auto',
-                  gap: 12,
-                  alignItems: 'center',
-                  padding: '12px 16px',
-                  borderTop: i > 0 ? '1px solid var(--border)' : 'none',
-                  background: p.changed_recently ? 'color-mix(in srgb, var(--accent-gold) 6%, transparent)' : 'transparent',
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <Link
-                    to={`/property/${p.pidn}`}
-                    style={{ fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 600, color: 'var(--accent-blue)', textDecoration: 'none' }}
-                  >
-                    {p.propadr ?? p.pidn}
-                  </Link>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.owner_full ?? 'Owner not displayed'} · {p.municipality ?? '--'}
-                  </div>
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)' }}>
-                  {p.aprtotal !== null ? formatCurrencyCompact(p.aprtotal, { allowBillions: true }) : '--'}
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{getPropertyClassLabel(p.class) || p.class || '--'}</div>
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: p.has_tax_delinquency ? 'var(--accent-red)' : 'var(--text-muted)' }}>
-                  {p.has_tax_delinquency ? 'flagged' : 'current'}
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>taxes</div>
-                </div>
-                <div>
-                  {p.changed_recently ? (
-                    <Badge color="var(--accent-gold)">changed {p.changed_at ? new Date(p.changed_at).toLocaleDateString() : ''}</Badge>
-                  ) : (
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>no recent change</span>
-                  )}
-                </div>
-                <button
-                  onClick={() => unwatch(p.pidn)}
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: 'var(--text-muted)',
-                    background: 'transparent',
-                    border: '1px solid var(--border)',
-                    borderRadius: 4,
-                    padding: '4px 10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Unwatch
-                </button>
+        <Section title={`Watched parcels (${parcels.length})`}>
+          <div className="section-actions" data-print-hidden><Button tone="quiet" onClick={exportParcels}>Export parcel CSV</Button><ButtonLink to="/compare" tone="quiet">Open comparison</ButtonLink></div>
+          <div className="watch-parcel-list">
+            {parcels.map((parcel) => (
+              <div className={`watch-parcel-row${parcel.changed_recently ? ' watch-parcel-changed' : ''}`} key={parcel.pidn}>
+                <div><Link to={`/property/${parcel.pidn}`}>{parcel.propadr ?? parcel.pidn}</Link><span>{parcel.owner_full ?? 'Owner not displayed'} · {parcel.municipality ?? 'Municipality unavailable'}</span></div>
+                <div><strong>{parcel.aprtotal !== null ? formatCurrencyCompact(parcel.aprtotal, { allowBillions: true }) : '—'}</strong><span>{getPropertyClassLabel(parcel.class) || parcel.class || 'Class unavailable'}</span></div>
+                <div>{parcel.changed_recently ? <Badge color="var(--accent-gold)">Changed</Badge> : <span>No recent change</span>}</div>
+                <Button tone="quiet" onClick={() => toggleWatch(parcel.pidn)}>Unwatch</Button>
               </div>
             ))}
           </div>
         </Section>
       )}
 
-      {!loading && missing.length > 0 && (
-        <Section title={`No longer found (${missing.length})`}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {missing.map((pidn) => (
-              <span key={pidn}>
-                {pidn}
-                <button
-                  onClick={() => unwatch(pidn)}
-                  style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  remove
-                </button>
-              </span>
-            ))}
-          </div>
-        </Section>
-      )}
+      {missing.length > 0 && <Section title={`No longer found (${missing.length})`}><div className="missing-watch-list">{missing.map((pidn) => <span key={pidn}>{pidn}<button onClick={() => toggleWatch(pidn)}>remove</button></span>)}</div></Section>}
 
-      {watched.length > 0 && (
-        <Section title="Recent intelligence for watched parcels">
-          {parcelEvents.loading && <LoadingLabel>Loading parcel intelligence…</LoadingLabel>}
-          {parcelEvents.error && <ErrorLabel>{parcelEvents.error}</ErrorLabel>}
-          {!parcelEvents.loading && !parcelEvents.error && (parcelEvents.data?.events.length ?? 0) === 0 && (
-            <EmptyLabel>No parcel events are available yet.</EmptyLabel>
-          )}
-          {(parcelEvents.data?.events.length ?? 0) > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {parcelEvents.data!.events.map((event) => <IntelligenceEventCard key={event.event_key} event={event} />)}
-            </div>
-          )}
-        </Section>
-      )}
+      {watched.length > 0 && <WatchSection title="Recent intelligence for watched parcels" events={parcelEvents} previousVisit={previousVisit} />}
     </PageShell>
   )
 }
 
-
-function LoadingLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', padding: '18px 0' }}>{children}</div>
+function WatchSection({ title, events, previousVisit, children }: { title: string; events: ReturnType<typeof useFetchJson<IntelligenceFeedResponse>>; previousVisit: string | null; children?: React.ReactNode }) {
+  return <Section title={title}>{children && <div className="watch-chip-list">{children}</div>}{events.loading && <StatusMessage>Loading watched intelligence…</StatusMessage>}{events.error && <StatusMessage tone="error">{events.error}</StatusMessage>}{!events.loading && !events.error && (events.data?.events.length ?? 0) === 0 && <div className="watch-empty-inline">No source-backed events are linked yet.</div>}{(events.data?.events.length ?? 0) > 0 && <div className="feed-list">{events.data!.events.map((event) => <IntelligenceEventCard key={event.event_key} event={event} isNew={Boolean(previousVisit && new Date(event.detected_at) > new Date(previousVisit))} />)}</div>}</Section>
 }
 
-
-function ErrorLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-red)', padding: '12px 0' }}>{children}</div>
+function WatchChip({ to, label, onRemove }: { to: string; label: string; onRemove: () => void }) {
+  return <span className="watch-chip"><Link to={to}>{label} →</Link><button onClick={onRemove} aria-label={`Remove ${label}`}>×</button></span>
 }
 
-
-function EmptyLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-secondary)', padding: '12px 0' }}>{children}</div>
+function uniqueEvents(events: IntelligenceEvent[]): IntelligenceEvent[] {
+  return Array.from(new Map(events.map((event) => [event.event_key, event])).values())
 }

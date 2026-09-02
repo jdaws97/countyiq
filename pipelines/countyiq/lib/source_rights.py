@@ -41,6 +41,7 @@ class MunicipalitySourceAuthorization:
     person_level_display_allowed: bool
     raw_export_allowed: bool
     allowed_origins: frozenset[str]
+    robots_unavailable_risk_accepted: bool
 
 
 SourceUse = Literal[
@@ -495,6 +496,9 @@ def authorize_municipality_sources(
             person_level_display_allowed=person_level_display_allowed,
             raw_export_allowed=raw_export_allowed,
             allowed_origins=frozenset(allowed_origins or []),
+            robots_unavailable_risk_accepted=bool(
+                (evidence or {}).get("robots_unavailable_risk_accepted", False)
+            ),
         )
         require_source_use(authorization, "derived_product")
         authorizations[source_key] = authorization

@@ -4,7 +4,6 @@ import inspect
 from pathlib import Path
 
 import pytest
-
 from countyiq.assets.arcgis import (
     address_points,
     ag_security,
@@ -27,9 +26,7 @@ from countyiq.assets.arcgis import (
 )
 from countyiq.assets.bulk import fema_flood, pa_open_data, plcb, tax_claims
 from countyiq.assets.enrichment import proceeding_extraction
-from countyiq.assets.scout import sources as scout_sources
 from countyiq.assets.scrapers import pa_dos_entities, public_proceedings, sheriff_sales
-
 
 GOVERNED_INGESTION_FUNCTIONS = [
     address_points.address_points_arcgis,
@@ -58,8 +55,6 @@ GOVERNED_INGESTION_FUNCTIONS = [
     public_proceedings.public_proceedings_scrape,
     sheriff_sales.sheriff_sales_scrape,
     proceeding_extraction.proceeding_extraction,
-    scout_sources.county_scout_discovery,
-    scout_sources.county_scout_monitor,
 ]
 
 
@@ -119,11 +114,14 @@ def test_every_governed_raw_archive_checks_retention_policy():
         source = path.read_text(encoding="utf-8")
         if "s3.archive" not in source:
             continue
-        if "assets/scout/" in path.as_posix():
-            if 'source_key="county_scout"' not in source:
-                missing.append(str(path))
-            continue
         if "require_source_use" not in source:
             missing.append(str(path))
 
     assert not missing, f"raw archives without retention enforcement: {missing}"
+
+
+def test_sheriff_listing_fetch_is_robots_gated():
+    source = _decorated_source(sheriff_sales.sheriff_sales_scrape)
+
+    assert source.find("authorize_source(") < source.find("get_with_robots(")
+    assert "get_with_retry(" not in source

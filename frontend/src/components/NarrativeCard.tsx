@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import Badge from './Badge'
+import EvidencePanel, { CitedText } from './EvidencePanel'
+import { openEvidenceReceipt } from '../lib/evidence'
 import { formatLabel, formatShortDate } from '../lib/format'
 import type { CountyNarrative } from '../types/api'
 
@@ -69,7 +71,7 @@ export default function NarrativeCard({
           marginBottom: 16,
         }}
       >
-        {narrative.body}
+        <CitedText text={narrative.body} evidence={narrative.citation_evidence ?? []} />
       </div>
 
       {showAffectedPidns && pidnsToShow.length > 0 && (
@@ -117,10 +119,28 @@ export default function NarrativeCard({
         <div>
           <SectionLabel>Citations</SectionLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {narrative.citations.map((citation) => (
-              <Badge key={citation} color="var(--accent-cyan)">{citation}</Badge>
-            ))}
+            {narrative.citations.map((citation) => {
+              const index = (narrative.citation_evidence ?? []).findIndex((item) => item.citation_key.toLowerCase() === `signal:${citation}`.toLowerCase())
+              const receipt = index >= 0 ? narrative.citation_evidence[index] : null
+              return receipt ? (
+                <a
+                  key={citation}
+                  href={`#${receipt.evidence_id}`}
+                  onClick={() => openEvidenceReceipt(receipt.evidence_id)}
+                  style={{ textDecoration: 'none' }}
+                >
+                  <Badge color="var(--accent-cyan)">E{index + 1} · {formatLabel(citation)}</Badge>
+                </a>
+              ) : (
+                <Badge key={citation} color="var(--text-muted)">{formatLabel(citation)}</Badge>
+              )
+            })}
           </div>
+        </div>
+      )}
+      {(narrative.citation_evidence?.length ?? 0) > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <EvidencePanel items={narrative.citation_evidence} title="Verify this narrative" />
         </div>
       )}
     </article>

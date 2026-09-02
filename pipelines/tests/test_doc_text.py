@@ -63,6 +63,21 @@ class TestExtractTextFromDocxBytes:
 
 
 class TestExtractTextFromPdfBytes:
+    def test_oversized_pdf_skips_parser(self, monkeypatch):
+        monkeypatch.setenv("COUNTYIQ_PDF_TEXT_MAX_BYTES", "4")
+
+        def fail_if_called(_stream):
+            raise AssertionError("pdfplumber should not be called")
+
+        monkeypatch.setattr("countyiq.lib.doc_text.pdfplumber.open", fail_if_called)
+
+        try:
+            extract_text_from_pdf_bytes(b"12345")
+        except ValueError as exc:
+            assert "byte limit" in str(exc)
+        else:
+            raise AssertionError("oversized PDFs must be rejected")
+
     def test_non_empty_pages_joined_with_blank_lines(self, monkeypatch):
         class FakePage:
             def __init__(self, text):
@@ -89,6 +104,33 @@ class TestExtractTextFromPdfBytes:
         assert extract_text_from_pdf_bytes(b"pdf bytes") == (
             "First page.\n\nSecond page."
         )
+
+    def test_excess_page_count_skips_page_extraction(self, monkeypatch):
+        monkeypatch.setenv("COUNTYIQ_PDF_TEXT_MAX_PAGES", "1")
+
+        class FakePage:
+            def extract_text(self):
+                raise AssertionError("pages should not be extracted")
+
+        class FakePdf:
+            pages = [FakePage(), FakePage()]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+        monkeypatch.setattr(
+            "countyiq.lib.doc_text.pdfplumber.open", lambda _stream: FakePdf()
+        )
+
+        try:
+            extract_text_from_pdf_bytes(b"pdf bytes")
+        except ValueError as exc:
+            assert "page limit" in str(exc)
+        else:
+            raise AssertionError("over-page-limit PDFs must be rejected")
 
     def test_empty_bytes_skip_pdf_parser(self, monkeypatch):
         def fail_if_called(_stream):

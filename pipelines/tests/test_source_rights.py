@@ -202,6 +202,7 @@ def _municipality_policy(
     proceeding_type="board_of_supervisors",
     status="conditional",
     due=None,
+    robots_unavailable_risk_accepted=False,
 ):
     return (
         source_key,
@@ -219,7 +220,10 @@ def _municipality_policy(
         "not_found",
         due or date.today() + timedelta(days=30),
         date.today(),
-        {"basis": "unit test"},
+        {
+            "basis": "unit test",
+            "robots_unavailable_risk_accepted": robots_unavailable_risk_accepted,
+        },
         datetime.now(timezone.utc),
         "test policy",
         1,
@@ -245,6 +249,27 @@ def test_municipality_policy_must_match_config_exactly():
     assert database.audit[0][4:6] == (True, "authorized")
     assert database.audit[0][6] == 1
     assert len(database.audit[0][7]) == 64
+
+
+def test_municipality_authorization_exposes_reviewed_robots_exception():
+    database = _MunicipalityDatabase(
+        [_municipality_policy(robots_unavailable_risk_accepted=True)]
+    )
+
+    authorizations = authorize_municipality_sources(
+        database,
+        entries=((
+            "Dover Twp Board of Supervisors",
+            "https://example.gov/minutes",
+            "board_of_supervisors",
+        ),),
+        acquisition_method="official_document_direct",
+        asset_key="public_proceedings_scrape",
+    )
+
+    assert authorizations[
+        "dover_twp_board_of_supervisors"
+    ].robots_unavailable_risk_accepted
 
 
 def test_changed_municipality_url_fails_closed_and_is_audited():

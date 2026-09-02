@@ -41,6 +41,8 @@ from countyiq.lib.intelligence_common import (
 
 VALID_STATUSES = {"confirmed", "upgraded", "downgraded", "stale", "irrelevant"}
 VALID_SIGNIFICANCE = {"high", "medium", "low", "none"}
+NON_SERVING_VALIDATION_STATUSES = {"stale", "irrelevant"}
+SERVING_VALIDATION_STATUSES = VALID_STATUSES - NON_SERVING_VALIDATION_STATUSES
 
 
 # =============================================================================
@@ -48,6 +50,35 @@ VALID_SIGNIFICANCE = {"high", "medium", "low", "none"}
 # =============================================================================
 
 SIGNAL_TEMPLATES: dict[str, dict] = {
+    # ── municipal_action ──────────────────────────────────────────────────
+    "municipal_action": {
+        "base_questions": [
+            "Does the linked proceeding actually concern this parcel, or was the address match ambiguous?",
+            "What is the procedural state (application, hearing, approval, denial, continuance) and how recent is it?",
+            "Do the proposed use or zoning and any conditions change what can be built here?",
+        ],
+        "conditional_questions": {
+            "decision_denied": [
+                "Was the denial final, or can the applicant revise and return?",
+            ],
+            "match_normalized_address": [
+                "Could the normalized street address match a different parcel on the same street?",
+            ],
+        },
+    },
+    # ── entity_assemblage ─────────────────────────────────────────────────
+    "entity_assemblage": {
+        "base_questions": [
+            "Is the same owner genuinely accumulating contiguous parcels, or is this a long-held family or farm holding?",
+            "Do the acquisition dates and prices suggest a development site being assembled?",
+            "Does the entity's portfolio or corporate record indicate a developer or investor?",
+        ],
+        "conditional_questions": {
+            "large_cluster": [
+                "Do the assembled parcels form a buildable footprint with road frontage?",
+            ],
+        },
+    },
     # ── 1. active_subdivision ─────────────────────────────────────────────
     "active_subdivision": {
         "base_questions": [
@@ -214,6 +245,9 @@ SIGNAL_TEMPLATES: dict[str, dict] = {
 SIGNAL_VALIDATION_PROMPT = """You are a county intelligence analyst validating a development signal for a parcel in {county_context}.
 
 Your job is to evaluate whether the signal is meaningful, current, and correctly weighted for this specific parcel. Answer each validation question, then provide your overall assessment.
+
+If validation_status is "stale" or "irrelevant", adjusted_significance MUST
+be "none". Those statuses are not eligible for serving briefs.
 
 SIGNAL:
 - Signal type: {signal_key}
@@ -555,6 +589,14 @@ def parse_signal_validation_output(output: object) -> dict:
     significance = output.get("adjusted_significance", "medium")
     if significance not in VALID_SIGNIFICANCE:
         significance = "medium"
+
+    if status in NON_SERVING_VALIDATION_STATUSES and significance != "none":
+        return {
+            "error": (
+                f"validation_status '{status}' requires "
+                "adjusted_significance 'none'"
+            )
+        }
 
     # Normalize key_facts
     key_facts = output.get("key_facts", [])

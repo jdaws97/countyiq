@@ -81,6 +81,16 @@ EVAL_MODEL_PRICE_CEILINGS = {
     "openai/gpt-5.6-luna": (0.22, 1.32),
     "z-ai/glm-5.3-flash": (0.16, 0.55),
     "x-ai/grok-4.6": (2.50, 8.00),
+    # 2026-09-02 cost-reduction candidates (OpenRouter list price + ~10%,
+    # rounded up; gpt-oss-120b allows the pricier hosted routes).
+    "deepseek/deepseek-v4-flash-0731": (0.08, 0.20),
+    "deepseek/deepseek-v4-flash": (0.10, 0.20),
+    "qwen/qwen3.5-flash-02-23": (0.08, 0.30),
+    "qwen/qwen3.8-flash": (0.17, 0.52),
+    "openai/gpt-oss-120b": (0.10, 0.40),
+    "upstage/solar-pro4": (0.04, 0.14),
+    "google/gemini-2.5-flash-lite": (0.11, 0.44),
+    "nvidia/nemotron-3-super-120b-a12b": (0.10, 0.45),
 }
 
 

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 import socket
 import threading
-import urllib.robotparser
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse, urlsplit
 
 import requests
-
 
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
@@ -54,20 +53,130 @@ class RobotsDecision:
     status_code: int | None = None
 
 
+@dataclass(frozen=True)
+class _RobotsRule:
+    allow: bool
+    pattern: str
+    specificity: int
+    regex: re.Pattern[str]
+
+    @classmethod
+    def parse(cls, *, allow: bool, pattern: str) -> _RobotsRule | None:
+        pattern = pattern.strip()
+        if not pattern:
+            return None
+        anchored = pattern.endswith("$")
+        body = pattern[:-1] if anchored else pattern
+        expression = re.escape(body).replace(r"\*", ".*")
+        return cls(
+            allow=allow,
+            pattern=pattern,
+            specificity=len(body.replace("*", "")),
+            regex=re.compile(f"^{expression}{'$' if anchored else ''}"),
+        )
+
+
+class _RobotsMatcher:
+    """Match robots groups with wildcard, end-anchor, and longest-rule semantics."""
+
+    def __init__(
+        self,
+        groups: list[tuple[tuple[str, ...], tuple[_RobotsRule, ...]]],
+    ) -> None:
+        self._groups = groups
+
+    @classmethod
+    def parse(cls, lines: list[str]) -> _RobotsMatcher:
+        groups: list[tuple[tuple[str, ...], tuple[_RobotsRule, ...]]] = []
+        agents: list[str] = []
+        rules: list[_RobotsRule] = []
+        group_has_directive = False
+
+        def flush() -> None:
+            nonlocal agents, rules, group_has_directive
+            if agents:
+                groups.append((tuple(agents), tuple(rules)))
+            agents = []
+            rules = []
+            group_has_directive = False
+
+        for raw_line in lines:
+            line = raw_line.partition("#")[0].strip()
+            if not line or ":" not in line:
+                continue
+            field, value = (part.strip() for part in line.split(":", 1))
+            field = field.casefold()
+            if field == "user-agent":
+                if agents and group_has_directive:
+                    flush()
+                if value:
+                    agents.append(value.casefold())
+                continue
+            if not agents:
+                continue
+            group_has_directive = True
+            if field not in {"allow", "disallow"}:
+                continue
+            rule = _RobotsRule.parse(allow=field == "allow", pattern=value)
+            if rule is not None:
+                rules.append(rule)
+        flush()
+        return cls(groups)
+
+    def can_fetch(self, product_token: str, url: str) -> bool:
+        product = product_token.casefold()
+        best_agent_specificity = -1
+        selected_rules: list[_RobotsRule] = []
+        for agents, rules in self._groups:
+            scores = [
+                0 if agent == "*" else len(agent)
+                for agent in agents
+                if agent == "*" or agent in product
+            ]
+            if not scores:
+                continue
+            specificity = max(scores)
+            if specificity > best_agent_specificity:
+                best_agent_specificity = specificity
+                selected_rules = list(rules)
+            elif specificity == best_agent_specificity:
+                selected_rules.extend(rules)
+
+        if best_agent_specificity < 0:
+            return True
+        parsed = urlsplit(url)
+        target = parsed.path or "/"
+        if parsed.query:
+            target = f"{target}?{parsed.query}"
+        matching = [rule for rule in selected_rules if rule.regex.search(target)]
+        if not matching:
+            return True
+        longest = max(rule.specificity for rule in matching)
+        return any(rule.allow for rule in matching if rule.specificity == longest)
+
+
 class RobotsPolicy:
     """Cache one robots policy per origin and expose auditable decisions.
 
     Missing policies (404/410) follow the ordinary allow convention. Network
     errors, server/client errors, empty responses, and explicit disallows fail
-    closed. The same honest user agent is used for the policy and source fetch.
+    closed. The outbound HTTP user agent remains honest while an explicit
+    product token selects the matching robots group.
     """
 
-    def __init__(self, user_agent: str, *, timeout: int = 10):
+    def __init__(
+        self,
+        user_agent: str,
+        *,
+        product_token: str | None = None,
+        timeout: int = 10,
+    ):
         self._user_agent = user_agent
+        self._product_token = product_token or user_agent
         self._timeout = timeout
         self._cache: dict[
             str,
-            tuple[urllib.robotparser.RobotFileParser | None, str, int | None, str],
+            tuple[_RobotsMatcher | None, str, int | None, str],
         ] = {}
         self._lock = threading.Lock()
 
@@ -81,7 +190,7 @@ class RobotsPolicy:
             parser, reason, status_code, cached_url = self._cache[origin]
         if parser is None:
             return RobotsDecision(False, reason, cached_url, status_code)
-        allowed = parser.can_fetch(self._user_agent, url)
+        allowed = parser.can_fetch(self._product_token, url)
         return RobotsDecision(
             allowed,
             "allowed" if allowed else "explicit_disallow",
@@ -92,9 +201,53 @@ class RobotsPolicy:
     def allowed(self, url: str) -> bool:
         return self.decision(url).allowed
 
+    def cache_browser_response(
+        self,
+        robots_url: str,
+        *,
+        text: str,
+        status_code: int,
+        resolved_url: str | None = None,
+    ) -> None:
+        """Cache a robots response obtained through an honest browser transport.
+
+        Some public hosts terminate the Python/OpenSSL connection while serving
+        the same URL normally to Chromium. The browser caller must enforce the
+        reviewed origin boundary before passing the response here. Empty/error
+        responses retain the same fail-closed semantics as the direct client.
+        """
+
+        parsed = urlparse(robots_url)
+        origin = f"{parsed.scheme or 'https'}://{parsed.netloc.lower()}"
+        result = self._parse_response(
+            text=text,
+            status_code=status_code,
+            resolved_url=resolved_url or robots_url,
+        )
+        with self._lock:
+            self._cache[origin] = result
+
+    @staticmethod
+    def _parse_response(
+        *,
+        text: str,
+        status_code: int,
+        resolved_url: str,
+    ) -> tuple[_RobotsMatcher | None, str, int | None, str]:
+        if status_code in (404, 410):
+            parser = _RobotsMatcher.parse([])
+            return parser, "robots_missing", status_code, resolved_url
+        if status_code >= 400:
+            return None, f"robots_http_{status_code}", status_code, resolved_url
+        if not text.strip():
+            return None, "robots_empty", status_code, resolved_url
+
+        parser = _RobotsMatcher.parse(text.splitlines())
+        return parser, "robots_loaded", status_code, resolved_url
+
     def _fetch(
         self, robots_url: str
-    ) -> tuple[urllib.robotparser.RobotFileParser | None, str, int | None, str]:
+    ) -> tuple[_RobotsMatcher | None, str, int | None, str]:
         try:
             response = get_public_with_redirects(
                 requests,
@@ -105,37 +258,10 @@ class RobotsPolicy:
         except requests.RequestException as exc:
             return None, f"robots_network_error:{type(exc).__name__}", None, robots_url
 
-        if response.status_code in (404, 410):
-            parser = urllib.robotparser.RobotFileParser()
-            parser.parse([])
-            return (
-                parser,
-                "robots_missing",
-                response.status_code,
-                getattr(response, "url", robots_url),
-            )
-        if response.status_code >= 400:
-            return (
-                None,
-                f"robots_http_{response.status_code}",
-                response.status_code,
-                getattr(response, "url", robots_url),
-            )
-        if not response.text.strip():
-            return (
-                None,
-                "robots_empty",
-                response.status_code,
-                getattr(response, "url", robots_url),
-            )
-
-        parser = urllib.robotparser.RobotFileParser()
-        parser.parse(response.text.splitlines())
-        return (
-            parser,
-            "robots_loaded",
-            response.status_code,
-            getattr(response, "url", robots_url),
+        return self._parse_response(
+            text=response.text,
+            status_code=response.status_code,
+            resolved_url=getattr(response, "url", robots_url),
         )
 
 
@@ -143,8 +269,10 @@ def get_with_robots(
     url: str,
     *,
     robots: RobotsPolicy,
+    requester=requests,
     headers: dict[str, str] | None = None,
     timeout: int = 30,
+    stream: bool = False,
     max_redirects: int = 5,
     allowed_origins: set[str] | frozenset[str] | None = None,
 ) -> requests.Response:
@@ -181,11 +309,12 @@ def get_with_robots(
         if not decision.allowed:
             raise RobotsDeniedError(current_url, decision.reason)
 
-        response = requests.get(
+        response = requester.get(
             current_url,
             headers=request_headers if redirect_count == 0 else redirect_headers,
             timeout=timeout,
             allow_redirects=False,
+            stream=stream,
         )
         if response.status_code not in _REDIRECT_STATUSES:
             return response
@@ -207,7 +336,7 @@ def get_with_robots(
 def assert_public_http_url(url: str) -> None:
     """Reject non-HTTP, credential-bearing, and non-public network targets.
 
-    Dynamic source discovery and redirects are untrusted input. Resolving the
+    Source URLs and redirects are untrusted input. Resolving the
     hostname before each hop blocks ordinary loopback, RFC1918, link-local,
     container-network, and instance-metadata SSRF targets. Host firewall rules
     remain the final defense against DNS rebinding between this check and the

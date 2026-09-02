@@ -19,7 +19,7 @@ from dagster import (
 
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.http_retry import get_with_retry
+from countyiq.lib.robots import RobotsPolicy, get_with_robots, source_origin
 from countyiq.lib.scd import scd2_upsert
 from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
@@ -30,6 +30,9 @@ VALUE_COLUMNS = [
     "plaintiff", "defendant", "zip_code",
     "municipality", "judgment_amount", "status", "status_date", "source_url",
 ]
+
+_USER_AGENT = "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"
+_ROBOTS_PRODUCT_TOKEN = "CountyIQ"
 
 
 def parse_sheriff_sale_page(html: str) -> list[dict]:
@@ -127,7 +130,19 @@ def sheriff_sales_scrape(
     require_source_use(authorization, "raw_retention")
 
     context.log.info(f"Fetching official sheriff listing: {county.sheriff_sales_url}")
-    html = get_with_retry(county.sheriff_sales_url, timeout=60).text
+    robots = RobotsPolicy(
+        _USER_AGENT,
+        product_token=_ROBOTS_PRODUCT_TOKEN,
+    )
+    response = get_with_robots(
+        county.sheriff_sales_url,
+        robots=robots,
+        headers={"User-Agent": _USER_AGENT},
+        timeout=60,
+        allowed_origins={source_origin(county.sheriff_sales_url)},
+    )
+    response.raise_for_status()
+    html = response.text
 
     context.log.info("Page loaded, parsing...")
     s3.archive(f"{county.s3_prefix}/scrapers/sheriff_sales", html, filename="listing.html")

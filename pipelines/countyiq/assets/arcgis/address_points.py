@@ -167,6 +167,18 @@ def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_recor
 
         archive_handle.flush()
 
+        # The SCD2 comparison probes the complete staged source twice for each
+        # current row. Without a temp-table key index, a county-sized refresh
+        # degrades into a quadratic scan (191k rows took minutes without
+        # completing on the local backfill). The source key is not declared on
+        # CREATE TABLE ... LIKE because temp constraints are intentionally
+        # omitted, so add the lookup index explicitly and refresh statistics.
+        cursor.execute(
+            "CREATE INDEX idx_tmp_address_points_site_nguid "
+            "ON _tmp_address_points (site_nguid)"
+        )
+        cursor.execute("ANALYZE _tmp_address_points")
+
         key_join = "c.site_nguid = t.site_nguid"
         value_diff = " OR ".join(f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS)
         cursor.execute(f"""

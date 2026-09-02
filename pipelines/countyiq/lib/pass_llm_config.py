@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 import os
+import threading
 from collections.abc import Callable
+from pathlib import Path
 
+from countyiq.lib.backfill_authorization import (
+    BackfillAuthorization,
+    BackfillAuthorizationError,
+)
 from countyiq.lib.llm_harness import HarnessConfig, get_preset_for_model
 
 
@@ -15,6 +22,19 @@ class PassHarnessUnavailable(RuntimeError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+class PassSpendLimitExceeded(RuntimeError):
+    """Raised before a call that could exceed the explicit pass budget."""
+
+
+class SpendReservation(float):
+    """Float-compatible reservation carrying its durable-ledger identifier."""
+
+    def __new__(cls, amount: float, authorization_id: str | None = None):
+        instance = super().__new__(cls, amount)
+        instance.authorization_id = authorization_id
+        return instance
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -112,19 +132,31 @@ def resolve_pass_enabled(pass_number: int) -> bool:
     return _bool_env(f"COUNTYIQ_PASS{pass_number}_ENABLED", False)
 
 
-def resolve_pass_item_limit(pass_number: int) -> int:
-    """Return a finite work-item ceiling for one explicitly enabled pass.
+def resolve_pass_item_limit(pass_number: int) -> int | None:
+    """Return the work-item ceiling for one explicitly enabled pass.
 
     The unit is the pass's outer work item (document, entity cluster, parcel,
     owner, or Pass 4 scan result). Invalid and non-positive values fall back to
-    25; there is intentionally no environment value meaning "unbounded".
+    25. Passes 0-3 may explicitly opt into a cost-only backfill: in that mode
+    the mandatory dollar reservation ledger, rather than a second item cap,
+    stops dispatch.
     """
+    if _bool_env(f"COUNTYIQ_PASS{pass_number}_BACKFILL_MODE", False):
+        if pass_number == 4:
+            raise ValueError("Pass 4 is outside the approved backfill")
+        max_cost_usd = _float_env(f"COUNTYIQ_PASS{pass_number}_MAX_COST_USD")
+        if max_cost_usd is None or max_cost_usd <= 0:
+            raise ValueError(
+                f"COUNTYIQ_PASS{pass_number}_BACKFILL_MODE requires a positive "
+                f"COUNTYIQ_PASS{pass_number}_MAX_COST_USD"
+            )
+        return None
     limit = _int_env(f"COUNTYIQ_PASS{pass_number}_MAX_ITEMS", 25)
     return limit if limit > 0 else 25
 
 
 class PassItemBudget:
-    """Finite budget for changed outer work items in one asset run.
+    """Budget for changed outer work items in one asset run.
 
     Callers claim only after their input-hash skip. That avoids a subtle
     starvation bug where an unchanged first page could consume the cap forever
@@ -137,19 +169,223 @@ class PassItemBudget:
         self.claimed = 0
         self.denied = 0
         self._warned = False
+        self._lock = threading.Lock()
+
+    @property
+    def mode(self) -> str:
+        return "dollar_ceiling" if self.limit is None else "item_and_dollar"
 
     def claim(self, log, *, label: str) -> bool:
-        if self.claimed >= self.limit:
-            self.denied += 1
-            if not self._warned:
-                log.warning(
-                    "Pass %d reached its %d-item run cap; remaining %s are deferred",
-                    self.pass_number, self.limit, label,
+        with self._lock:
+            if self.limit is None:
+                self.claimed += 1
+                return True
+            if self.claimed >= self.limit:
+                self.denied += 1
+                if not self._warned:
+                    log.warning(
+                        "Pass %d reached its %d-item run cap; remaining %s are deferred",
+                        self.pass_number, self.limit, label,
+                    )
+                    self._warned = True
+                return False
+            self.claimed += 1
+            return True
+
+
+class PassSpendBudget:
+    """Pre-call reservation ledger for one paid asset invocation."""
+
+    def __init__(
+        self,
+        pass_number: int,
+        max_cost_usd: float,
+        limit_label: str | None = None,
+        authorization: BackfillAuthorization | None = None,
+    ) -> None:
+        if not math.isfinite(max_cost_usd) or max_cost_usd <= 0:
+            raise ValueError("max_cost_usd must be positive and finite")
+        self.pass_number = pass_number
+        self.max_cost_usd = max_cost_usd
+        self.authorization = authorization
+        self.limit_label = limit_label or f"COUNTYIQ_PASS{pass_number}_MAX_COST_USD"
+        self.spent_usd = 0.0
+        self.reserved_usd = 0.0
+        self.calls = 0
+        self.blocked_reason: str | None = None
+        # Passes may overlap provider calls (COUNTYIQ_PASS2_CONCURRENCY); the
+        # ledger must stay consistent under concurrent reserve/record.
+        self._lock = threading.Lock()
+
+    def reserve(
+        self,
+        config: HarnessConfig,
+        prompt: str,
+        *,
+        retries: int,
+        pdf_bytes: bytes | None,
+    ) -> SpendReservation:
+        amount = estimate_max_pass_call_cost(
+            config, prompt, retries=retries, pdf_bytes=pdf_bytes
+        )
+        with self._lock:
+            if self.blocked_reason:
+                raise PassSpendLimitExceeded(self.blocked_reason)
+            if self.spent_usd + self.reserved_usd + amount > self.max_cost_usd:
+                raise PassSpendLimitExceeded(
+                    f"Pass {self.pass_number} cost reservation would exceed "
+                    f"{self.limit_label}: "
+                    f"spent=${self.spent_usd:.6f}, next_max=${amount:.6f}, "
+                    f"limit=${self.max_cost_usd:.6f}"
                 )
-                self._warned = True
-            return False
-        self.claimed += 1
-        return True
+            authorization_id = None
+            if self.authorization is not None:
+                try:
+                    authorization_id = self.authorization.reserve(amount)
+                except BackfillAuthorizationError as exc:
+                    raise PassSpendLimitExceeded(str(exc)) from exc
+            self.reserved_usd += amount
+        return SpendReservation(amount, authorization_id)
+
+    def release(self, reservation: SpendReservation) -> None:
+        authorization_id = getattr(reservation, "authorization_id", None)
+        if self.authorization is not None and authorization_id is not None:
+            try:
+                self.authorization.cancel(authorization_id)
+            except BackfillAuthorizationError as exc:
+                with self._lock:
+                    self.blocked_reason = (
+                        "cumulative authorization could not release a "
+                        f"non-dispatched reservation: {exc}"
+                    )
+                raise PassSpendLimitExceeded(self.blocked_reason) from exc
+        with self._lock:
+            self._release_locked(reservation)
+
+    def _release_locked(self, reservation: SpendReservation) -> None:
+        self.reserved_usd = max(0.0, self.reserved_usd - float(reservation))
+
+    def block_unverified(
+        self, reservation: SpendReservation, reason: str
+    ) -> None:
+        """Conservatively charge a dispatched call whose spend is unknowable."""
+
+        authorization_id = getattr(reservation, "authorization_id", None)
+        if self.authorization is not None and authorization_id is not None:
+            try:
+                self.authorization.forfeit(authorization_id)
+            except BackfillAuthorizationError as exc:
+                reason = f"{reason}; cumulative authorization update failed: {exc}"
+        with self._lock:
+            self._release_locked(reservation)
+            self.spent_usd += float(reservation)
+            self.calls += 1
+            self.blocked_reason = reason
+
+    def record(self, result, reservation: SpendReservation) -> str | None:
+        """Charge a completed call and return any reason to block later calls.
+
+        A provider-accounting anomaly must never discard the paid response that
+        exposed it. The current result remains available to the caller; the
+        next reservation fails closed through ``blocked_reason``.
+        """
+        cost = result.metadata.get("cost")
+        if not isinstance(cost, (int, float)):
+            reason = (
+                "OpenRouter omitted usage.cost; stopping because runtime spend "
+                "can no longer be verified"
+            )
+            self.block_unverified(reservation, reason)
+            return reason
+        if not math.isfinite(float(cost)) or float(cost) < 0:
+            reason = (
+                "OpenRouter returned an invalid usage.cost; stopping because "
+                "runtime spend can no longer be verified"
+            )
+            self.block_unverified(reservation, reason)
+            return reason
+        persistent_reason = None
+        authorization_id = getattr(reservation, "authorization_id", None)
+        if self.authorization is not None and authorization_id is not None:
+            try:
+                self.authorization.settle(authorization_id, float(cost))
+            except BackfillAuthorizationError as exc:
+                persistent_reason = (
+                    f"cumulative authorization update failed after dispatch: {exc}"
+                )
+        with self._lock:
+            self._release_locked(reservation)
+            self.calls += 1
+            self.spent_usd += float(cost)
+            if persistent_reason:
+                self.blocked_reason = persistent_reason
+                return self.blocked_reason
+            if (
+                float(cost) > float(reservation)
+                or self.spent_usd > self.max_cost_usd
+            ):
+                self.blocked_reason = (
+                    f"provider-reported spend exceeded its reservation or pass limit: "
+                    f"call=${float(cost):.6f}, "
+                    f"reservation=${float(reservation):.6f}, "
+                    f"spent=${self.spent_usd:.6f}, limit=${self.max_cost_usd:.6f}"
+                )
+                return self.blocked_reason
+        return None
+
+
+def estimate_max_pass_call_cost(
+    config: HarnessConfig,
+    prompt: str,
+    *,
+    retries: int = 1,
+    pdf_bytes: bytes | None = None,
+) -> float:
+    """Conservative provider-price-bounded reservation for one work item."""
+
+    prices = (config.max_price_prompt, config.max_price_completion)
+    if any(
+        price is None or not math.isfinite(price) or price <= 0
+        for price in prices
+    ):
+        raise PassSpendLimitExceeded(
+            "COUNTYIQ_MAX_PRICE_PROMPT and COUNTYIQ_MAX_PRICE_COMPLETION are "
+            "required as positive finite values when a paid pass is enabled"
+        )
+    characters = len(prompt) + len(config.system_prompt or "")
+    prompt_tokens = math.ceil(characters / 3)
+    if pdf_bytes is not None:
+        prompt_tokens += max(
+            _int_env("COUNTYIQ_PASS0_PDF_TOKEN_CEILING", 50_000), 1
+        )
+    return estimate_reserved_call_cost(
+        prompt_tokens=prompt_tokens,
+        max_tokens=config.max_tokens,
+        max_price_prompt=config.max_price_prompt,
+        max_price_completion=config.max_price_completion,
+        retries=retries,
+    )
+
+
+def estimate_reserved_call_cost(
+    *,
+    prompt_tokens: int,
+    max_tokens: int,
+    max_price_prompt: float,
+    max_price_completion: float,
+    retries: int = 1,
+) -> float:
+    """Mirror the runtime reservation math for estimators and tests."""
+
+    attempts = max(int(retries), 0) + 1
+    completion_budgets = [max(int(max_tokens), 1)]
+    for _ in range(attempts - 1):
+        completion_budgets.append(min(completion_budgets[-1] * 2, 16_384))
+    maximum = (
+        max(int(prompt_tokens), 0) * attempts * max_price_prompt
+        + sum(completion_budgets) * max_price_completion
+    ) / 1_000_000
+    return round(maximum * 1.10 + 0.000001, 9)
 
 
 def resolve_pass_reasoning_effort(pass_number: int) -> str | None:
@@ -171,9 +407,10 @@ def _float_env(name: str) -> float | None:
     if value is None or value.strip() == "":
         return None
     try:
-        return float(value)
+        parsed = float(value)
     except ValueError:
         return None
+    return parsed if math.isfinite(parsed) else None
 
 
 def build_pass_harness_config(
@@ -313,5 +550,85 @@ def resolve_pass_harness(
         )
         raise PassHarnessUnavailable("pass disabled or no model configured")
 
+    if (
+        config.max_price_prompt is None
+        or config.max_price_prompt <= 0
+        or config.max_price_completion is None
+        or config.max_price_completion <= 0
+    ):
+        raise PassHarnessUnavailable(
+            "COUNTYIQ_MAX_PRICE_PROMPT and COUNTYIQ_MAX_PRICE_COMPLETION must "
+            "be explicitly set to positive finite values before enabling paid inference"
+        )
+
+    max_cost_usd = _float_env(f"COUNTYIQ_PASS{pass_number}_MAX_COST_USD")
+    if max_cost_usd is None or max_cost_usd <= 0:
+        raise PassHarnessUnavailable(
+            f"COUNTYIQ_PASS{pass_number}_MAX_COST_USD must be explicitly set "
+            "to a positive dollar limit before enabling paid inference"
+        )
+    authorization_path = os.environ.get(
+        f"COUNTYIQ_PASS{pass_number}_BACKFILL_AUTHORIZATION_FILE", ""
+    ).strip()
+    if not authorization_path:
+        raise PassHarnessUnavailable(
+            f"COUNTYIQ_PASS{pass_number}_BACKFILL_AUTHORIZATION_FILE is "
+            "required for every paid canary or backfill run"
+        )
+    try:
+        authorization = BackfillAuthorization(
+            Path(authorization_path),
+            pass_number=pass_number,
+            model=config.model_path,
+            max_cost_usd=max_cost_usd,
+            max_price_prompt=config.max_price_prompt,
+            max_price_completion=config.max_price_completion,
+        )
+        authorization.snapshot()
+    except BackfillAuthorizationError as exc:
+        raise PassHarnessUnavailable(
+            f"invalid cumulative paid-pass authorization: {exc}"
+        ) from exc
+
+    spend_budget = PassSpendBudget(
+        pass_number,
+        max_cost_usd,
+        authorization=authorization,
+    )
+
+    def invoke_with_budget(call_config, prompt, **kwargs):
+        retries = int(kwargs.get("retries", 1))
+        reservation = spend_budget.reserve(
+            call_config,
+            prompt,
+            retries=retries,
+            pdf_bytes=kwargs.get("pdf_bytes"),
+        )
+        try:
+            result = invoke_with_retry(call_config, prompt, **kwargs)
+        except Exception:
+            spend_budget.block_unverified(
+                reservation,
+                "provider call failed before verifiable usage.cost was returned; "
+                "stopping subsequent calls",
+            )
+            raise
+        blocked_reason = spend_budget.record(result, reservation)
+        log.info(
+            "Pass %d spend: $%.6f / $%.6f across %d call(s)",
+            pass_number,
+            spend_budget.spent_usd,
+            spend_budget.max_cost_usd,
+            spend_budget.calls,
+        )
+        if blocked_reason:
+            log.warning(
+                "Pass %d retained the completed call result but blocked "
+                "subsequent calls: %s",
+                pass_number,
+                blocked_reason,
+            )
+        return result
+
     log.info("Pass %d: OpenRouter model=%s", pass_number, config.model_path)
-    return config, invoke_with_retry
+    return config, invoke_with_budget

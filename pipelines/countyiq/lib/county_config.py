@@ -132,7 +132,8 @@ class CountyConfig:
     municipality_websites: tuple[tuple[str, str, str], ...] = ()
 
     # Development signal thresholds (see assets/enrichment/development_signals.py)
-    signal_subdivision_radius_m: int = 250      # proximity for active_subdivision
+    signal_subdivision_radius_m: int = 250      # corridor radius for nearby_subdivision
+    signal_subdivision_on_parcel_m: int = 30    # plan point inside/at the parcel = active_subdivision
     signal_infrastructure_radius_m: int = 800   # proximity for PennDOT / CDBG
     signal_local_traffic_radius_m: int = 400    # nearest recent local traffic observation
     signal_environmental_radius_m: int = 500   # nearby PA DEP diligence record
@@ -258,7 +259,11 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ("Felton Borough Council", "https://feltonboroughpa.com/documents/minutes/", "borough_council"),
             ("Franklin Twp Board of Supervisors", "https://franklintownship.org/meeting-minutes-agendas/", "board_of_supervisors"),
             ("Goldsboro Borough Council", "https://goldsboropa.com/document-library-2/", "borough_council"),
-            ("Hellam Twp Board of Supervisors", "https://www.hellamtownship.gov/departments/public-meetings/", "board_of_supervisors"),
+            (
+                "Hellam Twp Board of Supervisors",
+                "https://www.hellamtownship.gov/board-of-supervisors-meetings/",
+                "board_of_supervisors",
+            ),
             ("Hopewell Twp Board of Supervisors", "https://www.hopewelltownship.com/public-meetings/board-of-supervisors/", "board_of_supervisors"),
             ("Jackson Twp Board of Supervisors", "https://jackson-township.org/meeting-agendas/", "board_of_supervisors"),
             ("Manchester Twp Board of Supervisors", "https://www.mantwp.com/meetings-agendas/", "board_of_supervisors"),
@@ -293,15 +298,20 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             # the cPanel default page). Kept for retry if hosting is restored.
             ("Yorkana Borough Council", "https://yorkanaborough.com/meeting-minutes/", "borough_council"),
             ("York City Council", "https://www.yorkcity.org/government/city-council/meetings/", "city_council"),
-            ("York Twp Board of Commissioners", "https://yorktownshippa.gov/boards/boc/", "board_of_commissioners"),
+            (
+                "York Twp Board of Commissioners",
+                "https://yorktownshippa.gov/boards-4/boc/",
+                "board_of_commissioners",
+            ),
 
             # --- Added 2026-04-08 deep survey ---
             ("Chanceford Twp Board of Supervisors", "https://www.chancefordtwp.com/Minutes.html", "board_of_supervisors"),
             ("Delta Borough Council", "https://www.deltaborough.us/current-meeting-minutes", "borough_council"),
             ("Dillsburg Borough Council", "https://dillsburg.com/minutes/", "borough_council"),
             ("Dover Borough Council", "https://www.doverboroughpa.com/minutes.html", "borough_council"),
-            # Franklintown's useful files are delivered only from GoDaddy's CDN;
-            # paused under the vendor terms review in migration 034.
+            # GoDaddy CDN delivery is an explicitly recorded product-owner risk
+            # acceptance in migration 042; raw archives remain private/export-disabled.
+            ("Franklintown Borough Council", "https://franklintownborough.net/notices%2Fagendas%2Fminutes", "borough_council"),
             ("Glen Rock Borough Council", "https://www.glenrockpa.org/borough-government/council-meeting-minutes-agendas/", "borough_council"),
             ("Jacobus Borough Council", "https://jacobuspa.com/council-meeting/council-meeting-minutes/", "borough_council"),
             ("Jefferson Borough Council", "https://jeffersonboro.net/council-minutes-agendas", "borough_council"),
@@ -309,8 +319,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ("Lower Chanceford Twp Board of Supervisors", "https://lowerchancefordtwppa.gov/meetings.php", "board_of_supervisors"),
             ("Lower Windsor Twp Board of Supervisors", "https://www.lowerwindsor.com/board-of-supervisors/", "board_of_supervisors"),
             ("Mount Wolf Borough Council", "https://mtwolfpa.gov/agenda-minutes/", "borough_council"),
-            # Newberry's useful files are delivered only from GoDaddy's CDN;
-            # paused under the vendor terms review in migration 034.
+            ("Newberry Twp Board of Supervisors", "https://newberrytwp.com/board-of-supervisors-info", "board_of_supervisors"),
             ("New Freedom Borough Council", "https://newfreedomboro.org/meeting-information/", "borough_council"),
             ("Stewartstown Borough Council", "https://www.stewartstown.org/borough-government/", "borough_council"),
             # York County's Warrington Twp is warringtontwp.org — warringtontownship.org
@@ -324,8 +333,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             # by filename. NOT heidelbergtownship.org — that's Heidelberg Twp,
             # BERKS County (wrong-county trap).
             ("Heidelberg Twp Board of Supervisors", "https://www.heidelbergtwpmunicipal.com/meeting-agendas-monthly-minutes/", "board_of_supervisors"),
-            # Washington Twp documents are delivered only from GoDaddy's CDN;
-            # paused under the vendor terms review in migration 034.
+            ("Washington Twp Board of Supervisors", "https://washingtontownshipyc.net/meeting-minutes", "board_of_supervisors"),
             # West York's hub delegates document delivery to public Google Drive.
             # Paused until the Drive origin has written commercial permission or
             # the borough publishes direct originals; see migration 033.
@@ -351,7 +359,11 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ("Goldsboro Boro Zoning Hearing Board", "https://goldsboropa.com/zoning-hearing-board/", "zoning_hearing"),
             ("Hanover Boro Zoning Hearing Board", "https://hanoverboroughpa.gov/AgendaCenter/Zoning-Hearing-Board-11", "zoning_hearing"),
             ("Heidelberg Twp Zoning Hearing Board", "https://www.heidelbergtwpmunicipal.com/meeting-agendas-monthly-minutes/", "zoning_hearing"),
-            ("Hellam Twp Zoning Hearing Board", "https://www.hellamtownship.gov/government/zoning-hearing-board/", "zoning_hearing"),
+            (
+                "Hellam Twp Zoning Hearing Board",
+                "https://www.hellamtownship.gov/zoning-hearing-board-meetings/",
+                "zoning_hearing",
+            ),
             ("Hopewell Twp Zoning Hearing Board", "https://www.hopewelltownship.com/public-meetings/zoning-hearing-board/", "zoning_hearing"),
             ("North Codorus Twp Zoning Hearing Board", "https://northcodorustwp.org/zoning-hearing-board-2/", "zoning_hearing"),
             ("Paradise Twp Zoning Hearing Board", "https://paradisetownship.org/documents/zoning-hearing-board-notices/", "zoning_hearing"),
@@ -388,7 +400,11 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ("Goldsboro Boro Planning Commission", "https://goldsboropa.com/planning-commission/", "planning_commission"),
             ("Heidelberg Twp Planning Commission", "https://www.heidelbergtwpmunicipal.com/meeting-agendas-monthly-minutes/", "planning_commission"),
             ("Hanover Boro Planning Commission", "https://hanoverboroughpa.gov/AgendaCenter/Planning-Commission-8", "planning_commission"),
-            ("Hellam Twp Planning Commission", "https://www.hellamtownship.gov/planning-commission/", "planning_commission"),
+            (
+                "Hellam Twp Planning Commission",
+                "https://www.hellamtownship.gov/planning-commission-meetings/",
+                "planning_commission",
+            ),
             ("Hopewell Twp Planning Commission", "https://www.hopewelltownship.com/public-meetings/planning-commission-board/", "planning_commission"),
             ("North Codorus Twp Planning Commission", "https://northcodorustwp.org/planning-commission-2/", "planning_commission"),
             ("Paradise Twp Planning Commission", "https://paradisetownship.org/documents/planning-commission-agendas-minutes/", "planning_commission"),

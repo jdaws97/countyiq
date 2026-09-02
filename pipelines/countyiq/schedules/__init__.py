@@ -3,8 +3,7 @@
 Weekly cadence for source refreshes (ArcGIS, bounded scrapers, PA DOS, FEMA,
 radar), monthly for low-frequency bulk downloads. Only deterministic
 enrichment runs Sunday 08:00 after upstream sources complete; paid LLM passes
-are manual and opt-in. County Scout remains manually runnable while its product
-role is evaluated; it is not on the default schedule.
+are manual and opt-in.
 
 Per-pass jobs are registered in ``definitions.py`` without schedules for
 targeted, budget-reviewed runs.

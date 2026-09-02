@@ -14,12 +14,13 @@ observability tables:
 
 No asset, sensor, API route, or frontend page ever read or wrote them, so
 migration `030_remove_unused_meta_tables.py` removes them. Its upgrade refuses
-to drop any table containing unexpected deployed rows. `GET /api/ops/health`
-continues to query current source rows; Dagster run history remains in the
-separate `dagster` database. See `docs/operations/health-dashboard.md` for the
-actual health contract.
+to drop any table containing unexpected deployed rows. Revision 037 later adds
+the narrowly scoped `job_run_status` projection that has an explicit writer
+and reader; full Dagster run history remains in the separate `dagster`
+database. See `docs/operations/health-dashboard.md` for the actual health
+contract.
 
-Current source-governance state is deliberately stored in `meta`:
+Current operational governance and audit state is deliberately stored in `meta`:
 
 - `source_rights` and append-only `source_rights_audit` govern source-wide
   acquisition, retention, derived serving, person display, and export. The
@@ -31,11 +32,29 @@ Current source-governance state is deliberately stored in `meta`:
   `municipality_source_audit` apply the same fail-closed model to each
   exact municipal body/listing. `allowed_origins` bounds redirects, document
   downloads, browser documents, and XHR/fetch endpoints to separately reviewed
-  origins; and
+  origins;
 - `municipality_source_health` records current access/document health without
-  changing or implying permission.
+  changing or implying permission;
+- `job_run_status` records only the latest outcome per Dagster job and latest
+  successful completion for application health. It is not a replacement for
+  Dagster's full event log; and
+- `intelligence_inference_history`, `intelligence_contradictions`, and
+  `intelligence_contradiction_resolutions` form the append-only audit boundary
+  for model-backed decisions. Serving projections link to an accepted history
+  row with `active_inference_id`; unchanged-evidence decision flips remain
+  quarantined for explicit review, and any human resolution is itself recorded
+  append-only. `intelligence_integrity_status` aggregates unresolved age,
+  provenance coverage, and projection/history mismatches without exposing
+  source payloads. Migration 040 labels pre-gate rows `legacy_unverified`,
+  archives them, and retracts them from serving.
+- `intelligence_validation_rejections` records every model output rejected by
+  deterministic evidence, membership, or citation validation. The table is
+  update/delete/truncate protected; `intelligence_validation_rejection_status`
+  exposes only total, last-24-hour count, and latest timestamp.
 
-Migrations 031 through 036 own those tables and current policy. Runtime code may
+Migrations 031 through 036 own the governance tables and current policy;
+migrations 038 through 041 own the intelligence integrity ledgers and operator
+resolution path. Runtime code may
 update health and append decisions, but it must not invent policy rows, expand
 origins, or update audit history.
 
@@ -46,8 +65,10 @@ The production Postgres container initializes two databases:
 - `countyiq`: application schemas and data
 - `dagster`: Dagster run, event-log, and schedule storage
 
-The API never queries the `dagster` database. Operators inspect pipeline state
-through the loopback-bound Dagster webserver or container logs.
+The API never queries the `dagster` database. Existing run-status sensors
+project the minimum latest-job state into `meta.job_run_status`; operators use
+the loopback-bound Dagster webserver or container logs for step-level and
+historical detail.
 
 ## Initialization
 

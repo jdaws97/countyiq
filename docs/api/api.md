@@ -26,8 +26,32 @@ surface is:
 | Owners | `/api/owners/top`, `/api/owners/{owner_id}` |
 | Municipalities and layers | `/api/municipalities`, `/api/municipalities/{name}`, `/api/layers/{layer_name}` |
 | Conditional distress | `/api/delinquent/parcels`, `/api/delinquent/top-owners`, `/api/scores/distressed`, `/api/scores/assemblage` (not mounted by default) |
-| Development intelligence | `/api/feed`, `/api/projects`, `/api/radar/development`, `/api/radar/development/bbox`, `/api/radar/municipalities`, `/api/radar/opportunity`, `/api/radar/site-readiness` |
-| Discovery and search | `/api/search`, `/api/licenses`, `/api/scout/candidates`, `/api/scout/registry`, `/api/scout/sources/{source_key}`, `/api/scout/summary` |
+| Development intelligence | `/api/feed`, `/api/projects`, `/api/radar/development`, `/api/radar/development/bbox`, `/api/radar/movers`, `/api/radar/municipalities`, `/api/radar/opportunity`, `/api/radar/site-readiness` |
+| Search and licenses | `/api/search`, `/api/licenses` |
+
+Radar scores are **score version 7**: every score is a deterministic function
+of `public.development_signals`, and Pass 2 output is carried only as a
+display annotation. `/api/radar/opportunity` weights come from the
+historical-plan back-test in `docs/research/radar-backtest-2026-09-02.md`.
+Each full property signal adds a `presentation` object with a readable title,
+trigger summary, interpretation, caveat, source facts, exact per-score point
+effects, and eligibility effect; `evidence_receipt` resolves to the matched
+source record where possible. `/api/parcels/{pidn}` also returns a parcel-wide
+`soil_profile` and FEMA `overlap_pct`. Tax-signal claim amounts and history are
+always suppressed in the public response.
+The list routes accept `municipality`, `min_acres`, `max_acres`, and `class`
+(comma-separated county class codes) and return compact signal JSON (per-signal
+prose stays on `/api/parcels/{pidn}`). Each row carries `previous_score`,
+`previous_opportunity_score`, `score_delta`, `opportunity_delta`,
+`previous_computed_at`, and `is_new` from the previous weekly snapshot.
+`/api/radar/movers` (`view=opportunity|momentum`, `direction=up|down|new`,
+`min_delta`) lists the parcels whose score changed most since that snapshot.
+`/api/radar/development/bbox` accepts `view=opportunity|momentum` for the map
+layer. `/api/feed` priority now decays two points per fortnight of age (capped
+at 25) and accepts `boost_pidns`, `boost_project_keys`, and `boost_entity_ids`,
+which rank a caller's browser-local watches first without filtering.
+`/api/municipalities/{name}` adds `development_pipeline` (source-backed
+planning matters by event type, upcoming and recent) and `radar_top`.
 
 `/api/radar/site-readiness` retains its stable route name but is presented as
 **site screening**. Its response reports coverage for seven deterministic
@@ -51,15 +75,31 @@ proceeding applicants, and source excerpts are suppressed. Boolean delinquency,
 municipality aggregates, scores, public premises, and generic evidence-backed
 event summaries retain analytical signal without exposing the restricted row.
 
-County Scout routes are registered but return 404 while its source policy is
-paused. `/api/ops/health` reports municipal-source configured, active, healthy,
-blocked, unchecked, and document counts so operational reachability cannot be
-mistaken for legal approval.
+`/api/ops/health` also returns an `intelligence_integrity` aggregate containing
+accepted/quarantined counts, unresolved contradiction age, resolution counts,
+unlinked or mismatched serving projections, and aggregate deterministic-gate
+rejection counts/timestamps. It never returns inference
+payloads, source excerpts, or a mutation route. A fresh unresolved item is
+yellow; an item older than `COUNTYIQ_CONTRADICTION_MAX_AGE_HOURS`, an unlinked
+projection, or a history/projection mismatch is red. A validation rejection in
+the last 24 hours is yellow.
+
+`/api/ops/health` reports municipal-source configured, active, healthy,
+blocked, unchecked, stale, and document counts. Scheduled staging sources also
+report their refresh job, latest run outcome, latest successful completion, and
+freshness deadline. A missing run, failed latest run, or expired freshness
+window fails red even when current rows still exist, so operational
+reachability cannot be mistaken for legal approval or current data.
 
 ## Natural-Language Search Boundary
 
 `GET /api/search` uses a deterministic fuzzy path for ordinary owner, address,
-and parcel lookups. Longer natural-language requests can use a dedicated
+and parcel lookups. It normalizes common street suffixes, ignores ordinary
+PIDN punctuation, accepts useful PIDN prefixes, searches personal names in
+both first/last and county last/first order, and ranks duplicate parcel matches
+by their strongest evidence. Owner names are lookup inputs but are not echoed
+on fuzzy result cards; those cards return the matched parcel address, PIDN, and
+municipality. Longer natural-language requests can use a dedicated
 low-cost LLM to emit a typed plan containing only:
 
 - an allowlisted table and fields;
@@ -88,6 +128,30 @@ links related parcels/entities/projects and sources; and identifies whether
 interpretation was deterministic or cached from an offline LLM pass. Serving
 and filtering the feed never calls an LLM.
 
+## Customer Evidence Receipts
+
+Customer-facing intelligence responses use a shared evidence-receipt shape so
+the UI can show what supports a claim without asking the customer to trust the
+summary. Receipts include a stable `evidence_id`/`citation_key`, source type and
+record identifier, effective and observed dates, a public-safe excerpt or fact
+set, the derivation method, confidence/caveat text, and links when available.
+`url` points to the original public record and `internal_url` points to the
+relevant CountyIQ record. A missing original URL is represented honestly rather
+than replaced with a generic source homepage.
+
+The contract is exposed as:
+
+- `sources` on `/api/feed` events;
+- `evidence` plus brief/narrative `citation_evidence` on parcel reports; and
+- `verification_evidence` plus brief `citation_evidence` on owner/entity case
+  files.
+
+Inline `[Signal: ...]`, `[Parcel: ...]`, and `[Evidence: ...]` markers resolve
+to these receipts in the frontend. Source-use policy still governs every field:
+restricted excerpts or natural-person details remain suppressed, while the
+receipt explains the safe fact, identifier, method, and limitation that can be
+shown.
+
 ## Browser Access
 
 The same-origin production path requires no CORS grant. Local development
@@ -107,7 +171,9 @@ present in the API container. Grants are refreshed after every migration by
 `DATABASE_POOL_MIN` defaults to 1 and `DATABASE_POOL_MAX` to 8, so the API is
 bounded at 16 connections instead of creating a new PostgreSQL connection per
 request. Broken connections are discarded and the pool closes during FastAPI
-shutdown.
+shutdown. When all connections are busy, requests wait for at most
+`DATABASE_POOL_WAIT_SECONDS` (default 5) and then receive HTTP 503 instead of
+an internal-server error.
 
 The API accepts `COUNTYIQ_TRUSTED_HOSTS` plus loopback/test hostnames required
 for internal health checks; unrestricted wildcard, URL, and path values are

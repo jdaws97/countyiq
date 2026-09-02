@@ -10,7 +10,6 @@ import pytest
 from fastapi.testclient import TestClient
 from psycopg2.extras import Json
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PIPELINES_DIR = REPO_ROOT / "pipelines"
 
@@ -93,7 +92,9 @@ def _wait_for_database() -> None:
         except psycopg2.OperationalError as exc:
             last_error = exc
             time.sleep(1)
-    raise RuntimeError("Timed out waiting for postgres-test to accept connections") from last_error
+    raise RuntimeError(
+        "Timed out waiting for postgres-test to accept connections"
+    ) from last_error
 
 
 def _provision_api_role() -> None:
@@ -123,9 +124,12 @@ def _reset_tables(cur) -> None:
         TRUNCATE TABLE
             staging.proceeding_extractions,
             staging.public_proceedings,
+            meta.job_run_status,
             meta.intelligence_passes,
             public.intelligence_events,
             public.owner_briefs,
+            public.entity_graph,
+            public.evidence,
             public.owner_source_links,
             public.owners,
             public.parcel_briefs,
@@ -250,6 +254,14 @@ def _seed_contract_data(cur) -> None:
             parcel_three_geom,
             "https://example.com/parcels/3",
         ),
+    )
+    cur.execute(
+        """
+        UPDATE staging.parcels
+        SET heatsys = 1, fuel = 2
+        WHERE pidn = %s
+        """,
+        (TEST_PIDN,),
     )
 
     cur.execute(
@@ -382,13 +394,50 @@ def _seed_contract_data(cur) -> None:
 
     signals = Json(
         {
-            "growth_area": {"weight": 1.2, "evidence": {"ga_type": "PGA"}},
+            "growth_area": {
+                "weight": 1.2,
+                "source_url": "https://example.com/growth/1",
+                "validation_status": "confirmed",
+                "adjusted_significance": "high",
+                "validation_reasoning": "The parcel intersects the official growth-area layer.",
+                "evidence": {"ga_type": "PGA"},
+            },
             "ownership_change": {
                 "weight": 0.8,
+                "source_url": "https://example.com/parcels/1",
+                "validation_status": "confirmed",
+                "adjusted_significance": "medium",
                 "validation_reasoning": "Private Person sold the parcel.",
                 "evidence": {"price": 210000, "prev_owner": "Private Person"},
             },
         }
+    )
+
+    cur.execute(
+        """
+        INSERT INTO public.evidence (
+            pidn, signal_key, claim, evidence_data, source_url, internal_url,
+            validation_status, adjusted_significance, validation_reasoning,
+            validated_at, confidence
+        )
+        VALUES
+            (%s, 'growth_area', %s, %s, %s, %s, 'confirmed', 'high', %s, NOW(), 0.95),
+            (%s, 'ownership_change', %s, %s, %s, %s, 'confirmed', 'medium', %s, NOW(), 0.88)
+        """,
+        (
+            TEST_PIDN,
+            "Parcel intersects the primary growth area.",
+            Json({"ga_type": "PGA"}),
+            "https://example.com/growth/1",
+            f"/property/{TEST_PIDN}",
+            "Confirmed by the official growth-area layer.",
+            TEST_PIDN,
+            "A recent ownership change was recorded.",
+            Json({"price": 210000, "saledt": "01-JAN-2024"}),
+            "https://example.com/parcels/1",
+            f"/property/{TEST_PIDN}",
+            "Confirmed by the versioned parcel record.",
+        ),
     )
     cur.execute(
         """
@@ -462,12 +511,12 @@ def _seed_contract_data(cur) -> None:
         """,
         (
             TEST_PIDN,
-            "Signal-rich commercial parcel with recent ownership change.",
+            "Signal-rich commercial parcel in a growth area [Signal: growth_area] with a recent ownership change [Signal: ownership_change].",
             "promising",
-            "Growth-area and ownership-change signals align.",
+            "Growth-area [Signal: growth_area] and ownership-change [Signal: ownership_change] signals align.",
             ["Is the adjacent parcel also available?"],
             2,
-            Json(["Proceedings packet", "County narrative"]),
+            Json(["growth_area", "ownership_change"]),
             1,
             Json({"model": "test"}),
         ),
@@ -642,13 +691,22 @@ def _seed_contract_data(cur) -> None:
             TEST_MUNICIPALITY,
             ["Alpha Holdings LLC"],
             [TEST_PIDN],
-            Json([{
-                "label": "York County parcel record",
-                "url": "https://example.com/parcels/1",
-                "document_url": None,
-                "excerpt": None,
-                "details": {"owner_full": {"old": "Old Owner", "new": "Alpha Holdings LLC"}},
-            }]),
+            Json(
+                [
+                    {
+                        "label": "York County parcel record",
+                        "url": "https://example.com/parcels/1",
+                        "document_url": None,
+                        "excerpt": None,
+                        "details": {
+                            "owner_full": {
+                                "old": "Old Owner",
+                                "new": "Alpha Holdings LLC",
+                            }
+                        },
+                    }
+                ]
+            ),
             "deterministic",
             "development:test-project",
             "proceeding_extraction",
@@ -666,13 +724,20 @@ def _seed_contract_data(cur) -> None:
             "Main Street redevelopment",
             ["Alpha Holdings LLC"],
             [TEST_PIDN],
-            Json([{
-                "label": "Test Township ZHB",
-                "url": "https://example.com/proceedings/1",
-                "document_url": "https://example.com/proceedings/1.pdf",
-                "excerpt": "The board approved the variance with conditions.",
-                "details": {"decision": "approved", "conditions": ["traffic review"]},
-            }]),
+            Json(
+                [
+                    {
+                        "label": "Test Township ZHB",
+                        "url": "https://example.com/proceedings/1",
+                        "document_url": "https://example.com/proceedings/1.pdf",
+                        "excerpt": "The board approved the variance with conditions.",
+                        "details": {
+                            "decision": "approved",
+                            "conditions": ["traffic review"],
+                        },
+                    }
+                ]
+            ),
             "llm",
             "test-model",
         ),
@@ -681,13 +746,38 @@ def _seed_contract_data(cur) -> None:
     # Owner resolution + portfolio brief for the owner-profile contract.
     cur.execute(
         """
-        INSERT INTO public.owners (canonical_name, entity_type, parcel_count, municipality)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO public.owners (
+            canonical_name, entity_type, parcel_count, municipality, aliases,
+            verification_status, verification_reasoning, verified_at
+        )
+        VALUES (%s, %s, %s, %s, %s, 'verified', %s, NOW())
         RETURNING owner_id
         """,
-        ("Alpha Holdings LLC", "llc", 1, TEST_MUNICIPALITY),
+        (
+            "Alpha Holdings LLC",
+            "business",
+            1,
+            TEST_MUNICIPALITY,
+            ["Alpha Holdings"],
+            f"The entity owns the cited county parcel [Evidence: parcels:{TEST_PIDN}].",
+        ),
     )
     owner_id = cur.fetchone()[0]
+    cur.execute(
+        """
+        INSERT INTO public.entity_graph (
+            canonical_name, entity_type, linked_names, linked_sources,
+            relationships, verification_status, verification_reasoning, verified_at
+        )
+        VALUES (%s, 'llc', %s, %s, '[]'::jsonb, 'verified', %s, NOW())
+        """,
+        (
+            "Alpha Holdings LLC",
+            ["Alpha Holdings LLC", "Alpha Holdings"],
+            Json({"parcels": [TEST_PIDN]}),
+            f"The entity owns the cited county parcel [Evidence: parcels:{TEST_PIDN}].",
+        ),
+    )
     cur.execute(
         """
         INSERT INTO public.owner_source_links
@@ -701,22 +791,24 @@ def _seed_contract_data(cur) -> None:
         INSERT INTO public.owner_briefs (
             canonical_name, owner_id, brief_text, portfolio_strategy,
             concentration_notes, key_pattern, recommendation, urgency,
-            top_risk, evidence_strength, n_parcels,
+            top_risk, evidence_strength, citations, parcel_citations, n_parcels,
             model_version, prompt_version, n_trials, trial_agreement, confidence
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             "Alpha Holdings LLC",
             owner_id,
-            "Alpha Holdings is consolidating along Main Street. [Parcel: 0000000000001]",
+            f"Alpha Holdings is consolidating along Main Street [Signal: growth_area] [Parcel: {TEST_PIDN}].",
             "accumulator",
             "Single-corridor concentration.",
-            "Recent acquisition plus zoning activity suggests active expansion.",
+            "Recent acquisition plus zoning activity suggests active expansion [Signal: growth_area].",
             "monitor",
             "near_term_90d",
-            "Competing buyers in the same corridor.",
+            f"Competing buyers may target the same corridor [Parcel: {TEST_PIDN}].",
             "moderate",
+            Json(["growth_area"]),
+            Json([TEST_PIDN]),
             1,
             "test-model",
             "testprompt123",
@@ -724,6 +816,18 @@ def _seed_contract_data(cur) -> None:
             None,
             0.72,
         ),
+    )
+
+    cur.execute(
+        """
+        INSERT INTO meta.job_run_status (
+            job_name, run_id, status, started_at, finished_at, last_success_at
+        )
+        VALUES (
+            'arcgis_refresh', 'api-contract-arcgis', 'success',
+            NOW() - INTERVAL '1 minute', NOW(), NOW()
+        )
+        """
     )
 
 

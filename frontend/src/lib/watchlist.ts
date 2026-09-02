@@ -36,7 +36,7 @@ function read(): string[] {
 
 function write(pidns: string[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(pidns.slice(0, WATCHLIST_CAP)))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pidns))
     window.dispatchEvent(new Event('countyiq-watchlist-changed'))
   } catch {
     // Storage full/unavailable (private browsing) — watching just won't persist.
@@ -62,7 +62,7 @@ function readProjects(): WatchedProject[] {
 
 function writeProjects(projects: WatchedProject[]): void {
   try {
-    localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projects.slice(0, WATCHLIST_CAP)))
+    localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projects))
     window.dispatchEvent(new Event('countyiq-watchlist-changed'))
   } catch {
     // Storage full/unavailable (private browsing) — watching just won't persist.
@@ -88,7 +88,7 @@ function readEntities(): WatchedEntity[] {
 
 function writeEntities(entities: WatchedEntity[]): void {
   try {
-    localStorage.setItem(ENTITY_STORAGE_KEY, JSON.stringify(entities.slice(0, WATCHLIST_CAP)))
+    localStorage.setItem(ENTITY_STORAGE_KEY, JSON.stringify(entities))
     window.dispatchEvent(new Event('countyiq-watchlist-changed'))
   } catch {
     // Storage full/unavailable (private browsing) — watching just won't persist.
@@ -109,6 +109,10 @@ export function toggleWatch(pidn: string): boolean {
     write(current.filter((p) => p !== pidn))
     return false
   }
+  if (current.length >= WATCHLIST_CAP) {
+    window.alert(`Parcel watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`)
+    return false
+  }
   write([pidn, ...current])
   return true
 }
@@ -125,6 +129,10 @@ export function toggleProjectWatch(project: WatchedProject): boolean {
   const current = readProjects()
   if (current.some((item) => item.key === project.key)) {
     writeProjects(current.filter((item) => item.key !== project.key))
+    return false
+  }
+  if (current.length >= WATCHLIST_CAP) {
+    window.alert(`Project watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`)
     return false
   }
   writeProjects([project, ...current])
@@ -145,6 +153,50 @@ export function toggleEntityWatch(entity: WatchedEntity): boolean {
     writeEntities(current.filter((item) => item.id !== entity.id))
     return false
   }
+  if (current.length >= WATCHLIST_CAP) {
+    window.alert(`Entity watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`)
+    return false
+  }
   writeEntities([entity, ...current])
   return true
+}
+
+export function replaceWatchlists({
+  parcels,
+  projects,
+  entities,
+}: {
+  parcels: string[]
+  projects: WatchedProject[]
+  entities: WatchedEntity[]
+}): void {
+  const nextParcels = Array.from(new Set(parcels.filter((pidn) => typeof pidn === 'string')))
+  const nextProjects = Array.from(new Map(
+    projects
+      .filter((project) => project && typeof project.key === 'string' && typeof project.name === 'string')
+      .map((project) => [project.key, project]),
+  ).values())
+  const nextEntities = Array.from(new Map(
+    entities
+      .filter((entity) => entity && Number.isInteger(entity.id) && typeof entity.name === 'string')
+      .map((entity) => [entity.id, entity]),
+  ).values())
+  if (nextParcels.length > WATCHLIST_CAP || nextProjects.length > WATCHLIST_CAP || nextEntities.length > WATCHLIST_CAP) {
+    throw new Error(`Workspace exceeds the ${WATCHLIST_CAP}-item limit for a watchlist.`)
+  }
+  write(nextParcels)
+  writeProjects(nextProjects)
+  writeEntities(nextEntities)
+}
+
+/** Query params that rank locally watched subjects first without filtering the feed. */
+export function watchBoostParams(): Record<string, string> {
+  const params: Record<string, string> = {}
+  const pidns = getWatchlist()
+  if (pidns.length) params.boost_pidns = pidns.join(',')
+  const projects = getProjectWatchlist().map((project) => project.key)
+  if (projects.length) params.boost_project_keys = projects.join(',')
+  const entities = getEntityWatchlist().map((entity) => String(entity.id))
+  if (entities.length) params.boost_entity_ids = entities.join(',')
+  return params
 }

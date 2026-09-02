@@ -61,13 +61,17 @@ EXPECTED_FIELDS = {
 
 
 def _fetch_page(url: str, attempt: int = 1) -> dict:
-    """Fetch a single page with retry on 5xx errors."""
+    """Fetch one page with bounded retries for transient provider failures."""
     try:
         resp = requests.get(url, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
-    except requests.exceptions.HTTPError as e:
-        if attempt < MAX_RETRIES and e.response is not None and e.response.status_code >= 500:
+    except requests.exceptions.RequestException as e:
+        status_code = e.response.status_code if e.response is not None else None
+        retryable = not isinstance(e, requests.exceptions.HTTPError) or (
+            status_code in {408, 429} or (status_code is not None and status_code >= 500)
+        )
+        if attempt < MAX_RETRIES and retryable:
             wait = RETRY_BACKOFF * attempt
             time.sleep(wait)
             return _fetch_page(url, attempt + 1)

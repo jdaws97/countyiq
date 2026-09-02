@@ -113,7 +113,7 @@ export default function ProjectList() {
   return (
     <PageShell maxWidth={1200}>
         {/* Page header */}
-        <div style={{ marginBottom: 40, animation: 'fadeUp 0.4s ease both' }}>
+        <div style={{ marginBottom: 40 }}>
           <div
             style={{
               fontFamily: 'var(--font-mono)',
@@ -158,7 +158,6 @@ export default function ProjectList() {
               gap: 24,
               marginBottom: 36,
               flexWrap: 'wrap',
-              animation: 'fadeUp 0.4s ease both',
               animationDelay: '0.05s',
               opacity: 0,
             }}
@@ -261,7 +260,6 @@ export default function ProjectList() {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 0,
-                    animation: 'fadeUp 0.4s ease both',
                     animationDelay: `${0.08 + idx * 0.03}s`,
                     opacity: 0,
                     transition: 'background 0.15s ease',
@@ -501,7 +499,6 @@ export default function ProjectList() {
         <div
           style={{
             marginTop: 48,
-            animation: 'fadeUp 0.4s ease both',
             animationDelay: '0.2s',
             opacity: 0,
           }}

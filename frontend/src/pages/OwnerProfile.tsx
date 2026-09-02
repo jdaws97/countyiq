@@ -3,6 +3,7 @@ import { useParams, Link, useLocation, useNavigate } from 'react-router-dom'
 
 import BackButton from '../components/BackButton'
 import Badge from '../components/Badge'
+import EvidencePanel, { CitedText } from '../components/EvidencePanel'
 import IntelligenceEventCard from '../components/IntelligenceEventCard'
 import PageShell from '../components/PageShell'
 import Section from '../components/Section'
@@ -90,11 +91,11 @@ export default function OwnerProfile() {
     <PageShell maxWidth={1000}>
       <BackButton onClick={() => navigate(-1)} />
 
-      <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-gold)', marginBottom: 8 }}>
+      <div style={{ marginBottom: 32 }}>
+        <div className="record-eyebrow">
           {entityView ? 'Entity case file' : 'Owner profile'}
         </div>
-        <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{owner.canonical_name}</h1>
+        <h1 className="page-title">{owner.canonical_name}</h1>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <Badge color="var(--accent-blue)">{formatEntityTypeLabel(owner.entity_type)}</Badge>
           {owner.verification_status && (
@@ -109,27 +110,19 @@ export default function OwnerProfile() {
               toggleEntityWatch({ id: owner.owner_id, name: owner.canonical_name })
               setWatchRevision((value) => value + 1)
             }}
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: watched ? 'var(--accent-gold)' : 'var(--accent-blue)',
-              background: 'transparent',
-              border: `1px solid ${watched ? 'var(--accent-gold)' : 'var(--border)'}`,
-              borderRadius: 4,
-              padding: '5px 10px',
-              cursor: 'pointer',
-            }}
+            className="watch-button"
+            aria-pressed={watched}
           >
             {watched ? '★ Watching entity' : '☆ Watch entity'}
           </button>
         </div>
       </div>
 
-      {(owner.aliases && owner.aliases.length > 0) || owner.verification_reasoning ? (
+      {(owner.aliases && owner.aliases.length > 0) || owner.verification_reasoning || data.verification_evidence.length > 0 ? (
         <Section title="Entity Context">
           {owner.aliases && owner.aliases.length > 0 && (
             <div style={{ marginBottom: owner.verification_reasoning ? 14 : 0 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Known Aliases</div>
+              <div className="record-label">Known Aliases</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {owner.aliases.map((alias) => (
                   <Badge key={alias} color="var(--accent-cyan)">{alias}</Badge>
@@ -139,10 +132,19 @@ export default function OwnerProfile() {
           )}
           {owner.verification_reasoning && (
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Why These Records Are Linked</div>
+              <div className="record-label">Why These Records Are Linked</div>
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                {owner.verification_reasoning}
+                <CitedText text={owner.verification_reasoning} evidence={data.verification_evidence} />
               </div>
+            </div>
+          )}
+          {data.verification_evidence.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <EvidencePanel
+                items={data.verification_evidence}
+                title="Records used to verify this entity"
+                intro="These governed record identifiers are the factual inputs to the entity-linking decision."
+              />
             </div>
           )}
         </Section>
@@ -168,7 +170,7 @@ export default function OwnerProfile() {
                       <span style={{ fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</span>
                     )}
                   </div>
-                  {evidence && <div style={{ marginTop: 8, fontFamily: 'var(--font-sans)', fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{evidence}</div>}
+                  {evidence && <div style={{ marginTop: 8, fontFamily: 'var(--font-sans)', fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}><CitedText text={evidence} evidence={data.verification_evidence} /></div>}
                 </div>
               )
             })}
@@ -209,19 +211,28 @@ export default function OwnerProfile() {
           </div>
           {data.brief.key_pattern && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Key Pattern</div>
+              <div className="record-label">Key Pattern</div>
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-primary)', fontWeight: 500 }}>
-                {data.brief.key_pattern}
+                <CitedText text={data.brief.key_pattern} evidence={data.brief.citation_evidence ?? []} />
               </div>
             </div>
           )}
           <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.7, color: 'var(--text-secondary)', whiteSpace: 'pre-line', marginBottom: 12 }}>
-            {data.brief.brief_text}
+            <CitedText text={data.brief.brief_text} evidence={data.brief.citation_evidence ?? []} />
           </div>
           {data.brief.top_risk && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Top Risk</div>
-              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{data.brief.top_risk}</div>
+              <div className="record-label">Top Risk</div>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}><CitedText text={data.brief.top_risk} evidence={data.brief.citation_evidence ?? []} /></div>
+            </div>
+          )}
+          {(data.brief.citation_evidence?.length ?? 0) > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <EvidencePanel
+                items={data.brief.citation_evidence}
+                title="Verify the portfolio brief"
+                intro="Inline references resolve to the validated signals and exact parcels used in this synthesis."
+              />
             </div>
           )}
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
@@ -232,7 +243,7 @@ export default function OwnerProfile() {
         </Section>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 32, animation: 'fadeUp 0.4s ease 0.1s both' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 32 }}>
         <StatCard label="Properties" value={portfolio.parcel_count.toLocaleString()} color="var(--accent-blue)" />
         <StatCard label="Total Assessed" value={formatCurrencyCompact(portfolio.total_assessed, { allowBillions: true })} color="var(--accent-green)" />
         <StatCard label="Delinquent" value={delinq.delinquent_parcels.toLocaleString()} color={delinq.delinquent_parcels > 0 ? 'var(--accent-red)' : 'var(--text-muted)'} />
@@ -240,23 +251,22 @@ export default function OwnerProfile() {
       </div>
 
       <Section title={`Properties (${portfolio.parcel_count})`}>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 100px 100px 80px', padding: '8px 16px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-            <div>PIDN</div><div>Address</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Sale Price</div><div style={{ textAlign: 'right' }}>Class</div>
+        <div className="data-table">
+          <div className="data-table-head" style={{ gridTemplateColumns: '140px 1fr 110px 110px 90px', minWidth: 580 }}>
+            <div>PIDN</div><div>Address</div><div className="cell-right">Assessed</div><div className="cell-right">Sale Price</div><div className="cell-right">Class</div>
           </div>
-          {portfolio.parcels.map((p, i: number) => (
+          {portfolio.parcels.map((p) => (
             <Link
               key={p.pidn}
               to={`/property/${p.pidn}`}
-              style={{ textDecoration: 'none', color: 'inherit', display: 'grid', gridTemplateColumns: '140px 1fr 100px 100px 80px', padding: '10px 16px', borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)', transition: 'background 0.15s' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-card-hover)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
+              className="data-table-row"
+              style={{ gridTemplateColumns: '140px 1fr 110px 110px 90px', minWidth: 580 }}
             >
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)' }}>{p.pidn}</div>
-              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>{p.propadr || '--'}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{formatCurrencyCompact(p.aprtotal, { allowBillions: true })}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>{formatCurrencyCompact(p.price, { allowBillions: true })}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{getPropertyClassLabel(p.class)}</div>
+              <div className="cell-id">{p.pidn}</div>
+              <div className="cell-strong">{p.propadr || '--'}</div>
+              <div className="cell-right">{formatCurrencyCompact(p.aprtotal, { allowBillions: true })}</div>
+              <div className="cell-right">{formatCurrencyCompact(p.price, { allowBillions: true })}</div>
+              <div className="cell-right cell-muted">{getPropertyClassLabel(p.class)}</div>
             </Link>
           ))}
         </div>
@@ -300,5 +310,10 @@ export default function OwnerProfile() {
 }
 
 function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
-  return <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 6, padding: '14px 18px' }}><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color }}>{value}</div></div>
+  return (
+    <div className="stat-tile" style={{ '--stat-color': color } as React.CSSProperties}>
+      <div className="field-label">{label}</div>
+      <div className="stat-tile-value">{value}</div>
+    </div>
+  )
 }

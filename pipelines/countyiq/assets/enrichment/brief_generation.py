@@ -3,7 +3,7 @@
 import json
 import os
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dagster import (
     AssetExecutionContext,
@@ -12,17 +12,21 @@ from dagster import (
     asset,
 )
 
+from countyiq.lib.error_budget import check_error_budget
 from countyiq.lib.intelligence_common import (
     compute_input_hash,
+    fetch_prior_pass_attempts,
     fetch_prior_pass_hashes,
+    pass_attempt_priority,
 )
-from countyiq.lib.error_budget import check_error_budget
-from countyiq.lib.pass_llm_config import (
-    PassItemBudget,
-    PassHarnessUnavailable,
-    resolve_pass_harness,
+from countyiq.lib.intelligence_autoresolve import auto_resolve_contradiction
+from countyiq.lib.intelligence_integrity import (
+    inference_input_hash,
+    parcel_brief_semantic_decision,
+    record_inference_decision,
+    record_validation_rejection,
+    validate_parcel_brief_citations,
 )
-from countyiq.lib.pass_schemas import PASS3_BRIEF_SCHEMA
 from countyiq.lib.pass3_brief_generation import (
     BRIEF_GENERATION_SYSTEM_PROMPT,
     PROMPT_VERSION,
@@ -31,37 +35,94 @@ from countyiq.lib.pass3_brief_generation import (
     parse_brief_output,
     should_generate_brief,
 )
+from countyiq.lib.pass_llm_config import (
+    PassHarnessUnavailable,
+    PassItemBudget,
+    PassSpendLimitExceeded,
+    resolve_pass_harness,
+)
+from countyiq.lib.pass_schemas import PASS3_BRIEF_SCHEMA
 from countyiq.resources.database import DatabaseResource
 
 PARCELS_NEEDING_BRIEFS_QUERY = """
-    -- Selects parcels that need a brief for any of these reasons:
-    --   1. Has medium/high evidence but no brief yet
-    --   2. Has evidence that was validated MORE RECENTLY than the current brief
-    --      (upstream Pass 2 produced new/updated evidence since the brief was written)
+    -- Rank-gated selection. A brief is worth paying for when a user is likely
+    -- to open the parcel, which the deterministic radar rank predicts far
+    -- better than the model's own significance label did. Candidates are the
+    -- top-N eligible parcels by the better of opportunity and momentum that
+    -- also carry Pass 2 evidence; the Python source/model/prompt hash still
+    -- skips unchanged work within that set.
+    WITH ranked AS (
+        SELECT dm.pidn
+        FROM public.development_momentum dm
+        WHERE dm.eligible = TRUE
+        ORDER BY GREATEST(dm.opportunity_score, dm.score) DESC, dm.signal_count DESC, dm.pidn
+        LIMIT %(rank_limit)s
+    )
     SELECT DISTINCT e.pidn
     FROM public.evidence e
-    LEFT JOIN public.parcel_briefs pb
-        ON pb.pidn = e.pidn
-    WHERE e.adjusted_significance IN ('high', 'medium')
-      AND (
-          pb.pidn IS NULL                              -- Reason 1: no brief
-          OR e.validated_at > pb.generated_at           -- Reason 2: evidence is fresher than brief
-      )
+    JOIN ranked r ON r.pidn = e.pidn
+    WHERE e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+      AND e.adjusted_significance IN ('high', 'medium')
     ORDER BY e.pidn
 """
+
+RETRACT_UNSERVABLE_BRIEFS_QUERY = """
+    WITH ranked AS (
+        SELECT dm.pidn
+        FROM public.development_momentum dm
+        WHERE dm.eligible = TRUE
+        ORDER BY GREATEST(dm.opportunity_score, dm.score) DESC,
+                 dm.signal_count DESC,
+                 dm.pidn
+        LIMIT %(rank_limit)s
+    )
+    DELETE FROM public.parcel_briefs pb
+    WHERE NOT EXISTS (
+        SELECT 1 FROM ranked r WHERE r.pidn = pb.pidn
+    )
+       OR NOT EXISTS (
+        SELECT 1
+        FROM public.evidence e
+        WHERE e.pidn = pb.pidn
+          AND e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+          AND e.adjusted_significance IN ('high', 'medium')
+    )
+    RETURNING pb.pidn
+"""
+
+
+def resolve_brief_rank_limit() -> int:
+    """How many top-ranked radar parcels are eligible for a cached brief."""
+    raw = os.environ.get("COUNTYIQ_PASS3_RANK_LIMIT", "500")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 500
+
+
+def _retract_unservable_briefs(
+    database: DatabaseResource, *, rank_limit: int
+) -> int:
+    rows = database.execute(
+        RETRACT_UNSERVABLE_BRIEFS_QUERY,
+        {"rank_limit": rank_limit},
+    ) or []
+    return len(rows)
 
 UPSERT_BRIEF_QUERY = """
     INSERT INTO public.parcel_briefs
         (pidn, brief_text, assessment, assessment_reasoning,
          key_questions, signal_count, citations, brief_version,
          pass_metadata, generated_at,
-         model_version, prompt_version, n_trials, trial_agreement, confidence)
+         model_version, prompt_version, n_trials, trial_agreement, confidence,
+         active_inference_id)
     VALUES
         (%(pidn)s, %(brief_text)s, %(assessment)s, %(assessment_reasoning)s,
          %(key_questions)s::text[], %(signal_count)s, %(citations)s::jsonb, 1,
          %(pass_metadata)s::jsonb, %(generated_at)s,
          %(model_version)s, %(prompt_version)s,
-         %(n_trials)s, %(trial_agreement)s, %(confidence)s)
+         %(n_trials)s, %(trial_agreement)s, %(confidence)s,
+         %(active_inference_id)s)
     ON CONFLICT (pidn)
     DO UPDATE SET
         brief_text = EXCLUDED.brief_text,
@@ -77,7 +138,8 @@ UPSERT_BRIEF_QUERY = """
         prompt_version = EXCLUDED.prompt_version,
         n_trials = EXCLUDED.n_trials,
         trial_agreement = EXCLUDED.trial_agreement,
-        confidence = EXCLUDED.confidence
+        confidence = EXCLUDED.confidence,
+        active_inference_id = EXCLUDED.active_inference_id
 """
 
 @asset(
@@ -94,6 +156,15 @@ def brief_generation(
     database: DatabaseResource,
 ) -> MaterializeResult:
     log = context.log
+    rank_limit = resolve_brief_rank_limit()
+    briefs_retracted = _retract_unservable_briefs(
+        database, rank_limit=rank_limit
+    )
+    if briefs_retracted:
+        log.info(
+            "Retracted %d parcel brief(s) outside the current serving set",
+            briefs_retracted,
+        )
 
     try:
         config, invoke_with_retry = resolve_pass_harness(
@@ -108,12 +179,14 @@ def brief_generation(
             system_prompt=BRIEF_GENERATION_SYSTEM_PROMPT,
         )
     except PassHarnessUnavailable as exc:
-        return _skipped_result(exc.reason)
+        return _skipped_result(exc.reason, briefs_retracted=briefs_retracted)
     item_budget = PassItemBudget(3)
     config = replace(config, temperature=min(config.temperature, 0.3))
 
     log.info("Querying parcels eligible for brief generation")
-    rows = database.execute(PARCELS_NEEDING_BRIEFS_QUERY)
+    rows = database.execute(
+        PARCELS_NEEDING_BRIEFS_QUERY, {"rank_limit": rank_limit}
+    )
 
     if not rows:
         log.info("No parcels eligible for brief generation.")
@@ -122,6 +195,7 @@ def brief_generation(
                 "status": MetadataValue.text("complete"),
                 "parcels_eligible": MetadataValue.int(0),
                 "briefs_created": MetadataValue.int(0),
+                "briefs_retracted": MetadataValue.int(briefs_retracted),
                 "skipped": MetadataValue.int(0),
                 "errors": MetadataValue.int(0),
             }
@@ -131,12 +205,28 @@ def brief_generation(
     briefs_created = 0
     skipped = 0
     errors = 0
+    spend_limit_reached = False
 
     log.info("Found %d parcels eligible for briefs", parcels_eligible)
 
     # One upfront fetch of prior input hashes replaces a per-parcel SELECT
     # inside the loop.
     prior_hashes = fetch_prior_pass_hashes(database, pass_number=3)
+    prior_attempts = fetch_prior_pass_attempts(database, pass_number=3)
+    current_brief_rows = database.execute(
+        "SELECT pidn FROM public.parcel_briefs"
+    ) or []
+    current_brief_pidns = {
+        (row.get("pidn") if isinstance(row, dict) else row[0])
+        for row in current_brief_rows
+    }
+    rows = sorted(
+        rows,
+        key=lambda row: pass_attempt_priority(
+            row[0] if isinstance(row, (tuple, list)) else row.get("pidn", row),
+            prior_attempts,
+        ),
+    )
 
     for row in rows:
         pidn = row[0] if isinstance(row, (tuple, list)) else row.get("pidn", row)
@@ -152,9 +242,17 @@ def brief_generation(
                 skipped += 1
                 continue
 
-            input_hash = compute_input_hash(ctx)
+            source_hash = compute_input_hash(ctx)
+            input_hash = inference_input_hash(
+                source_hash,
+                requested_model=config.model_path,
+                prompt_version=PROMPT_VERSION,
+            )
 
-            if prior_hashes.get(pidn) == input_hash:
+            if (
+                pidn in current_brief_pidns
+                and prior_hashes.get(pidn) == input_hash
+            ):
                 log.debug("Parcel %s context unchanged, skipping brief generation", pidn)
                 skipped += 1
                 continue
@@ -186,7 +284,73 @@ def brief_generation(
                 errors += 1
                 continue
 
-            now = datetime.now(timezone.utc).isoformat()
+            allowed_signal_keys = {
+                signal["signal_key"]
+                for signal in validated_signals
+                if signal.get("signal_key")
+            }
+            citation_errors = validate_parcel_brief_citations(
+                parsed, allowed_signal_keys,
+            )
+            if citation_errors:
+                record_validation_rejection(
+                    database,
+                    subject_key=pidn,
+                    pass_number=3,
+                    output_kind="parcel_brief",
+                    source_hash=source_hash,
+                    input_hash=input_hash,
+                    requested_model=config.model_path,
+                    prompt_version=PROMPT_VERSION,
+                    errors=citation_errors,
+                )
+                message = "; ".join(citation_errors)
+                log.warning("Brief for %s failed citation validation: %s", pidn, message)
+                _update_pass_status(
+                    database, pidn, 3, "error", input_hash, message,
+                )
+                errors += 1
+                continue
+
+            gate = record_inference_decision(
+                database,
+                subject_key=pidn,
+                pass_number=3,
+                output_kind="parcel_brief",
+                decision_key="brief",
+                source_hash=source_hash,
+                input_hash=input_hash,
+                requested_model=config.model_path,
+                served_model=result.metadata.get("served_model"),
+                provider=result.metadata.get("provider"),
+                prompt_version=PROMPT_VERSION,
+                payload=parsed,
+                semantic_decision=parcel_brief_semantic_decision(parsed),
+                citations=parsed.get("citations", []),
+                evidence_refs=[
+                    f"signal:{key}" for key in parsed.get("citations", [])
+                ],
+            )
+            if not gate.accepted:
+                auto = auto_resolve_contradiction(database, gate.contradiction_id, log)
+                if auto.resolved:
+                    log.info(
+                        "Contradiction %s auto-resolved (%s): %s",
+                        gate.contradiction_id, auto.resolution, auto.rationale,
+                    )
+                    continue
+                message = (
+                    f"quarantined as contradiction {gate.contradiction_id}: "
+                    f"{gate.reason}"
+                )
+                log.warning("Brief for %s %s", pidn, message)
+                _update_pass_status(
+                    database, pidn, 3, "error", input_hash, message,
+                )
+                errors += 1
+                continue
+
+            now = datetime.now(UTC).isoformat()
             pass_metadata = {
                 "model": os.path.basename(config.model_path),
                 "pass_version": "3.1-structured",
@@ -233,6 +397,7 @@ def brief_generation(
                     "n_trials": 1,
                     "trial_agreement": None,
                     "confidence": parsed.get("confidence"),
+                    "active_inference_id": gate.inference_id,
                 },
             )
 
@@ -244,6 +409,13 @@ def brief_generation(
                 pidn, parsed["assessment"],
             )
 
+        except PassSpendLimitExceeded as exc:
+            spend_limit_reached = True
+            log.info(
+                "Pass 3 dollar ceiling reached; remaining parcel briefs are deferred: %s",
+                exc,
+            )
+            break
         except Exception as exc:
             log.warning("Error generating brief for %s: %s", pidn, exc)
             _update_pass_status(
@@ -270,9 +442,16 @@ def brief_generation(
             "status": MetadataValue.text("complete"),
             "parcels_eligible": MetadataValue.int(parcels_eligible),
             "briefs_created": MetadataValue.int(briefs_created),
+            "briefs_retracted": MetadataValue.int(briefs_retracted),
             "skipped": MetadataValue.int(skipped),
-            "item_limit": MetadataValue.int(item_budget.limit),
+            "budget_mode": MetadataValue.text(item_budget.mode),
+            "item_limit": (
+                MetadataValue.int(item_budget.limit)
+                if item_budget.limit is not None
+                else MetadataValue.text("cost-only")
+            ),
             "items_claimed": MetadataValue.int(item_budget.claimed),
+            "spend_limit_reached": MetadataValue.bool(spend_limit_reached),
             "errors": MetadataValue.int(errors),
         }
     )
@@ -309,7 +488,7 @@ def _update_pass_status(
     )
 
 
-def _skipped_result(reason: str) -> MaterializeResult:
+def _skipped_result(reason: str, *, briefs_retracted: int = 0) -> MaterializeResult:
     """Return a MaterializeResult indicating the asset was skipped."""
     return MaterializeResult(
         metadata={
@@ -317,6 +496,7 @@ def _skipped_result(reason: str) -> MaterializeResult:
             "reason": MetadataValue.text(reason),
             "parcels_eligible": MetadataValue.int(0),
             "briefs_created": MetadataValue.int(0),
+            "briefs_retracted": MetadataValue.int(briefs_retracted),
             "skipped": MetadataValue.int(0),
             "errors": MetadataValue.int(0),
         }

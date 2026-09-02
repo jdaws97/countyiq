@@ -12,8 +12,10 @@ reading N parcel briefs separately.
 from __future__ import annotations
 
 import hashlib as _hashlib
+import json
 
 from countyiq.lib.county_config import county_prompt_context
+from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, PASS3B_FIELD_CONTRACT
 
 # Static instruction block. Sent as a byte-identical system message on every
 # rollup call so providers with implicit prompt caching can reuse it.
@@ -25,15 +27,20 @@ TASKS:
 3. Identify the single biggest pattern an outside investor should notice (e.g., "3 of 6 parcels show tax distress — owner appears to be deleveraging").
 4. Commit to a recommendation: pursue_acquisition | monitor | compete | none. Only emit "monitor" when evidence_strength is "weak" — otherwise commit.
 5. Output confidence in [0.0, 1.0] for the recommendation.
+6. concentration_notes, key_pattern, top_risk, and narrative must each cite
+   at least one listed signal as [Signal: key] and/or one listed parcel as
+   [Parcel: PIDN]; end each factual sentence with its marker. Copy
+   identifiers exactly and include every used identifier in
+   citations/parcel_citations.
 
 Return ONE JSON object:
 {{
   "portfolio_strategy":  "accumulator|flipper|holder|distressed|institutional|unclear",
-  "concentration_notes": "1 sentence",
-  "key_pattern":         "1-2 sentences naming the portfolio-level pattern",
+  "concentration_notes": "1 cited sentence",
+  "key_pattern":         "1-2 cited sentences naming the portfolio-level pattern",
   "recommendation":      "pursue_acquisition|monitor|compete|none",
   "urgency":             "urgent_30d|near_term_90d|long_term_12mo|none",
-  "top_risk":            "1 sentence",
+  "top_risk":            "1 cited sentence",
   "evidence_strength":   "strong|moderate|weak",
   "confidence":          <float in [0.0, 1.0]>,
   "narrative": "3-5 paragraph portfolio brief citing signals as [Signal: key] and parcels as [Parcel: PIDN]. Must be consistent with the structured fields above.",
@@ -54,9 +61,17 @@ PER-PARCEL SIGNAL EVIDENCE (from Pass 2 validation):
 
 Write the portfolio brief for this owner. Return ONLY the JSON object."""
 
-# Final system string sent to the API (single braces).
-OWNER_ROLLUP_SYSTEM_PROMPT = _P3B_SYSTEM_TEMPLATE.format(
-    county_context=county_prompt_context()
+# Final system string sent to the API (single braces). The static field
+# contract and citation-format blocks restate the enforced contract and push
+# the byte-identical prefix past the provider caching minimum
+# (prompt_prefix.py). pass_schemas imports this module, so the schema itself
+# cannot be rendered here.
+OWNER_ROLLUP_SYSTEM_PROMPT = (
+    _P3B_SYSTEM_TEMPLATE.format(county_context=county_prompt_context())
+    + "\n\n"
+    + PASS3B_FIELD_CONTRACT
+    + "\n\n"
+    + CITATION_FORMAT_BLOCK
 )
 
 
@@ -96,10 +111,9 @@ def _clamp_float_01(value: object) -> float | None:
 # ---------------------------------------------------------------------------
 
 OWNERS_NEEDING_BRIEFS_QUERY = """
-    -- Owners with ≥3 parcels under any alpha signal, and where the
-    -- owner_briefs row is missing or older than the freshest Pass 2
-    -- evidence. Alpha signals = ones the experiment-grade evidence
-    -- shows actually drive investor decisions.
+    -- All owners with ≥3 parcels under any alpha signal. Python's immutable
+    -- source/model/prompt hash skips unchanged owners; selecting the full
+    -- eligible set ensures prompt or model changes are not hidden by timestamps.
     -- Briefs join on canonical_name: owner_id is stable across rebuilds
     -- now, but canonical_name also survives cluster re-merges where a
     -- portfolio's owner row is replaced by a merged one.
@@ -109,14 +123,10 @@ OWNERS_NEEDING_BRIEFS_QUERY = """
          ON osl.owner_id = o.owner_id AND osl.source_type = 'parcel'
     JOIN public.evidence e
          ON e.pidn = osl.source_id
-    LEFT JOIN public.owner_briefs ob ON ob.canonical_name = o.canonical_name
-    WHERE e.adjusted_significance IN ('high', 'medium')
-    GROUP BY o.owner_id, o.canonical_name, ob.canonical_name, ob.generated_at
+    WHERE e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+      AND e.adjusted_significance IN ('high', 'medium')
+    GROUP BY o.owner_id, o.canonical_name
     HAVING COUNT(DISTINCT osl.source_id) >= 3
-       AND (
-           ob.canonical_name IS NULL
-           OR MAX(e.validated_at) > ob.generated_at
-       )
     ORDER BY o.owner_id
 """
 
@@ -136,11 +146,13 @@ OWNER_PORTFOLIO_QUERY = """
 PORTFOLIO_EVIDENCE_QUERY = """
     SELECT e.pidn, e.signal_key, e.validation_status,
            e.adjusted_significance, e.validation_reasoning,
-           e.validated_at, e.confidence,
+           e.evidence_data, e.validated_at, e.confidence,
            p.municipality
     FROM public.evidence e
     LEFT JOIN staging.parcels p ON p.pidn = e.pidn AND p.valid_to IS NULL
     WHERE e.pidn = ANY(%(pidns)s)
+      AND e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+      AND e.adjusted_significance IN ('high', 'medium', 'low')
     ORDER BY e.pidn, e.signal_key
 """
 
@@ -152,7 +164,7 @@ UPSERT_OWNER_BRIEF = """
          key_pattern, recommendation, urgency, top_risk, evidence_strength,
          citations, parcel_citations, n_parcels,
          model_version, prompt_version, n_trials, trial_agreement, confidence,
-         pass_metadata, generated_at)
+         pass_metadata, generated_at, active_inference_id)
     VALUES
         (%(canonical_name)s, %(owner_id)s, %(brief_text)s, %(portfolio_strategy)s,
          %(concentration_notes)s, %(key_pattern)s,
@@ -160,7 +172,7 @@ UPSERT_OWNER_BRIEF = """
          %(citations)s::jsonb, %(parcel_citations)s::jsonb, %(n_parcels)s,
          %(model_version)s, %(prompt_version)s,
          %(n_trials)s, %(trial_agreement)s, %(confidence)s,
-         %(pass_metadata)s::jsonb, %(generated_at)s)
+         %(pass_metadata)s::jsonb, %(generated_at)s, %(active_inference_id)s)
     ON CONFLICT (canonical_name)
     DO UPDATE SET
         owner_id              = EXCLUDED.owner_id,
@@ -182,7 +194,8 @@ UPSERT_OWNER_BRIEF = """
         confidence            = EXCLUDED.confidence,
         brief_version         = public.owner_briefs.brief_version + 1,
         pass_metadata         = EXCLUDED.pass_metadata,
-        generated_at          = EXCLUDED.generated_at
+        generated_at          = EXCLUDED.generated_at,
+        active_inference_id   = EXCLUDED.active_inference_id
 """
 
 
@@ -196,9 +209,11 @@ def _format_portfolio_evidence(rows: list[dict]) -> str:
     for pidn, sigs in by_pidn.items():
         muni = sigs[0].get("municipality") or "?"
         sig_lines = [
-            f"  - {s['signal_key']}: {s['validation_status']} "
+            f"  - Evidence refs: [Signal: {s['signal_key']}] [Parcel: {pidn}]\n"
+            f"    {s['signal_key']}: {s['validation_status']} "
             f"({s['adjusted_significance']}) — "
-            f"{(s.get('validation_reasoning') or '')[:180]}"
+            f"{(s.get('validation_reasoning') or '')[:180]} | source="
+            f"{json.dumps(s.get('evidence_data') or {}, sort_keys=True, default=str)[:240]}"
             for s in sigs
         ]
         chunks.append(f"### Parcel {pidn} — {muni}\n" + "\n".join(sig_lines))

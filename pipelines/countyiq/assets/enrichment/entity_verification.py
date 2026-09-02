@@ -16,7 +16,7 @@ Requires ``COUNTYIQ_PASS1_ENABLED=true``; model selection is independent.
 import json
 import os
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dagster import (
     AssetExecutionContext,
@@ -25,30 +25,45 @@ from dagster import (
     asset,
 )
 
+from countyiq.lib.error_budget import check_error_budget
+from countyiq.lib.intelligence_autoresolve import auto_resolve_contradiction
 from countyiq.lib.intelligence_common import (
     compute_input_hash,
-    fetch_prior_pass_hashes,
+    fetch_prior_pass_attempts,
+    fetch_reusable_pass_hashes,
+    pass_attempt_priority,
 )
-from countyiq.lib.error_budget import check_error_budget
-from countyiq.lib.pass_llm_config import (
-    PassItemBudget,
-    PassHarnessUnavailable,
-    resolve_escalation_config,
-    resolve_pass_harness,
+from countyiq.lib.intelligence_integrity import (
+    entity_semantic_decision,
+    inference_input_hash,
+    record_inference_decision,
+    record_validation_rejection,
+    validate_entity_membership,
 )
 from countyiq.lib.pass1_entity_verification import (
     CANDIDATE_CLUSTERS_QUERY,
+    DETERMINISTIC_VARIANT_VERSION,
     ENTITY_CANDIDATE_PAIRS_READY_QUERY,
     ENTITY_VERIFICATION_SYSTEM_PROMPT,
+    PROMPT_VERSION,
+    build_deterministic_entity_resolution,
     build_entity_cluster_prompt,
     entity_trial_majority_decided,
     gather_cluster_records,
     merge_entity_trial_partitions,
     parse_entity_verification_output,
+    select_pass1_clusters,
     stable_cluster_key,
 )
+from countyiq.lib.pass_llm_config import (
+    PassHarnessUnavailable,
+    PassItemBudget,
+    PassSpendLimitExceeded,
+    resolve_escalation_config,
+    resolve_pass_harness,
+)
+from countyiq.lib.pass_schemas import PASS1_ENTITY_VERIFICATION_SCHEMA
 from countyiq.resources.database import DatabaseResource
-
 
 # ---------------------------------------------------------------------------
 # Union-Find cluster builder
@@ -127,6 +142,8 @@ def entity_verification(
             # Static block goes out as a byte-identical system message so
             # providers with implicit prompt caching can reuse it per cluster.
             system_prompt=ENTITY_VERIFICATION_SYSTEM_PROMPT,
+            json_schema=PASS1_ENTITY_VERIFICATION_SCHEMA,
+            schema_name="pass1_entity_verification",
         )
     except PassHarnessUnavailable as exc:
         return _skipped_result(exc.reason)
@@ -156,12 +173,21 @@ def entity_verification(
             }
         )
 
-    clusters = _build_clusters(pairs)
-    log.info("Stage A complete: %d pairs → %d clusters", len(pairs), len(clusters))
+    clusters, person_only_skipped = select_pass1_clusters(_build_clusters(pairs))
+    log.info(
+        "Stage A complete: %d pairs → %d clusters (%d person-only clusters skipped)",
+        len(pairs), len(clusters), person_only_skipped,
+    )
 
     # One upfront fetch of prior input hashes replaces a per-cluster SELECT
     # inside the loop.
-    prior_hashes = fetch_prior_pass_hashes(database, pass_number=1)
+    prior_hashes = fetch_reusable_pass_hashes(database, pass_number=1)
+    prior_attempts = fetch_prior_pass_attempts(database, pass_number=1)
+    clusters.sort(
+        key=lambda names: pass_attempt_priority(
+            stable_cluster_key(names), prior_attempts
+        )
+    )
 
     # N-trial partition voting (docs/decisions.md 2026-08-06): majority
     # pair-vote across trials, disagreement → abstain. Default 3 per the
@@ -195,8 +221,10 @@ def entity_verification(
     voting_early_stops = 0
     voting_calls_saved = 0
     escalations = 0
+    deterministic_clusters = 0
     skipped = 0
     errors = 0
+    spend_limit_reached = False
 
     for i, cluster_names in enumerate(clusters, 1):
         input_hash: str | None = None
@@ -206,8 +234,27 @@ def entity_verification(
             with database.dict_cursor() as cur:
                 records = gather_cluster_records(cur, cluster_names)
 
-            # Compute input hash for change detection
-            input_hash = compute_input_hash(records)
+            deterministic_resolution = build_deterministic_entity_resolution(
+                records,
+                cluster_names,
+            )
+            execution_identity = (
+                DETERMINISTIC_VARIANT_VERSION
+                if deterministic_resolution is not None
+                else (
+                    f"{config.model_path}|trials={n_trials}|"
+                    f"escalation={escalation_config.model_path if escalation_config else ''}"
+                )
+            )
+
+            # Prompt/model changes rerun work; contradiction detection compares
+            # the evidence-only source hash below.
+            source_hash = compute_input_hash(records)
+            input_hash = inference_input_hash(
+                source_hash,
+                requested_model=execution_identity,
+                prompt_version=PROMPT_VERSION,
+            )
 
             # Check if we've already processed this exact input
             if prior_hashes.get(cluster_key) == input_hash:
@@ -215,14 +262,35 @@ def entity_verification(
                 skipped += 1
                 continue
 
-            if not item_budget.claim(log, label="changed entity clusters"):
+            if (
+                deterministic_resolution is None
+                and not item_budget.claim(log, label="changed entity clusters")
+            ):
                 break
 
             # Build prompt and invoke LLM (N trials; N=1 by default)
             prompt = build_entity_cluster_prompt(records)
-            trial_parses: list[dict] = []
+            trial_parses: list[dict] = (
+                [deterministic_resolution]
+                if deterministic_resolution is not None
+                else []
+            )
             last_error: str | None = None
-            for trial_idx in range(n_trials):
+            decision_result = None
+            decision_model = (
+                DETERMINISTIC_VARIANT_VERSION
+                if deterministic_resolution is not None
+                else config.model_path
+            )
+            if deterministic_resolution is not None:
+                deterministic_clusters += 1
+                log.info(
+                    "Cluster %s resolved by the anchored legal-name variant tier",
+                    cluster_key,
+                )
+            for trial_idx in range(
+                0 if deterministic_resolution is not None else n_trials
+            ):
                 trial_key = (
                     cluster_key if n_trials == 1
                     else f"{cluster_key}:trial-{trial_idx}"
@@ -248,6 +316,7 @@ def entity_verification(
                     )
                     continue
                 trial_parses.append(trial_parsed)
+                decision_result = result
                 remaining_trials = n_trials - (trial_idx + 1)
                 if (
                     adaptive_voting
@@ -295,6 +364,8 @@ def entity_verification(
                     )
                     if "error" not in esc_parsed:
                         parsed = esc_parsed
+                        decision_result = esc_result
+                        decision_model = escalation_config.model_path
                         escalations += 1
                         log.info(
                             "Cluster [%s]: escalated to %s",
@@ -312,21 +383,91 @@ def entity_verification(
                         cluster_key, esc_result.error,
                     )
 
-            # Upsert entities to public.entity_graph.
-            # Inject cluster_names so _upsert_entity can include the original
-            # name variants (the SQL candidate cluster) in linked_names for
-            # downstream entity lookup.
-            matched_entity_ids: set[int] = set()
-            for entity in parsed.get("entities", []):
-                entity["cluster_names"] = cluster_names
-                entity_id = _upsert_entity(
+            membership_errors = validate_entity_membership(
+                parsed, records, cluster_names,
+            )
+            if membership_errors:
+                record_validation_rejection(
                     database,
-                    entity,
-                    exclude_entity_ids=matched_entity_ids,
+                    subject_key=cluster_key,
+                    pass_number=1,
+                    output_kind="entity_verification",
+                    source_hash=source_hash,
+                    input_hash=input_hash,
+                    requested_model=execution_identity,
+                    prompt_version=PROMPT_VERSION,
+                    errors=membership_errors,
                 )
-                if entity_id is not None:
-                    matched_entity_ids.add(entity_id)
-                entities_created += 1
+                message = "; ".join(membership_errors)
+                log.warning(
+                    "Cluster %s failed identity membership validation: %s",
+                    cluster_key,
+                    message,
+                )
+                _update_pass_status(
+                    database, cluster_key, 1, "error", input_hash, message,
+                )
+                errors += 1
+                continue
+
+            evidence_refs = sorted({
+                f"{group}:{identifier}"
+                for entity in parsed.get("entities", [])
+                for group, identifiers in (entity.get("linked_records") or {}).items()
+                for identifier in identifiers or []
+            } | {f"candidate:{name}" for name in cluster_names})
+            if (parsed.get("trial_stats") or {}).get("demoted_entities"):
+                evidence_refs.append("trial:voting")
+            gate = record_inference_decision(
+                database,
+                subject_key=cluster_key,
+                pass_number=1,
+                output_kind="entity_verification",
+                decision_key="partition",
+                source_hash=source_hash,
+                input_hash=input_hash,
+                requested_model=decision_model,
+                served_model=(
+                    decision_result.metadata.get("served_model")
+                    if decision_result else None
+                ),
+                provider=(
+                    decision_result.metadata.get("provider")
+                    if decision_result else None
+                ),
+                prompt_version=PROMPT_VERSION,
+                payload=parsed,
+                semantic_decision=entity_semantic_decision(parsed),
+                evidence_refs=evidence_refs,
+            )
+            if not gate.accepted:
+                auto = auto_resolve_contradiction(database, gate.contradiction_id, log)
+                if auto.resolved:
+                    log.info(
+                        "Contradiction %s auto-resolved (%s): %s",
+                        gate.contradiction_id, auto.resolution, auto.rationale,
+                    )
+                    continue
+                message = (
+                    f"quarantined as contradiction {gate.contradiction_id}: "
+                    f"{gate.reason}"
+                )
+                log.warning("Cluster %s %s", cluster_key, message)
+                _update_pass_status(
+                    database, cluster_key, 1, "error", input_hash, message,
+                )
+                errors += 1
+                continue
+
+            # The accepted partition replaces this cluster atomically. This
+            # removes memberships a new evidence version rejects/abstains on;
+            # historical assignments remain recoverable in the ledger.
+            entities_created += _replace_cluster_entities(
+                database,
+                parsed.get("entities", []),
+                cluster_names,
+                inference_id=gate.inference_id,
+            )
 
             abstained_here = len(parsed.get("abstentions", []))
             if abstained_here:
@@ -357,6 +498,13 @@ def entity_verification(
                     f"({clusters_processed} processed, {skipped} skipped, {errors} errors)"
                 )
 
+        except PassSpendLimitExceeded as exc:
+            spend_limit_reached = True
+            log.info(
+                "Pass 1 dollar ceiling reached; remaining clusters are deferred: %s",
+                exc,
+            )
+            break
         except Exception as exc:
             log.warning(
                 f"Error processing cluster {cluster_names[:2]}: {exc}\n"
@@ -388,9 +536,17 @@ def entity_verification(
             "llm_trial_calls": MetadataValue.int(trial_calls),
             "voting_early_stops": MetadataValue.int(voting_early_stops),
             "voting_calls_saved": MetadataValue.int(voting_calls_saved),
+            "deterministic_clusters": MetadataValue.int(deterministic_clusters),
             "total_clusters": MetadataValue.int(len(clusters)),
-            "item_limit": MetadataValue.int(item_budget.limit),
+            "person_only_clusters_skipped": MetadataValue.int(person_only_skipped),
+            "budget_mode": MetadataValue.text(item_budget.mode),
+            "item_limit": (
+                MetadataValue.int(item_budget.limit)
+                if item_budget.limit is not None
+                else MetadataValue.text("cost-only")
+            ),
             "items_claimed": MetadataValue.int(item_budget.claimed),
+            "spend_limit_reached": MetadataValue.bool(spend_limit_reached),
             "clusters_processed": MetadataValue.int(clusters_processed),
             "clusters_skipped": MetadataValue.int(skipped),
             "entities_created": MetadataValue.int(entities_created),
@@ -458,135 +614,60 @@ def _candidate_names(entity: dict) -> list[str]:
     linked_records = entity.get("linked_records", {})
     return _merge_unique_strings(
         [entity.get("canonical_name", "")],
+        entity.get("member_names", []),
         linked_records.get("corporate_entities", []),
         linked_records.get("proceedings", []),
-        entity.get("cluster_names", []),
     )
 
 
-def _find_existing_entity_row(
+def _replace_cluster_entities(
     database: DatabaseResource,
-    names: list[str],
-    preferred_name: str,
-    exclude_entity_ids: set[int] | None = None,
-):
-    if not names:
-        return None
-
-    exclude = list(exclude_entity_ids or [])
-    with database.dict_cursor() as cur:
+    entities: list[dict],
+    cluster_names: list[str],
+    *,
+    inference_id: int,
+) -> int:
+    """Atomically replace one candidate cluster's active graph projection."""
+    with database.transaction() as cur:
         cur.execute(
             """
-            SELECT
-                entity_id,
-                canonical_name,
-                entity_type,
-                linked_names,
-                linked_sources,
-                relationships,
-                verification_status,
-                verification_reasoning,
-                verified_at
-            FROM public.entity_graph
-            WHERE (
-                canonical_name = ANY(%(names)s)
-                OR COALESCE(linked_names, ARRAY[]::text[]) && %(names)s::text[]
+            DELETE FROM public.entity_graph
+            WHERE canonical_name = ANY(%s)
+               OR COALESCE(linked_names, ARRAY[]::text[]) && %s::text[]
+            """,
+            (cluster_names, cluster_names),
+        )
+
+        inserted = 0
+        for entity in entities:
+            linked_records = entity.get("linked_records", {})
+            cur.execute(
+                """
+                INSERT INTO public.entity_graph
+                    (canonical_name, entity_type, linked_names, linked_sources,
+                     relationships, verification_status,
+                     verification_reasoning, verified_at, active_inference_id)
+                VALUES
+                    (%s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s)
+                """,
+                (
+                    entity.get("canonical_name", ""),
+                    entity.get("entity_type", "unknown"),
+                    _candidate_names(entity) or None,
+                    json.dumps(_merge_linked_sources({}, linked_records)),
+                    json.dumps(_merge_relationships([], entity.get("relationships", []))),
+                    (
+                        "verified"
+                        if entity.get("confidence", 0) >= 0.7
+                        else "tentative"
+                    ),
+                    entity.get("reasoning", ""),
+                    datetime.now(UTC).isoformat(),
+                    inference_id,
+                ),
             )
-              AND (
-                %(exclude_entity_ids)s::int[] = ARRAY[]::int[]
-                OR entity_id <> ALL(%(exclude_entity_ids)s::int[])
-              )
-            ORDER BY
-                (canonical_name = %(preferred_name)s) DESC,
-                verified_at DESC NULLS LAST,
-                entity_id
-            LIMIT 1
-            """,
-            {
-                "names": names,
-                "preferred_name": preferred_name,
-                "exclude_entity_ids": exclude,
-            },
-        )
-        return cur.fetchone()
-
-
-def _upsert_entity(
-    database: DatabaseResource,
-    entity: dict,
-    exclude_entity_ids: set[int] | None = None,
-) -> int | None:
-    """Insert or update an entity in public.entity_graph."""
-    linked_records = entity.get("linked_records", {})
-    candidate_names = _candidate_names(entity)
-    existing = _find_existing_entity_row(
-        database,
-        candidate_names,
-        entity.get("canonical_name", ""),
-        exclude_entity_ids=exclude_entity_ids,
-    )
-
-    canonical_name = (
-        existing.get("canonical_name")
-        if existing and existing.get("canonical_name")
-        else entity.get("canonical_name", "")
-    )
-    linked_names = _merge_unique_strings(
-        existing.get("linked_names") if existing else [],
-        candidate_names,
-    ) or None
-    linked_sources = _merge_linked_sources(
-        existing.get("linked_sources") if existing else {},
-        linked_records,
-    )
-    relationships = _merge_relationships(
-        existing.get("relationships") if existing else [],
-        entity.get("relationships", []),
-    )
-
-    params = {
-        "canonical_name": canonical_name,
-        "entity_type": entity.get("entity_type", "unknown"),
-        "linked_names": linked_names,
-        "linked_sources": json.dumps(linked_sources),
-        "relationships": json.dumps(relationships),
-        "verification_status": "verified" if entity.get("confidence", 0) >= 0.7 else "tentative",
-        "verification_reasoning": entity.get("reasoning", ""),
-        "verified_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    if existing:
-        database.execute(
-            """
-            UPDATE public.entity_graph
-            SET canonical_name = %(canonical_name)s,
-                entity_type = %(entity_type)s,
-                linked_names = %(linked_names)s,
-                linked_sources = %(linked_sources)s::jsonb,
-                relationships = %(relationships)s::jsonb,
-                verification_status = %(verification_status)s,
-                verification_reasoning = %(verification_reasoning)s,
-                verified_at = %(verified_at)s
-            WHERE entity_id = %(entity_id)s
-            """,
-            {**params, "entity_id": existing["entity_id"]},
-        )
-        return existing["entity_id"]
-
-    rows = database.execute(
-        """
-        INSERT INTO public.entity_graph
-            (canonical_name, entity_type, linked_names, linked_sources,
-             relationships, verification_status, verification_reasoning, verified_at)
-        VALUES
-            (%(canonical_name)s, %(entity_type)s, %(linked_names)s,
-             %(linked_sources)s::jsonb, %(relationships)s::jsonb,
-             %(verification_status)s, %(verification_reasoning)s, %(verified_at)s)
-        RETURNING entity_id
-        """,
-        params,
-    ) or []
-    return rows[0][0] if rows else None
+            inserted += 1
+    return inserted
 
 
 def _update_pass_status(

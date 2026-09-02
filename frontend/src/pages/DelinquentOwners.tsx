@@ -85,7 +85,7 @@ export default function DelinquentOwners() {
         </Link>
 
         {/* Page header */}
-        <div style={{ marginBottom: 40, animation: 'fadeUp 0.4s ease both' }}>
+        <div style={{ marginBottom: 40 }}>
           <div
             style={{
               fontFamily: 'var(--font-mono)',
@@ -130,7 +130,6 @@ export default function DelinquentOwners() {
             display: 'flex',
             gap: 0,
             marginBottom: 24,
-            animation: 'fadeUp 0.5s ease both',
             animationDelay: '0.05s',
             opacity: 0,
           }}
@@ -200,7 +199,6 @@ export default function DelinquentOwners() {
         {activeTab === 'owners' && !loadingOwners && !error && (
           <div
             style={{
-              animation: 'fadeUp 0.5s ease both',
               animationDelay: '0.1s',
               opacity: 0,
               border: '1px solid var(--border)',
@@ -387,7 +385,6 @@ export default function DelinquentOwners() {
         {activeTab === 'parcels' && !loadingParcels && !error && (
           <div
             style={{
-              animation: 'fadeUp 0.5s ease both',
               animationDelay: '0.1s',
               opacity: 0,
               border: '1px solid var(--border)',

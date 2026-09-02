@@ -28,10 +28,14 @@ before the product is promoted broadly.
   outside the product boundary.
 - Tax-claim rows are unavailable to natural-language row queries and
   claimant-name fuzzy search is removed. Municipality-level aggregates remain.
+- Owner names can be supplied to ordinary search to locate matching parcels.
+  Fuzzy result cards return parcel identifiers, addresses, and municipalities
+  without repeating the matched owner name.
 - Distress, delinquent-owner, and assemblage route groups are not mounted unless
-  `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS=true`; the corresponding frontend pages
-  also require `VITE_ENABLE_RESTRICTED_DISTRESS=true` at build time. Both
-  default to false and are deployment gates, not legal conclusions.
+  `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS=true`. The legacy standalone frontend
+  pages are no longer product routes; their bookmarks redirect to the
+  evidence-backed Feed or Radar. The API gate defaults to false and is a
+  deployment control, not a legal conclusion.
 - Ordinary parcel tax status omits claimant names and source-listed addresses;
   owner-profile delinquency detail follows the same restricted gate.
 - Score APIs recursively remove prior-owner/applicant/claimant identity and

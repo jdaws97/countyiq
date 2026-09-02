@@ -87,7 +87,13 @@ The intelligence passes currently use the shared harness in `pipelines/countyiq/
   per-item data in the user templates when editing prompts
 - Other knobs: `COUNTYIQ_PASS{N}_REASONING_EFFORT`, `COUNTYIQ_PASS1_TRIALS` /
   `COUNTYIQ_PASS2_TRIALS` (N-trial voting), `COUNTYIQ_PASS1_ESCALATION_MODEL`
-  (abstention cascade), `COUNTYIQ_PASS0_PDF_ENGINE` (default `native`)
+  (abstention cascade), `COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS` (default
+  false: person-only clusters are skipped), `COUNTYIQ_PASS0_PDF_ENGINE`
+  (default `native`)
+- Every system prompt must stay at or above 4,800 characters
+  (`tests/test_prompt_cache_prefix.py`) so provider prompt caching engages;
+  citation gates in `intelligence_integrity.py` are per field, not per
+  sentence
 
 Current model defaults and their evidence live in `docs/decisions.md` and
 `pipelines/countyiq/lib/pass_llm_config.py`. Do not copy model slugs into this

@@ -43,7 +43,7 @@ jobs:
         run: uv run --project pipelines python -c "from countyiq.definitions import defs; print('definitions OK')"
 
       - name: Run pipeline unit tests
-        run: uv run --project pipelines pytest pipelines/tests/ -q -k "not integration"
+        run: uv run --project pipelines pytest pipelines/tests/ -q -m "not integration"
 
       - name: Audit pipeline dependencies
         run: uvx pip-audit --path pipelines/.venv/lib/python3.11/site-packages
@@ -119,6 +119,25 @@ jobs:
           sed -i 's/CHANGE_ME_PIPELINE_PASSWORD/ci-pipeline-password-00000000000000000000000000000000000/g' .env
           sed -i 's/CHANGE_ME_API_PASSWORD/ci-api-password-00000000000000000000000000000000000000/g' .env
           docker compose -f docker/docker-compose.yml config --quiet
+
+      - name: Validate deployment scripts and fail-closed preflight
+        run: |
+          bash -n docker/setup.sh docker/backup.sh docker/deploy.sh docker/restore-drill.sh docker/lib/operations.sh
+          cat >> .env <<'EOF'
+          COUNTYIQ_ARCHIVE_STRICT=true
+          R2_ACCESS_KEY_ID=ci-r2-access-key
+          R2_SECRET_ACCESS_KEY=ci-r2-secret-key
+          R2_ENDPOINT_URL=https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.r2.cloudflarestorage.com
+          COUNTYIQ_BACKUP_R2_ACCESS_KEY_ID=ci-backup-r2-access-key
+          COUNTYIQ_BACKUP_R2_SECRET_ACCESS_KEY=ci-backup-r2-secret-key
+          COUNTYIQ_BACKUP_BUCKET_LOCK_CONFIRMED=true
+          DOMAIN=api.countyiq.test
+          COUNTYIQ_TRUSTED_HOSTS=api.countyiq.test
+          EOF
+          env \
+            COUNTYIQ_DEPLOY_REF="$(git rev-parse HEAD)" \
+            COUNTYIQ_ENV_FILE="$PWD/.env" \
+            docker/deploy.sh --check
 
       - name: Validate Caddy configuration
         run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 caddy validate --config /etc/caddy/Caddyfile

@@ -43,6 +43,13 @@ from pathlib import Path
 import psycopg2
 import psycopg2.extras
 
+from countyiq.lib.doc_text import extract_text_from_pdf_bytes
+from countyiq.lib.intelligence_integrity import (
+    validate_entity_membership,
+    validate_parcel_brief_citations,
+    validate_pass0_extractions,
+    validate_pass2_evidence_refs,
+)
 from countyiq.lib.llm_harness import (
     HarnessConfig,
     extract_json_object,
@@ -61,11 +68,11 @@ from countyiq.lib.pass2_batched_validation import (
     gather_parcel_batch_context,
     parse_batched_signal_output,
 )
-from countyiq.lib.pass_llm_config import resolve_pass_model
 from countyiq.lib.pass3_brief_generation import (
     build_brief_generation_prompt,
     parse_brief_output,
 )
+from countyiq.lib.pass_llm_config import resolve_pass_model
 from eval.fixture_io import canonical_context_hash, load_frozen_cases
 from eval.protocol import (
     EvalCostLedger,
@@ -76,6 +83,7 @@ from eval.protocol import (
 )
 from eval.scoring import (
     PASS2_SCORING_VERSION,
+    enforce_production_gate,
     score_pass0,
     score_pass1,
     score_pass2,
@@ -197,7 +205,14 @@ def run_pass0(cfg, ledger, on_progress=None) -> list[dict]:
             pdf_bytes=pdf,
         )
         parsed = res.parsed or _parse(res.raw_output)
-        score = score_pass0(parsed, fixture)
+        source_text = extract_text_from_pdf_bytes(pdf)
+        score = enforce_production_gate(
+            score_pass0(parsed, fixture),
+            validate_pass0_extractions(
+                (parsed or {}).get("extractions", []),
+                source_text,
+            ),
+        )
         rows.append(
             {
                 "doc": fname,
@@ -242,6 +257,32 @@ def _prompt_pidns(prompt):
     return ids
 
 
+def _fixture_cluster_names(case: dict) -> list[str]:
+    """Recover the candidate-name universe carried by a frozen Pass 1 case."""
+
+    # Partition labels are record IDs, not names; production cluster names
+    # are the owner-name strings the trigram pairs were built from.
+    records = case.get("context") or {}
+    explicit = records.get("candidate_names")
+    if isinstance(explicit, list) and explicit:
+        return sorted(str(name).strip() for name in explicit if str(name).strip())
+    names: set[str] = set()
+    fields = {
+        "parcels": ("owner_full",),
+        "tax_claims": ("owner_name",),
+        "plcb_licenses": ("licensee", "premises_owner"),
+        "corporate_entities": ("entity_name",),
+        "proceedings": ("applicant_name",),
+    }
+    for source, source_fields in fields.items():
+        for row in records.get(source, []) or []:
+            for field in source_fields:
+                value = row.get(field) if isinstance(row, dict) else None
+                if isinstance(value, str) and value.strip():
+                    names.add(value.strip())
+    return sorted(names)
+
+
 def run_pass1_live(cfg, ledger, on_progress=None) -> list[dict]:
     clusters = json.loads((FIXTURES / "p1_clusters.json").read_text())
     conn = _db()
@@ -267,7 +308,13 @@ def run_pass1_live(cfg, ledger, on_progress=None) -> list[dict]:
             "prompt": prompt,
             "elapsed_s": round(time.time() - t0, 1),
             "usage": res.metadata,
+            "production_gate_errors": validate_entity_membership(
+                parsed,
+                records,
+                c["names"],
+            ),
         }
+        row["production_gate_pass"] = not row["production_gate_errors"]
         if row["json_valid"]:
             in_p = _prompt_pidns(prompt)
             out_p = set()
@@ -297,13 +344,22 @@ def run_pass1_frozen(cfg, ledger, on_progress=None) -> list[dict]:
     cases = load_frozen_cases(FIXTURES / "p1_frozen.json")
     rows = []
     for case in cases:
-        prompt = build_entity_cluster_prompt(case["context"])
+        cluster_names = _fixture_cluster_names(case)
+        prompt_records = {**case["context"], "candidate_names": cluster_names}
+        prompt = build_entity_cluster_prompt(prompt_records)
         t0 = time.time()
         res = invoke_tracked(ledger, cfg, prompt, archive_key=f"chal_p1:{case['id']}")
         parsed = parse_entity_verification_output(
             res.parsed or _parse(res.raw_output) or {}
         )
-        score = score_pass1(parsed, {"records": case["context"], **case})
+        score = enforce_production_gate(
+            score_pass1(parsed, {"records": case["context"], **case}),
+            validate_entity_membership(
+                parsed,
+                prompt_records,
+                cluster_names,
+            ),
+        )
         row = {
             "case_id": case["id"],
             "case_type": case["case_type"],
@@ -343,18 +399,30 @@ only when the important factual and calibration errors are equivalent. Return
 the strict JSON object."""
 
 
-def _pass2_prompt_one(cfg, prompt, signals, case_key, ledger):
+def _pass2_prompt_one(cfg, prompt, context, case_key, ledger):
+    signals = context["signals"]
     res = invoke_tracked(
         ledger, cfg, prompt, archive_key=f"chal_p2:{case_key}:{cfg.model_path}"
     )
     raw_parsed = res.parsed or _parse(res.raw_output) or {}
     parsed = parse_batched_signal_output(raw_parsed, signals) if res.success else None
+    production_gate_errors = (
+        validate_pass2_evidence_refs(
+            parsed.get("validations", []),
+            signals,
+            context.get("context_signals", []),
+            parsed.get("cross_signal_insight"),
+        )
+        if parsed
+        else ["Pass 2 output could not be parsed"]
+    )
     return {
         "success": res.success,
         "error": res.error,
         "usage": res.metadata,
         "parsed": parsed,
         "output": json.dumps(parsed) if parsed else "",
+        "production_gate_errors": production_gate_errors,
     }
 
 
@@ -418,10 +486,10 @@ def run_pass2_live(
             continue
         prompt = build_batched_signal_prompt(context)
         challenger = _pass2_prompt_one(
-            cfg_challenger, prompt, context["signals"], pidn, ledger
+            cfg_challenger, prompt, context, pidn, ledger
         )
         incumbent = _pass2_prompt_one(
-            cfg_incumbent, prompt, context["signals"], pidn, ledger
+            cfg_incumbent, prompt, context, pidn, ledger
         )
         row = {
             "pidn": pidn,
@@ -478,8 +546,14 @@ def run_pass2_frozen(
     def complete_case(case, challenger, incumbent):
         context = case["context"]
         prompt = build_batched_signal_prompt(context)
-        challenger["score"] = score_pass2(challenger["parsed"], case)
-        incumbent["score"] = score_pass2(incumbent["parsed"], case)
+        challenger["score"] = enforce_production_gate(
+            score_pass2(challenger["parsed"], case),
+            challenger["production_gate_errors"],
+        )
+        incumbent["score"] = enforce_production_gate(
+            score_pass2(incumbent["parsed"], case),
+            incumbent["production_gate_errors"],
+        )
         row = {
             "case_id": case["id"],
             "case_type": case["case_type"],
@@ -513,10 +587,10 @@ def run_pass2_frozen(
             context = case["context"]
             prompt = build_batched_signal_prompt(context)
             challenger = _pass2_prompt_one(
-                cfg_challenger, prompt, context["signals"], case["id"], ledger
+                cfg_challenger, prompt, context, case["id"], ledger
             )
             incumbent = _pass2_prompt_one(
-                cfg_incumbent, prompt, context["signals"], case["id"], ledger
+                cfg_incumbent, prompt, context, case["id"], ledger
             )
             complete_case(case, challenger, incumbent)
     else:
@@ -534,7 +608,7 @@ def run_pass2_frozen(
                         _pass2_prompt_one,
                         config,
                         prompt,
-                        context["signals"],
+                        context,
                         case["id"],
                         ledger,
                     )
@@ -609,7 +683,15 @@ def run_pass3_frozen(cfg, ledger, on_progress=None) -> list[dict]:
         t0 = time.time()
         res = invoke_tracked(ledger, cfg, prompt, archive_key=f"chal_p3:{case['id']}")
         parsed = parse_brief_output(res.parsed or _parse(res.raw_output) or {})
-        score = score_pass3(parsed, case)
+        allowed_signal_keys = {
+            signal["signal_key"]
+            for signal in case["context"].get("validated_signals", [])
+            if signal.get("signal_key")
+        }
+        score = enforce_production_gate(
+            score_pass3(parsed, case),
+            validate_parcel_brief_citations(parsed, allowed_signal_keys),
+        )
         row = {
             "case_id": case["id"],
             "case_type": case["case_type"],

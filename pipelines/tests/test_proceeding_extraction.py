@@ -9,12 +9,14 @@ from contextlib import contextmanager
 import pytest
 
 from countyiq.assets.enrichment.proceeding_extraction import (
+    NO_LANDUSE_MARKER,
+    PRIOR_ACCEPTED_PROJECTIONS_QUERY,
     _is_pdf_document,
+    _persist_prefilter_skip,
     _write_proceeding_extractions,
 )
 from countyiq.lib.llm_harness import HarnessConfig, HarnessResult, _build_messages
 from countyiq.lib.pass0_templates import EXTRACTION_USER_TEMPLATE, PASS0_SYSTEM_PROMPT
-
 
 # ---------------------------------------------------------------------------
 # _is_pdf_document — guards the inline-upload fallback
@@ -378,6 +380,22 @@ class _FakeDatabase:
 
 class TestProceedingPersistence:
 
+    def test_prior_hash_skip_requires_the_active_projection(self):
+        assert "JOIN staging.proceeding_extractions" in PRIOR_ACCEPTED_PROJECTIONS_QUERY
+        assert "pe.active_inference_id = latest.inference_id" in PRIOR_ACCEPTED_PROJECTIONS_QUERY
+
+    def test_prefilter_marker_is_linked_to_immutable_inference(self):
+        database = _FakeDatabase()
+
+        _persist_prefilter_skip(database, 303, inference_id=9003)
+
+        assert database.committed[0] == (
+            "DELETE FROM staging.proceeding_extractions WHERE proceeding_id = %s",
+            (303,),
+        )
+        assert "active_inference_id" in database.committed[1][0]
+        assert database.committed[1][1] == (303, NO_LANDUSE_MARKER, 9003)
+
     def test_rolls_back_when_any_insert_fails(self):
         database = _FakeDatabase(existing_count=2, fail_on_type="variance_request")
         extractions = [
@@ -400,6 +418,7 @@ class TestProceedingPersistence:
                 proceeding_id=101,
                 extractions=extractions,
                 model_used="grok-4.1-fast",
+                inference_id=9001,
             )
 
         assert database.committed == []
@@ -412,6 +431,7 @@ class TestProceedingPersistence:
             proceeding_id=202,
             extractions=[],
             model_used="grok-4.1-fast",
+            inference_id=9002,
         )
 
         assert existing_count == 1
@@ -421,6 +441,6 @@ class TestProceedingPersistence:
             (202,),
         )
         assert "'_no_extractions'" in database.committed[1][0]
-        assert database.committed[1][1] == (202, "grok-4.1-fast")
+        assert database.committed[1][1] == (202, "grok-4.1-fast", 9002)
         assert "'_complete'" in database.committed[2][0]
-        assert database.committed[2][1] == (202, "grok-4.1-fast")
+        assert database.committed[2][1] == (202, "grok-4.1-fast", 9002)

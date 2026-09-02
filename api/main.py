@@ -2,18 +2,18 @@
 
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from psycopg2 import Error as PostgresError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from api.lib.database import close_pool, get_cursor
+from api.lib.database import DatabasePoolExhausted, close_pool, get_cursor
 from api.lib.response_types import HealthResponse
 from api.lib.settings import (
     api_docs_enabled,
-    county_metadata,
     cors_origins,
+    county_metadata,
     restricted_distress_enabled,
     trusted_hosts,
 )
@@ -28,11 +28,8 @@ from api.routes.parcels import router as parcels_router
 from api.routes.projects import router as projects_router
 from api.routes.radar import router as radar_router
 from api.routes.scores import router as scores_router
-from api.routes.scout import router as scout_router
 from api.routes.search import router as search_router
 from api.routes.stats import router as stats_router
-
-load_dotenv()  # Local development only; production Compose passes an allowlist.
 
 
 @asynccontextmanager
@@ -55,6 +52,17 @@ app.add_middleware(
     allowed_hosts=trusted_hosts(),
     www_redirect=False,
 )
+
+
+@app.exception_handler(DatabasePoolExhausted)
+async def database_pool_exhausted(
+    _request: Request,
+    _exc: DatabasePoolExhausted,
+) -> JSONResponse:
+    """Return bounded backpressure instead of an internal-server error."""
+    return JSONResponse(status_code=503, content={"detail": "database unavailable"})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),
@@ -76,7 +84,7 @@ def readiness() -> HealthResponse:
         with get_cursor() as cur:
             cur.execute("SELECT 1 AS ready")
             row = cur.fetchone()
-    except PostgresError as exc:
+    except (PostgresError, DatabasePoolExhausted) as exc:
         raise HTTPException(status_code=503, detail="database unavailable") from exc
 
     if not row or row["ready"] != 1:
@@ -90,7 +98,6 @@ def metadata() -> dict[str, str]:
     return county_metadata()
 
 
-app.include_router(scout_router, prefix="/api/scout")
 app.include_router(stats_router, prefix="/api/stats")
 app.include_router(layers_router, prefix="/api/layers")
 app.include_router(municipalities_router, prefix="/api/municipalities")

@@ -6,6 +6,11 @@ cache the instruction prefix across the whole batch — only the per-document
 header and document text vary call to call.
 """
 
+import hashlib as _hashlib
+
+from countyiq.lib.pass_schemas import PASS0_EXTRACTION_SCHEMA
+from countyiq.lib.prompt_prefix import PASS0_DEFINITIONS, schema_block
+
 # Static instruction block. It uses doubled braces so `.format()` can produce
 # the final JSON examples without treating them as interpolation fields.
 _SYSTEM_TEMPLATE = """You are a municipal-government document analyst extracting structured property records from meeting documents.
@@ -82,5 +87,20 @@ It is a {proceeding_type} meeting document{date_clause}.
 
 Extract all relevant property records from it. Return ONLY valid JSON."""
 
-# Final system string sent to the API (single braces).
-PASS0_SYSTEM_PROMPT = _SYSTEM_TEMPLATE.format()
+# Final system string sent to the API (single braces). The static definition
+# and schema blocks carry the vocabulary contract and push the byte-identical
+# prefix past the provider caching minimum (see prompt_prefix.py).
+PASS0_SYSTEM_PROMPT = (
+    _SYSTEM_TEMPLATE.format()
+    + "\n\n"
+    + PASS0_DEFINITIONS
+    + "\n\n"
+    + schema_block(PASS0_EXTRACTION_SCHEMA)
+)
+
+
+# Covers both halves of the prompt so a contract change invalidates the input
+# hash even when the source document itself is unchanged.
+PROMPT_VERSION = _hashlib.sha256(
+    (PASS0_SYSTEM_PROMPT + "\n\n" + EXTRACTION_USER_TEMPLATE).encode("utf-8")
+).hexdigest()[:12]

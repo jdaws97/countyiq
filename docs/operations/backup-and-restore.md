@@ -1,66 +1,85 @@
 # Backup and Restore
 
-`docker/backup.sh` creates PostgreSQL custom-format dumps for the CountyIQ and
-Dagster databases, validates their archives, writes portable SHA-256 sidecars,
-and uploads both files to the configured private R2 remote. It also backs up
-the intelligence archive under the configured retention policy.
+`docker/backup.sh` creates one uniquely named custom-format dump for the
+CountyIQ product database and one for Dagster. It validates each dump locally,
+adds a portable SHA-256 sidecar, uploads immutable objects to private R2,
+download-checks them, and uploads/read-backs a manifest last. Only a backup ID
+with that completion manifest is eligible for restore.
 
-## Daily verification
+The host script never deletes remote objects. Configure
+[R2 lifecycle rules](https://developers.cloudflare.com/r2/reference/wrangler-commands/)
+for expiry and an
+[R2 bucket-lock rule](https://developers.cloudflare.com/r2/buckets/bucket-locks/)
+for at least the required recovery window. Set
+`COUNTYIQ_BACKUP_BUCKET_LOCK_CONFIRMED=true` only after reviewing that lock.
+The dedicated `COUNTYIQ_BACKUP_R2_*` storage credential in
+`/opt/countyiq/.env` should be scoped to the private backup bucket and must be
+different from Dagster's raw-archive credential. Bucket-configuration
+authority belongs to a third, operator-only credential that is not stored on
+the VPS.
 
-The cron monitor must alert when the command exits nonzero or when no new dump
-and checksum objects appear for either database. A successful upload is not a
-restore test.
+## First-host gate
 
-## Non-destructive restore drill
-
-Run this at least quarterly and after material PostgreSQL, PostGIS, or backup
-changes. Use a recent dump and a disposable database name; never restore over
-the live database.
+After `deploy.sh --initial` succeeds, create and drill a post-migration backup
+before enabling the schedule:
 
 ```bash
 ssh countyiq
-sudo -i
-set -a
-source /opt/countyiq/.env
-set +a
-install -d -m 700 /var/lib/countyiq-restore
-cd /var/lib/countyiq-restore
-rclone copyto r2:countyiq-backups/postgres/countyiq-YYYY-MM-DD.dump countyiq.dump
-rclone copyto r2:countyiq-backups/postgres/countyiq-YYYY-MM-DD.dump.sha256 countyiq.dump.sha256
-sed -i 's/countyiq-YYYY-MM-DD.dump/countyiq.dump/' countyiq.dump.sha256
-sha256sum --check countyiq.dump.sha256
-pg_restore --list countyiq.dump >/dev/null
-
-docker exec countyiq-postgres dropdb -U "$DATABASE_USER" --if-exists countyiq_restore_drill
-docker exec countyiq-postgres createdb -U "$DATABASE_USER" countyiq_restore_drill
-docker cp countyiq.dump countyiq-postgres:/tmp/countyiq-restore.dump
-docker exec countyiq-postgres pg_restore \
-  -U "$DATABASE_USER" --exit-on-error --no-owner \
-  -d countyiq_restore_drill /tmp/countyiq-restore.dump
-docker exec countyiq-postgres psql \
-  -U "$DATABASE_USER" -d countyiq_restore_drill \
-  -c "SELECT COUNT(*) AS current_properties FROM public.properties;"
-docker exec countyiq-postgres rm -f /tmp/countyiq-restore.dump
-docker exec countyiq-postgres dropdb -U "$DATABASE_USER" countyiq_restore_drill
-rm -f countyiq.dump countyiq.dump.sha256
+sudo /opt/countyiq/docker/backup.sh --reason restore-drill
+# Copy the exact COUNTYIQ_BACKUP_ID printed above.
+sudo /opt/countyiq/docker/restore-drill.sh \
+  --backup-id <YYYYMMDDTHHMMSSZ-restore-drill>
+sudo systemctl enable --now countyiq-backup.timer
+sudo systemctl start countyiq-backup.service
+systemctl status countyiq-backup.service --no-pager
+systemctl list-timers countyiq-backup.timer --no-pager
 ```
 
-Record the dump date, restore duration, row-count sanity checks, and operator in
-the operations log.
+The restore script downloads the completion manifest, dump, and checksum for
+both databases, restores them into exact disposable sibling databases, runs
+sanity queries, drops only those drill databases, and writes a root-readable
+receipt under `/var/lib/countyiq/restore-drills/`. It never targets the live
+database names.
+
+## Daily verification
+
+The persistent systemd timer runs daily at 04:00 UTC with a randomized delay.
+Alert on a failed `countyiq-backup.service`; `SLACK_WEBHOOK_CRITICAL` provides a
+secondary notification when configured. A healthy check includes:
+
+```bash
+systemctl is-enabled countyiq-backup.timer
+systemctl is-active countyiq-backup.timer
+systemctl --failed --no-legend countyiq-backup.service
+journalctl -u countyiq-backup.service --since '2 days ago' --no-pager
+```
+
+Confirm that a new manifest and its referenced database objects exist in R2.
+Do not count orphan dumps without a manifest as successful. Run a restore drill
+at least quarterly, after PostgreSQL/PostGIS or backup changes, and before the
+configured receipt age can block a deployment.
 
 ## Production recovery
 
-1. Preserve the failed volume and take a snapshot when storage is healthy.
-2. Stop API, Dagster daemon, and Dagster webserver so there are no writers.
-3. Verify and restore the selected dump to a new database or volume using the
-   same procedure as the drill.
-4. Run Alembic only to the application revision that will be deployed, refresh
-   the API role grants, and execute the API contract smoke tests against the
-   restored database.
-5. Switch the stack to the restored database only after those checks pass.
-6. Retain the old database until the recovery is accepted and a new verified
-   backup has completed.
+Recovery is intentionally not automated because choosing a backup and cutting
+over production are destructive decisions:
 
-Do not use `pg_restore --clean` against the only production database. The exact
-cutover depends on whether recovery uses a sibling database, a new volume, or a
-replacement host and requires an approved incident plan.
+1. Keep API, Dagster daemon, and Dagster webserver stopped. Preserve the failed
+   volume and release receipts; take a provider snapshot when the disk is
+   healthy enough to do so.
+2. Select a completed backup ID from R2 and run `restore-drill.sh` first. This
+   proves the exact off-host set is readable without touching production.
+3. Restore the selected dump to a new database, new Docker volume, or
+   replacement host. Never restore over the only production database.
+4. Run Alembic only to the reviewed application's revision, refresh both
+   runtime roles, and execute readiness/contract smoke checks against the new
+   target.
+5. Cut over only after the checks pass. Retain the failed database until the
+   recovery is accepted and a new completed off-host backup exists.
+
+Do not use `pg_restore --clean` against the only production database. Do not
+treat a Hetzner server image as the database recovery oracle: according to
+[Hetzner's backup documentation](https://docs.hetzner.com/cloud/servers/backups-snapshots/faq/),
+a live image may be crash-inconsistent, provider backups are coupled to the
+server lifecycle, and attached Hetzner Volumes are not included. Logical R2
+dumps and tested restores remain the primary data-recovery path.

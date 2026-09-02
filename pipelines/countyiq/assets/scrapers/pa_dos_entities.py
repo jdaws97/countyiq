@@ -61,6 +61,11 @@ VALUE_COLUMNS = [
     "officers",
     "source_url",
 ]
+# Refreshed in place on every lookup so an unchanged record still advances its
+# TTL clock. Without it, unchanged rows kept their original valid_from, aged
+# past the TTL, and the same alphabetical prefix was re-queried every run while
+# newer owner names were never reached.
+CARRY_COLUMNS = ["last_checked_at"]
 
 # Cap on consecutive errors before aborting the run
 _MAX_ERRORS = 25
@@ -118,11 +123,13 @@ def pa_dos_entities(
     not_found_ttl_days = _positive_int_env(
         "COUNTYIQ_PA_DOS_NOT_FOUND_TTL_DAYS", _DEFAULT_NOT_FOUND_TTL_DAYS
     )
+    name_checkpoint = _get_name_checkpoint(database)
     entity_names = _get_pending_entity_names(
         database,
         limit=max_names,
         found_ttl_days=found_ttl_days,
         not_found_ttl_days=not_found_ttl_days,
+        after_name=name_checkpoint,
     )
     if not entity_names:
         log.info("No new business entity names to look up")
@@ -155,6 +162,7 @@ def pa_dos_entities(
     found = 0
     not_found = 0
     error_count = 0
+    last_attempted_name: str | None = None
 
     for entity_name in entity_names:
         if error_count >= _MAX_ERRORS:
@@ -167,6 +175,7 @@ def pa_dos_entities(
                 processed, len(entity_names), found, not_found, error_count,
             )
 
+        last_attempted_name = entity_name
         try:
             record = _lookup_entity(session, dataset_url, entity_name)
         except requests.exceptions.RequestException as err:
@@ -187,6 +196,7 @@ def pa_dos_entities(
             f"{dataset_url}?filing_number={record['entity_number']}"
             if record["entity_number"] else dataset_url
         )
+        record["last_checked_at"] = datetime.now(timezone.utc)
         records.append(record)
         time.sleep(_THROTTLE_SECONDS)
 
@@ -203,9 +213,12 @@ def pa_dos_entities(
                 key_columns=KEY_COLUMNS,
                 value_columns=VALUE_COLUMNS,
                 expire_missing=False,
+                carry_columns=CARRY_COLUMNS,
             )
         finally:
             cur.close()
+    if last_attempted_name:
+        _save_name_checkpoint(database, last_attempted_name)
 
     # --- 4. Archive raw match results to R2 ---
     if raw_archive:
@@ -335,24 +348,35 @@ def _get_pending_entity_names(
     limit: int,
     found_ttl_days: int,
     not_found_ttl_days: int,
+    after_name: str | None = None,
 ) -> list[str]:
-    """Return one deterministic, resumable batch of names due for lookup."""
+    """Return a resumable batch, wrapping after the last attempted name.
+
+    Advancing on attempted names prevents a permanently failing alphabetical
+    prefix from starving every later owner when the run-level error cap trips.
+    """
     rows = database.execute(
         r"""
-        SELECT DISTINCT p.owner_full
-        FROM staging.parcels p
-        WHERE p.valid_to IS NULL
-          AND p.owner_full ~* %s
-          AND NOT EXISTS (
-              SELECT 1
-              FROM staging.corporate_entities ce
-              WHERE ce.entity_name = p.owner_full
-                AND ce.valid_to IS NULL
-                AND ce.valid_from > NOW() - (
-                    CASE WHEN ce.status = %s THEN %s ELSE %s END
-                ) * INTERVAL '1 day'
-          )
-        ORDER BY p.owner_full
+        WITH pending AS (
+            SELECT DISTINCT p.owner_full
+            FROM staging.parcels p
+            WHERE p.valid_to IS NULL
+              AND p.owner_full ~* %s
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM staging.corporate_entities ce
+                  WHERE ce.entity_name = p.owner_full
+                    AND ce.valid_to IS NULL
+                    AND COALESCE(ce.last_checked_at, ce.valid_from) > NOW() - (
+                        CASE WHEN ce.status = %s THEN %s ELSE %s END
+                    ) * INTERVAL '1 day'
+              )
+        )
+        SELECT owner_full
+        FROM pending
+        ORDER BY
+            CASE WHEN %s IS NULL OR owner_full > %s THEN 0 ELSE 1 END,
+            owner_full
         LIMIT %s
         """,
         (
@@ -361,10 +385,40 @@ def _get_pending_entity_names(
             STATUS_NOT_FOUND,
             not_found_ttl_days,
             found_ttl_days,
+            after_name,
+            after_name,
             limit,
         ),
     )
     return [row[0] for row in rows if row and row[0]]
+
+
+def _get_name_checkpoint(database: DatabaseResource) -> str | None:
+    rows = database.execute(
+        """
+        SELECT checkpoint ->> 'last_entity_name'
+        FROM meta.scrape_checkpoints
+        WHERE source_name = %s
+        """,
+        (SOURCE_NAME,),
+    )
+    if not rows or not rows[0]:
+        return None
+    value = rows[0][0]
+    return str(value) if value else None
+
+
+def _save_name_checkpoint(database: DatabaseResource, entity_name: str) -> None:
+    database.execute(
+        """
+        INSERT INTO meta.scrape_checkpoints (source_name, checkpoint, updated_at)
+        VALUES (%s, jsonb_build_object('last_entity_name', %s), NOW())
+        ON CONFLICT (source_name) DO UPDATE
+        SET checkpoint = EXCLUDED.checkpoint,
+            updated_at = EXCLUDED.updated_at
+        """,
+        (SOURCE_NAME, entity_name),
+    )
 
 
 def _get_current_count(database: DatabaseResource) -> int:

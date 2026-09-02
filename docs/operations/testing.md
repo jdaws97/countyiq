@@ -10,7 +10,7 @@ Install exactly what is locked and run the non-integration suite:
 ```bash
 cd pipelines
 uv sync --locked --extra dev
-.venv/bin/python -m pytest tests/ -q -k "not integration"
+.venv/bin/python -m pytest tests/ -q -m "not integration"
 ```
 
 For asset, job, schedule, resource, or configuration wiring changes, also load
@@ -107,6 +107,20 @@ The API liveness endpoint is `/api/health`; container readiness uses
 `/api/ready`, which also verifies a database query. The Dagster image must load
 `countyiq.definitions` and expose `/server_info`.
 
+Deployment changes also require the non-mutating configuration gate:
+
+```bash
+bash -n docker/setup.sh docker/backup.sh docker/deploy.sh \
+  docker/restore-drill.sh docker/lib/operations.sh
+COUNTYIQ_DEPLOY_REF="$(git rev-parse HEAD)" \
+COUNTYIQ_ENV_FILE="$PWD/.env" \
+  docker/deploy.sh --check
+```
+
+The preflight deliberately rejects a dirty tree, placeholder credentials,
+enabled paid passes, missing R2 lock confirmation, and a Compose graph that
+cannot resolve. It does not contact R2, mutate Docker, or prove the live host.
+
 ## Continuous Integration
 
 `.github/workflows/ci.yml` runs:
@@ -116,7 +130,8 @@ The API liveness endpoint is `/api/health`; container readiness uses
 - the locked API environment and API unit tests;
 - frontend clean install, typecheck, and lint.
 - npm and Python dependency vulnerability audits;
-- production Compose and Caddy configuration validation.
+- production Compose, deployment preflight/script syntax, and Caddy
+  configuration validation.
 
 `.github/workflows/api-contract-tests.yml` additionally starts the dedicated
 PostGIS test container and runs the migration-backed API contract suite for API

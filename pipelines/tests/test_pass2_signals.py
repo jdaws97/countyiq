@@ -78,8 +78,9 @@ class TestSignalTemplates:
         for signal_type in self.EXPECTED_SIGNAL_TYPES:
             assert signal_type in SIGNAL_TEMPLATES, f"Missing template for {signal_type}"
 
-    def test_exactly_12_templates(self):
-        assert len(SIGNAL_TEMPLATES) == 12
+    def test_exactly_14_templates(self):
+        # 12 original signal types plus municipal_action and entity_assemblage.
+        assert len(SIGNAL_TEMPLATES) == 14
 
     def test_each_has_base_questions(self):
         for signal_type, template in SIGNAL_TEMPLATES.items():
@@ -325,13 +326,29 @@ class TestParseSignalValidationOutput:
             output = {
                 "signal_key": "test",
                 "validation_status": status,
-                "adjusted_significance": "medium",
+                "adjusted_significance": (
+                    "none" if status in {"stale", "irrelevant"} else "medium"
+                ),
                 "reasoning": "Reasoning here.",
                 "key_facts": [],
                 "cross_references": [],
             }
             result = parse_signal_validation_output(output)
             assert result["validation_status"] == status
+
+    @pytest.mark.parametrize("status", ["stale", "irrelevant"])
+    def test_non_serving_status_rejects_actionable_significance(self, status):
+        result = parse_signal_validation_output({
+            "signal_key": "test",
+            "validation_status": status,
+            "adjusted_significance": "high",
+            "reasoning": "Reasoning here.",
+            "key_facts": [],
+            "cross_references": [],
+        })
+
+        assert "error" in result
+        assert "requires adjusted_significance 'none'" in result["error"]
 
     def test_all_valid_significance_accepted(self):
         for sig in VALID_SIGNIFICANCE:

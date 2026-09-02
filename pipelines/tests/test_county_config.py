@@ -21,6 +21,31 @@ def test_york_config_exists():
     assert config.plcb_filter == "York County"
     assert config.plcb_min_records == 500
     assert "arcweb1.ycpc.org" in config.arcgis_parcels_url
+    assert (
+        "York Twp Board of Commissioners",
+        "https://yorktownshippa.gov/boards-4/boc/",
+        "board_of_commissioners",
+    ) in config.municipality_websites
+
+
+def test_hellam_sources_use_document_listing_pages():
+    entries = set(get_county_config("york").municipality_websites)
+
+    assert (
+        "Hellam Twp Board of Supervisors",
+        "https://www.hellamtownship.gov/board-of-supervisors-meetings/",
+        "board_of_supervisors",
+    ) in entries
+    assert (
+        "Hellam Twp Planning Commission",
+        "https://www.hellamtownship.gov/planning-commission-meetings/",
+        "planning_commission",
+    ) in entries
+    assert (
+        "Hellam Twp Zoning Hearing Board",
+        "https://www.hellamtownship.gov/zoning-hearing-board-meetings/",
+        "zoning_hearing",
+    ) in entries
 
 
 def test_default_county_is_york():
@@ -76,10 +101,10 @@ def test_york_proceeding_coverage_counts_sources_not_municipalities():
         }
     }
 
-    assert len(entries) == 110
-    assert len({url for _, url, _ in entries}) == 107
-    assert len(municipalities_with_any_source) == 65
-    assert len(governing_body_municipalities) == 63
+    assert len(entries) == 113
+    assert len({url for _, url, _ in entries}) == 110
+    assert len(municipalities_with_any_source) == 68
+    assert len(governing_body_municipalities) == 66
 
 
 def test_all_configs_have_required_fields():

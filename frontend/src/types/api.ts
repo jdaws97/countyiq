@@ -75,11 +75,16 @@ export interface OwnerBrief {
   urgency: string | null
   top_risk: string | null
   evidence_strength: string | null
+  citations: string[]
+  parcel_citations: string[]
+  citation_evidence: EvidenceItem[]
   n_parcels: number | null
   confidence: number | null
   n_trials: number | null
   trial_agreement: number | null
   model_version: string | null
+  prompt_version: string | null
+  brief_version: number | null
   generated_at: string | null
 }
 
@@ -90,6 +95,7 @@ export interface EntityRelationship {
 export interface OwnerProfileResponse {
   owner: OwnerSummary
   relationships: EntityRelationship[]
+  verification_evidence: EvidenceItem[]
   brief: OwnerBrief | null
   portfolio: {
     parcel_count: number
@@ -177,8 +183,8 @@ export interface ParcelRecord {
   num_stories: NumericLike
   res_living_area: NumericLike
   yrblt: NumericLike
-  heatsys: string | null
-  fuel: string | null
+  heatsys: number | null
+  fuel: number | null
   clean_green: string | null
   grade: string | null
   cdu: string | null
@@ -220,6 +226,33 @@ export interface FloodZoneInfo {
   in_flood_zone: boolean
   zone: string | null
   sfha: boolean
+  overlap_pct: number | null
+}
+
+export interface SoilUnit {
+  objectid: number
+  map_unit_symbol: string | null
+  map_unit_name: string | null
+  drainage: string | null
+  capability_class: number | null
+  permeability: number | null
+  septic_rating: string | null
+  slope_low: number | null
+  slope_high: number | null
+  representative_slope: number | null
+  hydric_rating: string | null
+  hydrologic_group: string | null
+  relative_value: string | null
+  coverage_pct: number
+}
+
+export interface SoilProfile {
+  mapped_coverage_pct: number
+  units: SoilUnit[]
+  considerations: string[]
+  source_record_ids: number[]
+  source_url: string | null
+  evidence?: EvidenceItem
 }
 
 export interface StructureBuilding {
@@ -242,13 +275,34 @@ export interface ReasonSignal {
   is_risk: boolean
 }
 
-export type DevelopmentSignalValue = string | number | boolean | string[] | null | undefined
-export type DevelopmentSignalEvidence = Record<string, DevelopmentSignalValue>
+export type DevelopmentSignalValue = string | number | boolean | string[] | number[] | null | undefined
+export type DevelopmentSignalEvidence = Record<string, unknown>
+
+export interface SignalFact {
+  label: string
+  value: string
+}
+
+export interface SignalPresentation {
+  title: string
+  summary: string
+  interpretation: string | null
+  caveat: string | null
+  facts: SignalFact[]
+  score_impacts: {
+    momentum: number
+    opportunity: number
+    site_screening: number
+  }
+  affects_eligibility: boolean
+}
 
 export interface DevelopmentSignal {
   weight?: number
   evidence?: DevelopmentSignalEvidence
-  [key: string]: DevelopmentSignalValue | DevelopmentSignalEvidence
+  presentation?: SignalPresentation
+  evidence_receipt?: EvidenceItem
+  [key: string]: unknown
 }
 
 export interface DevelopmentMomentum {
@@ -273,6 +327,7 @@ export interface ParcelBrief {
   key_questions: string[]
   signal_count: number | null
   citations: string[]
+  citation_evidence: EvidenceItem[]
   brief_version: number | null
   generated_at: string | null
 }
@@ -285,6 +340,7 @@ export interface CountyNarrative {
   trajectory: string | null
   key_entities: string[]
   citations: string[]
+  citation_evidence: EvidenceItem[]
   generated_at: string | null
 }
 
@@ -307,19 +363,33 @@ export interface LinkedProceeding {
   supporting_text: string | null
   document_url: string | null
   extraction_confidence: number | null
+  page_number: number | null
   match_type: 'pidn' | 'address'
+  evidence: EvidenceItem
 }
 
 export type IntelligenceCategory = 'parcel' | 'development'
 export type IntelligenceInterpretationKind = 'deterministic' | 'llm'
 
-export interface IntelligenceSource {
+export interface EvidenceItem {
+  evidence_id: string
+  citation_key: string
   label: string
+  source_kind: string
+  source_record_id: string | null
   url: string | null
   document_url: string | null
+  internal_url: string | null
   excerpt: string | null
   details: Record<string, unknown>
+  effective_at: string | null
+  observed_at: string | null
+  method: string
+  caveat: string | null
+  confidence: number | null
 }
+
+export type IntelligenceSource = EvidenceItem
 
 export interface IntelligenceProject {
   key: string
@@ -371,12 +441,14 @@ export interface PropertyReport {
   parcel: ParcelRecord
   tax_delinquency: TaxDelinquency
   flood_zone: FloodZoneInfo
+  soil_profile: SoilProfile
   structures: ParcelStructures
   development_momentum: DevelopmentMomentum | null
   parcel_brief: ParcelBrief | null
   related_narratives: CountyNarrative[]
   intelligence_summary: IntelligenceSummary | null
   linked_proceedings: LinkedProceeding[]
+  evidence: EvidenceItem[]
 }
 
 export interface MunicipalityProfile {
@@ -386,6 +458,37 @@ export interface MunicipalityProfile {
   stats: MunicipalityStats
   delinquency: MunicipalityDelinquency
   licenses: LicenseRecord[]
+  development_pipeline?: MunicipalityPipeline | null
+  radar_top?: MunicipalityRadarTop[]
+}
+
+export interface MunicipalityPipelineMatter {
+  event_key: string
+  event_type: string
+  title: string
+  event_date: string | null
+  project_key: string | null
+  project_name: string | null
+  related_pidns: string[]
+}
+
+export interface MunicipalityPipeline {
+  window_days: number
+  total_matters: number
+  by_event_type: { event_type: string; count: number }[]
+  upcoming: MunicipalityPipelineMatter[]
+  recent: MunicipalityPipelineMatter[]
+}
+
+export interface MunicipalityRadarTop {
+  pidn: string
+  propadr: string | null
+  acres: number | null
+  opportunity_score: number
+  score: number
+  top_signal: string | null
+  opportunity_delta: number | null
+  is_new: boolean
 }
 
 export interface MunicipalityStats {
@@ -517,6 +620,7 @@ export interface AssemblageResponse {
 }
 
 export type RadarViewMode = 'opportunity' | 'momentum' | 'readiness'
+export type RadarMoversDirection = 'up' | 'down' | 'new'
 
 export interface RadarParcel {
   pidn: string
@@ -536,6 +640,20 @@ export interface RadarParcel {
   aprtotal: number | null
   class: string | null
   reason_signals: ReasonSignal[]
+  previous_score?: number | null
+  previous_opportunity_score?: number | null
+  score_delta?: number | null
+  opportunity_delta?: number | null
+  previous_computed_at?: string | null
+  is_new?: boolean
+}
+
+export interface RadarMoversResponse {
+  count: number
+  view: 'opportunity' | 'momentum'
+  direction: RadarMoversDirection
+  previous_computed_at: string | null
+  parcels: RadarParcel[]
 }
 
 export interface RadarParcelListResponse {
@@ -547,6 +665,22 @@ export interface RadarParcelListResponse {
     loaded_layers: string[]
     missing_layers: string[]
   }
+}
+
+export interface RadarBboxItem {
+  pidn: string
+  score: number
+  eligible: boolean
+  top_signal: string | null
+  lng: number | null
+  lat: number | null
+}
+
+export interface RadarBboxResponse {
+  count: number
+  limit: number
+  truncated: boolean
+  parcels: RadarBboxItem[]
 }
 
 export interface RadarMunicipalitiesResponse {

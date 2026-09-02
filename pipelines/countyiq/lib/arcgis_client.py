@@ -3,9 +3,9 @@
 Handles FeatureServer and MapServer endpoints. Paginates using
 resultRecordCount + resultOffset until all records are fetched.
 
-Supports both sequential (iterate_feature_pages) and parallel
-(fetch_all_features_parallel) fetching. The parallel fetcher uses
-ThreadPoolExecutor for ~5-8x speedup on large layers.
+Supports sequential, bounded-parallel streaming, and buffered-parallel
+fetching. The parallel fetchers use ThreadPoolExecutor for ~5-8x speedup on
+large layers.
 """
 
 import time
@@ -156,6 +156,92 @@ def _fetch_page(url: str, where: str, out_fields: str, out_sr: int,
         if attempt < retries - 1:
             time.sleep(2 ** attempt)
     raise RuntimeError(f"Page at offset {offset} failed after {retries} attempts: {last_exc}")
+
+
+def iterate_feature_pages_parallel(
+    url: str,
+    where: str = "1=1",
+    out_fields: str = "*",
+    out_sr: int = 4326,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    return_geometry: bool = True,
+    max_workers: int = 4,
+) -> Iterator[list[dict]]:
+    """Yield pages in completion order with a bounded in-flight window.
+
+    Only ``max_workers`` futures are submitted at once. Completed futures are
+    removed before the next request is submitted so their feature payloads can
+    be reclaimed as soon as the caller finishes each yielded page.
+
+    Any page failure raises and closes the iterator. Callers that stage pages
+    incrementally must keep their writes in a transaction and roll it back on
+    failure so a partial fetch can never drive missing-row expiration.
+    """
+    if max_workers < 1:
+        raise ValueError("max_workers must be at least 1")
+    if batch_size < 1:
+        raise ValueError("batch_size must be at least 1")
+
+    log = get_dagster_logger()
+    total = _get_feature_count(url, where)
+    page_total = (total + batch_size - 1) // batch_size
+    log.info(f"Total features to fetch: {total:,} ({page_total} pages)")
+    if total == 0:
+        return
+
+    offsets = iter(range(0, total, batch_size))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        def submit(offset: int):
+            return pool.submit(
+                _fetch_page, url, where, out_fields, out_sr,
+                batch_size, offset, return_geometry,
+            )
+
+        pending = {}
+        for offset in offsets:
+            pending[submit(offset)] = offset
+            if len(pending) == max_workers:
+                break
+
+        completed = 0
+        fetched = 0
+        while pending:
+            future = next(as_completed(pending))
+            offset = pending.pop(future)
+            try:
+                features = future.result()
+            except Exception as exc:
+                for other in pending:
+                    other.cancel()
+                raise RuntimeError(
+                    f"Parallel fetch incomplete: page at offset {offset} failed. "
+                    "Refusing to yield a successful partial result."
+                ) from exc
+
+            completed += 1
+            fetched += len(features)
+            if completed % 10 == 0 or completed == page_total:
+                log.info(
+                    f"  Pages consumed: {completed}/{page_total} "
+                    f"({fetched:,} features)"
+                )
+
+            yield features
+            del features, future
+
+            try:
+                next_offset = next(offsets)
+            except StopIteration:
+                continue
+            pending[submit(next_offset)] = next_offset
+
+    if fetched != total:
+        raise RuntimeError(
+            f"Parallel fetch returned {fetched:,} features but ArcGIS reported "
+            f"{total:,}. Refusing a partial result."
+        )
+    log.info(f"Bounded parallel fetch complete: {fetched:,} features")
 
 
 def fetch_all_features_parallel(

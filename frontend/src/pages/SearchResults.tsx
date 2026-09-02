@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import PageShell from '../components/PageShell'
 import type { SearchMode, SearchResponse, SearchResult } from '../types/api'
@@ -8,6 +8,22 @@ const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   tax_claim: { label: 'Tax Delinquent', color: 'var(--accent-red)' },
   license: { label: 'Liquor License', color: 'var(--accent-green)' },
   parcel: { label: 'Parcel', color: 'var(--accent-cyan)' },
+}
+
+const MATCH_LABELS: Record<string, string> = {
+  parcel_id: 'Parcel ID',
+  address: 'Address',
+  owner: 'Owner',
+  mapped_address: 'Mapped address',
+  license: 'Premises',
+}
+
+const SEARCH_RESULT_LIMIT = 25
+
+function matchStrength(score: number) {
+  if (score >= 0.9) return 'Exact'
+  if (score >= 0.65) return 'Strong'
+  return 'Possible'
 }
 
 // Simple cache to avoid re-querying on back navigation
@@ -30,6 +46,7 @@ export default function SearchResults() {
   const [description, setDescription] = useState<string>('')
   const [aggLabel, setAggLabel] = useState<string>('')
   const [aggValue, setAggValue] = useState<string>('')
+  const [error, setError] = useState<string>('')
   // Loading is derived (resolved query vs current query) so the effect never
   // sets state synchronously; cache hits resolve through a microtask.
   const [resolvedQuery, setResolvedQuery] = useState<string | null>(null)
@@ -42,7 +59,7 @@ export default function SearchResults() {
     const cached = searchCache[query]
     const load: Promise<SearchCacheEntry | null> = cached
       ? Promise.resolve(cached)
-      : fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100`)
+      : fetch(`/api/search?q=${encodeURIComponent(query)}&limit=${SEARCH_RESULT_LIMIT}`)
           .then(r => {
             if (!r.ok) throw new Error(`Search failed (${r.status})`)
             return r.json()
@@ -71,13 +88,14 @@ export default function SearchResults() {
         setAggLabel(entry.label || '')
         setAggValue(entry.value || '')
         setResults(entry.results)
+        setError('')
         setResolvedQuery(query)
       })
       .catch((error) => {
         if (cancelled) return
         console.error('Search request failed', error)
         setResults([])
-        setDescription('Search is temporarily unavailable.')
+        setError('Search is temporarily unavailable. Please try again.')
         setResolvedQuery(query)
       })
     return () => {
@@ -85,11 +103,19 @@ export default function SearchResults() {
     }
   }, [query, navigate])
 
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const nextQuery = String(new FormData(event.currentTarget).get('q') || '').trim()
+    if (nextQuery.length >= 2) {
+      navigate(`/search?q=${encodeURIComponent(nextQuery)}`)
+    }
+  }
+
   return (
     <PageShell maxWidth={1200}>
 
         {/* Header */}
-        <div style={{ marginBottom: 32, animation: 'fadeUp 0.4s ease both' }}>
+        <div style={{ marginBottom: 32 }}>
           <Link to="/" style={{
             fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)',
             textDecoration: 'none', letterSpacing: 1,
@@ -102,10 +128,38 @@ export default function SearchResults() {
           }}>
             Search Results
           </h1>
+          <form
+            onSubmit={handleSearch}
+            role="search"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '18px 0 12px', maxWidth: 760 }}
+          >
+            <label className="sr-only" htmlFor="results-search">Search parcels and places</label>
+            <input
+              key={query}
+              id="results-search"
+              name="q"
+              type="search"
+              defaultValue={query}
+              minLength={2}
+              required
+              autoFocus
+              placeholder="Owner, address, or parcel ID"
+              style={{
+                flex: '1 1 320px', minWidth: 0, minHeight: 42, padding: '10px 13px',
+                color: 'var(--text-primary)', background: 'var(--bg-panel)',
+                border: '1px solid var(--border-active)', borderRadius: 6, fontSize: 15,
+              }}
+            />
+            <button type="submit" className="ciq-button ciq-button-primary">Search</button>
+          </form>
           <p style={{
             fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-secondary)',
-          }}>
-            {loading ? 'Searching...' : mode === 'aggregate' ? '' : `${results.length} results for "${query}"`}
+          }} aria-live="polite">
+            {loading
+              ? 'Searching...'
+              : mode === 'aggregate'
+                ? ''
+                : `${results.length === SEARCH_RESULT_LIMIT ? 'Top ' : ''}${results.length} matches for "${query}"`}
           </p>
           {(mode === 'smart' || mode === 'aggregate') && description && (
             <p style={{
@@ -124,7 +178,7 @@ export default function SearchResults() {
         {/* Aggregate result */}
         {!loading && mode === 'aggregate' && aggValue && (
           <div style={{
-            animation: 'fadeUp 0.4s ease both', textAlign: 'center', padding: '60px 0',
+            textAlign: 'center', padding: '60px 0',
           }}>
             <div style={{
               fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 2,
@@ -142,19 +196,32 @@ export default function SearchResults() {
           </div>
         )}
 
-        {!loading && results.length === 0 && mode !== 'aggregate' && (
+        {!loading && error && (
+          <div className="empty-state" role="alert">
+            <div className="empty-state-mark" aria-hidden="true">!</div>
+            <h2>Search could not be completed</h2>
+            <p className="empty-state-copy">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && results.length === 0 && mode !== 'aggregate' && (
           <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)',
-            textAlign: 'center', padding: '60px 0',
+            color: 'var(--text-muted)', textAlign: 'center', padding: '60px 18px',
           }}>
-            No results found for "{query}"
+            <strong style={{ display: 'block', color: 'var(--text-primary)', fontSize: 18, marginBottom: 8 }}>
+              No parcels or places found for "{query}"
+            </strong>
+            <span style={{ fontSize: 14, lineHeight: 1.6 }}>
+              Try an owner name in either order, a street address with or without the ZIP code,
+              or a full or partial parcel ID.
+            </span>
           </div>
         )}
 
         {!loading && results.length > 0 && mode === 'smart' && (
           <div style={{
             border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden',
-            animation: 'fadeUp 0.5s ease both', animationDelay: '0.1s', opacity: 0,
+            
           }}>
             {results.map((r, idx) => {
               const link = r._link
@@ -202,17 +269,16 @@ export default function SearchResults() {
         )}
 
         {!loading && results.length > 0 && mode === 'fuzzy' && (
-          <div style={{
+          <div className="search-results-table" style={{
             border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden',
-            animation: 'fadeUp 0.5s ease both', animationDelay: '0.1s', opacity: 0,
+            
           }}>
             {/* Header row */}
-            <div style={{
-              display: 'grid', gridTemplateColumns: '100px 1fr 1fr 80px 80px',
+            <div className="search-results-header" style={{
               padding: '12px 24px', background: 'var(--bg-panel)',
               borderBottom: '1px solid var(--border)',
             }}>
-              {['Type', 'Result', 'Details', 'Match', ''].map((col, i) => (
+              {['Type', 'Result', 'Details', 'Match'].map((col, i) => (
                 <div key={col} style={{
                   fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
                   letterSpacing: 2, textTransform: 'uppercase' as const,
@@ -226,13 +292,15 @@ export default function SearchResults() {
             {/* Result rows */}
             {results.map((r, idx) => {
               const pidn = r.pidn
-              const hasLink = pidn || (r.lat && r.lng)
-              const linkTo = pidn ? `/property/${pidn}` : (r.lat && r.lng ? `/map?lat=${r.lat}&lng=${r.lng}&zoom=17` : undefined)
+              const hasCoordinates = r.lat != null && r.lng != null
+              const hasLink = Boolean(pidn) || hasCoordinates
+              const linkTo = pidn ? `/property/${pidn}` : (hasCoordinates ? `/map?lat=${r.lat}&lng=${r.lng}&zoom=17` : undefined)
               const score = r.score ?? 0
+              const matchKind = typeof r.match_kind === 'string' ? r.match_kind : ''
               const content = (
                 <div
+                  className="search-result-row"
                   style={{
-                    display: 'grid', gridTemplateColumns: '100px 1fr 1fr 80px 80px',
                     padding: '14px 24px', alignItems: 'center',
                     background: idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
                     borderBottom: idx < results.length - 1 ? '1px solid var(--border)' : 'none',
@@ -242,7 +310,7 @@ export default function SearchResults() {
                   onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card-hover)' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = idx % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
                 >
-                  <div>
+                  <div className="search-result-type">
                     {(() => {
                       const t = TYPE_LABELS[r.result_type || ''] || { label: r.result_type || 'result', color: 'var(--text-muted)' }
                       return (
@@ -257,37 +325,27 @@ export default function SearchResults() {
                       )
                     })()}
                   </div>
-                  <div style={{
+                  <div className="search-result-title" style={{
                     fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 500,
                     color: 'var(--text-primary)',
                   }}>
                     {r.title}
                   </div>
-                  <div style={{
+                  <div className="search-result-details" style={{
                     fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)',
                   }}>
                     {r.subtitle}
                   </div>
-                  <div style={{
+                  <div className="search-result-match" style={{
                     fontFamily: 'var(--font-mono)', fontSize: 12,
-                    color: 'var(--text-muted)', textAlign: 'right',
+                    color: 'var(--text-muted)',
                   }}>
-                    {(score * 100).toFixed(0)}%
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    {r.lat && r.lng && (
-                      <Link
-                        to={`/map?lat=${r.lat}&lng=${r.lng}&zoom=16`}
-                        style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 10,
-                          color: 'var(--accent-blue)', textDecoration: 'none',
-                          padding: '4px 8px', border: '1px solid var(--border)',
-                          borderRadius: 4,
-                        }}
-                      >
-                        Map
-                      </Link>
-                    )}
+                    <span style={{ display: 'block', color: 'var(--text-secondary)' }}>
+                      {MATCH_LABELS[matchKind] || matchStrength(score)}
+                    </span>
+                    <span style={{ display: 'block', marginTop: 2, fontSize: 10 }}>
+                      {matchStrength(score)} match
+                    </span>
                   </div>
                 </div>
               )

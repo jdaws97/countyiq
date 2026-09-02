@@ -40,6 +40,19 @@ def test_bbox_coordinates_are_bounded_to_valid_longitude_and_latitude():
         assert parameters["north"]["maximum"] == 90
 
 
+def test_bbox_result_limits_are_hard_bounded():
+    for path in ("/api/parcels/bbox", "/api/radar/development/bbox"):
+        limit = _query_parameters(path)["limit"]
+        assert limit["minimum"] == 1
+        assert limit["maximum"] == 5000
+        assert limit["default"] == 5000
+
+
 def test_watchlist_query_has_a_request_size_bound():
     parameters = _query_parameters("/api/parcels/summary")
     assert parameters["pidns"]["maxLength"] == 2000
+
+
+def test_retired_scout_routes_are_not_registered():
+    paths = app.openapi()["paths"]
+    assert not {path for path in paths if path.startswith("/api/scout")}

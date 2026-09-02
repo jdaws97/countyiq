@@ -39,6 +39,7 @@ build-backend = "setuptools.build_meta"
 include = ["countyiq*"]
 
 [tool.pytest.ini_options]
+addopts = "-m 'not integration'"
 markers = [
     "integration: requires local Postgres/PostGIS or live infrastructure",
 ]

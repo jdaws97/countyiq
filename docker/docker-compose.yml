@@ -1,5 +1,13 @@
+name: countyiq
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 x-dagster-common: &dagster-common
-  image: countyiq-dagster:local
+  image: countyiq-dagster:${COUNTYIQ_IMAGE_TAG:-local}
   build:
     context: ..
     dockerfile: pipelines/Dockerfile
@@ -7,6 +15,8 @@ x-dagster-common: &dagster-common
   init: true
   environment:
     DAGSTER_HOME: /opt/dagster/home
+    DAGSTER_LOCAL_ARTIFACT_STORAGE_DIR: /opt/dagster/storage/artifacts
+    DAGSTER_COMPUTE_LOGS_DIR: /opt/dagster/storage/compute_logs
     DATABASE_HOST: postgres
     DATABASE_PORT: "5432"
     DATABASE_NAME: ${DATABASE_NAME:-countyiq}
@@ -35,12 +45,18 @@ x-dagster-common: &dagster-common
     COUNTYIQ_PASS2_MAX_ITEMS: ${COUNTYIQ_PASS2_MAX_ITEMS:-25}
     COUNTYIQ_PASS3_MAX_ITEMS: ${COUNTYIQ_PASS3_MAX_ITEMS:-25}
     COUNTYIQ_PASS4_MAX_ITEMS: ${COUNTYIQ_PASS4_MAX_ITEMS:-25}
+    COUNTYIQ_PASS0_MAX_COST_USD: ${COUNTYIQ_PASS0_MAX_COST_USD:-}
+    COUNTYIQ_PASS1_MAX_COST_USD: ${COUNTYIQ_PASS1_MAX_COST_USD:-}
+    COUNTYIQ_PASS2_MAX_COST_USD: ${COUNTYIQ_PASS2_MAX_COST_USD:-}
+    COUNTYIQ_PASS3_MAX_COST_USD: ${COUNTYIQ_PASS3_MAX_COST_USD:-}
+    COUNTYIQ_PASS4_MAX_COST_USD: ${COUNTYIQ_PASS4_MAX_COST_USD:-}
     COUNTYIQ_PASS0_MAX_TOKENS: ${COUNTYIQ_PASS0_MAX_TOKENS:-}
     COUNTYIQ_PASS1_MAX_TOKENS: ${COUNTYIQ_PASS1_MAX_TOKENS:-}
     COUNTYIQ_PASS2_MAX_TOKENS: ${COUNTYIQ_PASS2_MAX_TOKENS:-}
     COUNTYIQ_PASS3_MAX_TOKENS: ${COUNTYIQ_PASS3_MAX_TOKENS:-}
     COUNTYIQ_PASS4_MAX_TOKENS: ${COUNTYIQ_PASS4_MAX_TOKENS:-}
     COUNTYIQ_PASS0_MAX_PDF_BYTES: ${COUNTYIQ_PASS0_MAX_PDF_BYTES:-8388608}
+    COUNTYIQ_PASS0_PDF_TOKEN_CEILING: ${COUNTYIQ_PASS0_PDF_TOKEN_CEILING:-50000}
     COUNTYIQ_PASS0_PDF_ENGINE: ${COUNTYIQ_PASS0_PDF_ENGINE:-native}
     COUNTYIQ_PASS1_TRIALS: ${COUNTYIQ_PASS1_TRIALS:-3}
     COUNTYIQ_PASS1_ADAPTIVE_VOTING: ${COUNTYIQ_PASS1_ADAPTIVE_VOTING:-true}
@@ -70,6 +86,7 @@ x-dagster-common: &dagster-common
     COUNTYIQ_MAX_PRICE_PROMPT: ${COUNTYIQ_MAX_PRICE_PROMPT:-}
     COUNTYIQ_MAX_PRICE_COMPLETION: ${COUNTYIQ_MAX_PRICE_COMPLETION:-}
     COUNTYIQ_ZDR: ${COUNTYIQ_ZDR:-false}
+    COUNTYIQ_CONTRADICTION_MAX_AGE_HOURS: ${COUNTYIQ_CONTRADICTION_MAX_AGE_HOURS:-72}
     COUNTYIQ_PROCEEDINGS_MAX_DOCUMENT_REQUESTS: ${COUNTYIQ_PROCEEDINGS_MAX_DOCUMENT_REQUESTS:-250}
     COUNTYIQ_PROCEEDINGS_MAX_DOCUMENTS_PER_BODY: ${COUNTYIQ_PROCEEDINGS_MAX_DOCUMENTS_PER_BODY:-25}
     COUNTYIQ_PROCEEDINGS_MAX_FUTURE_DAYS: ${COUNTYIQ_PROCEEDINGS_MAX_FUTURE_DAYS:-90}
@@ -93,6 +110,7 @@ x-dagster-common: &dagster-common
   cap_drop:
     - ALL
   pids_limit: 512
+  logging: *default-logging
   read_only: true
   tmpfs:
     - /tmp:size=256m,mode=1777
@@ -127,10 +145,14 @@ services:
       timeout: 5s
       retries: 5
     pids_limit: 256
+    mem_limit: 2g
+    mem_reservation: 512m
+    logging: *default-logging
     networks:
       - database
 
   api:
+    image: countyiq-api:${COUNTYIQ_IMAGE_TAG:-local}
     build:
       context: ..
       dockerfile: api/Dockerfile
@@ -145,6 +167,7 @@ services:
       DATABASE_PASSWORD: ${DATABASE_API_PASSWORD:?DATABASE_API_PASSWORD must be set}
       DATABASE_POOL_MIN: ${DATABASE_POOL_MIN:-1}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-8}
+      DATABASE_POOL_WAIT_SECONDS: ${DATABASE_POOL_WAIT_SECONDS:-5}
       COUNTY: ${COUNTY:-york}
       COUNTYIQ_COUNTY_NAME: ${COUNTYIQ_COUNTY_NAME:-}
       COUNTYIQ_COUNTY_STATE: ${COUNTYIQ_COUNTY_STATE:-PA}
@@ -155,6 +178,7 @@ services:
       COUNTYIQ_EXPOSE_API_DOCS: ${COUNTYIQ_EXPOSE_API_DOCS:-false}
       COUNTYIQ_ENABLE_RESTRICTED_DISTRESS: ${COUNTYIQ_ENABLE_RESTRICTED_DISTRESS:-false}
       COUNTYIQ_OPS_HEALTH_TTL: ${COUNTYIQ_OPS_HEALTH_TTL:-60}
+      COUNTYIQ_CONTRADICTION_MAX_AGE_HOURS: ${COUNTYIQ_CONTRADICTION_MAX_AGE_HOURS:-72}
       COUNTYIQ_SEARCH_API_KEY: ${COUNTYIQ_SEARCH_API_KEY:-}
       COUNTYIQ_SEARCH_LLM_ENABLED: ${COUNTYIQ_SEARCH_LLM_ENABLED:-false}
       COUNTYIQ_SEARCH_MODEL: ${COUNTYIQ_SEARCH_MODEL:-}
@@ -184,6 +208,9 @@ services:
     cap_drop:
       - ALL
     pids_limit: 256
+    mem_limit: 768m
+    mem_reservation: 256m
+    logging: *default-logging
     networks:
       - proxy
       - database
@@ -205,14 +232,19 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    mem_limit: 768m
+    mem_reservation: 256m
 
   dagster-daemon:
     <<: *dagster-common
     container_name: countyiq-dagster-daemon
     command: ["dagster-daemon", "run", "-m", "countyiq.definitions"]
+    # The launched run/step subprocesses share this container cgroup.
+    mem_limit: 3g
+    mem_reservation: 512m
 
   migrate:
-    image: countyiq-dagster:local
+    image: countyiq-dagster:${COUNTYIQ_IMAGE_TAG:-local}
     profiles: ["tools"]
     restart: "no"
     environment:
@@ -229,6 +261,9 @@ services:
     cap_drop:
       - ALL
     pids_limit: 128
+    mem_limit: 1g
+    mem_reservation: 128m
+    logging: *default-logging
     networks:
       - database
 
@@ -256,15 +291,22 @@ services:
     cap_add:
       - NET_BIND_SERVICE
     pids_limit: 128
+    mem_limit: 256m
+    mem_reservation: 64m
+    logging: *default-logging
     networks:
       - proxy
       - caddy-egress
 
 volumes:
   postgres-data:
+    name: countyiq-postgres-data
   dagster-storage:
+    name: countyiq-dagster-storage
   caddy-data:
+    name: countyiq-caddy-data
   caddy-config:
+    name: countyiq-caddy-config
 
 networks:
   database:

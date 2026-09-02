@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 
 import requests
 
@@ -43,16 +44,16 @@ INTENTS
 {"intent":"aggregate","table":"tax_claims","description":"Total delinquent taxes in Dover Township","aggregate":{"operation":"sum","field":"total"},"filters":[{"field":"total","op":"gt","value":0}],"location":{"type":"municipality","value":"Dover Township"},"label":"Total Delinquent","format":"currency"}
 
 3. Exact person, company, address, or parcel lookup:
-{"intent":"lookup","search_term":"DAWS JAROD","description":"Looking up property owner Jarod Daws"}
+{"intent":"lookup","search_term":"COLEMAN AVERY","description":"Looking up property owner Avery Coleman"}
 
 4. Existing product page:
 {"intent":"redirect","redirect_path":"/radar","description":"Development radar"}
 Allowed redirect_path values: /, /map, /feed, /radar, /licenses, /watch.
 
 TABLES AND FIELDS
-- parcels: pidn, owner_full, propadr, class, acres, aprtotal, aprland, aprbldg, price, saledt, school_dis
+- parcels: pidn, propadr, class, acres, aprtotal, aprland, aprbldg, price, saledt, school_dis
   class codes: R residential, C commercial, I industrial, F farm, A agricultural, E exempt, U utility.
-  owner_full is stored LAST FIRST MIDDLE. propadr has street address but usually no municipality or ZIP.
+  propadr has street address but usually no municipality or ZIP. Use lookup intent for a person or company name.
 - tax_claims (aggregate intent only): pidn, tax_district_name, tax_year, authority_name, total
 - plcb_licenses: premises_name, premises_address, license_type, status, municipality
   This is the only restaurant/bar/brewery source and covers only licensed establishments; say so in descriptions.
@@ -102,10 +103,11 @@ def _clean_llm_json(content: str) -> dict | None:
     content = (content or "").strip()
     if not content:
         return None
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1]
-    if content.endswith("```"):
-        content = content.rsplit("```", 1)[0]
+    # Providers occasionally ignore response_format and wrap JSON in either a
+    # multiline or a single-line Markdown fence. Strip only an outer fence;
+    # the JSON parser below remains the authority for the payload itself.
+    content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+    content = re.sub(r"\s*```$", "", content)
     content = content.strip()
 
     try:

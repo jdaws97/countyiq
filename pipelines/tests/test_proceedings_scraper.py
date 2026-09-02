@@ -22,6 +22,7 @@ from countyiq.assets.scrapers.public_proceedings import (
     _filter_allowed_document_links,
     _link_belongs_to_entry,
     _resolve_drive_folders,
+    _resolved_document_filename,
     _safe_name,
     _sanitize_meeting_date,
     _upgrade_reviewed_document_url,
@@ -190,6 +191,43 @@ class TestRobotsPolicy:
             "https://example.gov/private/minutes.pdf"
         )
 
+    def test_named_product_token_matches_honest_browser_user_agent(self, monkeypatch):
+        requested_headers = []
+
+        def respond(_url, **kwargs):
+            requested_headers.append(kwargs.get("headers"))
+            return _Response(
+                200,
+                "User-agent: CountyIQ\nDisallow: /private\n"
+                "User-agent: *\nAllow: /",
+            )
+
+        monkeypatch.setattr(requests, "get", respond)
+        user_agent = (
+            "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"
+        )
+        policy = RobotsPolicy(user_agent, product_token="CountyIQ")
+
+        assert not policy.allowed("https://example.gov/private/minutes.pdf")
+        assert requested_headers == [{"User-Agent": user_agent}]
+
+    def test_wildcard_and_end_anchor_rules_are_enforced(self, monkeypatch):
+        monkeypatch.setattr(
+            requests,
+            "get",
+            lambda *_args, **_kwargs: _Response(
+                200,
+                "User-agent: *\n"
+                "Disallow: /*.pdf$\n"
+                "Allow: /public/*.pdf$",
+            ),
+        )
+        policy = RobotsPolicy("CountyIQ/1.0", product_token="CountyIQ")
+
+        assert not policy.allowed("https://example.gov/private/minutes.pdf")
+        assert policy.allowed("https://example.gov/public/minutes.pdf")
+        assert policy.allowed("https://example.gov/private/minutes.pdf?download=1")
+
     def test_network_error_fails_closed(self, monkeypatch):
         def fail(*_args, **_kwargs):
             raise requests.RequestException("offline")
@@ -204,6 +242,37 @@ class TestRobotsPolicy:
         assert not RobotsPolicy("CountyIQ/1.0").allowed(
             "https://example.gov/minutes.pdf"
         )
+
+    def test_browser_response_can_replace_cached_network_failure(self, monkeypatch):
+        def fail(*_args, **_kwargs):
+            raise requests.RequestException("direct transport unavailable")
+
+        monkeypatch.setattr(requests, "get", fail)
+        policy = RobotsPolicy("CountyIQ/1.0")
+        url = "https://example.gov/minutes.pdf"
+        assert not policy.allowed(url)
+
+        policy.cache_browser_response(
+            "https://example.gov/robots.txt",
+            text="User-agent: *\nAllow: /",
+            status_code=200,
+        )
+
+        assert policy.allowed(url)
+
+    def test_browser_response_remains_fail_closed_for_disallow(self, monkeypatch):
+        def fail(*_args, **_kwargs):
+            raise requests.RequestException("direct transport unavailable")
+
+        monkeypatch.setattr(requests, "get", fail)
+        policy = RobotsPolicy("CountyIQ/1.0")
+        policy.cache_browser_response(
+            "https://example.gov/robots.txt",
+            text="User-agent: *\nDisallow: /private",
+            status_code=200,
+        )
+
+        assert not policy.allowed("https://example.gov/private/minutes.pdf")
 
     def test_redirect_target_is_checked_before_fetch(self, monkeypatch):
         requested = []
@@ -321,6 +390,29 @@ class TestDocumentValidation:
 
     def test_rejects_html_error_page(self):
         assert not _valid_document_content("minutes.pdf", b"<html>blocked</html>")
+
+    @pytest.mark.parametrize(
+        ("content_type", "content", "expected"),
+        [
+            ("application/pdf", b"%PDF-1.7", "meeting.pdf"),
+            ("application/msword", b"legacy", "meeting.doc"),
+            (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                b"PK\x03\x04zip",
+                "meeting.docx",
+            ),
+            ("application/octet-stream", b"%PDF-1.7", "meeting.pdf"),
+        ],
+    )
+    def test_extensionless_route_uses_response_document_type(
+        self, content_type, content, expected
+    ):
+        response = requests.Response()
+        response.headers["Content-Type"] = content_type
+        response._content = content
+        response.url = "https://example.gov/document/meeting/"
+
+        assert _resolved_document_filename("meeting.pdf", response) == expected
 
     def test_legacy_http_link_upgrades_only_to_reviewed_https_origin(self):
         url = "http://minutes.example.gov/files/january.pdf"
@@ -450,3 +542,11 @@ class TestExtractRawText:
 
     def test_corrupt_pdf_returns_none(self):
         assert _extract_raw_text("minutes.pdf", b"not a real pdf") is None
+
+    def test_nul_characters_are_removed_before_database_storage(self, monkeypatch):
+        monkeypatch.setattr(
+            "countyiq.assets.scrapers.public_proceedings.extract_text_from_pdf_bytes",
+            lambda _data: "Applicant\x00Procedure",
+        )
+
+        assert _extract_raw_text("application.pdf", b"pdf") == "ApplicantProcedure"

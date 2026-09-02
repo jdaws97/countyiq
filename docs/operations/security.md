@@ -1,6 +1,6 @@
 # Security and Production-Readiness Review
 
-**Review date:** 2026-08-30
+**Review date:** 2026-08-31
 
 ## Scope and Deployment Reality
 
@@ -19,12 +19,12 @@ behavior must still be verified on the actual host.
 | High | Scheduled Dagster work inherited every deployment secret and used the PostgreSQL bootstrap superuser. | Dagster now receives an explicit environment allowlist and a dedicated non-superuser DML role. Administrator access is confined to a short-lived migration service and host backups. |
 | High | The installed pipeline environment reported 56 known advisories in 13 packages, including Dagster and request/parsing dependencies. | Dagster and the complete lock were upgraded; `pip-audit` reports no known vulnerabilities and now runs in CI for both Python environments. |
 | Medium | Client throttles trusted caller-supplied `CF-Connecting-IP` and `X-Forwarded-For`, allowing origin requests to forge limiter identities. | Caddy trusts only Cloudflare's published ranges and collapses the validated chain. Uvicorn accepts forwarding headers only from the dedicated Caddy subnet, the API port is not host-published, and application code no longer reads forwarding headers directly. |
-| Medium | Dynamic County Scout URLs and HTTP redirects could target loopback, private networks, or instance metadata. | Discovery and robots requests validate every hop as credential-free public HTTP(S), reject any hostname resolving to a non-global address, and strip sensitive headers across origins. Separate container egress networks reduce lateral reach. |
 | Medium | API and pipeline processes ran as container root with the default capability set. | Both application images use UID/GID 10001. Compose drops all capabilities, sets `no-new-privileges`, adds PID ceilings, and makes both application filesystems read-only. Caddy retains only `NET_BIND_SERVICE`. |
-| Medium | The VPS bootstrap executed mutable remote installer scripts as root and printed the generated database password. | Bootstrap uses signed Ubuntu packages, requires a reviewed 40-character commit SHA, generates separate hex credentials under `umask 077`, and never prints them. |
+| Medium | The VPS bootstrap executed mutable remote installer scripts as root and printed the generated database password. | Bootstrap uses signed Ubuntu packages, requires a reviewed 40-character commit SHA and pre-verified GitHub SSH host key, generates separate hex credentials under `umask 077`, and never prints them. |
 | Medium | Owner/entity portfolio routes lacked the privacy backlog's anti-scraping control. | Those routes now have a dedicated per-client token bucket behind the Cloudflare boundary. This is abuse resistance, not authorization. |
 | Low | Public Swagger/OpenAPI routes and arbitrary Host headers were accepted by default. | Docs require explicit opt-in and `TrustedHostMiddleware` accepts only configured hosts. |
-| Low | Backups were uploaded without a local archive-integrity check or checksum and overlapping cron runs were possible. | The backup job uses a lock, validates each custom-format dump with `pg_restore --list`, creates SHA-256 sidecars, and uses private file permissions. |
+| High | The manual release sequence could migrate while old API/Dagster processes were active and had no durable release identity. | `deploy.sh` requires an exact clean SHA, versioned images, a recent restore receipt, quiesced runtime roles, a remotely verified pre-deploy backup, readiness checks, and an immutable release receipt. Any migration-started failure leaves writers stopped. |
+| Medium | Same-day backup names could overwrite one another, R2 depended on hidden host config, partial uploads were not distinguishable, the pipeline shared backup authority, and the host pruned recovery objects. | Backup IDs are unique, rclone uses a distinct host-only credential, uploads are immutable and download-checked, a manifest is published last, and no remote delete operation exists on the host. R2 bucket lock and lifecycle are explicit launch gates. |
 
 CI actions are pinned to immutable commit SHAs. Dependency review, CodeQL,
 secret scanning, npm audit, pip-audit, Compose validation, and Caddy validation
@@ -47,8 +47,9 @@ critical vulnerabilities in the API and Dagster images on the review date.
 - Block instance-metadata, link-local, host, and private-network destinations
   from the pipeline bridge in the host firewall. Application URL checks reduce
   SSRF risk but cannot eliminate DNS rebinding between resolution and connect.
-- Perform and record a full off-host backup restore. Dump validation proves the
-  archive is readable; it does not prove the complete recovery procedure.
+- Perform and record the first live `restore-drill.sh` run, then monitor both
+  the persistent systemd timer and R2 completion manifests. Repository tests
+  cannot prove host scheduling, credential scope, or object retention.
 - Keep person-linked distress routes disabled until the documented privacy and
   access decision exists. Rate limiting is not a substitute for authorization.
 - Protect Dagster's loopback-only UI with SSH access discipline. If it ever
@@ -56,20 +57,27 @@ critical vulnerabilities in the API and Dagster images on the review date.
 - The single VPS remains an accepted availability risk. External runtime
   images are digest-pinned and updated through Dependabot, but a registry or
   upstream compromise before review remains a supply-chain risk.
+- Enable Hetzner server deletion/rebuild protection and provider backups as a
+  second recovery layer. They are not substitutes for R2 logical backups:
+  provider backups follow the server lifecycle and live-disk consistency is
+  not guaranteed.
 
 ## Pre-Launch Security Gate
 
 1. Set `DOMAIN`, `COUNTYIQ_TRUSTED_HOSTS`, all three database secrets, and separate
    pipeline/search provider credentials; leave public API docs off.
-2. Apply migrations with the administrator credential, then run
-   `/docker-entrypoint-initdb.d/02-runtime-role.sh` and
-   `/docker-entrypoint-initdb.d/03-api-role.sh`. Confirm both roles are
-   non-superusers and the API reports `transaction_read_only=on`.
+2. Use `docker/deploy.sh --initial`; do not manually interleave migration and
+   service replacement. Confirm both runtime roles are non-superusers and the
+   API reports `transaction_read_only=on`.
 3. Restrict the origin firewall to Cloudflare for HTTP(S), verify direct-IP
    requests fail, and verify real client addresses survive the proxy chain.
-4. Confirm R2 credentials are least-privilege, archives are private, and one
-   clean restore works on an isolated database.
+4. Confirm the private R2 bucket has a reviewed bucket lock and lifecycle rule,
+   the host credential cannot configure the bucket, and one exact completed
+   backup restores through `restore-drill.sh`.
 5. Run the full verification ladder in `docs/operations/testing.md`, review
    CodeQL/dependency alerts, and run Gitleaks on the exact release revision.
 6. Keep restricted distress disabled and record the privacy/access decision
    before any later enablement.
+7. Enable Hetzner deletion/rebuild protection and server backups; record a
+   protected post-provisioning snapshot without treating it as a live database
+   consistency guarantee.

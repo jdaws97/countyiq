@@ -1,0 +1,299 @@
+{
+  "generated_at": "2026-09-02T13:02:44.796541+00:00",
+  "county": "york",
+  "parameters": {
+    "label_months": 24,
+    "on_parcel_m": 30,
+    "corridor_m": 250,
+    "clean_years": 10,
+    "ridge": 2.0
+  },
+  "population": {
+    "eligible_parcels": 171510,
+    "positives": 496,
+    "ambiguous_excluded": 39809,
+    "fit_parcels": 131701,
+    "distinct_patterns": 1021
+  },
+  "signal_counts": {
+    "economic_development_park": 456,
+    "municipal_action": 0,
+    "zoning_mismatch": 13352,
+    "ownership_change": 7361,
+    "vacancy": 9318,
+    "tax_distress": 3497,
+    "assemblage": 12674,
+    "entity_assemblage": 1723,
+    "penndot_project": 18960,
+    "development_overlay": 1284,
+    "local_traffic_activity": 30277,
+    "growth_area": 125816,
+    "soil_constraint": 23954,
+    "zoning_constraint": 8790,
+    "environmental_diligence": 60209,
+    "flood_zone": 2901,
+    "conservation_easement": 932,
+    "ag_security": 4272
+  },
+  "base_rate": 0.0037661065595553564,
+  "intercept": -6.742429125698537,
+  "signals": [
+    {
+      "key": "entity_assemblage",
+      "n_with": 1086,
+      "positives_with": 50,
+      "rate_with": 0.04604051565377532,
+      "rate_without": 0.0034146154729548673,
+      "lift": 12.224963613140854,
+      "woe": 2.554302264462631,
+      "coefficient": 2.5973771692734986,
+      "proposed_weight": 0.23,
+      "current_weight": 0.0
+    },
+    {
+      "key": "economic_development_park",
+      "n_with": 151,
+      "positives_with": 15,
+      "rate_with": 0.09933774834437085,
+      "rate_without": 0.0036564044089699736,
+      "lift": 26.376775795770133,
+      "woe": 3.4004492693573383,
+      "coefficient": 2.5003547498306227,
+      "proposed_weight": 0.22,
+      "current_weight": 0.16
+    },
+    {
+      "key": "assemblage",
+      "n_with": 8225,
+      "positives_with": 113,
+      "rate_with": 0.013738601823708207,
+      "rate_without": 0.0031018173572192166,
+      "lift": 3.6479588685165214,
+      "woe": 1.3065753359662633,
+      "coefficient": 1.6412672662346568,
+      "proposed_weight": 0.15,
+      "current_weight": 0.08
+    },
+    {
+      "key": "vacancy",
+      "n_with": 6180,
+      "positives_with": 83,
+      "rate_with": 0.01343042071197411,
+      "rate_without": 0.0032902860875869376,
+      "lift": 3.5661287060235933,
+      "woe": 1.2851463618238859,
+      "coefficient": 1.352844029127837,
+      "proposed_weight": 0.12,
+      "current_weight": 0.12
+    },
+    {
+      "key": "environmental_diligence",
+      "n_with": 39714,
+      "positives_with": 241,
+      "rate_with": 0.006068388981215692,
+      "rate_without": 0.002772130844575864,
+      "lift": 1.611316325030419,
+      "woe": 0.4794184934812818,
+      "coefficient": 0.693573944504348,
+      "proposed_weight": 0.0,
+      "current_weight": -0.05
+    },
+    {
+      "key": "zoning_mismatch",
+      "n_with": 9710,
+      "positives_with": 62,
+      "rate_with": 0.006385169927909372,
+      "rate_without": 0.0035576394979957536,
+      "lift": 1.6954299691040167,
+      "woe": 0.5365426749630966,
+      "coefficient": 0.6434991858377255,
+      "proposed_weight": 0.06,
+      "current_weight": 0.1
+    },
+    {
+      "key": "growth_area",
+      "n_with": 89659,
+      "positives_with": 388,
+      "rate_with": 0.004327507556408169,
+      "rate_without": 0.0025688597117168544,
+      "lift": 1.1490666788034523,
+      "woe": 0.13878946287529334,
+      "coefficient": 0.5320765815820064,
+      "proposed_weight": 0.05,
+      "current_weight": 0.02
+    },
+    {
+      "key": "tax_distress",
+      "n_with": 2413,
+      "positives_with": 18,
+      "rate_with": 0.0074595938665561546,
+      "rate_without": 0.0036971722046903036,
+      "lift": 1.980717685119581,
+      "woe": 0.7123573358182538,
+      "coefficient": 0.3938803917342518,
+      "proposed_weight": 0.04,
+      "current_weight": 0.1
+    },
+    {
+      "key": "penndot_project",
+      "n_with": 13187,
+      "positives_with": 68,
+      "rate_with": 0.005156593614923788,
+      "rate_without": 0.0036113876841554586,
+      "lift": 1.3692107574174956,
+      "woe": 0.3209126533095436,
+      "coefficient": 0.20397102817226068,
+      "proposed_weight": 0.02,
+      "current_weight": 0.03
+    },
+    {
+      "key": "local_traffic_activity",
+      "n_with": 21828,
+      "positives_with": 110,
+      "rate_with": 0.0050393989371449515,
+      "rate_without": 0.003513146996987431,
+      "lift": 1.3380924988325147,
+      "woe": 0.295029670125373,
+      "coefficient": 0.20077931005585017,
+      "proposed_weight": 0.02,
+      "current_weight": 0.03
+    },
+    {
+      "key": "municipal_action",
+      "n_with": 0,
+      "positives_with": 0,
+      "rate_with": 0.0,
+      "rate_without": 0.0037661065595553564,
+      "lift": 0.0,
+      "woe": 5.575933860057152,
+      "coefficient": 0.0,
+      "proposed_weight": 0.0,
+      "current_weight": 0.0
+    },
+    {
+      "key": "zoning_constraint",
+      "n_with": 6650,
+      "positives_with": 23,
+      "rate_with": 0.0034586466165413532,
+      "rate_without": 0.0037824567576428816,
+      "lift": 0.9183613267038564,
+      "woe": -0.06604865695591605,
+      "coefficient": -0.09489861858485905,
+      "proposed_weight": -0.01,
+      "current_weight": -0.06
+    },
+    {
+      "key": "flood_zone",
+      "n_with": 2243,
+      "positives_with": 9,
+      "rate_with": 0.004012483281319661,
+      "rate_without": 0.003761837816125693,
+      "lift": 1.065419477082824,
+      "woe": 0.11545289029014051,
+      "coefficient": -0.24860676704783363,
+      "proposed_weight": -0.02,
+      "current_weight": -0.1
+    },
+    {
+      "key": "soil_constraint",
+      "n_with": 18964,
+      "positives_with": 57,
+      "rate_with": 0.00300569500105463,
+      "rate_without": 0.003894018822569343,
+      "lift": 0.7980908010764028,
+      "woe": -0.21959513986972848,
+      "coefficient": -0.28192845150656254,
+      "proposed_weight": -0.03,
+      "current_weight": -0.08
+    },
+    {
+      "key": "ownership_change",
+      "n_with": 5115,
+      "positives_with": 21,
+      "rate_with": 0.004105571847507331,
+      "rate_without": 0.0037523896797434157,
+      "lift": 1.0901369312269416,
+      "woe": 0.10806998977642843,
+      "coefficient": -0.5345920555945117,
+      "proposed_weight": 0.0,
+      "current_weight": 0.1
+    },
+    {
+      "key": "development_overlay",
+      "n_with": 963,
+      "positives_with": 0,
+      "rate_with": 0.0,
+      "rate_without": 0.003793847236457648,
+      "lift": 0.0,
+      "woe": -1.987785808357215,
+      "coefficient": -0.7340704037712465,
+      "proposed_weight": 0.0,
+      "current_weight": 0.04
+    }
+  ],
+  "proposed_weights": {
+    "economic_development_park": 0.22,
+    "municipal_action": 0.0,
+    "zoning_mismatch": 0.06,
+    "ownership_change": 0.0,
+    "vacancy": 0.12,
+    "tax_distress": 0.04,
+    "assemblage": 0.15,
+    "entity_assemblage": 0.23,
+    "penndot_project": 0.02,
+    "development_overlay": 0.0,
+    "local_traffic_activity": 0.02,
+    "growth_area": 0.05,
+    "soil_constraint": -0.03,
+    "zoning_constraint": -0.01,
+    "environmental_diligence": 0.0,
+    "flood_zone": -0.02
+  },
+  "ranking": {
+    "current_v5_weights": {
+      "auc": 0.6228283491359864,
+      "precision_at": {
+        "250": 0.032,
+        "1000": 0.026518987341772153,
+        "5000": 0.0162
+      }
+    },
+    "fitted_logistic": {
+      "auc": 0.7554274291892397,
+      "precision_at": {
+        "250": 0.088,
+        "1000": 0.05054098360655738,
+        "5000": 0.0312
+      }
+    },
+    "proposed_v6_weights": {
+      "auc": 0.7255438346910953,
+      "precision_at": {
+        "250": 0.07628571428571429,
+        "1000": 0.054,
+        "5000": 0.027136819172113292
+      }
+    }
+  },
+  "top_k": [
+    250,
+    1000,
+    5000
+  ],
+  "proposed_score_quantiles": {
+    "top_0.100%": 0.38,
+    "top_0.500%": 0.3,
+    "top_1.000%": 0.27,
+    "top_2.000%": 0.21999999999999997,
+    "top_5.000%": 0.18,
+    "top_10.000%": 0.12
+  },
+  "caveats": [
+    "Signals are computed on the current snapshot, not the parcel state before the plan was filed.",
+    "ownership_change counts for positives only when the sale predates the plan; other signals have no such guard.",
+    "vacancy is likely under-counted for positives because built-out plans now carry structures, so its coefficient is conservative.",
+    "municipal_action and entity_assemblage depend on Pass 0 extractions and recent-sale data; with few rows their coefficients are dominated by the ridge prior.",
+    "Precision@K is computed with fractional credit inside tied score groups.",
+    "This is predictive evidence for ranking, not a causal or entitlement claim."
+  ]
+}

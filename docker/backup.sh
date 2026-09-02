@@ -1,16 +1,55 @@
-#!/bin/bash
-# PostgreSQL + intelligence archives → Cloudflare R2 daily backup
-# Add to crontab: 0 4 * * * /opt/countyiq/docker/backup.sh >> /var/log/countyiq-backup.log 2>&1
+#!/usr/bin/env bash
+# PostgreSQL + intelligence archives -> Cloudflare R2.
+# A manifest is uploaded last and is the completion marker for one backup set.
 
 set -euo pipefail
 umask 077
 
-if [ -f /opt/countyiq/.env ]; then
-    set -a
-    # shellcheck disable=SC1091
-    source /opt/countyiq/.env
-    set +a
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=docker/lib/operations.sh
+source "$SCRIPT_DIR/lib/operations.sh"
+
+BACKUP_REASON="scheduled"
+BACKUP_LABEL=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --reason)
+            BACKUP_REASON="${2:-}"
+            shift 2
+            ;;
+        --label)
+            BACKUP_LABEL="${2:-}"
+            shift 2
+            ;;
+        *)
+            echo "Unknown backup argument: $1" >&2
+            exit 2
+            ;;
+    esac
+done
+
+if ! [[ "$BACKUP_REASON" =~ ^[a-z][a-z0-9_-]{0,31}$ ]]; then
+    echo "Backup reason must use lowercase letters, numbers, underscores, or dashes" >&2
+    exit 2
 fi
+if [ "$EUID" -ne 0 ]; then
+    echo "The backup job must run as root" >&2
+    exit 1
+fi
+if [ -n "$BACKUP_LABEL" ] && ! [[ "$BACKUP_LABEL" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$ ]]; then
+    echo "Backup label contains unsupported characters" >&2
+    exit 2
+fi
+
+ENVIRONMENT_FILE="${COUNTYIQ_ENV_FILE:-/opt/countyiq/.env}"
+countyiq_validate_secret_file "$ENVIRONMENT_FILE"
+countyiq_load_environment "$ENVIRONMENT_FILE"
+countyiq_require_command docker
+countyiq_require_command flock
+countyiq_require_command pg_restore
+countyiq_require_command rclone
+countyiq_require_command sha256sum
+countyiq_validate_r2_backup_environment
 
 exec 9>/var/lock/countyiq-backup.lock
 if ! flock -n 9; then
@@ -18,59 +57,127 @@ if ! flock -n 9; then
     exit 1
 fi
 
-BACKUP_DATE="$(date +%F)"
+BACKUP_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+BACKUP_SUFFIX="$BACKUP_REASON"
+if [ -n "$BACKUP_LABEL" ]; then
+    BACKUP_SUFFIX="${BACKUP_SUFFIX}-${BACKUP_LABEL}"
+fi
+BACKUP_ID="${BACKUP_TIMESTAMP}-${BACKUP_SUFFIX}"
 DUMP_DIR="$(mktemp -d)"
-R2_POSTGRES_PATH="r2:countyiq-backups/postgres/"
-R2_ARCHIVE_PATH="r2:countyiq-backups/intelligence-archives/"
+MANIFEST_FILE="$DUMP_DIR/backup-${BACKUP_ID}.manifest"
+REMOTE_POSTGRES_PATH="${COUNTYIQ_BACKUP_REMOTE}/postgres"
+REMOTE_ARCHIVE_PATH="${COUNTYIQ_BACKUP_REMOTE}/intelligence-archives"
+REMOTE_MANIFEST_PATH="${COUNTYIQ_BACKUP_REMOTE}/manifests"
 LLM_ARCHIVE_RETENTION_DAYS="${COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS:-90}"
 DATABASE_USER="${DATABASE_USER:-dagster_admin}"
 PRIMARY_DATABASE="${DATABASE_NAME:-countyiq}"
 DAGSTER_DATABASE="${DAGSTER_POSTGRES_DB:-dagster}"
-trap 'rm -rf -- "$DUMP_DIR"' EXIT
-
-if ! [[ "$LLM_ARCHIVE_RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
-    echo "COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS must be a non-negative integer" >&2
+BACKUP_CODE_REF="${COUNTYIQ_BACKUP_CODE_REF:-}"
+if [ -z "$BACKUP_CODE_REF" ] && [ -f /var/lib/countyiq/releases/current.env ]; then
+    BACKUP_CODE_REF="$(awk -F= '$1 == "deploy_ref" {print $2}' /var/lib/countyiq/releases/current.env)"
+fi
+BACKUP_CODE_REF="${BACKUP_CODE_REF:-unknown}"
+TARGET_DEPLOY_REF="${COUNTYIQ_DEPLOY_REF:-none}"
+if ! [[ "$BACKUP_CODE_REF" =~ ^([0-9a-f]{40}|unknown|none)$ ]] \
+    || ! [[ "$TARGET_DEPLOY_REF" =~ ^([0-9a-f]{40}|none)$ ]]; then
+    echo "Backup code references must be exact commit SHAs or explicit sentinels" >&2
     exit 1
 fi
-for identifier in "$DATABASE_USER" "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"; do
-    if ! [[ "$identifier" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
-        echo "Database names and users must be simple PostgreSQL identifiers" >&2
+MANIFEST_VERIFIED=false
+
+on_exit() {
+    local status=$?
+    local failure_message
+    rm -rf -- "$DUMP_DIR"
+    if [ "$status" -ne 0 ] && [ -n "${SLACK_WEBHOOK_CRITICAL:-}" ]; then
+        if [ "$MANIFEST_VERIFIED" = true ]; then
+            failure_message="CountyIQ backup completed, but local retention maintenance failed."
+        else
+            failure_message="CountyIQ backup failed before a completion manifest was verified."
+        fi
+        curl --fail --silent --show-error --max-time 10 \
+            -H 'Content-Type: application/json' \
+            --data "{\"text\":\"$failure_message\"}" \
+            "$SLACK_WEBHOOK_CRITICAL" >/dev/null 2>&1 || true
+    fi
+}
+trap on_exit EXIT
+
+for value_name in LLM_ARCHIVE_RETENTION_DAYS; do
+    value="${!value_name}"
+    if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+        echo "$value_name must be a positive integer" >&2
         exit 1
     fi
 done
+countyiq_require_identifier "$DATABASE_USER" "DATABASE_USER"
+countyiq_require_identifier "$PRIMARY_DATABASE" "DATABASE_NAME"
+countyiq_require_identifier "$DAGSTER_DATABASE" "DAGSTER_POSTGRES_DB"
 
-echo "[$(date -Iseconds)] Starting backup..."
+if [ "$(docker inspect --format '{{.State.Running}}' countyiq-postgres 2>/dev/null || true)" != "true" ]; then
+    echo "countyiq-postgres must be running before backup" >&2
+    exit 1
+fi
 
+{
+    printf 'backup_id=%s\n' "$BACKUP_ID"
+    printf 'created_at=%s\n' "$(date -u -Iseconds)"
+    printf 'reason=%s\n' "$BACKUP_REASON"
+    printf 'code_ref=%s\n' "$BACKUP_CODE_REF"
+    printf 'target_deploy_ref=%s\n' "$TARGET_DEPLOY_REF"
+} > "$MANIFEST_FILE"
+
+echo "[$(date -Iseconds)] Starting backup $BACKUP_ID..."
 for database_name in "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"; do
-    dump_file="$DUMP_DIR/${database_name}-${BACKUP_DATE}.dump"
-    docker exec countyiq-postgres pg_dump -U "$DATABASE_USER" -Fc "$database_name" > "$dump_file"
+    dump_name="${database_name}-${BACKUP_ID}.dump"
+    dump_file="$DUMP_DIR/$dump_name"
+    checksum_file="${dump_file}.sha256"
+    docker exec countyiq-postgres \
+        pg_dump -U "$DATABASE_USER" --format=custom "$database_name" > "$dump_file"
     pg_restore --list "$dump_file" >/dev/null
     (
         cd "$DUMP_DIR"
-        sha256sum "$(basename "$dump_file")" > "$(basename "$dump_file").sha256"
+        sha256sum "$dump_name" > "${dump_name}.sha256"
     )
-    echo "[$(date -Iseconds)] ${database_name} dump complete: $(du -h "$dump_file" | cut -f1)"
-    rclone copy "$dump_file" "$R2_POSTGRES_PATH"
-    rclone copy "${dump_file}.sha256" "$R2_POSTGRES_PATH"
+    dump_sha256="$(cut -d ' ' -f 1 "$checksum_file")"
+    dump_bytes="$(stat -c '%s' "$dump_file")"
+    {
+        printf 'database.%s.file=%s\n' "$database_name" "$dump_name"
+        printf 'database.%s.bytes=%s\n' "$database_name" "$dump_bytes"
+        printf 'database.%s.sha256=%s\n' "$database_name" "$dump_sha256"
+    } >> "$MANIFEST_FILE"
+
+    rclone copyto --immutable "$dump_file" "${REMOTE_POSTGRES_PATH}/${dump_name}"
+    rclone copyto --immutable "$checksum_file" "${REMOTE_POSTGRES_PATH}/${dump_name}.sha256"
+    rclone check "$DUMP_DIR" "$REMOTE_POSTGRES_PATH" \
+        --include "/$dump_name" \
+        --include "/${dump_name}.sha256" \
+        --download --one-way --checkers 1
+    echo "[$(date -Iseconds)] $database_name verified off-host: $dump_bytes bytes"
 done
 
+# Upload every backup-set object before publishing its completion manifest.
+# The host deliberately has no remote delete path; R2 lifecycle and bucket-lock
+# rules own remote retention and protect backups from a compromised VPS.
 if [ -d /opt/countyiq/archives ]; then
-    if [ "$LLM_ARCHIVE_RETENTION_DAYS" -gt 0 ]; then
-        find /opt/countyiq/archives -mindepth 3 -maxdepth 3 -type f \
-            -regextype posix-extended \
-            -regex '.*/[0-9a-f]{16}_[0-9]{6}_[0-9]{6}\.json' \
-            -mtime "+$LLM_ARCHIVE_RETENTION_DAYS" -delete
-        find /opt/countyiq/archives -mindepth 1 -type d -empty -delete
-    fi
-    rclone copy /opt/countyiq/archives "$R2_ARCHIVE_PATH"
+    rclone copy --immutable /opt/countyiq/archives "$REMOTE_ARCHIVE_PATH"
 fi
-if [ "$LLM_ARCHIVE_RETENTION_DAYS" -gt 0 ]; then
-    rclone delete --min-age "${LLM_ARCHIVE_RETENTION_DAYS}d" "$R2_ARCHIVE_PATH"
+
+manifest_name="$(basename "$MANIFEST_FILE")"
+remote_manifest_copy="$DUMP_DIR/remote-$manifest_name"
+rclone copyto --immutable "$MANIFEST_FILE" "${REMOTE_MANIFEST_PATH}/${manifest_name}"
+rclone copyto "${REMOTE_MANIFEST_PATH}/${manifest_name}" "$remote_manifest_copy"
+cmp --silent "$MANIFEST_FILE" "$remote_manifest_copy"
+MANIFEST_VERIFIED=true
+
+# Local privacy retention happens only after a complete off-host backup exists.
+if [ -d /opt/countyiq/archives ]; then
+    find /opt/countyiq/archives -mindepth 3 -maxdepth 3 -type f \
+        -regextype posix-extended \
+        -regex '.*/[0-9a-f]{16}_[0-9]{6}_[0-9]{6}\.json' \
+        -mtime "+$LLM_ARCHIVE_RETENTION_DAYS" -delete
+    find /opt/countyiq/archives -mindepth 1 -type d -empty -delete
 fi
-echo "[$(date -Iseconds)] Uploaded databases and intelligence archives to R2"
 
-# Prune backups older than 30 days
-rclone delete --min-age 30d "$R2_POSTGRES_PATH"
-echo "[$(date -Iseconds)] Pruned old backups"
-
-echo "[$(date -Iseconds)] Backup complete"
+echo "[$(date -Iseconds)] Backup complete: $BACKUP_ID"
+echo "COUNTYIQ_BACKUP_ID=$BACKUP_ID"

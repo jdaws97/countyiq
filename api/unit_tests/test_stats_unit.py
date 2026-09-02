@@ -7,6 +7,7 @@ from api.routes import stats
 
 
 def test_stats_exposes_the_latest_tax_claim_report_date(monkeypatch):
+    queries = []
     rows = iter(
         [
             {
@@ -32,7 +33,8 @@ def test_stats_exposes_the_latest_tax_claim_report_date(monkeypatch):
     )
 
     class FakeCursor:
-        def execute(self, _query):
+        def execute(self, query):
+            queries.append(query)
             return None
 
         def fetchone(self):
@@ -48,3 +50,4 @@ def test_stats_exposes_the_latest_tax_claim_report_date(monkeypatch):
     response = stats.get_stats()
 
     assert response["tax_claim_report_date"] == date(2026, 4, 19)
+    assert "valid_to IS NULL AND total > 0) AS delinquent_parcels" in queries[0]

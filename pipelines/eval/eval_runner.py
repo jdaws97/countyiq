@@ -94,7 +94,7 @@ exclusion AS (
         ds.signal_key                               AS top_signal,
         'exclusion'                                 AS category
     FROM public.development_signals ds
-    WHERE ds.signal_key IN ('conservation_easement', 'ag_security')
+    WHERE ds.signal_key = 'conservation_easement'
       AND ds.pidn NOT IN (SELECT pidn FROM high_signal)
       AND ds.pidn NOT IN (SELECT pidn FROM tax_distress)
     GROUP BY ds.pidn, ds.signal_key

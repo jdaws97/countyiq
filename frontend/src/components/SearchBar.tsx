@@ -13,40 +13,30 @@ export default function SearchBar() {
   }
 
   return (
-    <div style={{ marginBottom: 36, animation: 'fadeUp 0.6s ease-out' }}>
-      <div style={{
-        fontFamily: 'var(--font-serif)', fontSize: 28, fontStyle: 'italic',
-        color: 'var(--text-secondary)', marginBottom: 16, opacity: 0.8,
-      }}>
+    <div className="search-block">
+      <div className="search-prompt">
         What are you looking for?
       </div>
-      <form onSubmit={handleSubmit} style={{ position: 'relative' }}>
-        <span style={{
-          position: 'absolute', left: 18, top: '50%', transform: 'translateY(-50%)',
-          color: 'var(--text-muted)', fontSize: 16, pointerEvents: 'none',
-        }}>&#x2315;</span>
+      <form onSubmit={handleSubmit} className="search-form" role="search">
+        <span aria-hidden="true">&#x2315;</span>
+        <label className="sr-only" htmlFor="primary-search">Search by address, PIDN, municipality, or public organization</label>
         <input
+          id="primary-search"
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search by address, owner name, or parcel ID..."
-          autoFocus
-          style={{
-            width: '100%', background: 'var(--bg-panel)', border: '1px solid var(--border)',
-            borderRadius: 6, padding: '16px 20px 16px 48px',
-            fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)', outline: 'none',
-          }}
+          placeholder="Address, PIDN, municipality, or public organization..."
         />
       </form>
-      <div style={{
-        fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 8, letterSpacing: 0.3,
-      }}>
+      <div className="search-examples">
         Try:{' '}
-        <kbd style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 6px', fontSize: 10 }}>brian daws</kbd>{' '}
+        <kbd>York Township</kbd>{' '}
         or{' '}
-        <kbd style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 6px', fontSize: 10 }}>1 main st</kbd>{' '}
+        <kbd>1 main st</kbd>{' '}
         or{' '}
-        <kbd style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 6px', fontSize: 10 }}>0000000000001</kbd>
+        <kbd>0000000000001</kbd>
+        {' '}or{' '}
+        <kbd>Acme Holdings LLC</kbd>
       </div>
     </div>
   )

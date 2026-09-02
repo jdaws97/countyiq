@@ -32,7 +32,8 @@ class FakeDatabase:
                     date(2026, 8, 1),
                     "board_of_supervisors",
                     "https://example.test/minutes.pdf",
-                    "A" * 1_000,
+                    "zoning " + "A" * 1_000,
+                    "hash-1",
                 ),
                 (
                     2,
@@ -41,6 +42,16 @@ class FakeDatabase:
                     "city_council",
                     "https://example.test/minutes.docx",
                     "too short",
+                    "hash-2",
+                ),
+                (
+                    3,
+                    "Dover Township Board of Supervisors",
+                    date(2026, 8, 3),
+                    "board_of_supervisors",
+                    "https://example.test/routine.pdf",
+                    "budget personnel utilities " * 50,
+                    "hash-3",
                 ),
             ]
         if "c.relispopulated" in normalized:
@@ -86,7 +97,13 @@ def test_report_counts_only_call_eligible_pass0_rows_and_is_select_only():
     assert pass0["planning_calls_min"] == 1
     assert pass0["planning_calls_max"] == 1
     assert pass0["details"]["unsupported_without_text"] == 1
+    assert pass0["details"]["deterministic_prefilter_skips"] == 1
     assert pass0["sampled_units"] == 1
+    assert pass0["runtime_max_input_tokens_per_call"] > pass0["average_input_tokens"]
+    assert (
+        pass0["retry_ceiling_cost"]
+        > pass0["details"]["provider_retry_ceiling_cost"]
+    )
     assert report["read_only"] is True
 
     assert database.statements
@@ -114,6 +131,19 @@ def test_disabled_runtime_gate_does_not_zero_hypothetical_backfill(monkeypatch):
     assert pass0["enabled_in_environment"] is False
     assert pass0["planning_calls_min"] == 1
     assert pass0["planning_cost_min"] > 0
+
+
+def test_pass3_estimate_binds_the_runtime_rank_limit(monkeypatch):
+    class ParameterCheckingDatabase(FakeDatabase):
+        def execute(self, sql: str, params=None):
+            if "LIMIT %(rank_limit)s" in sql:
+                assert params == {"rank_limit": 123}
+                self.statements.append(sql)
+                return []
+            return super().execute(sql, params)
+
+    monkeypatch.setenv("COUNTYIQ_PASS3_RANK_LIMIT", "123")
+    estimate_backfill(ParameterCheckingDatabase(), sample_size=10)
 
 
 def test_report_fails_closed_when_pass1_candidate_view_is_unpopulated():

@@ -3,23 +3,39 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC
 
 import psycopg2
 import pytest
-
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.source_rights import authorize_municipality_sources
-from countyiq.lib.source_rights import record_municipality_source_health
+from countyiq.lib.job_run_status import record_job_run_status
+from countyiq.lib.source_rights import (
+    authorize_municipality_sources,
+    record_municipality_source_health,
+)
 
 
 def _connect():
+    database_name = os.environ.get("DATABASE_NAME", "countyiq_test")
+    if database_name != "countyiq_test":
+        raise RuntimeError(
+            "Schema integration tests are destructive and may only use "
+            "the dedicated countyiq_test database"
+        )
     return psycopg2.connect(
         host=os.environ.get("DATABASE_HOST", "localhost"),
         port=int(os.environ.get("DATABASE_PORT", "5433")),
-        dbname=os.environ.get("DATABASE_NAME", "countyiq"),
+        dbname=database_name,
         user=os.environ.get("DATABASE_USER", "dagster_admin"),
         password=os.environ.get("DATABASE_PASSWORD", "localtest"),
     )
+
+
+def test_schema_integration_connection_refuses_non_test_database(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_NAME", "countyiq")
+
+    with pytest.raises(RuntimeError, match="dedicated countyiq_test database"):
+        _connect()
 
 
 class _IntegrationDatabase:
@@ -48,7 +64,7 @@ class _TransactionalDatabase:
 
 
 @pytest.mark.integration
-def test_unused_legacy_meta_tables_are_absent() -> None:
+def test_retired_meta_tables_are_absent() -> None:
     connection = _connect()
     try:
         with connection.cursor() as cursor:
@@ -63,10 +79,13 @@ def test_unused_legacy_meta_tables_are_absent() -> None:
                         "meta.data_quality_checks",
                         "meta.infra_metrics",
                         "meta.pipeline_status",
+                        "meta.source_candidates",
+                        "meta.source_observations",
+                        "meta.source_registry",
                     ],
                 ),
             )
-            assert cursor.fetchall() == [(None,), (None,), (None,)]
+            assert cursor.fetchall() == [(None,)] * 6
     finally:
         connection.close()
 
@@ -82,18 +101,21 @@ def test_source_governance_and_site_readiness_schema() -> None:
                 FROM unnest(%s::text[]) AS names(name)
                 ORDER BY name
                 """,
-                ([
-                    "meta.source_rights",
-                    "meta.source_rights_audit",
-                    "meta.municipality_source_rights",
-                    "meta.municipality_source_audit",
-                    "meta.municipality_source_health",
-                    "staging.economic_development_parks",
-                    "staging.environmental_diligence_sites",
-                    "staging.local_traffic_counts",
-                    "staging.soils",
-                    "staging.zoning_overlays",
-                ],),
+                (
+                    [
+                        "meta.source_rights",
+                        "meta.source_rights_audit",
+                        "meta.municipality_source_rights",
+                        "meta.municipality_source_audit",
+                        "meta.municipality_source_health",
+                        "meta.job_run_status",
+                        "staging.economic_development_parks",
+                        "staging.environmental_diligence_sites",
+                        "staging.local_traffic_counts",
+                        "staging.soils",
+                        "staging.zoning_overlays",
+                    ],
+                ),
             )
             assert all(row[0] is not None for row in cursor.fetchall())
 
@@ -109,7 +131,9 @@ def test_source_governance_and_site_readiness_schema() -> None:
                 """
             )
             assert {row[0] for row in cursor.fetchall()} == {
-                "policy_version", "policy_fingerprint", "policy_snapshot"
+                "policy_version",
+                "policy_fingerprint",
+                "policy_snapshot",
             }
 
             cursor.execute(
@@ -123,8 +147,19 @@ def test_source_governance_and_site_readiness_schema() -> None:
             assert dict(cursor.fetchall()) == {
                 "conditional": 4,
                 "green": 5,
-                "paused": 3,
+                "paused": 2,
             }
+
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM meta.source_rights
+                    WHERE source_key = 'county_scout'
+                )
+                """
+            )
+            assert cursor.fetchone()[0] is False
 
             cursor.execute(
                 """
@@ -135,8 +170,8 @@ def test_source_governance_and_site_readiness_schema() -> None:
                 """
             )
             assert dict(cursor.fetchall()) == {
-                "conditional": 110,
-                "paused": 12,
+                "conditional": 113,
+                "paused": 9,
             }
 
             cursor.execute(
@@ -169,16 +204,36 @@ def test_source_governance_and_site_readiness_schema() -> None:
                 "cross_roads_borough_council": "CROSS ROADS BORO",
                 "dover_twp_board_of_supervisors": "DOVER TWP",
                 "dover_twp_zoning_hearing_board": "DOVER TWP",
-                "franklintown_borough_council": "FRANKLINTOWN BORO",
-                "newberry_twp_board_of_supervisors": "NEWBERRY TWP",
                 "railroad_borough_council": "RAILROAD BORO",
                 "shrewsbury_twp_board_of_supervisors": "SHREWSBURY TWP",
                 "west_manheim_twp_board_of_supervisors": "WEST MANHEIM TWP",
                 "west_manheim_twp_planning_commission": "WEST MANHEIM TWP",
                 "west_manheim_twp_zoning_hearing_board": "WEST MANHEIM TWP",
                 "west_york_borough_council": "WEST YORK BORO",
-                "washington_twp_board_of_supervisors": "WASHINGTON TWP",
             }
+
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM meta.municipality_source_rights
+                WHERE source_key IN (
+                    'franklintown_borough_council',
+                    'newberry_twp_board_of_supervisors',
+                    'washington_twp_board_of_supervisors'
+                )
+                  AND rights_status = 'conditional'
+                  AND acquisition_allowed
+                  AND raw_retention_allowed
+                  AND derived_product_allowed
+                  AND NOT person_level_display_allowed
+                  AND NOT raw_export_allowed
+                  AND terms_review_status = 'reviewed_risk_accepted'
+                  AND evidence->>'robots_unavailable_risk_accepted' = 'true'
+                  AND allowed_methods = ARRAY['official_document_direct']::TEXT[]
+                  AND 'https://img1.wsimg.com' = ANY(allowed_origins)
+                """
+            )
+            assert cursor.fetchone()[0] == 3
 
             cursor.execute(
                 """
@@ -212,6 +267,59 @@ def test_source_governance_and_site_readiness_schema() -> None:
             assert nullable == "NO"
             assert default == "0"
     finally:
+        connection.close()
+
+
+@pytest.mark.integration
+def test_job_run_status_preserves_last_success_after_failure() -> None:
+    from datetime import datetime
+
+    connection = _connect()
+    database = _IntegrationDatabase(connection)
+    job_name = "schema_integration_refresh"
+    first_finished = datetime(2026, 8, 30, 10, tzinfo=UTC)
+    second_finished = datetime(2026, 8, 30, 11, tzinfo=UTC)
+    try:
+        record_job_run_status(
+            database,
+            job_name=job_name,
+            run_id="schema-success",
+            status="success",
+            started_at=datetime(2026, 8, 30, 9, tzinfo=UTC),
+            finished_at=first_finished,
+        )
+        record_job_run_status(
+            database,
+            job_name=job_name,
+            run_id="schema-failure",
+            status="failure",
+            started_at=datetime(2026, 8, 30, 10, 30, tzinfo=UTC),
+            finished_at=second_finished,
+            error_message="test failure",
+        )
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT run_id, status, finished_at, last_success_at, error_message
+                FROM meta.job_run_status
+                WHERE job_name = %s
+                """,
+                (job_name,),
+            )
+            assert cursor.fetchone() == (
+                "schema-failure",
+                "failure",
+                second_finished,
+                first_finished,
+                "test failure",
+            )
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM meta.job_run_status WHERE job_name = %s",
+                (job_name,),
+            )
         connection.close()
 
 
@@ -272,18 +380,61 @@ def test_municipality_authorization_executes_against_migrated_schema() -> None:
                 (run_id,),
             )
             assert cursor.fetchone() == (
-                True, "authorized", 1, 64, "hanover_borough_council"
+                True,
+                "authorized",
+                1,
+                64,
+                "hanover_borough_council",
             )
     finally:
         connection.close()
 
 
 @pytest.mark.integration
-def test_site_readiness_score_rebuild_uses_replacement_signals() -> None:
-    from dagster import build_asset_context
+def test_godaddy_municipality_sources_authorize_with_bounded_origin() -> None:
+    connection = _connect()
+    run_id = "schema-integration-godaddy-municipality-authorization"
+    expected_source_keys = {
+        "franklintown_borough_council",
+        "newberry_twp_board_of_supervisors",
+        "washington_twp_board_of_supervisors",
+    }
+    try:
+        entries = tuple(
+            source
+            for source in get_county_config().municipality_websites
+            if source[0]
+            in {
+                "Franklintown Borough Council",
+                "Newberry Twp Board of Supervisors",
+                "Washington Twp Board of Supervisors",
+            }
+        )
+        authorizations = authorize_municipality_sources(
+            _IntegrationDatabase(connection),
+            entries=entries,
+            acquisition_method="official_document_direct",
+            asset_key="schema_integration",
+            dagster_run_id=run_id,
+        )
 
+        assert set(authorizations) == expected_source_keys
+        for authorization in authorizations.values():
+            assert authorization.raw_retention_allowed
+            assert authorization.derived_product_allowed
+            assert not authorization.person_level_display_allowed
+            assert not authorization.raw_export_allowed
+            assert authorization.robots_unavailable_risk_accepted
+            assert "https://img1.wsimg.com" in authorization.allowed_origins
+    finally:
+        connection.close()
+
+
+@pytest.mark.integration
+def test_site_readiness_score_rebuild_uses_replacement_signals() -> None:
     from countyiq.assets.enrichment.development_momentum import development_momentum
     from countyiq.resources.database import DatabaseResource
+    from dagster import build_asset_context
 
     pidn = "SRTEST0000001"
     connection = _connect()
@@ -332,11 +483,18 @@ def test_site_readiness_score_rebuild_uses_replacement_signals() -> None:
                 """,
                 (pidn,),
             )
-            assert cursor.fetchone() == (12, 12, 70, True, 5)
+            # v6: momentum = park 0.18 + growth 0.02 = 20; opportunity uses the
+            # back-tested weights park 0.22 + growth 0.05 + soil -0.03 = 24;
+            # readiness = 50 + 25 + 10 - 15 = 70.
+            assert cursor.fetchone() == (20, 24, 70, True, 6)
     finally:
         with connection.cursor() as cursor:
             cursor.execute("TRUNCATE public.development_momentum")
             cursor.execute("TRUNCATE public.development_signals RESTART IDENTITY")
+            cursor.execute(
+                "DELETE FROM public.development_momentum_history WHERE pidn = %s",
+                (pidn,),
+            )
         connection.close()
 
 

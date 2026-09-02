@@ -180,15 +180,33 @@ def test_gate_query_requires_interacting_interpretive_signals():
         PARCELS_NEEDING_VALIDATION_QUERY,
     )
     q = PARCELS_NEEDING_VALIDATION_QUERY
-    for sig in ("active_subdivision", "ownership_change", "vacancy",
-                "assemblage", "zoning_mismatch"):
+    for sig in ("active_subdivision", "municipal_action", "ownership_change",
+                "vacancy", "assemblage", "entity_assemblage", "zoning_mismatch"):
         assert sig in q, f"interpretive signal {sig} missing from gate"
     for deterministic in (
         "tax_distress", "flood_zone", "economic_development_park",
-        "environmental_diligence",
+        "environmental_diligence", "nearby_subdivision",
     ):
         assert deterministic not in q
     assert "WHERE 2 <=" in q
+
+
+def test_fast_path_query_omits_full_scan_branch():
+    from countyiq.assets.enrichment.signal_validation_batched import (
+        _FULL_SCAN_BRANCH,
+        PARCELS_NEEDING_VALIDATION_FAST_QUERY,
+        PARCELS_NEEDING_VALIDATION_QUERY,
+        pass2_config_fingerprint,
+    )
+    assert _FULL_SCAN_BRANCH.strip() in PARCELS_NEEDING_VALIDATION_QUERY
+    assert _FULL_SCAN_BRANCH.strip() not in PARCELS_NEEDING_VALIDATION_FAST_QUERY
+    assert PARCELS_NEEDING_VALIDATION_FAST_QUERY.count("FROM public.development_signals ds") == (
+        PARCELS_NEEDING_VALIDATION_QUERY.count("FROM public.development_signals ds") - 1
+    )
+    # Errored attempts stay reachable on the fast path.
+    assert "ip.status = 'error'" in PARCELS_NEEDING_VALIDATION_FAST_QUERY
+    assert pass2_config_fingerprint("m", 1) != pass2_config_fingerprint("m", 3)
+    assert len(pass2_config_fingerprint("m", 1)) == 16
 
 
 def test_prompt_version_is_stable_hash():

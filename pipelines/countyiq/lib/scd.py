@@ -36,16 +36,27 @@ def scd2_upsert(
     key_columns: list[str],
     value_columns: list[str],
     expire_missing: bool = True,
+    carry_columns: list[str] | None = None,
 ):
     """Perform an SCD Type 2 upsert inside an explicit transaction.
 
     Args:
         records: List or iterable of dicts. If iterable, records are streamed
                  into the temp table in chunks to minimize peak memory.
+        carry_columns: Columns that are written with every row but never
+                 count as a change. They are refreshed in place on the
+                 current version instead of expiring it. Use them for
+                 "observed on" style bookkeeping (a listing's report date,
+                 a last-checked timestamp) so a weekly refresh of identical
+                 facts does not rewrite the whole table.
     """
     log = get_dagster_logger()
     fqn = f"{schema}.{table}"
-    all_columns = key_columns + value_columns
+    carry_columns = list(carry_columns or [])
+    overlap = set(carry_columns) & (set(key_columns) | set(value_columns))
+    if overlap:
+        raise ValueError(f"carry_columns overlap key/value columns: {sorted(overlap)}")
+    all_columns = key_columns + value_columns + carry_columns
 
     conn = cursor.connection
     was_autocommit = conn.autocommit
@@ -55,7 +66,7 @@ def scd2_upsert(
     try:
         result = _scd2_upsert_inner(
             cursor, fqn, all_columns, key_columns, value_columns,
-            records, log, expire_missing,
+            records, log, expire_missing, carry_columns,
         )
         return result
     except Exception:
@@ -66,7 +77,10 @@ def scd2_upsert(
             conn.autocommit = True
 
 
-def _scd2_upsert_inner(cursor, fqn, all_columns, key_columns, value_columns, records, log, expire_missing):
+def _scd2_upsert_inner(
+    cursor, fqn, all_columns, key_columns, value_columns, records, log,
+    expire_missing, carry_columns=(),
+):
     """Inner implementation — streams records into temp table in batches."""
 
     table_name = fqn.split(".")[-1]
@@ -167,6 +181,21 @@ def _scd2_upsert_inner(cursor, fqn, all_columns, key_columns, value_columns, rec
     cursor.execute(insert_new_sql)
     inserted = cursor.rowcount
 
+    # Carry columns are bookkeeping, not facts: refresh them on the surviving
+    # current version so "last seen" advances without a new SCD2 version.
+    carried = 0
+    if carry_columns:
+        carry_set = ", ".join(f"{c} = t.{c}" for c in carry_columns)
+        carry_diff = " OR ".join(
+            f"c.{c}::text IS DISTINCT FROM t.{c}::text" for c in carry_columns
+        )
+        cursor.execute(f"""
+            UPDATE {fqn} c SET {carry_set}
+            FROM {temp_table} t
+            WHERE c.valid_to IS NULL AND {key_join} AND ({carry_diff})
+        """)
+        carried = cursor.rowcount
+
     cursor.execute(f"DROP TABLE IF EXISTS {temp_table}")
     cursor.connection.commit()
 
@@ -174,6 +203,7 @@ def _scd2_upsert_inner(cursor, fqn, all_columns, key_columns, value_columns, rec
     log.info(
         f"SCD2 upsert {fqn}: {inserted} inserted, {expired} expired, "
         f"{unchanged} unchanged out of {total_staged} incoming"
+        + (f", {carried} carry-column refreshes" if carry_columns else "")
     )
     return {"inserted": inserted, "expired": expired, "unchanged": unchanged}
 

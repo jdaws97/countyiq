@@ -2,17 +2,23 @@ import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import BackButton from '../components/BackButton'
 import Badge from '../components/Badge'
+import EvidencePanel, { CitedText } from '../components/EvidencePanel'
+import IntelligenceEventCard from '../components/IntelligenceEventCard'
 import NarrativeCard from '../components/NarrativeCard'
 import PageShell from '../components/PageShell'
+import ReportActions from '../components/ReportActions'
 import Section from '../components/Section'
+import { Button, ButtonLink, Freshness } from '../components/ui'
+import { openEvidenceReceipt, sourceLinkLabel } from '../lib/evidence'
 import { formatCurrency, formatLabel, formatShortDate } from '../lib/format'
+import { isCompared, toggleComparison } from '../lib/investigationState'
 import { useFetchJson } from '../lib/useFetchJson'
 import { isWatched, toggleWatch } from '../lib/watchlist'
 import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
 import type {
   DevelopmentSignal,
   DevelopmentSignalEvidence,
-  DevelopmentSignalValue,
+  IntelligenceFeedResponse,
   LinkedProceeding,
   PropertyReport,
   StructureBuilding,
@@ -34,70 +40,8 @@ function getSignalEvidence(signal: DevelopmentSignal): DevelopmentSignalEvidence
   return flat
 }
 
-function getString(value: DevelopmentSignalValue | DevelopmentSignalEvidence): string | null {
+function getString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
-}
-
-function getNumber(value: DevelopmentSignalValue): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.length > 0) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-
-function formatSignalDetail(key: string, evidence: DevelopmentSignalEvidence): string {
-  if (key === 'active_subdivision') {
-    return getString(evidence['plan_title']) ?? ''
-  }
-  if (key === 'economic_development_park') {
-    const names = evidence['park_names']
-    return Array.isArray(names) && names.length > 0 ? names.join(', ') : 'Official park designation'
-  }
-  if (key === 'zoning_mismatch') {
-    const current = getString(evidence['current_zname']) ?? getString(evidence['current_ztype']) ?? '?'
-    const future = getString(evidence['future_lu']) ?? '?'
-    return `${current} -> ${future}`
-  }
-  if (key === 'ownership_change') {
-    const price = getNumber(evidence['price'])
-    return price == null ? '' : `Sold for $${price.toLocaleString()}`
-  }
-  if (key === 'tax_distress') {
-    const totalOwed = getNumber(evidence['total_owed'])
-    return totalOwed == null ? '' : `$${totalOwed.toLocaleString()} owed`
-  }
-  if (key === 'penndot_project') {
-    return getString(evidence['project_name']) ?? ''
-  }
-  if (key === 'flood_zone') {
-    const zone = getString(evidence['fld_zone'])
-    return zone ? `Zone ${zone}` : ''
-  }
-  if (key === 'growth_area') {
-    const type = getString(evidence['ga_type'])
-    if (type === 'PGA') return 'Primary Growth Area'
-    if (type) return 'Secondary Growth Area'
-  }
-  if (key === 'development_overlay') {
-    return getString(evidence['overlay_name']) ?? getString(evidence['overlay_type']) ?? 'Development overlay'
-  }
-  if (key === 'local_traffic_activity') {
-    const volume = getNumber(evidence['volume'])
-    const year = getNumber(evidence['count_year'])
-    return volume == null ? '' : `${volume.toLocaleString()} vehicles${year ? ` (${year})` : ''}`
-  }
-  if (key === 'soil_constraint') {
-    return getString(evidence['drainage']) ?? getString(evidence['map_unit_name']) ?? 'Adverse soil profile'
-  }
-  if (key === 'zoning_constraint') {
-    return getString(evidence['overlay_type']) ?? 'Special-purpose overlay'
-  }
-  if (key === 'environmental_diligence') {
-    return getString(evidence['site_name']) ?? getString(evidence['facility_type']) ?? 'Nearby PA DEP record'
-  }
-  return ''
 }
 
 function getValidationStatus(signal: DevelopmentSignal, evidence: DevelopmentSignalEvidence): string | null {
@@ -132,12 +76,15 @@ export default function PropertyDetail() {
   const { data: report, error, loading } = useFetchJson<PropertyReport>(
     pidn ? `/api/parcels/${encodeURIComponent(pidn)}` : null,
   )
+  const intelligenceTimeline = useFetchJson<IntelligenceFeedResponse>(
+    pidn ? `/api/feed?pidns=${encodeURIComponent(pidn)}&since_days=3650&limit=100&sort=latest` : null,
+  )
   // localStorage read is cheap; deriving at render (re-triggered by the
   // counter bump on toggle) avoids a setState-in-effect.
   const [, setWatchToggleCount] = useState(0)
 
-  if (loading) return <PageShell><div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '80px 0' }}>Loading property...</div></PageShell>
-  if (error || !report) return <PageShell><div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-red)' }}>Property not found: {pidn}</div></PageShell>
+  if (loading) return <PageShell><div className="status-message">Loading property…</div></PageShell>
+  if (error || !report) return <PageShell><div className="status-message status-message-error">Property not found: {pidn}</div></PageShell>
 
   const p = report.parcel
   const watchedState = isWatched(p.pidn)
@@ -148,48 +95,61 @@ export default function PropertyDetail() {
   const narratives = report.related_narratives
   const intelligence = report.intelligence_summary
   const proceedings = report.linked_proceedings ?? []
+  const comparedState = isCompared(p.pidn)
+  const evidenceFreshness = (report.evidence ?? [])
+    .map((item) => item.observed_at ?? item.effective_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1)
 
   return (
     <PageShell>
         {/* Back + Actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <BackButton onClick={() => navigate(-1)} marginBottom={0} />
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
+          <div className="property-actions" data-print-hidden>
+            <Button
+              tone="quiet"
               onClick={() => {
                 toggleWatch(p.pidn)
                 setWatchToggleCount((c) => c + 1)
               }}
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: watchedState ? 'var(--accent-gold)' : 'var(--accent-blue)',
-                background: 'transparent',
-                border: `1px solid ${watchedState ? 'var(--accent-gold)' : 'var(--border)'}`,
-                borderRadius: 4,
-                padding: '4px 10px',
-                cursor: 'pointer',
-              }}
             >
               {watchedState ? '★ Watching' : '☆ Watch'}
-            </button>
-            {p.lat && p.lng && (
-              <Link to={`/map?lat=${p.lat}&lng=${p.lng}&zoom=18&highlight=${p.pidn}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 4 }}>View on Map</Link>
+            </Button>
+            <Button
+              tone="quiet"
+              onClick={() => {
+                const result = toggleComparison(p.pidn)
+                if (result.full) window.alert('Comparison is limited to four parcels. Remove one before adding another.')
+                setWatchToggleCount((c) => c + 1)
+              }}
+            >
+              {comparedState ? '✓ In comparison' : '+ Compare'}
+            </Button>
+            {comparedState && <ButtonLink to="/compare" tone="secondary">Open comparison</ButtonLink>}
+            {p.lat != null && p.lng != null && (
+              <ButtonLink to={`/map?lat=${p.lat}&lng=${p.lng}&zoom=18&highlight=${p.pidn}`} tone="quiet">View on map</ButtonLink>
             )}
+            <ReportActions label={`${p.propadr || p.pidn} property report`} />
           </div>
         </div>
 
         {/* Header */}
-        <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-gold)', marginBottom: 8 }}>Property Report</div>
-          <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{p.owner_full || 'Owner not displayed'}</h1>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-secondary)' }}>{p.propadr || 'No address'}</div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <div style={{ marginBottom: 32 }}>
+          <div className="record-eyebrow">Property Report</div>
+          <h1 className="property-address">{p.propadr || 'Address unavailable'}</h1>
+          <div className="property-owner">
+            {p.owner_full ? <Link to={`/search?q=${encodeURIComponent(p.owner_full)}`}>{p.owner_full}</Link> : 'Owner not displayed'}
+            <span> · PIDN {p.pidn}</span>
+          </div>
+          <div className="property-badges">
             {p.class && <Badge color="var(--accent-blue)">{getPropertyClassLabel(p.class)}</Badge>}
             {p.school_dis && <Badge color="var(--accent-purple)">{getSchoolDistrictLabel(p.school_dis)}</Badge>}
             {tax.is_delinquent && <Badge color="var(--accent-red)">Tax Delinquent</Badge>}
             {flood.in_flood_zone && <Badge color="var(--accent-cyan)">Flood Zone {flood.zone}</Badge>}
             {structures.likely_vacant && <Badge color="var(--accent-gold)">Vacant</Badge>}
+            <Freshness value={evidenceFreshness} />
           </div>
         </div>
 
@@ -200,9 +160,9 @@ export default function PropertyDetail() {
             <Field label="Acres" value={p.acres ? Number(p.acres).toFixed(2) : '--'} />
             <Field label="Sale Date" value={p.saledt || '--'} />
             <Field label="Sale Price" value={formatCurrency(p.price)} highlight />
-            {p.prev_price && <Field label="Previous Price" value={formatCurrency(p.prev_price)} />}
-            {p.aprland && <Field label="Land Value" value={formatCurrency(p.aprland)} />}
-            {p.aprbldg && <Field label="Building Value" value={formatCurrency(p.aprbldg)} />}
+            {p.prev_price != null && <Field label="Previous Price" value={formatCurrency(p.prev_price)} />}
+            {p.aprland != null && <Field label="Land Value" value={formatCurrency(p.aprland)} />}
+            {p.aprbldg != null && <Field label="Building Value" value={formatCurrency(p.aprbldg)} />}
           </Grid>
         </Section>
 
@@ -212,11 +172,11 @@ export default function PropertyDetail() {
             <Field label="PIDN" value={p.pidn} />
             <Field label="Class" value={getPropertyClassLabel(p.class) || '--'} />
             <Field label="School District" value={getSchoolDistrictLabel(p.school_dis) || '--'} />
-            {p.acres && <Field label="Acres" value={Number(p.acres).toFixed(2)} />}
-            {p.yrblt && <Field label="Year Built" value={String(p.yrblt)} />}
+            {p.acres != null && <Field label="Acres" value={Number(p.acres).toFixed(2)} />}
+            {p.yrblt != null && <Field label="Year Built" value={String(p.yrblt)} />}
             {p.style && <Field label="Style" value={p.style} />}
-            {p.num_stories && <Field label="Stories" value={String(p.num_stories)} />}
-            {p.res_living_area && <Field label="Living Area" value={`${Number(p.res_living_area).toLocaleString()} sf`} />}
+            {p.num_stories != null && <Field label="Stories" value={String(p.num_stories)} />}
+            {p.res_living_area != null && <Field label="Living Area" value={`${Number(p.res_living_area).toLocaleString()} sf`} />}
             {p.prev_owner && <Field label="Previous Owner" value={p.prev_owner} />}
             {p.deed_bk && <Field label="Deed" value={`${p.deed_bk}/${p.deed_pg}`} />}
           </Grid>
@@ -269,19 +229,66 @@ export default function PropertyDetail() {
         <Section title="Flood Risk">
           {flood.in_flood_zone ? (
             <div>
-              <Badge color="var(--accent-cyan)">FEMA Zone {flood.zone}</Badge>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginLeft: 12 }}>
-                {flood.sfha ? 'Special Flood Hazard Area — flood insurance required' : 'Minimal flood risk'}
+              <Badge color="var(--accent-cyan)">FEMA SFHA · Zone {flood.zone}</Badge>
+              <span style={{ fontSize: 14, color: 'var(--text-secondary)', marginLeft: 12 }}>
+                {flood.overlap_pct != null ? `${flood.overlap_pct.toFixed(1)}% of parcel area overlaps.` : 'Parcel overlap detected.'}
+                {' '}Insurance and elevation requirements depend on the structure, loan, and official determination.
               </span>
             </div>
           ) : (
-            <Badge color="var(--accent-green)">Not in Flood Zone</Badge>
+            <Badge color="var(--accent-green)">No mapped FEMA SFHA overlap</Badge>
+          )}
+        </Section>
+
+        <Section title="Soils & Site Conditions">
+          {report.soil_profile.units.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {report.soil_profile.considerations.length > 0 && (
+                <div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)' }}>
+                  <div className="record-label" style={{ marginBottom: 8 }}>What the mapped soils suggest</div>
+                  <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    {report.soil_profile.considerations.map((consideration) => (
+                      <li key={consideration}>{consideration}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {report.soil_profile.units.map((unit) => (
+                <div key={unit.objectid} style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-panel)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                      {unit.map_unit_symbol || 'Soil unit'}: {unit.map_unit_name || 'Name unavailable'}
+                    </div>
+                    <Badge color="var(--accent-blue)">{unit.coverage_pct.toFixed(1)}% of parcel</Badge>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                    {(unit.slope_low != null || unit.slope_high != null) && (
+                      <Badge color={(unit.representative_slope ?? 0) >= 15 ? 'var(--accent-red)' : 'var(--text-muted)'}>
+                        Slope {unit.slope_low ?? '?'}–{unit.slope_high ?? '?'}%; representative {unit.representative_slope ?? '?'}%
+                      </Badge>
+                    )}
+                    {unit.drainage && <Badge color="var(--text-muted)">Drainage: {unit.drainage}</Badge>}
+                    {unit.septic_rating && <Badge color={unit.septic_rating === 'Very limited' ? 'var(--accent-gold)' : 'var(--text-muted)'}>On-lot septic: {unit.septic_rating}</Badge>}
+                    {unit.hydrologic_group && <Badge color={unit.hydrologic_group === 'D' ? 'var(--accent-red)' : 'var(--text-muted)'}>Hydrologic group {unit.hydrologic_group}</Badge>}
+                    {unit.hydric_rating && <Badge color="var(--text-muted)">{unit.hydric_rating}</Badge>}
+                  </div>
+                </div>
+              ))}
+              <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-muted)' }}>
+                Generalized mapped-soil screening only. Confirm grading, drainage, foundations, and wastewater design with parcel-specific professional review.
+                {report.soil_profile.source_url && (
+                  <> <a href={report.soil_profile.source_url} target="_blank" rel="noreferrer" className="signal-link">Open the exact mapped soil records</a>.</>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{ color: 'var(--text-secondary)' }}>No county soil polygons intersected this parcel. This is a data-coverage gap, not a favorable soil finding.</div>
           )}
         </Section>
 
         {/* Structures */}
         <Section title="Structures">
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)', marginBottom: structures.buildings?.length ? 12 : 0 }}>
+          <div style={{ fontSize: 15, color: 'var(--text-primary)', marginBottom: structures.buildings?.length ? 12 : 0 }}>
             {structures.count} building footprint{structures.count !== 1 ? 's' : ''} detected
             {structures.likely_vacant && <span style={{ color: 'var(--accent-gold)', marginLeft: 12 }}>— Likely vacant land</span>}
           </div>
@@ -301,6 +308,33 @@ export default function PropertyDetail() {
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+        </Section>
+
+        <Section title="Verify This Property Report">
+          <EvidencePanel
+            items={report.evidence ?? []}
+            title="Official and derived records"
+            intro="These receipts separate source facts from CountyIQ calculations and show when each record became effective. Open the original link where source policy allows it."
+          />
+        </Section>
+
+        <Section title="Property intelligence timeline">
+          {intelligenceTimeline.loading && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>Loading property-linked events...</div>}
+          {!intelligenceTimeline.loading && intelligenceTimeline.error && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-red)' }}>
+              Property-linked events could not be loaded. The property report remains available.
+            </div>
+          )}
+          {!intelligenceTimeline.loading && !intelligenceTimeline.error && (intelligenceTimeline.data?.events.length ?? 0) === 0 && (
+            <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+              No source-backed intelligence events are linked to this property yet. This is not a claim that nothing has happened.
+            </div>
+          )}
+          {(intelligenceTimeline.data?.events.length ?? 0) > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {intelligenceTimeline.data!.events.map((event) => <IntelligenceEventCard key={event.event_key} event={event} />)}
             </div>
           )}
         </Section>
@@ -353,23 +387,23 @@ export default function PropertyDetail() {
               </div>
 
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: 15, lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: brief.assessment_reasoning || brief.key_questions.length > 0 || brief.citations.length > 0 ? 16 : 0 }}>
-                {brief.brief_text}
+                <CitedText text={brief.brief_text} evidence={brief.citation_evidence ?? []} />
               </div>
 
               {brief.assessment_reasoning && (
                 <div style={{ marginBottom: brief.key_questions.length > 0 || brief.citations.length > 0 ? 16 : 0 }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  <div className="record-label">
                     Assessment Rationale
                   </div>
                   <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                    {brief.assessment_reasoning}
+                    <CitedText text={brief.assessment_reasoning} evidence={brief.citation_evidence ?? []} />
                   </div>
                 </div>
               )}
 
               {brief.key_questions.length > 0 && (
                 <div style={{ marginBottom: brief.citations.length > 0 ? 16 : 0 }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  <div className="record-label">
                     Key Questions
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -384,14 +418,36 @@ export default function PropertyDetail() {
 
               {brief.citations.length > 0 && (
                 <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  <div className="record-label">
                     Citations
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {brief.citations.map((citation) => (
-                      <Badge key={citation} color="var(--accent-cyan)">{citation}</Badge>
-                    ))}
+                    {brief.citations.map((citation) => {
+                      const index = (brief.citation_evidence ?? []).findIndex((item) => item.citation_key.toLowerCase() === `signal:${citation}`.toLowerCase())
+                      const receipt = index >= 0 ? brief.citation_evidence[index] : null
+                      return receipt ? (
+                        <a
+                          key={citation}
+                          href={`#${receipt.evidence_id}`}
+                          onClick={() => openEvidenceReceipt(receipt.evidence_id)}
+                          style={{ textDecoration: 'none' }}
+                        >
+                          <Badge color="var(--accent-cyan)">E{index + 1} · {formatLabel(citation)}</Badge>
+                        </a>
+                      ) : (
+                        <Badge key={citation} color="var(--text-muted)">{formatLabel(citation)}</Badge>
+                      )
+                    })}
                   </div>
+                </div>
+              )}
+              {(brief.citation_evidence?.length ?? 0) > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <EvidencePanel
+                    items={brief.citation_evidence}
+                    title="Verify the brief"
+                    intro="Each receipt resolves an internal signal citation to its source facts and record link."
+                  />
                 </div>
               )}
             </div>
@@ -400,62 +456,90 @@ export default function PropertyDetail() {
 
         {/* Development Momentum */}
         {report?.development_momentum && (
-          <div style={{
-            background: 'var(--bg-card)', borderRadius: 8, padding: 16, marginTop: 16,
-            border: `1px solid ${report.development_momentum.eligible ? '#22c55e' : 'var(--text-secondary)'}40`,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-              <span style={{
-                fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                color: report.development_momentum.eligible
-                  ? (report.development_momentum.score >= 60 ? '#22c55e' : report.development_momentum.score >= 40 ? '#eab308' : '#06b6d4')
-                  : 'var(--text-secondary)',
-              }}>
+          <div className="momentum-card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12, flexWrap: 'wrap' }}>
+              <span
+                className="momentum-score"
+                style={{ '--score-color': report.development_momentum.eligible
+                  ? (report.development_momentum.score >= 60 ? 'var(--accent-green)' : report.development_momentum.score >= 40 ? 'var(--accent-gold)' : 'var(--accent-ink)')
+                  : 'var(--text-secondary)' } as React.CSSProperties}
+              >
                 {report.development_momentum.score}
               </span>
               <div>
                 <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Development Momentum</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
                   {report.development_momentum.eligible
                     ? report.development_momentum.top_signal || 'No top signal'
-                    : `Ineligible: ${(report.development_momentum.exclusion_reasons || []).join(', ')}`}
+                    : `Excluded from radar ranking: ${(report.development_momentum.exclusion_reasons || []).map(formatLabel).join(', ')}`}
                 </div>
               </div>
-              <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--accent-purple)' }}>
-                  {report.development_momentum.site_readiness_score}
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 24, textAlign: 'right' }}>
+                <div>
+                  <div className="momentum-sub">{report.development_momentum.opportunity_score}</div>
+                  <div className="field-label" style={{ marginTop: 4 }}>Opportunity</div>
                 </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>
-                  Site Screening
+                <div>
+                  <div className="momentum-sub">{report.development_momentum.site_readiness_score}</div>
+                  <div className="field-label" style={{ marginTop: 4 }}>Site Screening</div>
                 </div>
               </div>
             </div>
-            <div style={{ fontFamily: 'var(--font-sans)', fontSize: 12, lineHeight: 1.5, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Screening rank only. It is not an entitlement, engineering, flood, soil, or environmental determination. Follow the evidence links before relying on it.
+            <div style={{ fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Momentum totals activity points. Opportunity uses separately calibrated weights and is gated to zero for a parcel with its own active plan. Site Screening starts at 50 and applies only the adjustments labeled below. These are screening ranks, not entitlement or engineering determinations.
             </div>
-            {report.development_momentum.eligible && report.development_momentum.signals && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {report.development_momentum.signals && (
+              <div className="signal-list">
                 {Object.entries(report.development_momentum.signals)
-                  .filter(([key]) => !['conservation_easement', 'ag_security'].includes(key))
-                  .sort(([, a], [, b]) => getSignalWeight(b) - getSignalWeight(a))
+                  .sort(([, a], [, b]) => {
+                    const aExcludes = a.presentation?.affects_eligibility ? 1 : 0
+                    const bExcludes = b.presentation?.affects_eligibility ? 1 : 0
+                    return bExcludes - aExcludes || Math.abs(getSignalWeight(b)) - Math.abs(getSignalWeight(a))
+                  })
                   .map(([key, sig]) => {
-                    const w = getSignalWeight(sig)
                     const ev = getSignalEvidence(sig)
-                    const detail = formatSignalDetail(key, ev)
+                    const presentation = sig.presentation
                     const validationStatus = getValidationStatus(sig, ev)
                     const adjustedSignificance = getAdjustedSignificance(sig, ev)
                     const validationReasoning = getValidationReasoning(sig, ev)
-                    const sourceUrl = getString(sig.source_url) ?? getString(ev['source_url'])
-                    const detailUrl = getString(ev['detail_url'])
+                    const receipt = sig.evidence_receipt
+                    const sourceUrl = receipt?.url ?? receipt?.document_url ?? getString(ev['detail_url']) ?? getString(sig.source_url) ?? getString(ev['source_url'])
+                    const impacts = presentation?.score_impacts
+                    const impactBadges = impacts ? [
+                      impacts.momentum !== 0 ? { label: 'Momentum', value: impacts.momentum } : null,
+                      impacts.opportunity !== 0 ? { label: 'Opportunity', value: impacts.opportunity } : null,
+                      impacts.site_screening !== 0 ? { label: 'Site', value: impacts.site_screening } : null,
+                    ].filter((item): item is { label: string; value: number } => item !== null) : []
                     return (
-                      <div key={key} style={{
-                        display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13,
-                        padding: '6px 10px', background: 'var(--bg-panel)', borderRadius: 4,
-                      }}>
+                      <div key={key} className="signal-row">
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                            {formatLabel(key)}
-                            {detail ? <span style={{ color: 'var(--text-secondary)', marginLeft: 8, fontWeight: 400 }}>{detail}</span> : null}
+                            {presentation?.title ?? formatLabel(key)}: <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>{presentation?.summary ?? formatLabel(key)}</span>
+                          </div>
+                          {presentation?.interpretation && (
+                            <div style={{ marginTop: 7, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{presentation.interpretation}</div>
+                          )}
+                          {(presentation?.facts.length ?? 0) > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 18px', marginTop: 8 }}>
+                              {presentation!.facts.map((fact) => (
+                                <span key={`${fact.label}:${fact.value}`} style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                                  <strong style={{ color: 'var(--text-secondary)' }}>{fact.label}:</strong> {fact.value}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                            {impactBadges.map((impact) => (
+                              <Badge key={impact.label} color={impact.value > 0 ? 'var(--accent-green)' : 'var(--accent-red)'}>
+                                {impact.label} {impact.value > 0 ? '+' : ''}{impact.value}
+                              </Badge>
+                            ))}
+                            {impactBadges.length === 0 && !presentation?.affects_eligibility && (
+                              <Badge color="var(--text-muted)">Context only · no direct score change</Badge>
+                            )}
+                            {presentation?.affects_eligibility && (
+                              <Badge color="var(--accent-red)">Radar eligibility exclusion</Badge>
+                            )}
                           </div>
                           {(validationStatus || adjustedSignificance) && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
@@ -476,20 +560,22 @@ export default function PropertyDetail() {
                               {validationReasoning}
                             </div>
                           )}
-                          {(detailUrl || sourceUrl) && (
+                          {presentation?.caveat && (
+                            <div style={{ marginTop: 8, color: 'var(--text-muted)', lineHeight: 1.45, fontSize: 12.5 }}>
+                              <strong>Caveat:</strong> {presentation.caveat}
+                            </div>
+                          )}
+                          {sourceUrl && (
                             <a
-                              href={detailUrl || sourceUrl || undefined}
+                              href={sourceUrl}
                               target="_blank"
                               rel="noreferrer"
-                              style={{ display: 'inline-block', marginTop: 7, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent-blue)' }}
+                              className="signal-link"
                             >
-                              View official evidence ↗
+                              {sourceLinkLabel(sourceUrl)}
                             </a>
                           )}
                         </div>
-                        <span style={{ fontFamily: 'var(--font-mono)', color: w > 0 ? '#22c55e' : w < 0 ? '#ef4444' : 'var(--text-muted)', fontWeight: 600 }}>
-                          {w > 0 ? '+' : ''}{Math.round(w * 100)}
-                        </span>
                       </div>
                     )
                   })}
@@ -513,14 +599,21 @@ export default function PropertyDetail() {
 }
 
 function Grid({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px 24px' }}>{children}</div>
+  return <div className="field-grid">{children}</div>
 }
 
+const IDENTIFIER_FIELDS = new Set(['PIDN', 'Deed'])
+
 function Field({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  const valueClass = highlight
+    ? 'field-value field-value-highlight'
+    : IDENTIFIER_FIELDS.has(label)
+      ? 'field-value field-value-mono'
+      : 'field-value'
   return (
     <div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontFamily: highlight ? 'var(--font-mono)' : 'var(--font-sans)', fontSize: 14, fontWeight: highlight ? 600 : 400, color: highlight ? 'var(--accent-green)' : 'var(--text-primary)' }}>{value}</div>
+      <div className="field-label">{label}</div>
+      <div className={valueClass}>{value}</div>
     </div>
   )
 }
@@ -555,6 +648,12 @@ function ProceedingRow({ proceeding }: { proceeding: LinkedProceeding }) {
         {proceeding.meeting_date && (
           <Badge color="var(--accent-cyan)">{formatShortDate(proceeding.meeting_date)}</Badge>
         )}
+        {proceeding.page_number != null && (
+          <Badge color="var(--text-muted)">page {proceeding.page_number}</Badge>
+        )}
+        {proceeding.extraction_confidence != null && (
+          <Badge color="var(--text-muted)">{Math.round(proceeding.extraction_confidence * 100)}% extraction confidence</Badge>
+        )}
         {proceeding.match_type === 'address' && (
           <Badge color="var(--text-muted)">matched by address</Badge>
         )}
@@ -573,15 +672,10 @@ function ProceedingRow({ proceeding }: { proceeding: LinkedProceeding }) {
           {proceeding.supporting_text}
         </div>
       )}
-      {proceeding.document_url && (
-        <a
-          href={proceeding.document_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-blue)', textDecoration: 'none' }}
-        >
-          View source PDF →
-        </a>
+      {proceeding.evidence && (
+        <div style={{ marginTop: 10 }}>
+          <EvidencePanel items={[proceeding.evidence]} title="Verify this proceeding" />
+        </div>
       )}
     </div>
   )

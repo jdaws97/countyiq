@@ -1,11 +1,36 @@
 import { useEffect, useState } from 'react'
 import PageShell from '../components/PageShell'
-import type { HealthData, OverallHealthStatus } from '../types/ops'
+import type { HealthData, OverallHealthStatus, SourceHealthReason } from '../types/ops'
 
 function formatSourceName(key: string): string {
   return key
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function formatTimestamp(value?: string | null): string {
+  if (!value) return 'not observed'
+  return new Date(value).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+function formatRefreshWindow(hours?: number): string {
+  if (!hours) return 'not configured'
+  return hours % 24 === 0 ? `${hours / 24} days` : `${hours} hours`
+}
+
+const STATUS_LABELS: Record<SourceHealthReason, string> = {
+  healthy: 'Healthy',
+  empty_source: 'No current records',
+  last_run_failed: 'Last run failed',
+  missing_table: 'Table missing',
+  policy_overdue: 'Policy review overdue',
+  query_failed: 'Health query failed',
+  run_not_observed: 'No run observed',
+  source_unhealthy: 'Source needs attention',
+  stale: 'Stale',
 }
 
 const OVERALL_COLORS: Record<OverallHealthStatus, { bg: string; text: string; label: string }> = {
@@ -38,6 +63,7 @@ export default function OpsHealth() {
   const overall = health?.overall ?? 'green'
   const overallStyle = OVERALL_COLORS[overall] ?? OVERALL_COLORS.green
   const sourceEntries = health ? Object.entries(health.sources) : []
+  const integrity = health?.intelligence_integrity
 
   return (
     <PageShell maxWidth={1200}>
@@ -45,7 +71,6 @@ export default function OpsHealth() {
         <div
           style={{
             marginBottom: 48,
-            animation: 'fadeUp 0.4s ease both',
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
@@ -162,6 +187,44 @@ export default function OpsHealth() {
           </div>
         )}
 
+        {!loading && !error && integrity && (
+          <section
+            style={{
+              marginBottom: 24,
+              padding: 20,
+              background: 'var(--bg-panel)',
+              border: `1px solid ${OVERALL_COLORS[integrity.status].text}55`,
+              borderLeft: `3px solid ${OVERALL_COLORS[integrity.status].text}`,
+              borderRadius: 6,
+            }}
+            aria-label="Intelligence integrity"
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-primary)' }}>
+                  Intelligence integrity
+                </div>
+                <div style={{ marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', color: OVERALL_COLORS[integrity.status].text }}>
+                  {integrity.status_reason.replace(/_/g, ' ')}
+                </div>
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.7, color: 'var(--text-muted)', textAlign: 'right' }}>
+                {integrity.accepted_count.toLocaleString()} accepted · {integrity.quarantined_count.toLocaleString()} quarantined
+                <br />
+                {integrity.unresolved_contradiction_count} unresolved · {integrity.resolved_contradiction_count} resolved
+              </div>
+            </div>
+            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+              <span>oldest unresolved {formatTimestamp(integrity.oldest_unresolved_at)}</span>
+              <span>unlinked projections {integrity.unlinked_projection_count}</span>
+              <span>projection mismatches {integrity.projection_mismatch_count}</span>
+              <span>human resolutions {integrity.human_resolution_inference_count}</span>
+              <span>invalid outputs (24h) {integrity.validation_rejections_last_24h}</span>
+              <span>latest invalid output {formatTimestamp(integrity.latest_validation_rejection_at)}</span>
+            </div>
+          </section>
+        )}
+
         {/* Source grid */}
         {!loading && !error && health && (
           <div
@@ -191,7 +254,6 @@ export default function OpsHealth() {
                     borderRadius: 6,
                     padding: '20px',
                     position: 'relative',
-                    animation: `fadeUp 0.4s ease both`,
                     animationDelay: `${0.05 + idx * 0.04}s`,
                     opacity: 0,
                     transition: 'background 0.15s ease, border-color 0.15s ease',
@@ -281,7 +343,21 @@ export default function OpsHealth() {
                     <div style={{ marginTop: 10, fontFamily: 'var(--font-mono)', fontSize: 10, lineHeight: 1.6, color: 'var(--text-muted)' }}>
                       {source.healthy_count}/{source.active_count} active bodies healthy
                       <br />
-                      {source.blocked_count} blocked · {source.unchecked_count} unchecked · {source.configured_count} reviewed
+                      {source.blocked_count} blocked · {source.unchecked_count} unchecked · {source.stale_count ?? 0} stale
+                      <br />
+                      latest body check {formatTimestamp(source.last_checked_at)}
+                    </div>
+                  )}
+
+                  {source.refresh_job && (
+                    <div style={{ marginTop: 10, fontFamily: 'var(--font-mono)', fontSize: 10, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+                      latest job {formatSourceName(source.last_run_job ?? source.refresh_job)} · {source.last_run_status ?? 'unknown'}
+                      <br />
+                      last run {formatTimestamp(source.last_run_at)}
+                      <br />
+                      last success {formatTimestamp(source.last_success_at)}
+                      <br />
+                      freshness window {formatRefreshWindow(source.expected_refresh_hours)}
                     </div>
                   )}
 
@@ -296,7 +372,9 @@ export default function OpsHealth() {
                       color: isGreen ? 'var(--accent-green)' : 'var(--accent-red)',
                     }}
                   >
-                    {isGreen ? 'Active' : 'Inactive'}
+                    {source.status_reason
+                      ? STATUS_LABELS[source.status_reason]
+                      : isGreen ? 'Healthy' : 'Needs attention'}
                   </div>
                 </div>
               )

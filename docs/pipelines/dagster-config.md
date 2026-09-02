@@ -11,6 +11,26 @@ Both processes load `countyiq.definitions` directly. This is intentionally a
 single-code-location deployment for one VPS; a separate gRPC code-server tier
 would add operational surface without isolating another team or machine.
 
+## Single-VPS Resource Envelope
+
+The production instance queues at most one Dagster run, and CountyIQ's default
+multiprocess executor launches at most one asset step inside that run. Internal
+I/O concurrency remains available inside an asset (for example, the parcel
+loader keeps four ArcGIS pages in flight), but independent assets cannot stack
+their peak memory on the 8 GB VPS.
+
+Compose also applies cgroup limits: 3 GB for the daemon plus its launched run
+and step processes, 2 GB for PostgreSQL, 768 MB each for the API and Dagster
+webserver, and 256 MB for Caddy. These are containment limits, not capacity
+proof. An OOM-killed pipeline should fail without taking the serving API or
+database with it, and the host still needs memory/disk monitoring.
+
+The York parcel fetch benchmark on 2026-08-31 found that retaining every
+ArcGIS page used about 1.27 GiB before database loading. The production asset
+now consumes a four-page bounded iterator; its fetch-only Python benchmark used
+about 160 MiB. Benchmark details and the Rust comparison live in
+`benchmarks/arcgis-ingestion/README.md`.
+
 ## Durable State
 
 - Dagster run, event, and schedule storage uses the `dagster` database in the

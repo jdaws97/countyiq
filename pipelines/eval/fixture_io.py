@@ -9,11 +9,15 @@ from typing import Any
 
 
 def canonical_context_hash(context: Any) -> str:
+    # ``default=str`` only affects values json cannot encode natively (the
+    # live lane gathers ``date`` objects from PostgreSQL); frozen fixtures are
+    # plain JSON already, so their fingerprints are unchanged.
     payload = json.dumps(
         context,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=True,
+        default=str,
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 

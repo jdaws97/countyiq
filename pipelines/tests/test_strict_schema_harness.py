@@ -12,9 +12,9 @@ from unittest import mock
 
 import pytest
 import requests
-
 from countyiq.lib import llm_harness
 from countyiq.lib.llm_harness import HarnessConfig, build_openrouter_payload
+from countyiq.lib.pass1_entity_verification import parse_entity_verification_output
 from countyiq.lib.pass_llm_config import build_pass_harness_config
 from countyiq.lib.pass_schemas import (
     PASS0_EXTRACTION_SCHEMA,
@@ -22,8 +22,6 @@ from countyiq.lib.pass_schemas import (
     PASS3_BRIEF_SCHEMA,
     PASS3B_OWNER_BRIEF_SCHEMA,
 )
-from countyiq.lib.pass1_entity_verification import parse_entity_verification_output
-
 
 ALL_SCHEMAS = [
     PASS0_EXTRACTION_SCHEMA,
@@ -56,6 +54,60 @@ def test_llm_archive_retention_prunes_only_expired_harness_files(tmp_path):
     assert not expired.exists()
     assert recent.exists()
     assert unrelated.exists()
+
+
+def test_llm_archive_probe_requires_explicit_directory(monkeypatch):
+    monkeypatch.delenv("COUNTYIQ_ARCHIVE_DIR", raising=False)
+
+    result = llm_harness.probe_llm_archive_destination()
+
+    assert result["ok"] is False
+    assert "not explicitly configured" in result["reason"]
+
+
+def test_llm_archive_probe_writes_and_cleans_up(tmp_path, monkeypatch):
+    monkeypatch.setenv("COUNTYIQ_ARCHIVE_DIR", str(tmp_path))
+
+    result = llm_harness.probe_llm_archive_destination()
+
+    assert result["ok"] is True
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_strict_llm_archive_failure_is_not_silenced(tmp_path, monkeypatch):
+    invalid_root = tmp_path / "archive-root-is-a-file"
+    invalid_root.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setenv("COUNTYIQ_ARCHIVE_DIR", str(invalid_root))
+    monkeypatch.setenv("COUNTYIQ_ARCHIVE_STRICT", "true")
+
+    with pytest.raises(RuntimeError, match="LLM transcript archive failed"):
+        llm_harness.archive_raw_output("pass2", "pidn", "prompt", "{}")
+
+
+def test_non_strict_llm_archive_failure_remains_a_warning(tmp_path, monkeypatch):
+    invalid_root = tmp_path / "archive-root-is-a-file"
+    invalid_root.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setenv("COUNTYIQ_ARCHIVE_DIR", str(invalid_root))
+    monkeypatch.setenv("COUNTYIQ_ARCHIVE_STRICT", "false")
+
+    assert llm_harness.archive_raw_output(
+        "pass2", "pidn", "prompt", "{}"
+    ) is None
+
+
+def test_strict_invoke_requires_archive_key(monkeypatch):
+    monkeypatch.setenv("COUNTYIQ_ARCHIVE_STRICT", "true")
+    monkeypatch.setattr(
+        llm_harness,
+        "_invoke_openrouter",
+        lambda config, prompt, pdf_bytes=None: ("{}", None, {"cost": 0.01}),
+    )
+
+    with pytest.raises(RuntimeError, match="archive key is missing"):
+        llm_harness.invoke(
+            HarnessConfig(model_path="x/y", archive_label="pass2"),
+            "prompt",
+        )
 
 
 def _walk_objects(schema: dict):
@@ -270,6 +322,18 @@ def test_usage_meta_captured():
     assert meta["reasoning_tokens"] == 12
     assert meta["cached_tokens"] == 80
     assert meta["provider"] == "DeepInfra"
+
+
+def test_missing_api_key_preserves_three_value_invoke_contract(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    raw, error, meta = llm_harness._invoke_openrouter(
+        HarnessConfig(model_path="x/y"), "prompt"
+    )
+
+    assert raw == ""
+    assert error == "OPENROUTER_API_KEY not set"
+    assert meta == {}
 
 
 def test_invoke_exposes_usage_metadata_on_result():

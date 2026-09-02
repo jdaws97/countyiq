@@ -14,7 +14,6 @@ from typing import Any, Iterable
 
 from countyiq.lib.county_config import get_county_config
 
-
 DEVELOPMENT_EVENT_TAGS = {
     "application",
     "hearing",
@@ -332,10 +331,11 @@ def build_delinquency_event(row: dict[str, Any]) -> dict[str, Any]:
         "affected_claims": int(row.get("affected_claims") or 0),
         "tax_years": list(row.get("tax_years") or []),
     }
+    transition_identity = f"{pidn}:{row['detected_at'].isoformat()}:{change_kind}"
     return {
-        "event_key": f"delinquency:{pidn}:{row['detected_at'].isoformat()}",
+        "event_key": f"delinquency:{transition_identity}",
         "source_kind": "delinquency_event",
-        "source_record_id": f"{pidn}:{row['detected_at'].isoformat()}",
+        "source_record_id": transition_identity,
         "category": "parcel",
         "event_type": "delinquency_change",
         "event_tags": ["delinquency_change"],
@@ -345,7 +345,9 @@ def build_delinquency_event(row: dict[str, Any]) -> dict[str, Any]:
         "what_happens_next": next_step,
         "event_date": row.get("event_date"),
         "detected_at": row["detected_at"],
-        "confidence": 0.95,
+        # This is a deterministic source transition, not a probabilistic model
+        # judgment. Showing a synthetic 95% overstates what the number means.
+        "confidence": None,
         "municipality": row.get("municipality"),
         "project_key": None,
         "project_name": None,

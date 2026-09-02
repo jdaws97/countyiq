@@ -65,12 +65,18 @@ class DatabaseResource(ConfigurableResource):
             cur.close()
 
     @contextmanager
-    def transaction(self):
-        """Yield a cursor inside an explicit transaction."""
+    def transaction(self, *, dict_rows: bool = False):
+        """Yield a cursor inside an explicit transaction.
+
+        ``dict_rows`` is reserved for transactional workflows that must gather
+        and validate named source fields before writing. Ordinary asset writes
+        retain the lighter tuple cursor.
+        """
         conn = self._get_conn()
         prior_autocommit = conn.autocommit
         conn.autocommit = False
-        cur = conn.cursor()
+        cursor_factory = psycopg2.extras.RealDictCursor if dict_rows else None
+        cur = conn.cursor(cursor_factory=cursor_factory)
         try:
             yield cur
             conn.commit()

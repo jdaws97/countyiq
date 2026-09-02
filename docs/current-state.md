@@ -30,12 +30,31 @@ data backfill and customer use before CountyIQ is sales-ready:
   value, structure, and delinquency changes with source-grounded development
   applications, hearings, revisions, continuances, decisions, conditions, and
   upcoming actions extracted once in Pass 0.
-- **Watchlist** — browser-local entity, parcel, and development-project watches exist;
-  server-side persistence and notifications are not built.
+- **Customer verification receipts** — feed events, property reports, and
+  owner/entity case files expose numbered evidence cards with source record
+  IDs, dates, supporting facts or excerpts, derivation method, caveats, and
+  original/internal links when available. Inline brief citations resolve to the
+  same receipts; governed fields remain redacted when source policy disallows
+  customer display.
+- **Investigation workspace** — browser-local entity, parcel, and development-project
+  watches now include in-app "new since last visit" alerts, reviewed/dismissed feed
+  triage, saved Feed/Radar searches, 2–4 parcel comparison, CSV exports, and
+  print/save-PDF evidence packets. A versioned JSON export/import moves the
+  workspace between browsers without implying that CountyIQ has customer
+  accounts. Automatic multi-device sync and server notifications are not built.
 - ~~Weekly digest email~~ — dropped by decision (2026-08-02): no email features planned.
+- The radar (score version 7, 2026-09-02) is deterministic, includes
+  proceedings-linked `municipal_action` and owner `entity_assemblage`
+  signals, and keeps weekly history for the Movers view and municipality
+  pages. Opportunity weights are back-tested in
+  `docs/research/radar-backtest-2026-09-02.md`. Version 7 also exposes exact
+  per-score signal effects, uses parcel-wide soil and SFHA overlap, treats
+  Agricultural Security Areas as neutral context rather than prohibitions,
+  and documents all trigger/meaning/caveat pairs in
+  `docs/research/development-signal-contract-v7.md`.
 - Pass 2+ intelligence has run on ~75 of 176,060 parcels. The municipal
-  proceedings registry covers all 72 municipalities explicitly: 63 currently
-  have an authorized main governing-body source and 65 have at least one active
+  proceedings registry covers all 72 municipalities explicitly: 66 currently
+  have an authorized main governing-body source and 68 have at least one active
   board source. All vendor, robots, and no-web-presence gaps remain as paused
   policy rows rather than being treated as empty activity.
 - Zero customer conversations logged; pricing is unvalidated.
@@ -55,7 +74,7 @@ tools remain under `pipelines/eval/`.
 | Object storage | Cloudflare R2 (via `R2_ENDPOINT_URL` — required, otherwise boto3 targets AWS) |
 | Front door | Cloudflare |
 | Inference backend | OpenRouter |
-| Deployment | Not deployed. Docker Compose on a Hetzner VPS behind Cloudflare is the current target architecture, not a live environment. |
+| Deployment | Not deployed. Docker Compose on a Hetzner VPS behind Cloudflare is the target. The repo now has a fail-closed exact-SHA deploy path, versioned local images, stable volume names, verified R2 backup manifests, release/restore receipts, and a persistent systemd backup timer; the first live host, restore drill, firewall, and provider controls remain unverified. |
 
 ## Current Model Lineup
 
@@ -86,13 +105,38 @@ be restored from old docs or git history.
 LLMs are deliberately limited to work that needs semantic interpretation:
 extracting and explaining unstructured municipal proceedings, entity ambiguity,
 and selected synthesis. Parcel diffs, delinquency transitions, joins, filters,
-ranking, API responses, and watch state remain deterministic. The feed rebuild
-uses cached Pass 0 output and makes no additional model call.
+ranking, radar scoring (score version 7, back-tested against historical plan
+filings), API responses, and watch state remain deterministic. The feed
+rebuild uses cached Pass 0 output and makes no additional model call, and the
+radar keeps weekly score history so movers are visible without a model.
+
+Pass 0–3 outputs now cross a fail-closed integrity boundary before serving:
+document quotes must occur in locally extracted source text; entity partitions
+must account for candidate names and may use only input record identifiers;
+signal reasoning must cite machine-readable evidence refs; and parcel/owner
+brief claims must use known inline signal/parcel citations. Accepted outputs
+are append-versioned. If a later run changes the semantic decision while the
+evidence-only hash is unchanged, the challenger is quarantined and the prior
+serving projection remains active. These controls improve auditability and
+consistency; they do not turn LLM judgment into independently verified fact.
+Migration 040 archives and retracts any pre-gate serving row that cannot prove
+this provenance, exposes aggregate integrity health, and supports atomic human
+resolution through `pipelines/scripts/review_intelligence_contradictions.py`.
+The product API remains read-only. Every enabled paid pass also requires an
+explicit per-run dollar ceiling plus provider price ceilings; the harness
+reserves the conservative maximum before dispatch and stops if provider cost
+cannot be verified.
+Migration 041 also persists every deterministic validation failure in an
+append-only rejection ledger. The health API and Dagster guard warn when a
+rejection occurred in the last 24 hours, so an invalid output cannot disappear
+into worker logs or be treated as a clean canary.
 
 Relevant env vars: `OPENROUTER_API_KEY`, `COUNTYIQ_PASS{0-4}_MODEL`,
 `COUNTYIQ_PASS{0-4}_ENABLED`,
 `COUNTYIQ_OPENROUTER_MODEL`, `COUNTYIQ_THINKING`, `COUNTYIQ_ARCHIVE_DIR`,
 `COUNTYIQ_ARCHIVE_STRICT`, `COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS`,
+`COUNTYIQ_PASS{0-4}_MAX_COST_USD`, `COUNTYIQ_MAX_PRICE_PROMPT`,
+`COUNTYIQ_MAX_PRICE_COMPLETION`, `COUNTYIQ_PASS{0-3}_BACKFILL_MODE`,
 `COUNTYIQ_PASS2_TRIALS`,
 `COUNTYIQ_SEARCH_LLM_ENABLED`, `COUNTYIQ_SEARCH_API_KEY`,
 `COUNTYIQ_SEARCH_RATE_PER_MIN`, `COUNTYIQ_SEARCH_DAILY_LLM_BUDGET`, and the
@@ -101,10 +145,13 @@ default-off `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS` deployment gate.
 The production Compose boundary uses an independent read-only API database
 role, withholds pipeline/R2/Slack secrets from the API, runs application
 containers as a non-root UID, validates proxy-derived client addresses, and
-keeps public API docs off by default. The 2026-08-30 repository security review
-and remaining live-environment gates are in `docs/operations/security.md`.
+keeps public API docs off by default. API and pipeline packages may not import
+one another, only the migration service receives the administrator URL, and the
+release script stops both runtimes before backup and migration. The 2026-08-31
+repository security review and remaining live-environment gates are in
+`docs/operations/security.md`.
 
-## Source Posture (2026-08-28)
+## Source Posture (2026-08-31)
 
 Source reachability is not treated as permission. Migrations 031 through 036
 establish use-specific source policy, immutable source-decision ledgers,
@@ -120,19 +167,22 @@ policies.
   Collection uses allowlisted official methods; proceedings fail closed on
   robots/access uncertainty and sheriff collection no longer disguises a
   browser client.
-- Municipal proceedings contain 110 configured source entries (107 distinct
-  listing URLs) across 65 municipalities. All 72 municipalities remain in 122
-  policy rows: 110 are conditional and 12 are paused. Pauses cover two
-  no-web-presence bodies, eCode360, Rep'd, Google Drive, three explicit
-  West Manheim robots disallows, and three GoDaddy-CDN-only sources. Every
+- Municipal proceedings contain 113 configured source entries (110 distinct
+  listing URLs) across 68 municipalities. All 72 municipalities remain in 122
+  policy rows: 113 are conditional and 9 are paused. Pauses cover two
+  no-web-presence bodies, eCode360, Rep'd, Google Drive, and three explicit
+  West Manheim robots disallows. Every
   configured body must match its policy's municipality, URL, proceeding type,
   acquisition method, and allowed origin before any request is made;
-  listing/document health is visible in `/api/ops/health`.
-- County Scout is paused and unscheduled. Its manual jobs and API also consult
-  the same source policy, so it cannot probe or promote arbitrary URLs. It has
-  zero runtime rows, no score or product dependency, and is not worth
-  activating for the York alpha; retain it only as an offline research
-  prototype for possible later multi-county discovery.
+  listing/document health, scheduled refresh freshness, and latest job failure
+  state are visible in `/api/ops/health`.
+- Franklintown Borough, Newberry Township, and Washington Township use official
+  listing pages whose PDFs are delivered by GoDaddy's `img1.wsimg.com` CDN.
+  Revision 042 records explicit product-owner risk acceptance for automated
+  retrieval from that exact origin. Revision 043 narrowly accepts unavailable
+  robots endpoints on those three first-party listing origins; the CDN document
+  origin remains live robots-gated. Raw archives remain private; person-level
+  display and raw-document export remain disabled.
 - York `OPEN_DATA`, PennDOT open data, FEMA NFHL, and data.pa.gov business data
   are approved for derived analytics within the recorded delivery boundary.
 - PA DEP's public, non-sensitive GIS is approved for attributed derived

@@ -6,7 +6,7 @@ from api.lib.development_radar import format_signal_label, sanitize_signals_for_
 def test_ownership_change_omits_unknown_date_placeholder():
     signal = {"evidence": {"price": 210000, "buyer_is_llc": False}}
 
-    assert format_signal_label("ownership_change", signal) == "Sold for $210,000"
+    assert format_signal_label("ownership_change", signal) == "Recorded sale for $210,000"
 
 
 def test_signal_payload_redacts_people_and_free_form_reasoning():

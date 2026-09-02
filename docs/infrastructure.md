@@ -74,6 +74,11 @@ R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
 R2_ENDPOINT_URL=https://ACCOUNT_ID.r2.cloudflarestorage.com
 S3_RAW_BUCKET=countyiq-raw
+COUNTYIQ_BACKUP_R2_ACCESS_KEY_ID=...
+COUNTYIQ_BACKUP_R2_SECRET_ACCESS_KEY=...
+COUNTYIQ_BACKUP_R2_BUCKET=countyiq-backups
+COUNTYIQ_BACKUP_BUCKET_LOCK_CONFIRMED=true
+COUNTYIQ_RESTORE_DRILL_MAX_AGE_DAYS=120
 ```
 
 Notes:
@@ -90,6 +95,9 @@ Notes:
   the complete `.env`—and use a non-superuser writer created by
   `02-runtime-role.sh`. Only the short-lived `migrate` service and host backup
   job use the database administrator credential.
+- Dagster's R2 credential is scoped to raw archives. The separate host-only
+  backup credential is scoped to the private database-backup bucket and is
+  never injected into an application container.
 
 ## Access Model
 
@@ -105,26 +113,39 @@ Notes:
   outbound access does not also create a shared lateral-movement network.
 - External runtime images and Dockerfile bases are pinned by digest; Dependabot
   proposes reviewed digest updates rather than silently changing a deployment.
+- Container JSON logs rotate at 10 MiB with five files per service. Commit-tagged
+  images are retained for reviewed rollback, so operators still monitor
+  `docker system df` and prune only after release receipts and rollback needs
+  have been reviewed.
 
 ## Backups And Archives
 
-- PostgreSQL backups: `pg_dump` plus off-host storage
+- PostgreSQL backups: unique custom-format `pg_dump` sets in private R2 storage
 - raw pipeline archives: Cloudflare R2
 - LLM output archives: `COUNTYIQ_ARCHIVE_DIR`
 
 The archives are operational artifacts, not core repo content. They should not be committed to git.
-Each database dump is validated as a readable custom-format archive and
-uploaded with a SHA-256 sidecar. A successful dump check is not a restore test.
+Each database dump is validated locally, uploaded with a SHA-256 sidecar,
+download-checked against R2, and made eligible for restore only when a manifest
+is uploaded and read back last. Uploads are immutable and the host script has
+no remote delete operation. R2 bucket-lock and lifecycle rules own protection
+and expiry. A successful dump check is still not a restore test, so ordinary
+deployments require a recent receipt from `docker/restore-drill.sh`.
 
 ## Delivery
 
-GitHub Actions currently verifies the locked pipeline and API environments,
-pipeline definition import, unit and contract tests, and the frontend type,
-lint, and production-build gates. It does not publish container images or
-deploy either runtime.
+GitHub Actions verifies the locked pipeline and API environments, architecture
+contracts, pipeline definition import, unit and contract tests, frontend type,
+lint and production build, Compose configuration, and the deployment preflight.
+It does not publish images or deploy either runtime.
 
-VPS deployment is manual: pull the reviewed revision, rebuild the local
-Compose images, apply Alembic deliberately, and restart the affected services
-using `docs/operations/runbook.md`. The Caddy configuration expects the static
-frontend to be hosted separately on Cloudflare Pages, but Pages deployment
-automation is not contained in this repository.
+VPS release initiation remains manual, but execution is scripted and
+fail-closed. The operator checks out an exact reviewed SHA and runs
+`docker/deploy.sh`; the script builds SHA-tagged images locally, stops writers,
+requires a remotely verified pre-deploy backup, applies Alembic, refreshes
+runtime grants, checks readiness, persists the active image tag, and writes an
+immutable release receipt.
+This is operationally repeatable, but it is not bit-for-bit artifact promotion:
+a future registry/signing boundary becomes worthwhile if multiple hosts or
+frequent releases make on-host builds inadequate. Cloudflare Pages deployment
+remains separate and is not automated by this repository.

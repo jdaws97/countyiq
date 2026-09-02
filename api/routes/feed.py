@@ -7,9 +7,11 @@ from typing import Literal
 from fastapi import APIRouter, Query
 
 from api.lib.database import get_cursor
+from api.lib.development_radar import sanitize_signals_for_public
+from api.lib.evidence import normalize_source_evidence
 from api.lib.response_types import IntelligenceFeedResponse
 from api.lib.serialization import serialize_temporal_fields
-from api.lib.settings import open_data_source_key
+from api.lib.settings import county_metadata, open_data_source_key
 from api.lib.source_policy import (
     is_public_organization,
     require_source_use,
@@ -66,11 +68,47 @@ _PRIORITY_SQL = """
     + LEAST(COALESCE(cardinality(related_entities), 0), 3) * 3
     + CASE WHEN project_key IS NOT NULL THEN 5 ELSE 0 END
     + CASE WHEN jsonb_array_length(COALESCE(source_evidence, '[]'::jsonb)) > 0 THEN 5 ELSE 0 END
+    + CASE
+        WHEN event_type = 'delinquency_change' THEN
+            CASE COALESCE(source_evidence->0->'details'->>'change_kind', '')
+                WHEN 'new' THEN 10
+                WHEN 'increased' THEN 7
+                WHEN 'decreased' THEN -5
+                WHEN 'resolved' THEN -10
+                ELSE 0
+            END
+        ELSE 0
+      END
+    -- Recency decay: a decision from ten months ago should not outrank this
+    -- week's application forever. Two points per fortnight, capped at 25, so
+    -- an old approval (90) still lands above a fresh delinquency change (55).
+    - LEAST(
+        GREATEST(CURRENT_DATE - COALESCE(event_date, detected_at::date), 0) / 14,
+        25
+      )
+    -- Watched-subject boost: the caller passes its browser-local watches so
+    -- the general feed leads with what this user already follows.
+    + CASE
+        WHEN related_pidns && %(boost_pidns)s::text[] THEN 15
+        WHEN project_key = ANY(%(boost_project_keys)s::text[]) THEN 15
+        WHEN EXISTS (
+            SELECT 1
+            FROM public.owners watched_owner
+            CROSS JOIN LATERAL unnest(COALESCE(related_entities, ARRAY[]::text[])) event_entity
+            WHERE watched_owner.owner_id = ANY(%(boost_entity_ids)s::integer[])
+              AND (lower(event_entity) = lower(watched_owner.canonical_name)
+                   OR lower(event_entity) = ANY(ARRAY(SELECT lower(alias) FROM
+                       unnest(COALESCE(watched_owner.aliases, ARRAY[]::text[])) alias)))
+        ) THEN 15
+        ELSE 0
+      END
 """
 
 
 def _importance_reasons(row: dict) -> list[str]:
     reasons: list[str] = []
+    if row.get("watched_match"):
+        reasons.append("Watched subject")
     event_type = row.get("event_type")
     if event_type in {"approval", "denial", "upcoming_decision"}:
         reasons.append("Decision or deadline")
@@ -205,13 +243,43 @@ def intelligence_feed(
         default=None,
         description="Comma-separated stable owner/entity IDs for locally watched entities",
     ),
+    boost_pidns: str | None = Query(
+        default=None,
+        description="Comma-separated watched PIDNs to rank first without filtering",
+    ),
+    boost_project_keys: str | None = Query(
+        default=None,
+        description="Comma-separated watched project keys to rank first without filtering",
+    ),
+    boost_entity_ids: str | None = Query(
+        default=None,
+        description="Comma-separated watched entity IDs to rank first without filtering",
+    ),
     sort: Literal["priority", "latest"] = Query(default="priority"),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> IntelligenceFeedResponse:
     """Return parcel facts and LLM-extracted development events in one contract."""
-    filters = ["TRUE"]
-    params: dict[str, object] = {"fetch_limit": limit + 1, "offset": offset}
+    filters = [
+        """
+        NOT (
+            source_kind = 'delinquency_event'
+            AND COALESCE(source_evidence->0->'details'->>'change_kind', '') = 'new'
+            AND detected_at = (
+                SELECT MIN(baseline.detected_at)
+                FROM public.intelligence_events AS baseline
+                WHERE baseline.source_kind = 'delinquency_event'
+            )
+        )
+        """
+    ]
+    params: dict[str, object] = {
+        "fetch_limit": limit + 1,
+        "offset": offset,
+        "boost_pidns": _csv_values(boost_pidns),
+        "boost_project_keys": _csv_values(boost_project_keys),
+        "boost_entity_ids": _csv_ints(boost_entity_ids),
+    }
 
     if category:
         filters.append("category = %(category)s")
@@ -297,6 +365,8 @@ def intelligence_feed(
             f"""
             SELECT
                 event_key,
+                source_kind,
+                source_record_id,
                 category,
                 event_type,
                 event_tags,
@@ -316,7 +386,9 @@ def intelligence_feed(
                 interpretation_kind,
                 interpretation_model,
                 interpretation_generated_at,
-                ({_PRIORITY_SQL})::integer AS priority_score
+                ({_PRIORITY_SQL})::integer AS priority_score,
+                (related_pidns && %(boost_pidns)s::text[]
+                 OR project_key = ANY(%(boost_project_keys)s::text[])) AS watched_match
             FROM public.intelligence_events
             WHERE {' AND '.join(filters)}
             ORDER BY {order_clause}
@@ -335,6 +407,11 @@ def intelligence_feed(
     rows = rows[:limit]
     events = []
     for row in rows:
+        display_confidence = (
+            row.get("confidence")
+            if row["interpretation_kind"] == "llm"
+            else None
+        )
         serialize_temporal_fields(
             row,
             "event_date",
@@ -362,10 +439,10 @@ def intelligence_feed(
             what_happened = row["what_happened"]
             why_it_matters = row["why_it_matters"]
             what_happens_next = row["what_happens_next"]
-            sources = list(row.get("source_evidence") or [])
+            raw_sources = list(row.get("source_evidence") or [])
         else:
             event_label = str(row["event_type"]).replace("_", " ")
-            location = row.get("municipality") or "York County"
+            location = row.get("municipality") or county_metadata()["county_name"]
             hidden_entities = [
                 str(name)
                 for name in (row.get("related_entities") or [])
@@ -383,17 +460,39 @@ def intelligence_feed(
             what_happens_next = _redact_hidden_entities(
                 row.get("what_happens_next"), hidden_entities
             ) or "Review the official source and monitor the next municipal action."
-            sources = [
-                {
-                    "label": source.get("label") or "Official source",
-                    "url": source.get("url"),
-                    "document_url": source.get("document_url"),
-                    "excerpt": None,
-                    "details": {},
-                }
-                for source in (row.get("source_evidence") or [])
-                if isinstance(source, dict)
-            ]
+            raw_sources = []
+            for source in (row.get("source_evidence") or []):
+                if not isinstance(source, dict):
+                    continue
+                safe_payload = sanitize_signals_for_public(
+                    {"source": source}, allow_people=False
+                ) or {}
+                safe_source = safe_payload.get("source")
+                if not isinstance(safe_source, dict):
+                    continue
+                raw_sources.append({**safe_source, "excerpt": None})
+        sources = [
+            normalize_source_evidence(
+                source,
+                scope=f"event:{row['event_key']}",
+                index=index,
+                source_kind=str(row.get("source_kind") or f"{row['category']}_event"),
+                source_record_id=row.get("source_record_id") or row["event_key"],
+                effective_at=row.get("event_date"),
+                observed_at=row["detected_at"],
+                interpretation_kind=str(row["interpretation_kind"]),
+                confidence=display_confidence,
+                # Parcel-record events cite the county parcel layer; deep-link
+                # the customer to the parcel's own record, not the layer root.
+                record_query=(
+                    ("PIDN", list(row.get("related_pidns") or [])[:1])
+                    if row.get("source_kind") == "parcel_event" and row.get("related_pidns")
+                    else None
+                ),
+            )
+            for index, source in enumerate(raw_sources)
+            if isinstance(source, dict)
+        ]
         display_row = {**row, "related_entities": related_entities}
         events.append(
             {
@@ -407,7 +506,7 @@ def intelligence_feed(
                 "what_happens_next": what_happens_next,
                 "event_date": row.get("event_date"),
                 "detected_at": row["detected_at"],
-                "confidence": row.get("confidence"),
+                "confidence": display_confidence,
                 "municipality": row.get("municipality"),
                 "project": project,
                 "related_entities": related_entities,

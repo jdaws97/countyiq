@@ -47,6 +47,44 @@ def test_full_fetch_returns_all_pages_in_order():
     assert [f["attributes"]["offset"] for f in features] == [0, 1000]
 
 
+def test_bounded_parallel_iterator_limits_submitted_page_window():
+    with mock.patch.object(arcgis_client, "_get_feature_count", return_value=5), \
+         mock.patch.object(arcgis_client, "_fetch_page") as fetch_page:
+        fetch_page.side_effect = lambda u, w, f, s, b, offset, g: [
+            {"attributes": {"offset": offset}}
+        ]
+        pages = arcgis_client.iterate_feature_pages_parallel(
+            "http://x/FeatureServer/0", batch_size=1, max_workers=2,
+        )
+
+        first_page = next(pages)
+        assert fetch_page.call_count <= 2
+        remaining_pages = list(pages)
+
+    returned_offsets = {
+        feature["attributes"]["offset"]
+        for page in [first_page, *remaining_pages]
+        for feature in page
+    }
+    assert returned_offsets == {0, 1, 2, 3, 4}
+
+
+def test_bounded_parallel_iterator_raises_on_partial_fetch():
+    with mock.patch.object(arcgis_client, "_get_feature_count", return_value=2), \
+         mock.patch.object(arcgis_client, "_fetch_page") as fetch_page:
+        def side_effect(url, where, out_fields, out_sr, batch_size, offset, return_geometry):
+            if offset == 1:
+                raise RuntimeError("boom")
+            return [{"attributes": {"offset": offset}}]
+
+        fetch_page.side_effect = side_effect
+        pages = arcgis_client.iterate_feature_pages_parallel(
+            "http://x/FeatureServer/0", batch_size=1, max_workers=2,
+        )
+        with pytest.raises(RuntimeError, match="Refusing to yield a successful partial result"):
+            list(pages)
+
+
 def test_fetch_page_retries_transient_then_succeeds():
     good = _resp({"features": [{"attributes": {}}]})
     with mock.patch.object(arcgis_client.requests, "get",

@@ -71,7 +71,11 @@ _PARCEL_EVENTS_SQL = """
 
 
 _DELINQUENCY_EVENTS_SQL = """
-    WITH inserted_or_changed AS (
+    WITH initial_baseline AS (
+        SELECT MIN(valid_from) AS loaded_at
+        FROM staging.tax_claims
+    ),
+    inserted_or_changed AS (
         SELECT
             n.pidn,
             n.valid_from AS detected_at,
@@ -88,7 +92,11 @@ _DELINQUENCY_EVENTS_SQL = """
          AND o.tax_year = n.tax_year
          AND o.authority_name = n.authority_name
          AND o.valid_to = n.valid_from
-        WHERE o.pidn IS NULL OR o.total IS DISTINCT FROM n.total
+        CROSS JOIN initial_baseline baseline
+        WHERE (o.pidn IS NULL OR o.total IS DISTINCT FROM n.total)
+          -- The first complete listing is current inventory, not a change.
+          -- Keep it on the property report but do not flood the event feed.
+          AND n.valid_from > baseline.loaded_at
         GROUP BY n.pidn, n.valid_from
     ),
     resolved AS (
@@ -187,16 +195,27 @@ _DEVELOPMENT_EVENTS_SQL = """
               AND (
                   p.pidn = REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g')
                   OR (
+                      -- Normalized street match: minutes write "1234 North Main
+                      -- Street, Suite 2" while the assessment file says
+                      -- "1234 N MAIN ST". normalize_street_address (migration
+                      -- 048) folds both to one spelling and is index-backed.
                       LENGTH(REGEXP_REPLACE(pe.parcel_reference, '[^A-Za-z0-9]', '', 'g')) >= 6
-                      AND REGEXP_REPLACE(UPPER(p.propadr), '[^A-Z0-9]', '', 'g') =
-                          REGEXP_REPLACE(UPPER(pe.parcel_reference), '[^A-Z0-9]', '', 'g')
+                      AND public.normalize_street_address(p.propadr)
+                          = public.normalize_street_address(pe.parcel_reference)
+                      AND EXISTS (
+                          SELECT 1
+                          FROM meta.municipality_source_rights msr
+                          WHERE msr.body_name = pp.body_name
+                            AND msr.municipality_name = p.municipality
+                            AND msr.derived_product_allowed = TRUE
+                      )
                   )
               )
             ORDER BY p.pidn
             LIMIT 20
         ) m
     ) matches ON TRUE
-    WHERE pe.extraction_type NOT IN ('_complete', '_no_extractions')
+    WHERE LEFT(pe.extraction_type, 1) <> '_'
     ORDER BY pe.extracted_at, pe.id
 """
 

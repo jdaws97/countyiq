@@ -122,7 +122,26 @@ def test_pending_entity_batch_has_limit_and_differentiated_ttls():
 
     assert names == ["ALPHA HOLDINGS LLC", "BETA PROPERTIES LP"]
     assert "LIMIT %s" in database.query
-    assert database.params[-4:] == (STATUS_NOT_FOUND, 180, 30, 25)
+    assert "owner_full > %s" in database.query
+    assert database.params[-6:] == (STATUS_NOT_FOUND, 180, 30, None, None, 25)
+
+
+def test_pending_entity_batch_resumes_after_last_attempted_name():
+    database = _RecordingDatabase()
+
+    _get_pending_entity_names(
+        database,
+        limit=25,
+        found_ttl_days=30,
+        not_found_ttl_days=180,
+        after_name="BETA PROPERTIES LP",
+    )
+
+    assert database.params[-3:] == (
+        "BETA PROPERTIES LP",
+        "BETA PROPERTIES LP",
+        25,
+    )
 
 
 def test_positive_int_env_never_turns_zero_into_unbounded(monkeypatch):

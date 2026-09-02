@@ -5,6 +5,12 @@ Each signal type is a separate INSERT query. Full refresh each run.
 
 RULES:
   - One row per (pidn, signal_key) — DISTINCT ON for all proximity/spatial joins
+  - signal_weight is the deterministic ACTIVITY weight used by the momentum
+    score. Opportunity uses the separately back-tested weights in
+    development_momentum.py (see docs/research/radar-backtest-2026-09-02.md);
+    no LLM output changes either score (score_version 7)
+  - Recency matters: ownership_change and municipal_action decay by age so a
+    sale last week and a sale eleven months ago are not the same signal
   - Proximity radii, price cutoffs, and neighbor thresholds live in
     county_config.py (signal_* fields) and are bound as query parameters
   - Exclude nominal transfers (price <= signal_nominal_sale_max)
@@ -15,20 +21,32 @@ RULES:
 """
 
 from dagster import (
-    asset,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
+    asset,
 )
 
 from countyiq.lib.county_config import county_open_data_source_key, get_county_config
 from countyiq.lib.source_rights import authorize_source_uses, source_use_is_authorized
 from countyiq.resources.database import DatabaseResource
 
+# Word-bounded organisation markers. ``\m`` / ``\M`` are PostgreSQL word
+# boundaries, so "PHILPOT" no longer matches "LP" and "ALPINE" no longer
+# matches "INC".
+BUSINESS_OWNER_REGEX = (
+    r"\m(LLC|L\.L\.C|INC|CORP|CORPORATION|LP|L\.P|LLP|LTD|HOLDINGS|TRUST|"
+    r"PARTNERS|PARTNERSHIP|ASSOCIATES|ENTERPRISES|PROPERTIES|GROUP|VENTURES|"
+    r"CAPITAL|INVESTMENTS|DEVELOPMENT|REALTY|COMPANY|CO)\M"
+)
+
 _SIGNALS: list[tuple[str, str]] = [
     # ── HIGH-VALUE DIRECT SIGNALS ──────────────────────────────────────
 
-    # 1. active_subdivision — closest plan within 250m, last 3 years
+    # 1. active_subdivision — a believable plan point ON the parcel (inside the
+    #    polygon or within 30 m of it), received in the last 3 years. This is
+    #    the parcel's own activity; proximity-only matches go to
+    #    nearby_subdivision so the label never claims a neighbour's plan.
     (
         "active_subdivision",
         """
@@ -37,18 +55,27 @@ _SIGNALS: list[tuple[str, str]] = [
         SELECT DISTINCT ON (p.pidn)
             p.pidn, 'active_subdivision', 0.30,
             'staging.planning_subdivisions', s.sequ_num,
-            ST_Distance(ST_Centroid(p.geom)::geography, s.geom::geography),
+            ST_Distance(p.geom::geography, s.geom::geography),
             jsonb_build_object(
                 'plan_title', s.plan_title, 'date_rcvd', s.date_rcvd,
                 'pt_subdiv', s.pt_subdiv, 'pt_land_dev', s.pt_land_dev,
                 'total_acres', s.total_acres, 'prop_lots', s.prop_lots, 'prop_du', s.prop_du,
-                'source_url', s.source_url,
-                'evidence_captured_at', NOW()
+                'plan_location',
+                    CASE
+                        WHEN ST_Intersects(p.geom, s.geom) THEN 'point_on_parcel'
+                        ELSE 'within_30m_of_parcel'
+                    END,
+                'months_since_received',
+                    (EXTRACT(YEAR FROM AGE(NOW(), s.date_rcvd)) * 12
+                     + EXTRACT(MONTH FROM AGE(NOW(), s.date_rcvd)))::int,
+                'source_url', s.source_url
             )
         FROM staging.parcels p
         JOIN staging.planning_subdivisions s
-            ON ST_DWithin(ST_Centroid(p.geom)::geography, s.geom::geography, %(subdivision_radius_m)s)
+            ON p.geom && ST_Expand(s.geom, %(subdivision_on_parcel_deg)s)
+           AND ST_DWithin(p.geom::geography, s.geom::geography, %(subdivision_on_parcel_m)s)
         WHERE p.valid_to IS NULL AND s.valid_to IS NULL
+          AND p.geom IS NOT NULL
           AND s.date_rcvd >= NOW() - INTERVAL '3 years'
           -- Believability filter (see the hybrid-LLM decision in docs/decisions.md):
           -- plans with prop_du=0 AND pt_land_dev=NO were 20,773 of the raw
@@ -57,7 +84,43 @@ _SIGNALS: list[tuple[str, str]] = [
           -- paying Pass 2 to rediscover it per parcel.
           AND (COALESCE(s.prop_du, 0) > 0
                OR UPPER(COALESCE(s.pt_land_dev, 'NO')) = 'YES')
-        ORDER BY p.pidn, ST_Distance(ST_Centroid(p.geom)::geography, s.geom::geography)
+        ORDER BY p.pidn, ST_Distance(p.geom::geography, s.geom::geography), s.date_rcvd DESC
+        """,
+    ),
+    # 1b. nearby_subdivision — closest believable plan beyond the on-parcel
+    #     band but within the corridor radius. Neighbourhood activity is a
+    #     real predictor (see the back-test) but it is not this parcel's plan.
+    (
+        "nearby_subdivision",
+        """
+        INSERT INTO public.development_signals
+            (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
+        SELECT DISTINCT ON (p.pidn)
+            p.pidn, 'nearby_subdivision', 0.08,
+            'staging.planning_subdivisions', s.sequ_num,
+            ST_Distance(p.geom::geography, s.geom::geography),
+            jsonb_build_object(
+                'plan_title', s.plan_title, 'date_rcvd', s.date_rcvd,
+                'pt_subdiv', s.pt_subdiv, 'pt_land_dev', s.pt_land_dev,
+                'total_acres', s.total_acres, 'prop_lots', s.prop_lots, 'prop_du', s.prop_du,
+                'plan_location', 'nearby',
+                'distance_m', ROUND(ST_Distance(p.geom::geography, s.geom::geography)::numeric),
+                'source_url', s.source_url
+            )
+        FROM staging.parcels p
+        JOIN staging.planning_subdivisions s
+            ON p.geom && ST_Expand(s.geom, %(subdivision_radius_deg)s)
+           AND ST_DWithin(p.geom::geography, s.geom::geography, %(subdivision_radius_m)s)
+        WHERE p.valid_to IS NULL AND s.valid_to IS NULL
+          AND p.geom IS NOT NULL
+          AND s.date_rcvd >= NOW() - INTERVAL '3 years'
+          AND (COALESCE(s.prop_du, 0) > 0
+               OR UPPER(COALESCE(s.pt_land_dev, 'NO')) = 'YES')
+          AND NOT EXISTS (
+              SELECT 1 FROM public.development_signals x
+              WHERE x.pidn = p.pidn AND x.signal_key = 'active_subdivision'
+          )
+        ORDER BY p.pidn, ST_Distance(p.geom::geography, s.geom::geography), s.date_rcvd DESC
         """,
     ),
     # 2. economic_development_park — official open-data park designation
@@ -76,14 +139,107 @@ _SIGNALS: list[tuple[str, str]] = [
             jsonb_build_object(
                 'park_types', jsonb_agg(DISTINCT ep.park_type),
                 'park_names', jsonb_agg(DISTINCT ep.name) FILTER (WHERE ep.name IS NOT NULL),
-                'source_url', MIN(ep.source_url),
-                'evidence_captured_at', NOW()
+                'source_records', jsonb_agg(DISTINCT jsonb_build_object(
+                    'park_type', ep.park_type,
+                    'objectid', ep.source_objectid,
+                    'source_url', ep.source_url
+                )),
+                'source_url', MIN(ep.source_url)
             )
         FROM staging.parcels p
         JOIN staging.economic_development_parks ep
             ON ep.pidn = p.pidn AND ep.valid_to IS NULL
         WHERE p.valid_to IS NULL
         GROUP BY p.pidn
+        """,
+    ),
+
+    # 2b. municipal_action — the parcel is the subject of a rezoning, variance,
+    #     special exception, conditional use, or land-development matter in
+    #     Pass 0 municipal proceedings within the last 24 months. Linking is
+    #     deterministic (PIDN digits or the normalized street address); the
+    #     weight follows the procedural state and decays with age.
+    (
+        "municipal_action",
+        """
+        INSERT INTO public.development_signals
+            (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
+        SELECT DISTINCT ON (m.pidn)
+            m.pidn,
+            'municipal_action',
+            ROUND((
+                CASE
+                    WHEN m.decision = 'approved' THEN 0.20
+                    WHEN m.decision = 'denied' THEN 0.04
+                    ELSE 0.14
+                END
+                * CASE
+                    WHEN m.months_since <= 6 THEN 1.0
+                    WHEN m.months_since <= 12 THEN 0.8
+                    ELSE 0.6
+                END
+            )::numeric, 4),
+            'staging.proceeding_extractions',
+            m.extraction_id::text,
+            NULL,
+            jsonb_build_object(
+                'extraction_type', m.extraction_type,
+                'decision', m.decision,
+                'meeting_date', m.meeting_date,
+                'months_since_meeting', m.months_since,
+                'body_name', m.body_name,
+                'project_name', m.project_name,
+                'proposed_zoning', m.proposed_zoning,
+                'event_tags', m.event_tags,
+                'match_method', m.match_method,
+                'source_url', COALESCE(m.document_url, m.source_url)
+            )
+        FROM (
+            SELECT
+                p.pidn,
+                pe.id AS extraction_id,
+                pe.extraction_type,
+                LOWER(pe.decision) AS decision,
+                pe.project_name,
+                pe.proposed_zoning,
+                pe.event_tags,
+                pp.body_name,
+                pp.meeting_date,
+                pp.document_url,
+                pp.source_url,
+                (EXTRACT(YEAR FROM AGE(NOW(), pp.meeting_date)) * 12
+                 + EXTRACT(MONTH FROM AGE(NOW(), pp.meeting_date)))::int AS months_since,
+                CASE
+                    WHEN p.pidn = REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g')
+                        THEN 'pidn'
+                    ELSE 'normalized_address'
+                END AS match_method
+            FROM staging.proceeding_extractions pe
+            JOIN staging.public_proceedings pp
+              ON pp.id = pe.proceeding_id AND pp.valid_to IS NULL
+            JOIN staging.parcels p
+              ON p.valid_to IS NULL
+             AND (
+                 p.pidn = REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g')
+                 OR (
+                     LENGTH(REGEXP_REPLACE(pe.parcel_reference, '[^A-Za-z0-9]', '', 'g')) >= 6
+                     AND public.normalize_street_address(p.propadr)
+                         = public.normalize_street_address(pe.parcel_reference)
+                     AND EXISTS (
+                         SELECT 1
+                         FROM meta.municipality_source_rights msr
+                         WHERE msr.body_name = pp.body_name
+                           AND msr.municipality_name = p.municipality
+                           AND msr.derived_product_allowed = TRUE
+                     )
+                 )
+             )
+            WHERE LEFT(pe.extraction_type, 1) <> '_'
+              AND pe.parcel_reference IS NOT NULL
+              AND pp.meeting_date IS NOT NULL
+              AND pp.meeting_date >= NOW() - INTERVAL '24 months'
+        ) m
+        ORDER BY m.pidn, m.meeting_date DESC, m.extraction_id DESC
         """,
     ),
 
@@ -100,8 +256,13 @@ _SIGNALS: list[tuple[str, str]] = [
             'staging.future_landuse', f.globalid, NULL,
             jsonb_build_object(
                 'current_ztype', z.ztype, 'current_zname', z.zname,
+                'current_zoning_id', z.zrecid,
+                'current_zoning_adopted', z.adpt_date,
+                'current_zoning_source_url', z.source_url,
                 'future_lu', f.future_lu, 'general_lu', f.general_lu,
-                'evidence_captured_at', NOW()
+                'future_land_use_adopted', f.adopt_date,
+                'basis', 'parcel_center',
+                'source_url', f.source_url
             )
         FROM staging.parcels p
         JOIN staging.zoning z
@@ -124,28 +285,49 @@ _SIGNALS: list[tuple[str, str]] = [
         ORDER BY p.pidn
         """,
     ),
-    # 4. ownership_change — real market sale > $1,000 in last 12 months
+    # 4. ownership_change — real market sale in the last 12 months. The weight
+    #    decays with age (a sale last quarter is a stronger signal than one
+    #    eleven months ago). Buyer-type detection uses word boundaries so
+    #    surnames containing "LP" or "INC" are not labelled investor buyers.
     (
         "ownership_change",
         """
         INSERT INTO public.development_signals
             (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
-        SELECT p.pidn, 'ownership_change', 0.10,
-            'staging.parcels', p.pidn, NULL,
+        SELECT
+            x.pidn, 'ownership_change',
+            CASE
+                WHEN x.months_since_sale <= 3 THEN 0.10
+                WHEN x.months_since_sale <= 6 THEN 0.08
+                ELSE 0.06
+            END,
+            'staging.parcels', x.pidn, NULL,
             jsonb_build_object(
-                'saledt', p.saledt, 'price', p.price, 'prev_owner', p.prev_owner,
-                'buyer_is_llc', (p.owner_full ILIKE '%%LLC%%' OR p.owner_full ILIKE '%%LP%%'
-                    OR p.owner_full ILIKE '%%HOLDINGS%%' OR p.owner_full ILIKE '%%ASSOCIATES%%'
-                    OR p.owner_full ILIKE '%%PARTNERS%%'),
-                'evidence_captured_at', NOW()
+                'saledt', x.saledt, 'price', x.price, 'prev_owner', x.prev_owner,
+                'months_since_sale', x.months_since_sale,
+                'price_to_assessed_pct',
+                    CASE WHEN COALESCE(x.aprtotal::numeric, 0) > 0
+                         THEN ROUND(100 * x.price::numeric / x.aprtotal::numeric)
+                         ELSE NULL END,
+                'buyer_name_looks_organizational', x.buyer_is_business,
+                'source_url', x.source_url
             )
-        FROM staging.parcels p
-        WHERE p.valid_to IS NULL
-          -- Format guard: a single malformed county date must not abort the
-          -- whole rebuild (all 13 inserts share one transaction).
-          AND p.saledt ~* '^\\d{1,2}-[a-z]{3}-\\d{4}$'
-          AND to_date(p.saledt, 'DD-MON-YYYY') >= NOW() - INTERVAL '12 months'
-          AND COALESCE(p.price::numeric, 0) > %(nominal_sale_max)s
+        FROM (
+            SELECT
+                p.pidn, p.saledt, p.price, p.prev_owner, p.aprtotal, p.source_url,
+                (EXTRACT(YEAR FROM AGE(NOW(), to_date(p.saledt, 'DD-MON-YYYY'))) * 12
+                 + EXTRACT(MONTH FROM AGE(NOW(), to_date(p.saledt, 'DD-MON-YYYY'))))::int
+                    AS months_since_sale,
+                COALESCE(p.owner_full, '') ~* %(business_owner_regex)s AS buyer_is_business
+            FROM staging.parcels p
+            WHERE p.valid_to IS NULL
+              -- Format guard: a single malformed county date must not abort the
+              -- whole rebuild (all inserts share one transaction).
+              AND p.saledt ~* '^\\d{1,2}-[a-z]{3}-\\d{4}$'
+              AND to_date(p.saledt, 'DD-MON-YYYY') >= NOW() - INTERVAL '12 months'
+              AND to_date(p.saledt, 'DD-MON-YYYY') <= NOW()
+              AND COALESCE(p.price::numeric, 0) > %(nominal_sale_max)s
+        ) x
         """,
     ),
     # 5. vacancy — no structures + not high-value residential + no recent high-dollar sale
@@ -161,7 +343,8 @@ _SIGNALS: list[tuple[str, str]] = [
                 'class', p.class,
                 'aprtotal', p.aprtotal,
                 'price', p.price,
-                'evidence_captured_at', NOW()
+                'screen_basis', 'no_intersecting_county_building_footprint_and_low_value_filters',
+                'source_url', p.source_url
             )
         FROM staging.parcels p
         WHERE p.valid_to IS NULL
@@ -190,13 +373,14 @@ _SIGNALS: list[tuple[str, str]] = [
                 'total_owed', agg.total_owed,
                 'years_delinquent', agg.years_delinquent,
                 'oldest_year', agg.oldest_year,
-                'evidence_captured_at', NOW()
+                'source_url', agg.source_url
             )
         FROM (
             SELECT tc.pidn,
                    SUM(tc.total) AS total_owed,
                    COUNT(DISTINCT tc.tax_year) AS years_delinquent,
-                   MIN(tc.tax_year) AS oldest_year
+                   MIN(tc.tax_year) AS oldest_year,
+                   MAX(tc.source_url) AS source_url
             FROM staging.tax_claims tc
             JOIN staging.parcels p ON p.pidn = tc.pidn AND p.valid_to IS NULL
             WHERE tc.valid_to IS NULL
@@ -235,7 +419,7 @@ _SIGNALS: list[tuple[str, str]] = [
                     WHERE COALESCE(NULLIF(TRIM(n.owner_full), ''), '__blank__')
                           <> COALESCE(NULLIF(TRIM(p.owner_full), ''), '__blank__')
                 ),
-                'evidence_captured_at', NOW()
+                'source_url', MIN(p.source_url)
             )
         FROM staging.parcels p
         JOIN staging.parcels n
@@ -254,6 +438,80 @@ _SIGNALS: list[tuple[str, str]] = [
             WHERE COALESCE(NULLIF(TRIM(n.owner_full), ''), '__blank__')
                   <> COALESCE(NULLIF(TRIM(p.owner_full), ''), '__blank__')
         ) >= %(assemblage_min_neighbors)s
+        """,
+    ),
+
+    # 7b. entity_assemblage — one owner holds two or more contiguous parcels
+    #     and acquired at least one of them in the last 24 months. This is the
+    #     developer-intent pattern (an entity accumulating a site); the older
+    #     `assemblage` signal only measures how fragmented the neighbourhood
+    #     is. Every parcel in the accumulating cluster receives the signal.
+    (
+        "entity_assemblage",
+        """
+        INSERT INTO public.development_signals
+            (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
+        WITH recent AS (
+            SELECT
+                p.pidn,
+                UPPER(TRIM(p.owner_full)) AS owner_key,
+                p.geom,
+                p.source_url,
+                to_date(p.saledt, 'DD-MON-YYYY') AS sale_date
+            FROM staging.parcels p
+            WHERE p.valid_to IS NULL
+              AND p.geom IS NOT NULL
+              AND NULLIF(TRIM(p.owner_full), '') IS NOT NULL
+              AND p.saledt ~* '^\\d{1,2}-[a-z]{3}-\\d{4}$'
+              AND to_date(p.saledt, 'DD-MON-YYYY') >= NOW() - INTERVAL '24 months'
+              AND to_date(p.saledt, 'DD-MON-YYYY') <= NOW()
+              AND COALESCE(p.price::numeric, 0) > %(nominal_sale_max)s
+        ),
+        pairs AS (
+            SELECT r.pidn AS seed_pidn, r.owner_key, r.sale_date,
+                   r.source_url, n.pidn AS neighbor_pidn
+            FROM recent r
+            JOIN staging.parcels n
+              ON n.valid_to IS NULL
+             AND n.geom IS NOT NULL
+             AND n.pidn <> r.pidn
+             AND UPPER(TRIM(n.owner_full)) = r.owner_key
+             AND ST_Intersects(r.geom, n.geom)
+        ),
+        members AS (
+            SELECT seed_pidn AS pidn, owner_key, sale_date, source_url,
+                   neighbor_pidn AS other_pidn FROM pairs
+            UNION ALL
+            SELECT neighbor_pidn, owner_key, sale_date, source_url,
+                   seed_pidn FROM pairs
+        ),
+        agg AS (
+            SELECT
+                pidn,
+                owner_key,
+                COUNT(DISTINCT other_pidn) AS contiguous_same_owner,
+                MAX(sale_date) AS latest_acquisition,
+                MIN(source_url) AS source_url
+            FROM members
+            GROUP BY pidn, owner_key
+        )
+        SELECT
+            a.pidn,
+            'entity_assemblage',
+            CASE WHEN a.contiguous_same_owner >= 2 THEN 0.15 ELSE 0.10 END,
+            'staging.parcels',
+            a.pidn,
+            NULL,
+            jsonb_build_object(
+                'contiguous_same_owner_parcels', a.contiguous_same_owner + 1,
+                'latest_acquisition', a.latest_acquisition,
+                'months_since_latest_acquisition',
+                    (EXTRACT(YEAR FROM AGE(NOW(), a.latest_acquisition)) * 12
+                     + EXTRACT(MONTH FROM AGE(NOW(), a.latest_acquisition)))::int,
+                'match_basis', 'exact_recorded_owner_name_and_intersecting_parcels',
+                'source_url', a.source_url
+            )
+        FROM agg a
         """,
     ),
 
@@ -281,13 +539,14 @@ _SIGNALS: list[tuple[str, str]] = [
                 'end_date', pp.end_date,
                 'cost', pp.cost,
                 'municipality', pp.municipality,
-                'source_url', pp.source_url,
-                'evidence_captured_at', NOW()
+                'source_url', pp.source_url
             )
         FROM staging.parcels p
         JOIN staging.penndot_projects pp
-            ON ST_DWithin(ST_Centroid(p.geom)::geography, pp.geom::geography, %(infrastructure_radius_m)s)
+            ON p.geom && ST_Expand(pp.geom, %(infrastructure_radius_deg)s)
+           AND ST_DWithin(ST_Centroid(p.geom)::geography, pp.geom::geography, %(infrastructure_radius_m)s)
         WHERE p.valid_to IS NULL AND pp.valid_to IS NULL
+          AND COALESCE(pp.status, '') NOT ILIKE '%%complete%%'
         ORDER BY p.pidn, ST_Distance(ST_Centroid(p.geom)::geography, pp.geom::geography)
         """,
     ),
@@ -305,8 +564,8 @@ _SIGNALS: list[tuple[str, str]] = [
                 'overlay_name', zo.overlay_name,
                 'description', zo.description,
                 'municipality', zo.municipality,
-                'source_url', zo.source_url,
-                'evidence_captured_at', NOW()
+                'basis', 'parcel_center',
+                'source_url', zo.source_url
             )
         FROM staging.parcels p
         JOIN staging.zoning_overlays zo
@@ -337,12 +596,13 @@ _SIGNALS: list[tuple[str, str]] = [
                 'purpose', ltc.purpose,
                 'volume', ltc.volume,
                 'count_year', ltc.count_year,
-                'source_url', ltc.source_url,
-                'evidence_captured_at', NOW()
+                'distance_m', ROUND(ST_Distance(ST_Centroid(p.geom)::geography, ltc.geom::geography)::numeric),
+                'source_url', ltc.source_url
             )
         FROM staging.parcels p
         JOIN staging.local_traffic_counts ltc
-            ON ST_DWithin(
+            ON p.geom && ST_Expand(ltc.geom, %(local_traffic_radius_deg)s)
+           AND ST_DWithin(
                 ST_Centroid(p.geom)::geography,
                 ltc.geom::geography,
                 %(local_traffic_radius_m)s
@@ -368,8 +628,8 @@ _SIGNALS: list[tuple[str, str]] = [
             p.pidn, 'growth_area', 0.02,
             'staging.growth_areas', g.globalid, NULL,
             jsonb_build_object('ga_type', g.ga_type, 'ga_status', g.ga_status,
-                               'source_url', g.source_url,
-                               'evidence_captured_at', NOW())
+                               'basis', 'parcel_center',
+                               'source_url', g.source_url)
         FROM staging.parcels p
         JOIN staging.growth_areas g
             ON ST_Intersects(ST_Centroid(p.geom), g.geom)
@@ -381,41 +641,89 @@ _SIGNALS: list[tuple[str, str]] = [
 
     # ── NEGATIVE / EXCLUSION SIGNALS ───────────────────────────────────
 
-    # 12. soil_constraint — clearly adverse drainage, slope, or runoff profile
+    # 12. soil_constraint — parcel-wide mapped slope, drainage, or runoff screen.
+    #     A soil unit must cover at least 5% of the parcel to trigger the fixed
+    #     site-screening penalty; all materially overlapping units are retained
+    #     in evidence so the UI never mistakes one centroid unit for the parcel.
     (
         "soil_constraint",
         """
         INSERT INTO public.development_signals
             (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
-        SELECT DISTINCT ON (p.pidn)
-            p.pidn, 'soil_constraint', -0.08,
-            'staging.soils', s.objectid::text, NULL,
+        WITH soil_overlaps AS (
+            SELECT
+                p.pidn,
+                s.objectid,
+                s.map_unit_symbol,
+                s.map_unit_name,
+                s.drainage,
+                s.septic_rating,
+                s.slope_low,
+                s.slope_high,
+                s.representative_slope,
+                s.hydric_rating,
+                s.hydrologic_group,
+                s.source_url,
+                ROUND((
+                    100 * ST_Area(ST_Transform(ST_Intersection(ST_MakeValid(p.geom), ST_MakeValid(s.geom)), 32617))
+                    / NULLIF(ST_Area(ST_Transform(ST_MakeValid(p.geom), 32617)), 0)
+                )::numeric, 1) AS coverage_pct
+            FROM staging.parcels p
+            JOIN staging.soils s
+              ON p.geom && s.geom
+             AND ST_Intersects(p.geom, s.geom)
+            WHERE p.valid_to IS NULL
+              AND s.valid_to IS NULL
+              AND p.geom IS NOT NULL
+              AND s.geom IS NOT NULL
+        )
+        SELECT
+            o.pidn,
+            'soil_constraint',
+            -0.08,
+            'staging.soils',
+            STRING_AGG(DISTINCT o.objectid::text, ','),
+            NULL,
             jsonb_build_object(
-                'map_unit_symbol', s.map_unit_symbol,
-                'map_unit_name', s.map_unit_name,
-                'drainage', s.drainage,
-                'septic_rating', s.septic_rating,
-                'representative_slope', s.representative_slope,
-                'slope_high', s.slope_high,
-                'hydric_rating', s.hydric_rating,
-                'hydrologic_group', s.hydrologic_group,
-                'source_url', s.source_url,
-                'evidence_captured_at', NOW()
+                'screen_basis', 'parcel_overlap',
+                'minimum_trigger_coverage_pct', 5,
+                'source_record_ids', jsonb_agg(o.objectid ORDER BY o.coverage_pct DESC),
+                'soil_units', jsonb_agg(
+                    jsonb_build_object(
+                        'objectid', o.objectid,
+                        'map_unit_symbol', o.map_unit_symbol,
+                        'map_unit_name', o.map_unit_name,
+                        'coverage_pct', o.coverage_pct,
+                        'drainage', o.drainage,
+                        'septic_rating', o.septic_rating,
+                        'slope_low', o.slope_low,
+                        'slope_high', o.slope_high,
+                        'representative_slope', o.representative_slope,
+                        'hydric_rating', o.hydric_rating,
+                        'hydrologic_group', o.hydrologic_group,
+                        'constraint_reasons', to_jsonb(array_remove(ARRAY[
+                            CASE WHEN COALESCE(o.representative_slope, 0) >= 15
+                                 THEN 'steep_slope' END,
+                            CASE WHEN o.drainage IN ('Poorly drained', 'Somewhat poorly drained')
+                                 THEN 'poor_drainage' END,
+                            CASE WHEN o.hydrologic_group = 'D'
+                                 THEN 'high_runoff_potential' END
+                        ], NULL))
+                    ) ORDER BY o.coverage_pct DESC
+                ),
+                'source_url', MIN(o.source_url)
             )
-        FROM staging.parcels p
-        JOIN staging.soils s
-            ON ST_Intersects(ST_Centroid(p.geom), s.geom)
-        WHERE p.valid_to IS NULL
-          AND s.valid_to IS NULL
-          AND (
-              COALESCE(s.representative_slope, 0) >= 15
-              OR s.drainage IN ('Poorly drained', 'Somewhat poorly drained')
-              OR s.hydrologic_group = 'D'
-          )
-        ORDER BY
-            p.pidn,
-            COALESCE(s.representative_slope, 0) DESC,
-            CASE WHEN s.drainage = 'Poorly drained' THEN 0 ELSE 1 END
+        FROM soil_overlaps o
+        WHERE o.coverage_pct > 0
+        GROUP BY o.pidn
+        HAVING BOOL_OR(
+            o.coverage_pct >= 5
+            AND (
+                COALESCE(o.representative_slope, 0) >= 15
+                OR o.drainage IN ('Poorly drained', 'Somewhat poorly drained')
+                OR o.hydrologic_group = 'D'
+            )
+        )
         """,
     ),
     # 13. zoning_constraint — special-purpose overlay requiring extra diligence
@@ -435,8 +743,8 @@ _SIGNALS: list[tuple[str, str]] = [
                 'overlay_name', zo.overlay_name,
                 'description', zo.description,
                 'municipality', zo.municipality,
-                'source_url', zo.source_url,
-                'evidence_captured_at', NOW()
+                'basis', 'parcel_center',
+                'source_url', zo.source_url
             )
         FROM staging.parcels p
         JOIN staging.zoning_overlays zo
@@ -473,12 +781,12 @@ _SIGNALS: list[tuple[str, str]] = [
                 'facility_type', eds.facility_type,
                 'facility_status', eds.facility_status,
                 'detail_url', eds.detail_url,
-                'source_url', eds.source_url,
-                'evidence_captured_at', NOW()
+                'source_url', eds.source_url
             )
         FROM staging.parcels p
         JOIN staging.environmental_diligence_sites eds
-            ON ST_DWithin(
+            ON p.geom && ST_Expand(eds.geom, %(environmental_radius_deg)s)
+           AND ST_DWithin(
                 ST_Centroid(p.geom)::geography,
                 eds.geom::geography,
                 %(environmental_radius_m)s
@@ -495,17 +803,54 @@ _SIGNALS: list[tuple[str, str]] = [
         """
         INSERT INTO public.development_signals
             (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
-        SELECT DISTINCT ON (p.pidn)
-            p.pidn, 'flood_zone', -0.10,
-            'staging.flood_zones', f.fld_ar_id, NULL,
-            jsonb_build_object('fld_zone', f.fld_zone, 'zone_subty', f.zone_subty, 'sfha_tf', f.sfha_tf,
-                               'source_url', f.source_url,
-                               'evidence_captured_at', NOW())
-        FROM staging.parcels p
-        JOIN staging.flood_zones f
-            ON ST_Intersects(ST_Centroid(p.geom), f.geom)
-        WHERE p.valid_to IS NULL AND f.valid_to IS NULL AND f.sfha_tf = 'T'
-        ORDER BY p.pidn
+        WITH flood_overlaps AS (
+            SELECT
+                p.pidn,
+                f.fld_ar_id,
+                f.fld_zone,
+                f.zone_subty,
+                f.source_url,
+                ST_Intersection(ST_MakeValid(p.geom), ST_MakeValid(f.geom)) AS overlap_geom,
+                ST_Area(ST_Transform(ST_MakeValid(p.geom), 32617)) AS parcel_area_m2
+            FROM staging.parcels p
+            JOIN staging.flood_zones f
+              ON p.geom && f.geom
+             AND ST_Intersects(p.geom, f.geom)
+            WHERE p.valid_to IS NULL
+              AND f.valid_to IS NULL
+              AND p.geom IS NOT NULL
+              AND f.geom IS NOT NULL
+              AND f.sfha_tf = 'T'
+        )
+        SELECT
+            o.pidn,
+            'flood_zone',
+            -0.10,
+            'staging.flood_zones',
+            STRING_AGG(DISTINCT o.fld_ar_id, ','),
+            NULL,
+            jsonb_build_object(
+                'sfha_tf', 'T',
+                'screen_basis', 'parcel_overlap',
+                'minimum_trigger_coverage_pct', 1,
+                'overlap_pct', ROUND((
+                    100 * ST_Area(ST_Transform(ST_UnaryUnion(ST_Collect(o.overlap_geom)), 32617))
+                    / NULLIF(MIN(o.parcel_area_m2), 0)
+                )::numeric, 1),
+                'flood_zones', jsonb_agg(DISTINCT jsonb_build_object(
+                    'fld_zone', o.fld_zone,
+                    'zone_subty', o.zone_subty
+                )),
+                'source_record_ids', jsonb_agg(DISTINCT o.fld_ar_id),
+                'source_url', MIN(o.source_url)
+            )
+        FROM flood_overlaps o
+        WHERE NOT ST_IsEmpty(o.overlap_geom)
+        GROUP BY o.pidn
+        HAVING (
+            100 * ST_Area(ST_Transform(ST_UnaryUnion(ST_Collect(o.overlap_geom)), 32617))
+            / NULLIF(MIN(o.parcel_area_m2), 0)
+        ) >= 1
         """,
     ),
     # 15. conservation_easement — hard exclude
@@ -529,7 +874,7 @@ _SIGNALS: list[tuple[str, str]] = [
                 'exclusion_flag', ce.exclusion,
                 'federal_flag', ce.federal,
                 'district', ce.district,
-                'evidence_captured_at', NOW()
+                'source_url', ce.source_url
             )
         FROM staging.parcels p
         JOIN staging.conservation_easements ce ON ce.pidn = p.pidn AND ce.valid_to IS NULL
@@ -537,10 +882,9 @@ _SIGNALS: list[tuple[str, str]] = [
         ORDER BY p.pidn
         """,
     ),
-    # 16. ag_security — hard exclude
-    #    Evidence includes resolution ID, book/page, last review date, and
-    #    status flag so Pass 2 can assess staleness (enrollments expire and
-    #    must be renewed — last_review date is critical for currency).
+    # 16. ag_security — planning context, not a development prohibition.
+    #    Pennsylvania's official ASA guidance says enrollment does not restrict
+    #    the landowner from selling, subdividing, or developing the property.
     (
         "ag_security",
         """
@@ -559,7 +903,8 @@ _SIGNALS: list[tuple[str, str]] = [
                 'instrument', ag.instrument,
                 'flag', ag.flag,
                 'district', ag.district,
-                'evidence_captured_at', NOW()
+                'development_prohibition', FALSE,
+                'source_url', ag.source_url
             )
         FROM staging.parcels p
         JOIN staging.ag_security ag ON ag.pidn = p.pidn AND ag.valid_to IS NULL
@@ -568,6 +913,35 @@ _SIGNALS: list[tuple[str, str]] = [
         """,
     ),
 ]
+
+
+def build_signal_params(county) -> dict:
+    """Bind county thresholds; proximity radii also get a degree envelope.
+
+    Every proximity join first narrows with ``geom && ST_Expand(...)`` so the
+    GiST index on parcel geometry is used before the exact geography distance
+    test. The envelope is deliberately generous (1 degree ≈ 85 km of longitude
+    at 40° N, so 1 m ≈ 1.2e-5 degrees; we use 1.5e-5).
+    """
+    degrees_per_meter = 1.5e-5
+    return {
+        "subdivision_radius_m": county.signal_subdivision_radius_m,
+        "subdivision_radius_deg": county.signal_subdivision_radius_m * degrees_per_meter,
+        "subdivision_on_parcel_m": county.signal_subdivision_on_parcel_m,
+        "subdivision_on_parcel_deg": county.signal_subdivision_on_parcel_m * degrees_per_meter,
+        "infrastructure_radius_deg": county.signal_infrastructure_radius_m * degrees_per_meter,
+        "local_traffic_radius_deg": county.signal_local_traffic_radius_m * degrees_per_meter,
+        "environmental_radius_deg": county.signal_environmental_radius_m * degrees_per_meter,
+        "business_owner_regex": BUSINESS_OWNER_REGEX,
+        "infrastructure_radius_m": county.signal_infrastructure_radius_m,
+        "local_traffic_radius_m": county.signal_local_traffic_radius_m,
+        "environmental_radius_m": county.signal_environmental_radius_m,
+        "nominal_sale_max": county.signal_nominal_sale_max,
+        "vacancy_apr_max": county.signal_vacancy_apr_max,
+        "vacancy_price_max": county.signal_vacancy_price_max,
+        "assemblage_min_neighbors": county.signal_assemblage_min_neighbors,
+        "assemblage_strong_neighbors": county.signal_assemblage_strong_neighbors,
+    }
 
 
 @asset(
@@ -590,6 +964,7 @@ _SIGNALS: list[tuple[str, str]] = [
         "pa_dep_environmental_diligence",
         "structures_arcgis",
         "zoning_arcgis",
+        "proceeding_extraction",
     ],
     description="Spatial-join radar layers to parcels \u2192 public.development_signals",
     kinds={"postgres"},
@@ -622,17 +997,8 @@ def development_signals(
         asset_key="development_signals:tax_distress",
         dagster_run_id=context.run_id,
     )
-    signal_params = {
-        "subdivision_radius_m": county.signal_subdivision_radius_m,
-        "infrastructure_radius_m": county.signal_infrastructure_radius_m,
-        "local_traffic_radius_m": county.signal_local_traffic_radius_m,
-        "environmental_radius_m": county.signal_environmental_radius_m,
-        "nominal_sale_max": county.signal_nominal_sale_max,
-        "vacancy_apr_max": county.signal_vacancy_apr_max,
-        "vacancy_price_max": county.signal_vacancy_price_max,
-        "assemblage_min_neighbors": county.signal_assemblage_min_neighbors,
-        "assemblage_strong_neighbors": county.signal_assemblage_strong_neighbors,
-    }
+    signal_params = build_signal_params(county)
+
 
     cur = database.cursor()
     conn = cur.connection

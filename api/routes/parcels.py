@@ -4,13 +4,22 @@ from fastapi import APIRouter, HTTPException, Query
 
 from api.lib.database import get_cursor
 from api.lib.development_radar import (
+    build_signal_presentation,
     build_reason_signals,
     compute_headline_signal,
     sanitize_signals_for_public,
 )
+from api.lib.evidence import (
+    NFHL_FLOOD_HAZARD_LAYER,
+    arcgis_record_url,
+    evidence_item,
+    signal_evidence_items,
+    with_arcgis_layer,
+)
+from api.lib.query_bounds import MAX_BBOX_RESULTS, validate_bbox
 from api.lib.response_types import ParcelBboxResponse, PropertyReportResponse
 from api.lib.serialization import serialize_temporal_fields
-from api.lib.settings import open_data_source_key
+from api.lib.settings import county_metadata, open_data_source_key
 from api.lib.source_policy import (
     PUBLIC_ORGANIZATION_TYPES,
     require_source_use,
@@ -18,6 +27,66 @@ from api.lib.source_policy import (
 )
 
 router = APIRouter(tags=["parcels"])
+
+
+def _soil_profile(rows: list[dict]) -> dict:
+    """Build parcel-wide soil facts and plain-language screening considerations."""
+
+    units: list[dict] = []
+    considerations: list[str] = []
+    for row in rows:
+        unit = dict(row)
+        for field in ("coverage_pct", "capability_class", "permeability", "representative_slope"):
+            if unit.get(field) is not None:
+                unit[field] = float(unit[field])
+        coverage = float(unit.get("coverage_pct") or 0)
+        symbol = unit.get("map_unit_symbol") or "Mapped unit"
+        representative = float(unit.get("representative_slope") or 0)
+        if coverage >= 5 and representative >= 15:
+            slope_range = (
+                f"{unit.get('slope_low')}–{unit.get('slope_high')}% mapped slope"
+                if unit.get("slope_low") is not None and unit.get("slope_high") is not None
+                else f"{representative:g}% representative slope"
+            )
+            considerations.append(
+                f"{symbol} covers {coverage:.1f}% of the parcel and has {slope_range} "
+                f"({representative:g}% representative)."
+            )
+        drainage = str(unit.get("drainage") or "")
+        if coverage >= 5 and drainage in {"Poorly drained", "Somewhat poorly drained"}:
+            considerations.append(
+                f"{symbol} covers {coverage:.1f}% and is mapped as {drainage.lower()}."
+            )
+        if coverage >= 5 and unit.get("hydrologic_group") == "D":
+            considerations.append(
+                f"{symbol} covers {coverage:.1f}% and is hydrologic group D, the high-runoff-potential group."
+            )
+        units.append(unit)
+
+    very_limited = sum(
+        float(unit.get("coverage_pct") or 0)
+        for unit in units
+        if str(unit.get("septic_rating") or "").lower() == "very limited"
+    )
+    if very_limited > 0:
+        considerations.append(
+            f"{min(very_limited, 100):.1f}% of the mapped parcel area is rated “Very limited” "
+            "for on-lot septic suitability; this matters primarily where public sewer is unavailable."
+        )
+    if any(unit.get("drainage") == "Well drained" for unit in units) and considerations:
+        considerations.append(
+            "“Well drained” describes soil drainage only; it does not cancel separate slope, runoff, or septic limitations."
+        )
+
+    source_ids = [unit.get("objectid") for unit in units if unit.get("objectid") is not None]
+    source_url = next((unit.get("source_url") for unit in units if unit.get("source_url")), None)
+    return {
+        "mapped_coverage_pct": round(min(sum(float(unit.get("coverage_pct") or 0) for unit in units), 100), 1),
+        "units": units,
+        "considerations": considerations,
+        "source_record_ids": source_ids,
+        "source_url": arcgis_record_url(source_url, "OBJECTID_1", source_ids) or source_url,
+    }
 
 _PUBLIC_OWNER_NAME_SQL = """
 CASE
@@ -41,11 +110,13 @@ def parcels_bbox(
     east: float = Query(..., ge=-180, le=180),
     north: float = Query(..., ge=-90, le=90),
     layer: str | None = Query(default=None),
+    limit: int = Query(default=MAX_BBOX_RESULTS, ge=1, le=MAX_BBOX_RESULTS),
 ) -> ParcelBboxResponse:
     """Return parcels within a bounding box as GeoJSON.
 
     Optional layer=delinquent adds a derived tax-delinquency signal.
     """
+    validate_bbox(west, south, east, north)
     with get_cursor() as cur:
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
@@ -59,6 +130,7 @@ def parcels_bbox(
             "north": north,
             "show_people": show_people,
             "organization_types": list(PUBLIC_ORGANIZATION_TYPES),
+            "fetch_limit": limit + 1,
         }
         if layer == "delinquent":
             require_source_use(cur, "tax_claims", "derived_product", conceal=False)
@@ -79,6 +151,8 @@ def parcels_bbox(
                 WHERE p.valid_to IS NULL
                   AND p.geom IS NOT NULL
                   AND p.geom && ST_MakeEnvelope(%(west)s, %(south)s, %(east)s, %(north)s, 4326)
+                ORDER BY p.pidn
+                LIMIT %(fetch_limit)s
             """, bbox_params)
         elif layer in {"vacant", "vacant_delinquent"}:
             tax_signal_sql = "NULL::boolean"
@@ -117,6 +191,8 @@ def parcels_bbox(
                       OR p.aprtotal::numeric < 50000
                   )
                   AND (p.price IS NULL OR p.price::numeric < 100000)
+                ORDER BY p.pidn
+                LIMIT %(fetch_limit)s
             """, bbox_params)
         else:
             cur.execute(f"""
@@ -130,20 +206,46 @@ def parcels_bbox(
                 WHERE p.valid_to IS NULL
                   AND p.geom IS NOT NULL
                   AND p.geom && ST_MakeEnvelope(%(west)s, %(south)s, %(east)s, %(north)s, 4326)
+                ORDER BY p.pidn
+                LIMIT %(fetch_limit)s
             """, bbox_params)
         rows = cur.fetchall()
 
+    truncated = len(rows) > limit
+    rows = rows[:limit]
     features = []
     for row in rows:
-        geom = row.pop("geometry")
+        record = dict(row)
+        geom = record.pop("geometry")
         features.append({
             "type": "Feature",
             "geometry": geom,
             "properties": {k: (float(v) if k in ("aprtotal", "price", "delinquent_total") and v is not None else v)
-                           for k, v in dict(row).items()},
+                           for k, v in record.items()},
         })
 
-    return {"type": "FeatureCollection", "features": features}
+    return {
+        "type": "FeatureCollection",
+        "count": len(features),
+        "limit": limit,
+        "truncated": truncated,
+        "features": features,
+    }
+
+
+def _redact_parcel_owner_fields(
+    parcel: dict,
+    *,
+    show_people: bool,
+    show_current_owner: bool,
+) -> None:
+    """Apply the legal-organization exception only to the current owner label."""
+    if show_people:
+        return
+    for key in ("own_name1", "own_name2", "prev_owner", "mail_addr_full"):
+        parcel[key] = None
+    if not show_current_owner:
+        parcel["owner_full"] = None
 
 
 @router.get("/summary")
@@ -233,6 +335,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                    yrblt, heatsys, fuel, clean_green, grade, cdu,
                    aprland, aprbldg, aprtotal, saledt, price, prev_price,
                    deed_bk, deed_pg, comm_struc, comm_year_built, comm_building_sq_ft,
+                   source_url, valid_from AS parcel_record_effective_at,
                    ST_Y(ST_Centroid(geom)) AS lat,
                    ST_X(ST_Centroid(geom)) AS lng
             FROM staging.parcels
@@ -265,28 +368,94 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             show_owner = bool((cur.fetchone() or {}).get("allowed"))
 
         cur.execute("""
-            SELECT EXISTS (
-                SELECT 1
-                FROM staging.tax_claims
-                WHERE pidn = %(pidn)s AND valid_to IS NULL AND total > 0
-            ) AS has_tax_delinquency
+            SELECT
+                COUNT(*) FILTER (WHERE total > 0) > 0 AS has_tax_delinquency,
+                MAX(source_url) FILTER (WHERE total > 0) AS source_url,
+                MAX(valid_from) FILTER (WHERE total > 0) AS record_effective_at
+            FROM staging.tax_claims
+            WHERE pidn = %(pidn)s AND valid_to IS NULL
         """, {"pidn": pidn})
         tax_signal = cur.fetchone() or {"has_tax_delinquency": False}
 
         cur.execute("""
-            SELECT fld_zone, zone_subty, sfha_tf
-            FROM staging.flood_zones
-            WHERE valid_to IS NULL
-              AND geom IS NOT NULL
-              AND ST_Intersects(geom, (
-                  SELECT geom FROM staging.parcels WHERE pidn = %(pidn)s AND valid_to IS NULL
-              ))
-            LIMIT 1
+            WITH parcel AS (
+                SELECT geom, ST_Area(ST_Transform(ST_MakeValid(geom), 32617)) AS area_m2
+                FROM staging.parcels
+                WHERE pidn = %(pidn)s AND valid_to IS NULL
+            ), flood_overlaps AS (
+                SELECT
+                    f.fld_zone,
+                    f.zone_subty,
+                    f.sfha_tf,
+                    f.fld_ar_id,
+                    f.source_url,
+                    f.valid_from,
+                    ST_Intersection(ST_MakeValid(f.geom), ST_MakeValid(p.geom)) AS overlap_geom,
+                    p.area_m2
+                FROM staging.flood_zones f
+                CROSS JOIN parcel p
+                WHERE f.valid_to IS NULL
+                  AND f.geom IS NOT NULL
+                  AND f.sfha_tf = 'T'
+                  AND f.geom && p.geom
+                  AND ST_Intersects(f.geom, p.geom)
+            )
+            SELECT
+                (ARRAY_AGG(fld_zone ORDER BY ST_Area(overlap_geom) DESC))[1] AS fld_zone,
+                (ARRAY_AGG(zone_subty ORDER BY ST_Area(overlap_geom) DESC))[1] AS zone_subty,
+                'T' AS sfha_tf,
+                ARRAY_AGG(DISTINCT fld_ar_id) AS fld_ar_ids,
+                ARRAY_AGG(DISTINCT fld_zone) FILTER (WHERE fld_zone IS NOT NULL) AS flood_zones,
+                MIN(source_url) AS source_url,
+                MAX(valid_from) AS valid_from,
+                ROUND((
+                    100 * ST_Area(ST_Transform(ST_UnaryUnion(ST_Collect(overlap_geom)), 32617))
+                    / NULLIF(MIN(area_m2), 0)
+                )::numeric, 1) AS overlap_pct
+            FROM flood_overlaps
+            HAVING COUNT(*) > 0
         """, {"pidn": pidn})
         flood = cur.fetchone()
 
         cur.execute("""
-            SELECT s.building_type,
+            WITH parcel AS (
+                SELECT geom, ST_Area(ST_Transform(ST_MakeValid(geom), 32617)) AS area_m2
+                FROM staging.parcels
+                WHERE pidn = %(pidn)s AND valid_to IS NULL
+            )
+            SELECT
+                s.objectid,
+                s.map_unit_symbol,
+                s.map_unit_name,
+                s.drainage,
+                s.capability_class,
+                s.permeability,
+                s.septic_rating,
+                s.slope_low,
+                s.slope_high,
+                s.representative_slope,
+                s.hydric_rating,
+                s.hydrologic_group,
+                s.relative_value,
+                s.source_url,
+                s.valid_from,
+                ROUND((
+                    100 * ST_Area(ST_Transform(ST_Intersection(ST_MakeValid(s.geom), ST_MakeValid(p.geom)), 32617))
+                    / NULLIF(p.area_m2, 0)
+                )::numeric, 1) AS coverage_pct
+            FROM staging.soils s
+            CROSS JOIN parcel p
+            WHERE s.valid_to IS NULL
+              AND s.geom IS NOT NULL
+              AND s.geom && p.geom
+              AND ST_Intersects(s.geom, p.geom)
+              AND ST_Area(ST_Transform(ST_Intersection(ST_MakeValid(s.geom), ST_MakeValid(p.geom)), 32617)) > 0
+            ORDER BY coverage_pct DESC, s.objectid
+        """, {"pidn": pidn})
+        soil_rows = cur.fetchall()
+
+        cur.execute("""
+            SELECT s.objectid, s.index_id, s.building_type, s.source_url, s.valid_from,
                    ROUND(ST_Area(ST_Transform(s.geom, 32617))::numeric) AS sqm
             FROM staging.structures s
             WHERE s.valid_to IS NULL
@@ -363,6 +532,9 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                 pp.body_name,
                 pp.meeting_date,
                 pp.proceeding_type,
+                pp.source_url,
+                pp.content_hash,
+                pp.valid_from AS source_observed_at,
                 pe.extraction_type,
                 CASE WHEN %(show_people)s THEN pe.applicant_name ELSE NULL END
                     AS applicant_name,
@@ -373,6 +545,8 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                      ELSE NULL END AS supporting_text,
                 pp.document_url,
                 pe.extraction_confidence,
+                pe.page_number,
+                pe.extracted_at AS interpretation_observed_at,
                 CASE
                     WHEN pe.parcel_reference = %(pidn)s THEN 'pidn'
                     ELSE 'address'
@@ -380,7 +554,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             FROM staging.proceeding_extractions pe
             JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
             WHERE pp.valid_to IS NULL
-              AND pe.extraction_type NOT IN ('_complete', '_no_extractions')
+              AND LEFT(pe.extraction_type, 1) <> '_'
               AND pe.parcel_reference = ANY(%(match_refs)s)
             ORDER BY pp.meeting_date DESC NULLS LAST, pe.proceeding_id DESC
             LIMIT 20
@@ -392,15 +566,13 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         proceeding_rows = cur.fetchall()
 
     p = dict(parcel)
-    if not show_owner:
-        for key in (
-            "owner_full",
-            "own_name1",
-            "own_name2",
-            "prev_owner",
-            "mail_addr_full",
-        ):
-            p[key] = None
+    parcel_source_url = p.pop("source_url", None)
+    parcel_record_effective_at = p.pop("parcel_record_effective_at", None)
+    _redact_parcel_owner_fields(
+        p,
+        show_people=show_people,
+        show_current_owner=show_owner,
+    )
     for key in ("aprland", "aprbldg", "aprtotal", "price", "prev_price", "acres", "lat", "lng"):
         if p.get(key):
             p[key] = float(p[key])
@@ -412,12 +584,34 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         and (p.get("class") not in ("R",) or not p.get("aprtotal") or float(p.get("aprtotal") or 0) < 50000)
         and (not p.get("price") or float(p.get("price") or 0) < 100000)
     )
+    soil = _soil_profile([dict(row) for row in soil_rows])
     momentum = dict(momentum_row) if momentum_row else None
+    signal_receipts: list[dict] = []
     if momentum:
         momentum["signals"] = sanitize_signals_for_public(
             momentum.get("signals"),
             allow_people=show_people,
         )
+        public_signals = momentum.get("signals") or {}
+        signal_receipts = signal_evidence_items(
+            public_signals,
+            public_signals.keys(),
+            scope=f"parcel:{pidn}:signals",
+            pidn=pidn,
+            observed_at=momentum.get("computed_at"),
+        )
+        receipts_by_key = {
+            receipt["citation_key"].removeprefix("signal:"): receipt
+            for receipt in signal_receipts
+        }
+        decorated_signals: dict[str, object] = {}
+        for key, raw_signal in public_signals.items():
+            signal = dict(raw_signal) if isinstance(raw_signal, dict) else {"value": raw_signal}
+            signal["presentation"] = build_signal_presentation(key, signal)
+            if key in receipts_by_key:
+                signal["evidence_receipt"] = receipts_by_key[key]
+            decorated_signals[key] = signal
+        momentum["signals"] = decorated_signals
         momentum["reason_signals"] = build_reason_signals(momentum.get("signals"))
         momentum["top_signal"] = compute_headline_signal(
             momentum.get("signals"),
@@ -433,6 +627,13 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         brief["key_questions"] = brief.get("key_questions") or []
         brief["citations"] = brief.get("citations") or []
         serialize_temporal_fields(brief, "generated_at")
+        brief["citation_evidence"] = signal_evidence_items(
+            momentum.get("signals") if momentum else None,
+            brief["citations"],
+            scope=f"parcel:{pidn}:brief",
+            pidn=pidn,
+            observed_at=brief.get("generated_at"),
+        )
 
     narratives = (
         [dict(row) for row in related_narratives]
@@ -443,6 +644,13 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         narrative["key_entities"] = narrative.get("key_entities") or []
         narrative["citations"] = narrative.get("citations") or []
         serialize_temporal_fields(narrative, "generated_at")
+        narrative["citation_evidence"] = signal_evidence_items(
+            momentum.get("signals") if momentum else None,
+            narrative["citations"],
+            scope=f"parcel:{pidn}:narrative:{narrative['narrative_id']}",
+            pidn=pidn,
+            observed_at=narrative.get("generated_at"),
+        )
 
     intelligence_summary = (
         dict(intelligence_row) if intelligence_row and show_people else None
@@ -455,8 +663,190 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         record = dict(row)
         if record.get("extraction_confidence") is not None:
             record["extraction_confidence"] = float(record["extraction_confidence"])
-        serialize_temporal_fields(record, "meeting_date")
+        serialize_temporal_fields(
+            record,
+            "meeting_date",
+            "source_observed_at",
+            "interpretation_observed_at",
+        )
+        source_url = record.pop("source_url", None)
+        content_hash = record.pop("content_hash", None)
+        source_observed_at = record.pop("source_observed_at", None)
+        interpretation_observed_at = record.pop("interpretation_observed_at", None)
+        record["evidence"] = evidence_item(
+            scope=f"parcel:{pidn}",
+            citation_key=f"proceeding:{record['proceeding_id']}",
+            label=record.get("body_name") or "Municipal proceeding",
+            source_kind="municipal_proceeding",
+            source_record_id=content_hash or record["proceeding_id"],
+            url=source_url,
+            document_url=record.get("document_url"),
+            excerpt=record.get("supporting_text"),
+            details={
+                key: record.get(key)
+                for key in (
+                    "proceeding_type",
+                    "extraction_type",
+                    "decision",
+                    "current_zoning",
+                    "proposed_zoning",
+                    "page_number",
+                    "match_type",
+                )
+                if record.get(key) is not None
+            },
+            effective_at=record.get("meeting_date"),
+            observed_at=interpretation_observed_at or source_observed_at,
+            method="CountyIQ extracted the linked matter and verified the displayed excerpt against the municipal document.",
+            caveat=(
+                "An address match can be ambiguous; confirm the parcel reference in the original document."
+                if record.get("match_type") == "address"
+                else None
+            ),
+            confidence=record.get("extraction_confidence"),
+        )
         linked_proceedings.append(record)
+
+    county_name = county_metadata()["county_name"]
+    report_evidence = [
+        evidence_item(
+            scope=f"parcel:{pidn}",
+            citation_key=f"parcel:{pidn}",
+            label=f"{county_name} parcel and assessment record",
+            source_kind="official_parcel_record",
+            source_record_id=pidn,
+            url=parcel_source_url,
+            record_query=("PIDN", [pidn]),
+            internal_url=f"/property/{pidn}",
+            details={
+                key: p.get(key)
+                for key in (
+                    "pidn",
+                    "propadr",
+                    "owner_full",
+                    "municipality",
+                    "acres",
+                    "aprland",
+                    "aprbldg",
+                    "aprtotal",
+                    "saledt",
+                    "price",
+                    "deed_bk",
+                    "deed_pg",
+                )
+                if p.get(key) is not None
+            },
+            effective_at=parcel_record_effective_at,
+            observed_at=parcel_record_effective_at,
+            method="CountyIQ displays the current versioned county parcel record without LLM interpretation.",
+            caveat="Assessment and deed fields are informational county records; confirm legal title with the recorder or a title professional.",
+        )
+    ]
+    if soil["units"]:
+        soil_dates = [unit.get("valid_from") for unit in soil["units"] if unit.get("valid_from")]
+        soil_receipt = evidence_item(
+            scope=f"parcel:{pidn}",
+            citation_key=f"soils:{pidn}",
+            label=f"{county_name} mapped soil units",
+            source_kind="official_soil_layer",
+            source_record_id=",".join(str(value) for value in soil["source_record_ids"]),
+            url=next((unit.get("source_url") for unit in soil["units"] if unit.get("source_url")), None),
+            record_query=("OBJECTID_1", soil["source_record_ids"]),
+            details={
+                "mapped_coverage_pct": soil["mapped_coverage_pct"],
+                "map_units": [
+                    {
+                        key: unit.get(key)
+                        for key in (
+                            "map_unit_symbol",
+                            "map_unit_name",
+                            "coverage_pct",
+                            "drainage",
+                            "septic_rating",
+                            "slope_low",
+                            "slope_high",
+                            "representative_slope",
+                            "hydric_rating",
+                            "hydrologic_group",
+                        )
+                        if unit.get(key) is not None
+                    }
+                    for unit in soil["units"]
+                ],
+            },
+            effective_at=max(soil_dates) if soil_dates else None,
+            observed_at=max(soil_dates) if soil_dates else None,
+            method="CountyIQ intersects every current county soil polygon with the parcel and calculates each unit's share of parcel area.",
+            caveat="Mapped soils are generalized screening data; site design, wastewater suitability, drainage, and foundations require parcel-specific professional review.",
+        )
+        soil["evidence"] = soil_receipt
+        soil["source_url"] = soil_receipt["url"]
+        report_evidence.append(soil_receipt)
+    if tax_signal.get("has_tax_delinquency"):
+        report_evidence.append(
+            evidence_item(
+                scope=f"parcel:{pidn}",
+                citation_key=f"tax-status:{pidn}",
+                label=f"{county_name} tax-claim listing",
+                source_kind="official_tax_listing",
+                source_record_id=pidn,
+                url=tax_signal.get("source_url"),
+                document_url=tax_signal.get("source_url"),
+                details={"delinquency_signal": True},
+                effective_at=tax_signal.get("record_effective_at"),
+                observed_at=tax_signal.get("record_effective_at"),
+                method="CountyIQ checks whether the PIDN appears with a positive balance in the current governed listing.",
+                caveat="The public product suppresses exact claim rows and balances; confirm the current amount with the Tax Claim Bureau.",
+            )
+        )
+    if flood:
+        flood_ids = [value for value in (flood.get("fld_ar_ids") or []) if value]
+        report_evidence.append(
+            evidence_item(
+                scope=f"parcel:{pidn}",
+                citation_key=f"flood:{flood_ids[0] if flood_ids else pidn}",
+                label="FEMA National Flood Hazard Layer",
+                source_kind="official_flood_layer",
+                source_record_id=",".join(map(str, flood_ids)) or pidn,
+                url=with_arcgis_layer(flood.get("source_url"), NFHL_FLOOD_HAZARD_LAYER),
+                record_query=("FLD_AR_ID", flood_ids),
+                details={
+                    "zones": flood.get("flood_zones") or [flood.get("fld_zone")],
+                    "zone_subtype": flood.get("zone_subty"),
+                    "special_flood_hazard_area": True,
+                    "parcel_overlap_pct": float(flood["overlap_pct"]) if flood.get("overlap_pct") is not None else None,
+                },
+                effective_at=flood.get("valid_from"),
+                observed_at=flood.get("valid_from"),
+                method="CountyIQ deterministically intersects the parcel geometry with the current FEMA flood layer.",
+                caveat="This screening result is not a flood determination; consult the effective FEMA map and a qualified professional.",
+            )
+        )
+    if structure_rows:
+        structure_dates = [row.get("valid_from") for row in structure_rows if row.get("valid_from")]
+        structure_ids = [row.get("objectid") for row in structure_rows if row.get("objectid") is not None]
+        report_evidence.append(
+            evidence_item(
+                scope=f"parcel:{pidn}",
+                citation_key=f"structures:{pidn}",
+                label=f"{county_name} building-footprint layer",
+                source_kind="official_structure_layer",
+                source_record_id=",".join(str(value) for value in structure_ids) or pidn,
+                url=next((row.get("source_url") for row in structure_rows if row.get("source_url")), None),
+                record_query=("OBJECTID", structure_ids),
+                details={
+                    "footprint_count": structure_count,
+                    "building_types": [row.get("building_type") or "Unknown" for row in structure_rows],
+                },
+                effective_at=max(structure_dates) if structure_dates else None,
+                observed_at=max(structure_dates) if structure_dates else None,
+                method="CountyIQ deterministically intersects county building footprints with the parcel geometry.",
+                caveat="A missing footprint can reflect vacant land, recent construction, or source-data lag.",
+            )
+        )
+    report_evidence.extend(signal_receipts)
+    for item in report_evidence:
+        serialize_temporal_fields(item, "effective_at", "observed_at")
 
     return {
         "parcel": p,
@@ -470,7 +860,9 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             "in_flood_zone": flood is not None,
             "zone": flood["fld_zone"] if flood else None,
             "sfha": flood["sfha_tf"] == "T" if flood else False,
+            "overlap_pct": float(flood["overlap_pct"]) if flood and flood.get("overlap_pct") is not None else None,
         },
+        "soil_profile": soil,
         "structures": {
             "count": structure_count,
             "likely_vacant": likely_vacant,
@@ -488,4 +880,5 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         "related_narratives": narratives,
         "intelligence_summary": intelligence_summary,
         "linked_proceedings": linked_proceedings,
+        "evidence": report_evidence,
     }

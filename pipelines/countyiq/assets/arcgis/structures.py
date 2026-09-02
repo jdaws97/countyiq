@@ -7,6 +7,8 @@ Memory-optimized: streams ArcGIS pages directly into DB temp table.
 """
 
 import json
+import os
+import tempfile
 
 import requests
 from psycopg2.extras import execute_batch
@@ -50,11 +52,20 @@ def structures_arcgis(
     county = get_county_config()
     authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="structures_arcgis", dagster_run_id=context.run_id)
     require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     context.log.info(f"Querying ArcGIS structures: {county.arcgis_structures_url}")
 
     cur = database.cursor()
     conn = cur.connection
     was_autocommit = conn.autocommit
+    archive_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".ndjson",
+        prefix="structures_",
+        delete=False,
+        encoding="utf-8",
+    )
+    archive_path = archive_file.name
     if was_autocommit:
         conn.autocommit = False
 
@@ -64,6 +75,7 @@ def structures_arcgis(
 
         # Stream pages into temp table with geometry
         total_staged = 0
+        raw_feature_count = 0
         insert_sql = f"""
             INSERT INTO _tmp_structures ({', '.join(ALL_COLUMNS)}, geom)
             VALUES ({', '.join(['%s'] * len(ALL_COLUMNS))},
@@ -81,6 +93,9 @@ def structures_arcgis(
         ):
             batch = []
             for feat in page_features:
+                archive_file.write(json.dumps(feat, default=str))
+                archive_file.write("\n")
+                raw_feature_count += 1
                 attrs = feat.get("attributes", {})
                 oid = attrs.get("OBJECTID")
                 if oid is None:
@@ -109,6 +124,7 @@ def structures_arcgis(
 
         # Index temp table for fast SCD2 expire query
         cur.execute("CREATE INDEX ON _tmp_structures (objectid)")
+        cur.execute("ANALYZE _tmp_structures")
         context.log.info("Temp table indexed")
 
         if total_staged < county.arcgis_structures_min_records:
@@ -132,6 +148,15 @@ def structures_arcgis(
             )
             context.log.error(msg)
             raise RuntimeError(msg)
+
+        archive_file.flush()
+        os.fsync(archive_file.fileno())
+        archive_file.close()
+        s3.archive_file(
+            f"{county.s3_prefix}/arcgis/structures",
+            archive_path,
+            filename="response.ndjson",
+        )
 
         # SCD2 expire + insert
         key_join = "c.objectid = t.objectid"
@@ -165,6 +190,10 @@ def structures_arcgis(
         conn.rollback()
         raise
     finally:
+        if not archive_file.closed:
+            archive_file.close()
+        if os.path.exists(archive_path):
+            os.unlink(archive_path)
         if was_autocommit:
             conn.autocommit = True
         cur.close()
@@ -172,6 +201,7 @@ def structures_arcgis(
     return MaterializeResult(
         metadata={
             "record_count": MetadataValue.int(total_staged),
+            "raw_feature_count": MetadataValue.int(raw_feature_count),
             "inserted": MetadataValue.int(inserted),
             "expired": MetadataValue.int(expired),
             "unchanged": MetadataValue.int(total_staged - inserted),

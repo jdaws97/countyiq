@@ -9,13 +9,19 @@ transcripts and superseded choices belong in git history or the gitignored
 | Area | Current decision | Consequence |
 |---|---|---|
 | Product lane | Real-estate intelligence for investors and developers in South-Central PA, starting with York County | Surfaces must serve an investor or developer job; the earlier civic and government product framing is retired. |
-| Repository | One monorepo | Frontend, API, pipelines, migrations, deployment, and current docs change together. |
+| Repository | One modular monorepo | Frontend, API, pipelines, migrations, deployment, and current docs change together, while executable import/credential/network contracts prevent runtime coupling and preserve later extraction seams. |
 | Runtime | React/Vite, FastAPI/Uvicorn, Dagster, PostgreSQL 16/PostGIS | These are the only active application paths. |
 | Deployment target | Docker Compose on Hetzner behind Cloudflare; Netcup is the fallback VPS. Nothing is deployed yet. | AWS Lambda, Terraform, and managed-database plans are legacy. |
 | Frontend hosting | Cloudflare Pages | Static delivery remains separate from the VPS services. |
 | Object storage | Cloudflare R2 | Raw source payloads and archives stay out of Postgres. `R2_ENDPOINT_URL` is required so boto3 cannot silently target AWS. |
 | API routing | All service routes live under `/api/*` | Caddy, frontend calls, tests, and documentation use one route convention. |
-| Database changes | Alembic migrations applied deliberately during deployment | Runtime code does not create or mutate schema ad hoc. |
+| Database changes | Alembic migrations run only through the quiesced deployment path | Runtime code does not mutate schema ad hoc. A started migration failure leaves application services stopped; downgrade safety is reviewed per revision. |
+| Release identity | Exact reviewed Git SHA, SHA-tagged local images, fixed Compose/volume identity, and immutable release receipts | Moving branch tips, dirty worktrees, implicit directory project names, and blind backward deploys fail closed. On-host builds are repeatable operations, not registry-backed artifact promotion. |
+| Backup completion | Unique immutable R2 objects plus checksums and a manifest uploaded/read back last; recent disposable restore receipt required before ordinary deploy | A partial upload is not a backup. Dagster cannot receive the distinct backup-bucket credential, the host has no scripted remote-delete path, R2 bucket lock/lifecycle own retention, and recovery never restores over the only live database. |
+| Operational health | Dagster sensors project only the latest outcome and latest success per job into `meta.job_run_status`; the API combines that with current rows and explicit freshness windows | The product fails red for stale, failed, or never-observed scheduled refreshes without granting the API access to Dagster's separate database or duplicating its event history. |
+| Intelligence integrity operations | Model proposals are append-versioned; same-evidence semantic flips are quarantined; aggregate health is public but adjudication is a writer-only pipeline CLI | A human resolution appends a human-origin accepted version and updates/retracts the serving projection atomically. Pre-gate rows are archived as `legacy_unverified` and retracted rather than silently grandfathered. |
+| Human in the loop (2026-09-02) | Intelligence does the volume; people set policy and audit samples. Routine same-evidence flips are resolved by a recorded rule policy (newer version wins; same-version noise keeps the incumbent), optionally confirmed by a judge model. Only consequential flips (person ↔ organization merges, approved ↔ denied, high ↔ non-actionable, pursue ↔ pass) and rule/judge disagreements wait for a person. | `meta.intelligence_auto_resolutions` records every assessment; `meta.intelligence_review_queue` is the human queue. The one-time Pass 2 label receipt is replaced after the first accepted run by the live gate pass rate. Weekly sampled audits (`sample` / `approve` / `reject`) feed gold candidates to the eval corpus instead of a separate labelling task. Person/organization merge questions are reviewed as a batch after the first Pass 1 backfill, not one at a time. |
+| Paid-pass spend | Every enabled pass requires finite item, per-run dollar, and provider per-token price ceilings | The runtime reserves a conservative maximum before each work item and stops when `usage.cost` is missing or would exceed the signed envelope. |
 | Parcel identity | PIDN | No competing `parcel_id` identifier is introduced. |
 | Durable owner identity | Upsert `public.owners` by `canonical_name`; expose `owner_id` through the API | `owner_id` stays stable across ordinary rebuilds while the owner remains present, while briefs and reconciliation use `canonical_name` so a cluster change is explicit. |
 | Alpha experience | Prioritized evidence feed → property/project/entity case file → original source → browser-local watch loop | Homepage metrics and feature tiles do not lead the product; every surfaced case answers what happened, why, what next, who/which parcels, and why to believe it. |
@@ -97,11 +103,27 @@ terms-review, retention, allowed-origin, and review-date policy. Authorization
 occurs before listing or document access; every HTTP redirect is checked before
 the destination request; browser document/API calls cannot cross to an
 unreviewed vendor; robots uncertainty fails closed; health is recorded per
-body; and both policy-audit tables are append-only. Rep'd, Google Drive,
-GoDaddy-CDN-only, eCode360, and explicit-disallow paths remain paused rather
-than being treated as ordinary public pages. County Scout is a
-paused governed source, absent from schedules, and blocked at its jobs and API
-until its arbitrary-URL discovery model receives a separate approval.
+  body; and both policy-audit tables are append-only. Rep'd, Google Drive,
+  eCode360, and explicit-disallow paths remain paused rather
+  than being treated as ordinary public pages. Revision 045 retires County
+  Scout; new sources enter through explicit county manifests and reviewed
+  source-policy migrations rather than arbitrary-URL discovery.
+
+Revision 042 records a deliberate product-owner exception for the official
+Franklintown Borough, Newberry Township, and Washington Township listing pages.
+Their GoDaddy Website Services terms remain reviewed and risk-accepted rather
+than being represented as unrestricted. Collection is limited to the official
+listing URLs and exact `https://img1.wsimg.com` PDF origin. Derived proceedings
+intelligence and private raw retention are enabled; person-level display and
+raw-document export remain disabled.
+
+Revision 043 records the narrower transport exception needed to execute that
+decision: the three first-party GoDaddy listing origins returned TLS EOF/timeouts
+to the direct client and their `robots.txt` endpoints also timed out in Chromium,
+while the official listing pages remained reachable. Browser listing access is
+therefore allowed only for those policy rows when robots is unavailable. An
+explicit disallow still blocks access, and the separate `img1.wsimg.com` PDF
+origin must pass its live robots policy on every run.
 
 Independent `development_signals` and `development_momentum` runs reauthorize
 only the configured sources contributing to the active county. The deterministic
@@ -142,15 +164,84 @@ LLMs are used for:
 
 LLMs are not used for source downloads, SCD2 diffs, parcel-event generation,
 spatial joins, rankings, feed filtering, watch state, API serialization, or
-templateable structured facts. Buyer-facing saved intelligence is generated
+templateable structured facts. As of radar score version 7 (2026-09-02) they
+are also not used for scoring: Pass 2 validation status and significance no
+longer multiply signal weights. They are stored and displayed as annotations
+(reasoning, status, cross-signal insight) beside a score any reader can
+recompute from the signal table. Buyer-facing saved intelligence is generated
 offline and served from Postgres; ordinary feed and detail requests do not call
 an LLM.
 
 Pass 2 requires at least two interpretive signals from `active_subdivision`,
-`ownership_change`, `vacancy`, `assemblage`, and `zoning_mismatch`. Tax status,
-economic-park membership, transportation, flood, soils, zoning overlays,
-conservation/agriculture restrictions, and PA DEP proximity records remain
+`municipal_action`, `ownership_change`, `vacancy`, `assemblage`,
+`entity_assemblage`, and `zoning_mismatch`. Tax status, economic-park
+membership, nearby plans, transportation, flood, soils, zoning overlays,
+conservation-easement restrictions, agricultural-area context, and PA DEP proximity records remain
 context-only deterministic facts. A singleton fact cannot spend a model call.
+Pass 0 additionally skips documents with no land-use vocabulary before any
+call and records an explicit `_no_landuse_terms` marker. Pass 3 briefs are
+generated only for the top-N radar parcels (`COUNTYIQ_PASS3_RANK_LIMIT`), so
+the deterministic rank, not the model's own significance label, decides where
+synthesis money is spent.
+
+### Radar score version 6 (2026-09-02)
+
+The 2026-09-02 product review found four defects in the version-5 radar:
+the LLM multipliers ranked every validated parcel below unvalidated ones;
+the product's own proceedings never fed the score; `active_subdivision` gave
+any parcel within 250 m the neighbour's plan and label; and a stateless
+weekly `TRUNCATE` made "what changed" impossible. Version 6 therefore:
+
+- scores deterministically from `public.development_signals` only;
+- adds `municipal_action` (Pass 0 matters linked by PIDN or normalized
+  address), `entity_assemblage` (one owner accumulating contiguous parcels
+  with a recent acquisition), and `nearby_subdivision` (corridor activity,
+  separated from the parcel's own plan);
+- decays `ownership_change` and `municipal_action` by age and fixes the
+  substring "LP"/"INC" investor-buyer bug with word boundaries;
+- calibrates opportunity weights with `pipelines/scripts/backtest_radar_weights.py`
+  against believable plans received on the parcel in the last 24 months
+  (report: `docs/research/radar-backtest-2026-09-02.md`: 131,701 eligible
+  parcels, 496 positives; AUC 0.73 for the rounded v6 weights versus 0.62 for
+  the v5 weights, precision@250 7.6% versus 3.2% against a 0.38% base rate),
+  while momentum keeps activity weights;
+- appends every rebuild to `public.development_momentum_history` and exposes
+  movers (`/api/radar/movers`, the Radar "Movers" tab, municipality pages).
+
+Re-run the back-test and update `OPPORTUNITY_WEIGHTS` in one commit with the
+regenerated report after the first live proceedings backfill, when
+`municipal_action` has enough rows to calibrate instead of carrying a prior.
+
+### Radar score version 7 (2026-09-02)
+
+Version 7 preserves version 6's deterministic and back-tested opportunity
+weights while correcting the evidence contract uncovered in a property-page
+audit:
+
+- Agricultural Security Area enrollment is neutral planning context, not an
+  eligibility exclusion. Pennsylvania's official guidance says enrollment
+  does not itself prevent sale, subdivision, or development. Agricultural
+  conservation easements remain the sole hard radar exclusion.
+- Soil screening uses every materially overlapping mapped unit rather than the
+  parcel centroid. The property API reports parcel share, slope range and
+  representative slope, drainage, hydrologic group, hydric rating, and on-lot
+  septic rating. The signal headline names the field that actually triggered
+  it, so a steep well-drained unit is not mislabeled as a drainage problem.
+- FEMA Special Flood Hazard Area screening uses parcel overlap and reports the
+  overlap percentage rather than claiming the entire parcel is in a zone from
+  a center-point match.
+- Non-completed PennDOT projects remain eligible for the proximity signal;
+  completed project points do not add current momentum or site points.
+- Every serialized signal carries explicit Momentum, Opportunity, and Site
+  Screening point effects plus its eligibility effect. Public tax signals
+  suppress claim amounts and history regardless of person-display policy.
+- Signal labels distinguish evidence from inference: organization-looking
+  names are not called investors, same-name contiguous parcels are not called
+  active assemblage, missing footprints are not called proven vacancy, and
+  nearby DEP records are not called contamination.
+
+The complete trigger/meaning/caveat matrix is maintained in
+`docs/research/development-signal-contract-v7.md`.
 
 ### Current model defaults
 
@@ -162,7 +253,9 @@ The executable source of truth is `_PASS_MODEL_DEFAULTS` in
 | Use | Default | Evidence |
 |---|---|---|
 | Pass 0 PDF extraction | `openai/gpt-5.6-luna`, native PDF input | Historical runs covered the real PDF corpus; the 2026-08-30 audit replaced count-only checking with five human-reviewed expected matters and three zero-extraction controls. Re-run the new gold gate before any model change. |
-| Pass 1 entity verification | `openai/gpt-5.6-luna`, high reasoning, adaptive N=3 voting | Strong abstention discipline; stability testing produced 97% pairwise verdict agreement. Replaying 11 archived three-trial clusters showed that stopping after an irreversible 2-0 decision saved 10 of 33 calls (30.3%) with no partition changes. |
+| Pass 1 entity verification | `openai/gpt-5.6-luna`, high reasoning, adaptive N=3 voting; organization-involving clusters only, registered-agent hub addresses excluded (2026-09-02) | Strong abstention discipline; stability testing produced 97% pairwise verdict agreement. Replaying 11 archived three-trial clusters showed that stopping after an irreversible 2-0 decision saved 10 of 33 calls (30.3%) with no partition changes. Person-only clusters were 5,078 of 6,110 (83% of spend) and reach no customer surface while person display is policy-disabled and assemblage matches raw owner strings; `COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS` restores them. On the frozen 8-case corpus GLM 5.3 Flash solved 8/8 partitions at 23% of Luna's cost (`docs/research/llm-cost-reduction-2026-09-02.md`); promote it through the canary env override, not a code default, until the live gate rate holds. |
+| Citation gate granularity (2026-09-02) | `[Evidence:]`/`[Signal:]`/`[Parcel:]` markers are required per reasoning field, not per sentence; identifier, membership, quote, and unknown-marker checks are unchanged | The per-sentence rule rejected 6/8 correct Luna Pass 1 partitions and 6–9/10 Luna Pass 2 validations on the frozen corpora because models write one uncited lead sentence before the cited one; production writes a rejection without retry, so the spend was lost. Prompts still ask for a marker on every factual sentence. The Pass 0 quote check also accepts a whitespace-free match because PDF extraction splits tokens at line breaks. |
+| Cached prompt prefix (2026-09-02) | Every pass system prompt carries static schema, field-contract, and citation-format blocks and must stay at or above 4,600 characters (`tests/test_prompt_cache_prefix.py`); prefix blocks may restate format and contract only, never signal semantics | OpenAI caches only identical prefixes of at least 1,024 tokens; the bare instruction blocks were 487–838 tokens and every audited call reported `cached_tokens: 0`. After the change the live Pass 0 canary reported cached tokens on 24 of 25 Luna calls. A trial signal glossary ("trigger / means / does not establish") shifted Luna's Pass 2 statuses from downgraded to confirmed on the reviewed gold cases and was removed. |
 | Pass 2 signal validation | `openai/gpt-5.6-luna`, low reasoning | Retained after a 100-case paired diagnostic reversed the initial ten-case GLM result. Luna led grounded decisions (191/263 vs 166/263), strict signals (133/263 vs 102/263), required facts (595/683 vs 573/683), and prohibited-claim control (0 vs 30 signals). |
 | Pass 3 and 3b briefs | `openai/gpt-5.6-luna` | Won all eight salvageable current-prompt comparisons against MiniMax. |
 | Pass 4 county narratives | Disabled by default; `openai/gpt-5.6-luna` is the opt-in provisional model | The small two-area comparison split and no alpha surface requires it. Enable only with `COUNTYIQ_PASS4_ENABLED=true` after a product/eval gate. |

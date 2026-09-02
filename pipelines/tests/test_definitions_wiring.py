@@ -15,11 +15,13 @@ Run with: ``pytest tests/test_definitions_wiring.py -v``.
 from __future__ import annotations
 
 import pytest
+from dagster import DefaultSensorStatus
 
 
 @pytest.fixture(scope="module")
 def defs():
     from countyiq.definitions import defs as _defs
+
     return _defs
 
 
@@ -38,6 +40,18 @@ def test_definitions_load(defs):
     assert defs.sensors, "no sensors registered"
 
 
+def test_run_outcome_sensors_require_application_database(defs):
+    sensors = {sensor.name: sensor for sensor in defs.sensors}
+
+    assert sensors["success_reporter"].required_resource_keys == {"database"}
+    assert sensors["failure_alerter"].required_resource_keys == {"database"}
+    assert sensors["intelligence_integrity_guard"].required_resource_keys == {
+        "database"
+    }
+    assert sensors["success_reporter"].default_status == DefaultSensorStatus.RUNNING
+    assert sensors["failure_alerter"].default_status == DefaultSensorStatus.RUNNING
+
+
 def test_every_scheduled_job_is_registered(defs):
     registered_job_names = {j.name for j in defs.jobs}
     for schedule in defs.schedules:
@@ -47,7 +61,7 @@ def test_every_scheduled_job_is_registered(defs):
 
 
 def test_fema_refresh_only_covers_fema(asset_graph):
-    from countyiq.jobs import fema_refresh, bulk_refresh
+    from countyiq.jobs import bulk_refresh, fema_refresh
 
     fema_assets = _resolve(fema_refresh, asset_graph)
     bulk_assets = _resolve(bulk_refresh, asset_graph)
@@ -147,10 +161,21 @@ def test_pass1_manual_job_refreshes_candidate_inputs(asset_graph):
         "municipality_join",
         "entity_candidate_pairs_refresh",
         "entity_verification",
+        "development_signals",
+        "owner_resolution",
     }
 
 
-def test_paused_and_scout_assets_are_absent_from_every_schedule(asset_graph):
+def test_pass3_manual_jobs_keep_parcel_and_owner_budgets_separate(asset_graph):
+    from countyiq.jobs import brief_generation_refresh, owner_briefs_refresh
+
+    assert set(_resolve(brief_generation_refresh, asset_graph)) == {
+        "brief_generation"
+    }
+    assert set(_resolve(owner_briefs_refresh, asset_graph)) == {"owner_briefs"}
+
+
+def test_paused_assets_are_absent_from_every_schedule(asset_graph):
     from countyiq.jobs import (
         arcgis_refresh,
         bulk_refresh,
@@ -175,9 +200,22 @@ def test_paused_and_scout_assets_are_absent_from_every_schedule(asset_graph):
         {
             "cdbg_housing_arcgis",
             "ecodev_candidates_arcgis",
-            "county_scout_discovery",
-            "county_scout_monitor",
         }
+    )
+
+
+def test_retired_scout_runtime_is_not_registered(defs, asset_graph):
+    asset_names = {
+        key.to_user_string()
+        for key in asset_graph.get_all_asset_keys()
+    }
+    job_names = {job.name for job in defs.jobs}
+
+    assert not asset_names.intersection(
+        {"county_scout_discovery", "county_scout_monitor"}
+    )
+    assert not job_names.intersection(
+        {"scout_discovery_refresh", "scout_monitor_refresh"}
     )
 
 
@@ -194,7 +232,9 @@ def test_schedule_names_are_stable(defs):
         "weekly_pa_dos",
     }
     actual = {s.name for s in defs.schedules}
-    assert actual == expected, f"schedule set drifted: +{actual - expected} / -{expected - actual}"
+    assert actual == expected, (
+        f"schedule set drifted: +{actual - expected} / -{expected - actual}"
+    )
 
 
 def test_optional_radar_schedule_requires_a_configured_layer():
@@ -203,10 +243,12 @@ def test_optional_radar_schedule_requires_a_configured_layer():
     from countyiq.schedules import _has_radar_sources
 
     assert not _has_radar_sources(CountyConfig(name="Example"))
-    assert _has_radar_sources(CountyConfig(
-        name="Example",
-        pa_dep_query_bbox=(-77.0, 39.0, -76.0, 40.0),
-    ))
+    assert _has_radar_sources(
+        CountyConfig(
+            name="Example",
+            pa_dep_query_bbox=(-77.0, 39.0, -76.0, 40.0),
+        )
+    )
 
 
 def test_asset_checks_are_registered():

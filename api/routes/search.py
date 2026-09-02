@@ -1,6 +1,7 @@
 """Lookup-first search with optional constrained LLM intent parsing."""
 
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from psycopg2 import Error as PsycopgError
@@ -9,8 +10,8 @@ from api.lib.database import get_cursor
 from api.lib.llm_search import ALLOWED_REDIRECT_PATHS, parse_query_with_llm
 from api.lib.rate_limit import client_ip, llm_search_daily_budget, llm_search_limiter
 from api.lib.search_plan import InvalidSearchPlan, compile_aggregate, compile_query
-from api.lib.source_policy import require_source_use
 from api.lib.settings import llm_search_enabled, open_data_source_key
+from api.lib.source_policy import require_source_use
 
 router = APIRouter(tags=["search"])
 logger = logging.getLogger(__name__)
@@ -95,7 +96,10 @@ def search(
 
         if intent == "query":
             llm_results = _execute_llm_query(llm_intent, limit)
-            if llm_results:
+            # An accepted smart-search plan with no matching rows is still a
+            # successful query. Falling through to fuzzy lookup here changes
+            # the meaning of the request and can surface unrelated records.
+            if llm_results is not None:
                 return {
                     "mode": "smart",
                     "description": description,
@@ -131,7 +135,7 @@ NL_WORDS = {
 def _is_name_lookup(query: str) -> bool:
     """Fast check: is this a person/business name vs a natural language query?
 
-    Name lookups: "Brian Daws", "KEYSTONE REALTY", "123 Main St"
+    Name lookups: "Avery Coleman", "KEYSTONE REALTY", "123 Main St"
     NOT name lookups: "breweries in york", "vacant delinquent parcels", "oldest tax"
     """
     words = query.lower().split()
@@ -153,117 +157,372 @@ def _is_name_lookup(query: str) -> bool:
         if w in NL_WORDS:
             return False
 
-    # "X in Y" pattern -> natural language
-    if "in" in words[1:]:
-        return False
+    # 2-3 words without an "X in Y" pattern -> probably a name
+    return "in" not in words[1:]
 
-    # 2-3 words with no keywords -> probably a name
-    return True
+
+_STREET_SUFFIX_ALIASES = {
+    "avenue": "ave",
+    "ave": "avenue",
+    "boulevard": "blvd",
+    "blvd": "boulevard",
+    "circle": "cir",
+    "cir": "circle",
+    "court": "ct",
+    "ct": "court",
+    "drive": "dr",
+    "dr": "drive",
+    "highway": "hwy",
+    "hwy": "highway",
+    "lane": "ln",
+    "ln": "lane",
+    "parkway": "pkwy",
+    "pkwy": "parkway",
+    "place": "pl",
+    "pl": "place",
+    "road": "rd",
+    "rd": "road",
+    "route": "rte",
+    "rte": "route",
+    "street": "st",
+    "st": "street",
+    "terrace": "ter",
+    "ter": "terrace",
+    "trail": "trl",
+    "trl": "trail",
+    "turnpike": "tpke",
+    "tpke": "turnpike",
+    "way": "wy",
+    "wy": "way",
+}
+
+_BUSINESS_SUFFIXES = {
+    "association",
+    "company",
+    "corp",
+    "corporation",
+    "inc",
+    "incorporated",
+    "llc",
+    "llp",
+    "lp",
+    "partners",
+    "partnership",
+    "trust",
+}
+
+
+def _lookup_variants(search_term: str) -> list[str]:
+    """Return a small, ordered set of useful name/address query variants."""
+    normalized = " ".join(search_term.strip().split())
+    variants: list[str] = []
+
+    def add(value: str) -> None:
+        value = " ".join(value.split()).strip()
+        if value and value.casefold() not in {item.casefold() for item in variants}:
+            variants.append(value)
+
+    add(normalized)
+    punctuation_normalized = re.sub(r"[,;]+", " ", normalized)
+    add(punctuation_normalized)
+
+    tokens = punctuation_normalized.split()
+    clean_tokens = [token.strip(".()") for token in tokens]
+    lowered = [token.casefold() for token in clean_tokens]
+
+    # Parcel addresses normally omit the county/state/ZIP suffix users paste
+    # from another site. Keep a variant ending at the recognized street type.
+    if clean_tokens and any(char.isdigit() for char in clean_tokens[0]):
+        for index, token in enumerate(lowered):
+            if token in _STREET_SUFFIX_ALIASES:
+                add(" ".join(clean_tokens[: index + 1]))
+                break
+
+    # County owner data commonly stores people LAST FIRST MIDDLE. Search both
+    # orders, but do not turn a company suffix into the first token.
+    elif 2 <= len(clean_tokens) <= 4 and lowered[-1] not in _BUSINESS_SUFFIXES:
+        add(" ".join([clean_tokens[-1], *clean_tokens[:-1]]))
+
+    # Street/ST and similar variants make pasted and county-normalized
+    # addresses converge before trigram ranking.
+    for value in tuple(variants):
+        value_tokens = value.split()
+        for index, token in enumerate(value_tokens):
+            replacement = _STREET_SUFFIX_ALIASES.get(token.casefold().rstrip("."))
+            if replacement:
+                replaced = value_tokens.copy()
+                replaced[index] = replacement
+                add(" ".join(replaced))
+
+    return variants[:6]
+
+
+def _pidn_candidate(search_term: str) -> str | None:
+    """Normalize a numeric or alphanumeric PIDN pasted with separators."""
+    if not re.fullmatch(r"[A-Za-z0-9.\-\s]+", search_term):
+        return None
+    tokens = [token.casefold().rstrip(".") for token in search_term.split()]
+    if any(token in _STREET_SUFFIX_ALIASES for token in tokens):
+        return None
+    compact = re.sub(r"[^A-Za-z0-9]", "", search_term).upper()
+    if not any(char.isdigit() for char in compact):
+        return None
+    minimum_length = 10 if any(char.isalpha() for char in compact) else 6
+    return compact if minimum_length <= len(compact) <= 16 else None
 
 
 def _trgm_search_with_reversal(search_term: str, limit: int) -> list[dict]:
-    """Run pg_trgm search with automatic name reversal (FIRST LAST -> LAST FIRST)."""
-    results = _trgm_search(search_term, limit)
+    """Run one ranked lookup across PIDNs, parcel owners/addresses, and places."""
+    variants = _lookup_variants(search_term)
+    branch_limit = min(max(limit, 20), 100)
 
-    # Also try reversed name order
-    parts = search_term.strip().split()
-    if len(parts) >= 2:
-        reversed_name = parts[-1] + " " + " ".join(parts[:-1])
-        reversed_results = _trgm_search(reversed_name, limit)
-
-        # Merge, deduplicate by title, keep highest score
-        seen: dict[str, dict] = {}
-        for result in results + reversed_results:
-            key = result.get("title", "")
-            if key not in seen or (result.get("score") or 0) > (seen[key].get("score") or 0):
-                seen[key] = result
-        results = sorted(seen.values(), key=lambda item: item.get("score", 0), reverse=True)[:limit]
-
-    return results
-
-
-def _trgm_search(search_term: str, limit: int) -> list[dict]:
-    """Standard pg_trgm fuzzy matching across all sources."""
     with get_cursor() as cur:
+        cur.execute("SET LOCAL statement_timeout = '5s'")
+        cur.execute("SET TRANSACTION READ ONLY")
+        cur.execute("SET LOCAL pg_trgm.similarity_threshold = 0.22")
+        cur.execute("SET LOCAL pg_trgm.strict_word_similarity_threshold = 0.45")
         require_source_use(cur, open_data_source_key(), "derived_product", conceal=False)
-        require_source_use(cur, "plcb_licenses", "derived_product", conceal=False)
-        pidn_results: list = []
-        stripped = search_term.replace("-", "").replace(".", "").replace(" ", "")
-        if len(stripped) >= 10 and stripped[:2].isdigit():
-            cur.execute(
-                """
-                SELECT 'parcel' AS result_type,
-                       COALESCE(propadr, pidn) AS title,
-                       pidn || ' · ' || COALESCE(municipality, '') AS subtitle,
-                       NULL::float AS lat, NULL::float AS lng,
-                       1.0 AS score, pidn
-                FROM staging.parcels
-                WHERE valid_to IS NULL AND pidn = %(q)s
-                LIMIT 1
-                """,
-                {"q": stripped},
-            )
-            pidn_results = cur.fetchall()
+        include_licenses = True
+        try:
+            require_source_use(cur, "plcb_licenses", "derived_product", conceal=False)
+        except HTTPException as exc:
+            include_licenses = False
+            logger.info("License search unavailable; continuing with parcels: %s", exc.detail)
 
-        address_parcel_results: list = []
-        if any(char.isdigit() for char in search_term) and not pidn_results:
-            cur.execute(
-                """
+        all_results: list[dict] = []
+        for variant in variants:
+            all_results.extend(
+                _trgm_search(cur, variant, branch_limit, include_licenses=include_licenses)
+            )
+
+    return _deduplicate_and_rank(all_results, limit)
+
+
+def _trgm_search(
+    cur,
+    search_term: str,
+    limit: int,
+    *,
+    include_licenses: bool,
+) -> list[dict]:
+    """Run index-backed fuzzy branches for one normalized query variant."""
+    pidn_results: list = []
+    pidn_candidate = _pidn_candidate(search_term)
+    if pidn_candidate:
+        cur.execute(
+            """
+            SELECT 'parcel' AS result_type,
+                   COALESCE(propadr, pidn) AS title,
+                   CONCAT_WS(' · ', pidn, municipality, 'Parcel ID match') AS subtitle,
+                   NULL::float AS lat, NULL::float AS lng,
+                   CASE
+                       WHEN pidn = %(q)s THEN 1.0::float
+                       ELSE 0.96::float
+                   END AS score,
+                   pidn, 'parcel_id' AS match_kind
+            FROM staging.parcels
+            WHERE valid_to IS NULL
+              AND (
+                pidn = %(q)s
+                OR (%(is_prefix)s AND pidn LIKE %(q)s || '%%')
+              )
+            ORDER BY score DESC, pidn
+            LIMIT %(limit)s
+            """,
+            {
+                "q": pidn_candidate,
+                "is_prefix": len(pidn_candidate) < 13,
+                "limit": limit,
+            },
+        )
+        pidn_results = cur.fetchall()
+        if pidn_results:
+            return [dict(row) for row in pidn_results]
+
+    owner_parcels = _fetch_results(
+        cur,
+        query="""
+            SELECT 'parcel' AS result_type,
+                   COALESCE(propadr, pidn) AS title,
+                   CONCAT_WS(' · ', pidn, municipality, 'Owner match') AS subtitle,
+                   NULL::float AS lat, NULL::float AS lng,
+                   GREATEST(
+                       similarity(owner_full, %(q)s),
+                       strict_word_similarity(%(q)s, owner_full)
+                   ) AS score,
+                   pidn, 'owner' AS match_kind
+            FROM staging.parcels
+            WHERE valid_to IS NULL
+              AND %(allow_owner)s
+              AND owner_full IS NOT NULL
+              AND (owner_full %% %(q)s OR %(q)s <<%% owner_full)
+              AND GREATEST(
+                  similarity(owner_full, %(q)s),
+                  strict_word_similarity(%(q)s, owner_full)
+              ) >= 0.55
+            ORDER BY score DESC, pidn
+            LIMIT %(limit)s
+        """,
+        params={
+            "q": search_term,
+            "allow_owner": not any(char.isdigit() for char in search_term),
+            "limit": limit,
+        },
+    )
+
+    address_parcels: list = []
+    addresses: list = []
+    if any(char.isdigit() for char in search_term):
+        address_parcels = _fetch_results(
+            cur,
+            query="""
                 SELECT 'parcel' AS result_type,
                        COALESCE(propadr, pidn) AS title,
-                       pidn || ' · ' || COALESCE(municipality, '') AS subtitle,
+                       CONCAT_WS(' · ', pidn, municipality, 'Parcel address') AS subtitle,
                        NULL::float AS lat, NULL::float AS lng,
-                       similarity(propadr, %(q)s) AS score, pidn
+                       GREATEST(
+                           similarity(propadr, %(q)s),
+                           strict_word_similarity(%(q)s, propadr)
+                       ) AS score,
+                       pidn, 'address' AS match_kind
                 FROM staging.parcels
-                WHERE valid_to IS NULL AND propadr %% %(q)s
-                ORDER BY similarity(propadr, %(q)s) DESC
+                WHERE valid_to IS NULL
+                  AND propadr IS NOT NULL
+                  AND (propadr %% %(q)s OR %(q)s <<%% propadr)
+                  AND GREATEST(
+                      similarity(propadr, %(q)s),
+                      strict_word_similarity(%(q)s, propadr)
+                  ) >= 0.40
+                ORDER BY score DESC, pidn
                 LIMIT %(limit)s
-                """,
-                {"q": search_term.upper(), "limit": limit},
-            )
-            address_parcel_results = cur.fetchall()
-
-        parcel_results = [dict(row) for row in pidn_results + address_parcel_results]
+            """,
+            params={"q": search_term, "limit": limit},
+        )
 
         addresses = _fetch_results(
             cur,
             query="""
-                SELECT
-                    'address' AS result_type,
-                    CONCAT_WS(' ', add_number, street_name, st_pos_typ) AS title,
-                    inc_muni AS subtitle,
-                    lat, long AS lng,
-                    similarity(CONCAT_WS(' ', add_number, street_name, st_pos_typ), %(q)s) AS score
-                FROM staging.address_points
-                WHERE valid_to IS NULL
-                  AND CONCAT_WS(' ', add_number, street_name, st_pos_typ) %% %(q)s
-                ORDER BY score DESC
+                SELECT 'address' AS result_type,
+                       address_text AS title,
+                       CONCAT_WS(' · ', inc_muni, 'Mapped address') AS subtitle,
+                       lat, long AS lng,
+                       GREATEST(
+                           similarity(address_text, %(q)s),
+                           strict_word_similarity(%(q)s, address_text)
+                       ) AS score,
+                       'mapped_address' AS match_kind
+                FROM (
+                    SELECT
+                        COALESCE(add_number::text, '') || ' ' ||
+                        COALESCE(street_name, '') || ' ' ||
+                        COALESCE(st_pos_typ, '') AS address_text,
+                        inc_muni, lat, long
+                    FROM staging.address_points
+                    WHERE valid_to IS NULL
+                ) points
+                WHERE (address_text %% %(q)s OR %(q)s <<%% address_text)
+                  AND GREATEST(
+                      similarity(address_text, %(q)s),
+                      strict_word_similarity(%(q)s, address_text)
+                  ) >= 0.40
+                ORDER BY score DESC, title
                 LIMIT %(limit)s
             """,
             params={"q": search_term, "limit": limit},
         )
 
+    licenses: list = []
+    if include_licenses:
         licenses = _fetch_results(
             cur,
             query="""
-                SELECT DISTINCT ON (premises_name)
-                    'license' AS result_type,
-                    premises_name AS title,
-                    license_type || ' · ' || municipality AS subtitle,
-                    NULL::float AS lat, NULL::float AS lng,
-                    similarity(premises_name, %(q)s) AS score
-                FROM staging.plcb_licenses
-                WHERE valid_to IS NULL AND UPPER(status) = 'ACTIVE'
-                  AND premises_name %% %(q)s
-                ORDER BY premises_name, score DESC
+                SELECT *
+                FROM (
+                    SELECT DISTINCT ON (premises_name)
+                           'license' AS result_type,
+                           premises_name AS title,
+                           CONCAT_WS(' · ', license_type, municipality, 'Licensed premises') AS subtitle,
+                           NULL::float AS lat, NULL::float AS lng,
+                           GREATEST(
+                               similarity(premises_name, %(q)s),
+                               strict_word_similarity(%(q)s, premises_name)
+                           ) AS score,
+                           'license' AS match_kind
+                    FROM staging.plcb_licenses
+                    WHERE valid_to IS NULL
+                      AND UPPER(status) = 'ACTIVE'
+                      AND premises_name IS NOT NULL
+                      AND (premises_name %% %(q)s OR %(q)s <<%% premises_name)
+                      AND GREATEST(
+                          similarity(premises_name, %(q)s),
+                          strict_word_similarity(%(q)s, premises_name)
+                      ) >= 0.45
+                    ORDER BY premises_name, score DESC
+                ) matches
+                ORDER BY score DESC, title
                 LIMIT %(limit)s
             """,
             params={"q": search_term, "limit": limit},
         )
 
-    all_results = [dict(row) for row in parcel_results + addresses + licenses]
-    all_results.sort(key=lambda row: row["score"], reverse=True)
-    return all_results[:limit]
+    return [
+        dict(row)
+        for row in [*owner_parcels, *address_parcels, *addresses, *licenses]
+    ]
+
+
+_MATCH_PRIORITY = {
+    "parcel_id": 5,
+    "address": 4,
+    "owner": 3,
+    "mapped_address": 2,
+    "license": 1,
+}
+
+_RESULT_TYPE_BONUS = {
+    "parcel": 0.12,
+}
+
+
+def _deduplicate_and_rank(results: list[dict], limit: int) -> list[dict]:
+    """Keep the strongest result per parcel/place and apply stable tie-breaks."""
+    best: dict[tuple, dict] = {}
+    for result in results:
+        if result.get("pidn"):
+            key = ("parcel", result["pidn"])
+        elif result.get("result_type") == "address":
+            key = (
+                "address",
+                str(result.get("title") or "").casefold(),
+                str(result.get("subtitle") or "").casefold(),
+            )
+        else:
+            key = (result.get("result_type"), result.get("title"), result.get("subtitle"))
+
+        current = best.get(key)
+        result_rank = (
+            float(result.get("score") or 0),
+            _MATCH_PRIORITY.get(str(result.get("match_kind")), 0),
+        )
+        current_rank = (
+            float(current.get("score") or 0),
+            _MATCH_PRIORITY.get(str(current.get("match_kind")), 0),
+        ) if current else (-1.0, -1)
+        if result_rank > current_rank:
+            best[key] = result
+
+    return sorted(
+        best.values(),
+        key=lambda item: (
+            -(
+                float(item.get("score") or 0)
+                + _RESULT_TYPE_BONUS.get(str(item.get("result_type")), 0)
+            ),
+            -_MATCH_PRIORITY.get(str(item.get("match_kind")), 0),
+            str(item.get("title") or ""),
+            str(item.get("pidn") or ""),
+        ),
+    )[:limit]
 
 
 def _fetch_results(cur, query: str, params: dict) -> list:
@@ -350,8 +609,8 @@ SCHOOL_DISTRICTS = {
     "008": "Eastern York", "010": "Hanover", "012": "Northeastern",
     "014": "Northern York", "016": "Red Lion", "018": "South Eastern",
     "020": "South Western", "022": "Southern York", "024": "Spring Grove",
-    "026": "West Shore", "028": "West York", "030": "York Suburban",
-    "17F": "York City", "17G": "York City", "17L": "York City", "17N": "York City",
+    "026": "West York", "028": "York City", "030": "York Suburban",
+    "17F": "West Shore", "17G": "West Shore", "17L": "West Shore", "17N": "West Shore",
 }
 
 CLASS_NAMES = {
@@ -430,9 +689,12 @@ def _clean_row(row: dict) -> dict:
     cleaned = {}
     for key, val in row.items():
         # Skip hidden fields unless they're key fields for this result type
-        if FRIENDLY_NAMES.get(key) is None and key in FRIENDLY_NAMES:
-            if key not in always_show:
-                continue
+        if (
+            FRIENDLY_NAMES.get(key) is None
+            and key in FRIENDLY_NAMES
+            and key not in always_show
+        ):
+            continue
 
         if hasattr(val, "as_tuple"):
             val = float(val)

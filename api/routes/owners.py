@@ -10,7 +10,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.lib.database import get_cursor
+from api.lib.development_radar import sanitize_signals_for_public
+from api.lib.evidence import evidence_item
 from api.lib.rate_limit import enforce_sensitive_read_limit
+from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import open_data_source_key, restricted_distress_enabled
 from api.lib.source_policy import (
     PUBLIC_ORGANIZATION_TYPES,
@@ -25,15 +28,21 @@ router = APIRouter(
 )
 
 
-def _fetch_owner_brief(cur, canonical_name: str) -> dict | None:
+def _fetch_owner_brief(
+    cur,
+    canonical_name: str,
+    *,
+    allow_people: bool,
+) -> dict | None:
     """Portfolio-level LLM brief for this owner, if one has been generated."""
     cur.execute(
         """
         SELECT
             brief_text, portfolio_strategy, concentration_notes, key_pattern,
             recommendation, urgency, top_risk, evidence_strength,
+            citations, parcel_citations,
             n_parcels, confidence, n_trials, trial_agreement,
-            model_version, generated_at
+            model_version, prompt_version, brief_version, generated_at
         FROM public.owner_briefs
         WHERE canonical_name = %(name)s
         """,
@@ -47,7 +56,251 @@ def _fetch_owner_brief(cur, canonical_name: str) -> dict | None:
         brief["confidence"] = float(brief["confidence"])
     if brief.get("trial_agreement") is not None:
         brief["trial_agreement"] = float(brief["trial_agreement"])
+    brief["citations"] = list(brief.get("citations") or [])
+    brief["parcel_citations"] = list(brief.get("parcel_citations") or [])
+    brief["citation_evidence"] = _fetch_owner_brief_evidence(
+        cur,
+        brief,
+        allow_people=allow_people,
+    )
+    serialize_temporal_fields(brief, "generated_at")
     return brief
+
+
+def _fetch_owner_brief_evidence(
+    cur,
+    brief: dict,
+    *,
+    allow_people: bool,
+) -> list[dict]:
+    """Resolve stored signal/PIDN citations into customer-facing receipts."""
+
+    signal_keys = [str(value) for value in brief.get("citations") or [] if str(value)]
+    pidns = [str(value) for value in brief.get("parcel_citations") or [] if str(value)]
+    items: list[dict] = []
+    resolved_signal_keys: set[str] = set()
+
+    if signal_keys and pidns:
+        cur.execute(
+            """
+            SELECT pidn, signal_key, claim, evidence_data, source_url,
+                   internal_url, validation_status, adjusted_significance,
+                   validation_reasoning, validated_at, confidence
+            FROM public.evidence
+            WHERE pidn = ANY(%(pidns)s)
+              AND signal_key = ANY(%(signal_keys)s)
+            ORDER BY pidn, signal_key
+            """,
+            {"pidns": pidns, "signal_keys": signal_keys},
+        )
+        for row in cur.fetchall():
+            record = dict(row)
+            safe_signal = sanitize_signals_for_public(
+                {
+                    "signal": {
+                        "claim": record.get("claim"),
+                        "validation_reasoning": record.get("validation_reasoning"),
+                        "evidence": record.get("evidence_data") or {},
+                    }
+                },
+                allow_people=allow_people,
+            ) or {}
+            signal = safe_signal.get("signal")
+            if not isinstance(signal, dict):
+                signal = {}
+            facts = dict(signal.get("evidence") or {})
+            for key in ("claim", "validation_reasoning"):
+                if signal.get(key) is not None:
+                    facts[key] = signal[key]
+            facts["validation_status"] = record.get("validation_status")
+            facts["adjusted_significance"] = record.get("adjusted_significance")
+            signal_key = str(record["signal_key"])
+            pidn = str(record["pidn"])
+            resolved_signal_keys.add(signal_key)
+            items.append(
+                evidence_item(
+                    scope=f"owner-brief:{pidn}",
+                    citation_key=f"signal:{signal_key}",
+                    label=f"{signal_key.replace('_', ' ').title()} · {pidn}",
+                    source_kind="validated_signal",
+                    source_record_id=f"{pidn}:{signal_key}",
+                    url=record.get("source_url"),
+                    internal_url=record.get("internal_url") or f"/property/{pidn}",
+                    details=facts,
+                    observed_at=record.get("validated_at"),
+                    method="CountyIQ validated this portfolio signal against the linked source facts before generating the brief.",
+                    confidence=record.get("confidence"),
+                )
+            )
+
+    for signal_key in signal_keys:
+        if signal_key in resolved_signal_keys:
+            continue
+        items.append(
+            evidence_item(
+                scope="owner-brief",
+                citation_key=f"signal:{signal_key}",
+                label=signal_key.replace("_", " ").title(),
+                source_kind="validated_signal",
+                source_record_id=signal_key,
+                method="This stored citation identifies the validated signal used by the portfolio brief.",
+                caveat="The current serving rows do not contain a more specific external record for this citation.",
+            )
+        )
+
+    if pidns:
+        cur.execute(
+            """
+            SELECT pidn, propadr, municipality, aprtotal, saledt, price,
+                   source_url, valid_from
+            FROM staging.parcels
+            WHERE pidn = ANY(%(pidns)s) AND valid_to IS NULL
+            ORDER BY pidn
+            """,
+            {"pidns": pidns},
+        )
+        for row in cur.fetchall():
+            record = dict(row)
+            pidn = str(record["pidn"])
+            item = evidence_item(
+                scope="owner-brief",
+                citation_key=f"parcel:{pidn}",
+                label=f"Parcel {pidn}",
+                source_kind="official_parcel_record",
+                source_record_id=pidn,
+                url=record.get("source_url"),
+                internal_url=f"/property/{pidn}",
+                details={
+                    key: record.get(key)
+                    for key in ("propadr", "municipality", "aprtotal", "saledt", "price")
+                    if record.get(key) is not None
+                },
+                effective_at=record.get("valid_from"),
+                observed_at=record.get("valid_from"),
+                method="CountyIQ linked this exact PIDN from the versioned county parcel record to the portfolio brief.",
+            )
+            serialize_temporal_fields(item, "effective_at", "observed_at")
+            items.append(item)
+    for item in items:
+        serialize_temporal_fields(item, "effective_at", "observed_at")
+        if item.get("confidence") is not None:
+            item["confidence"] = float(item["confidence"])
+    return items
+
+
+def _fetch_entity_verification_evidence(
+    cur,
+    canonical_name: str,
+    *,
+    allow_corporate_evidence: bool,
+) -> list[dict]:
+    """Expose the governed record identifiers used to verify an entity merge."""
+
+    cur.execute(
+        """
+        SELECT linked_sources, verified_at
+        FROM public.entity_graph
+        WHERE canonical_name = %(name)s
+        ORDER BY verified_at DESC NULLS LAST
+        LIMIT 1
+        """,
+        {"name": canonical_name},
+    )
+    graph = cur.fetchone()
+    if not graph or not isinstance(graph.get("linked_sources"), dict):
+        return []
+
+    # Each source family needs its own customer-display decision. Parcels are
+    # governed above; business records are included only when their separate
+    # policy permits derived-product use. Other graph groups stay backend-only
+    # until their own policy is checked here explicitly.
+    allowed_groups = {"parcels"}
+    if allow_corporate_evidence:
+        allowed_groups.add("corporate_entities")
+    linked_sources = {
+        str(group): [str(value) for value in values[:25]]
+        for group, values in graph["linked_sources"].items()
+        if group in allowed_groups and isinstance(values, list)
+    }
+    verified_at = graph.get("verified_at")
+    items: list[dict] = []
+    parcel_ids = linked_sources.get("parcels", [])
+    parcel_by_id: dict[str, dict] = {}
+    if parcel_ids:
+        cur.execute(
+            """
+            SELECT pidn, propadr, municipality, source_url, valid_from
+            FROM staging.parcels
+            WHERE pidn = ANY(%(pidns)s) AND valid_to IS NULL
+            """,
+            {"pidns": parcel_ids},
+        )
+        parcel_by_id = {str(row["pidn"]): dict(row) for row in cur.fetchall()}
+
+    corporate_names = linked_sources.get("corporate_entities", [])
+    corporate_by_name: dict[str, dict] = {}
+    if corporate_names and allow_corporate_evidence:
+        cur.execute(
+            """
+            SELECT entity_name, entity_number, status, formation_date,
+                   office_address, source_url, valid_from
+            FROM staging.corporate_entities
+            WHERE entity_name = ANY(%(names)s) AND valid_to IS NULL
+            """,
+            {"names": corporate_names},
+        )
+        corporate_by_name = {
+            str(row["entity_name"]): dict(row) for row in cur.fetchall()
+        }
+
+    for group, identifiers in linked_sources.items():
+        for identifier in identifiers:
+            record = parcel_by_id.get(identifier) or corporate_by_name.get(identifier) or {}
+            citation_key = f"evidence:{group}:{identifier}"
+            if group == "parcels":
+                label = f"County parcel {identifier}"
+                internal_url = f"/property/{identifier}"
+                source_kind = "official_parcel_record"
+                details = {
+                    key: record.get(key)
+                    for key in ("propadr", "municipality")
+                    if record.get(key) is not None
+                }
+            elif group == "corporate_entities":
+                label = f"Pennsylvania business record · {identifier}"
+                internal_url = None
+                source_kind = "official_business_record"
+                details = {
+                    key: record.get(key)
+                    for key in ("entity_number", "status", "formation_date", "office_address")
+                    if record.get(key) is not None
+                }
+            else:
+                label = f"{group.replace('_', ' ').title()} · {identifier}"
+                internal_url = None
+                source_kind = "governed_record_reference"
+                details = {"record_group": group, "record_identifier": identifier}
+            item = evidence_item(
+                scope=f"entity:{canonical_name}",
+                citation_key=citation_key,
+                label=label,
+                source_kind=source_kind,
+                source_record_id=record.get("entity_number") or identifier,
+                url=record.get("source_url"),
+                internal_url=internal_url,
+                details=details,
+                effective_at=record.get("valid_from"),
+                observed_at=verified_at,
+                method="CountyIQ used this exact governed record identifier in the entity-verification decision.",
+                caveat=(
+                    None
+                    if record.get("source_url") or internal_url
+                    else "Row-level source display is unavailable under the current source-use policy."
+                ),
+            )
+            serialize_temporal_fields(item, "effective_at", "observed_at")
+            items.append(item)
+    return items
 
 
 def _linked_relationships(
@@ -157,6 +410,9 @@ def owner_profile(owner_id: int) -> dict:
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
         show_people = source_use_allowed(cur, parcel_source, "person_level_display")
+        allow_corporate_evidence = source_use_allowed(
+            cur, "data_pa_businesses", "derived_product"
+        )
         cur.execute(
             """
             SELECT
@@ -230,6 +486,20 @@ def owner_profile(owner_id: int) -> dict:
             owner.pop("relationships", None) or [],
             allow_people=show_people,
         )
+        verification_evidence = _fetch_entity_verification_evidence(
+            cur,
+            owner["canonical_name"],
+            allow_corporate_evidence=allow_corporate_evidence,
+        )
+        brief = (
+            _fetch_owner_brief(
+                cur,
+                owner["canonical_name"],
+                allow_people=show_people,
+            )
+            if show_people
+            else None
+        )
 
         return {
             "owner": {
@@ -237,13 +507,10 @@ def owner_profile(owner_id: int) -> dict:
                 "aliases": owner.get("aliases") or [],
             },
             "relationships": relationships,
+            "verification_evidence": verification_evidence,
             # Existing LLM prose was generated before the person-redaction
             # contract and may mention people beyond this legal organization.
-            "brief": (
-                _fetch_owner_brief(cur, owner["canonical_name"])
-                if show_people
-                else None
-            ),
+            "brief": brief,
             "portfolio": {
                 "parcel_count": len(parcels),
                 "total_assessed": total_assessed,

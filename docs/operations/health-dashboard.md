@@ -1,51 +1,101 @@
 # Source Availability Page
 
 The React route `/ops/health` calls `GET /api/ops/health` and displays current
-row counts for staging sources plus the municipal-source governance rollup.
-The API returns entries shaped like:
+row counts, scheduled-refresh freshness, the latest job outcome, source-policy
+review state, and municipal-source health. The API returns entries shaped like:
 
 ```json
 {
   "overall": "green",
   "sources": {
-    "parcels": {"status": "green", "record_count": 176060},
+    "parcels": {
+      "status": "green",
+      "status_reason": "healthy",
+      "record_count": 176060,
+      "refresh_job": "arcgis_refresh",
+      "expected_refresh_hours": 192,
+      "last_run_status": "success",
+      "last_run_at": "2026-08-30T06:00:00Z",
+      "last_success_at": "2026-08-30T06:00:00Z",
+      "freshness_due_at": "2026-09-07T06:00:00Z",
+      "stale": false
+    },
     "municipal_proceedings": {
       "status": "red",
+      "status_reason": "source_unhealthy",
       "configured_count": 122,
       "active_count": 110,
       "healthy_count": 96,
       "blocked_count": 26,
       "unchecked_count": 0,
-      "document_count": 7152
+      "stale_count": 0,
+      "record_count": 7152,
+      "refresh_job": "scraper_refresh",
+      "last_run_status": "success"
     }
   },
-  "summary": "15/16 sources active"
+  "intelligence_integrity": {
+    "status": "yellow",
+    "status_reason": "unresolved_contradictions",
+    "accepted_count": 124,
+    "quarantined_count": 2,
+    "unresolved_contradiction_count": 1,
+    "resolved_contradiction_count": 1,
+    "oldest_unresolved_at": "2026-08-31T12:00:00Z",
+    "unlinked_projection_count": 0,
+    "projection_mismatch_count": 0,
+    "validation_rejection_count": 3,
+    "validation_rejections_last_24h": 1,
+    "latest_validation_rejection_at": "2026-08-31T12:05:00Z"
+  },
+  "summary": "26/27 sources healthy; intelligence integrity yellow"
 }
 ```
 
-A source is green when its table exists, the count query succeeds, and at
-least one `valid_to IS NULL` row exists. A missing table, query failure, or
-zero current rows is red. Overall status is green when all sources are green,
-yellow when more than half are green, and red otherwise.
+Scheduled weekly sources are healthy for eight days after their latest
+successful job; monthly bulk sources are healthy for 35 days. A source is red
+when its table is missing, its count query fails, it has no current rows, no job
+outcome has been observed, its latest owning job failed, or its latest success
+is older than the configured window. An observed success does not make an
+empty source green. Migration 037 starts the job projection empty, so existing
+data correctly remains `run_not_observed` until the corresponding job next
+completes.
 
-The municipal entry is computed from the 122 per-body policy rows and their
-latest health records. Paused and blocked/failed/uncertain sources remain
-visible, and document counts include active policies only so stale health from
-a subsequently paused source cannot inflate coverage. The example reflects the
-2026-08-27 retained audit; the API is authoritative at runtime. Health never
-changes rights status or grants collection permission.
+The run projection is intentionally job-level. When a grouped refresh fails,
+all source cards owned by that job fail red; Dagster's event log identifies the
+exact failed asset. A newer targeted `proceedings_refresh` run can update the
+municipal card after focused recovery. The application database stores only
+the latest outcome and latest successful completion per job, not a second run
+history.
 
-The result is cached for 60 seconds per Uvicorn worker because the navigation
-bar and homepage also consume it. `COUNTYIQ_OPS_HEALTH_TTL` can change that
-window.
+The municipal entry also checks every active body's `checked_at` timestamp.
+Paused and blocked/failed/uncertain sources remain visible, and document counts
+include active policies only so stale health from a subsequently paused source
+cannot inflate coverage. Health never changes rights status or grants
+collection permission.
 
-This is an availability/count page, not a pipeline observability system. It
-does not currently report last materialization, expected cadence, failed
-Dagster runs, CPU, memory, disk, or container state; a stale populated table
-will remain green. Dagster UI and container health checks remain the operator
-tools until the freshness item in `docs/open-items.md` is implemented.
+The manual `staging.pa_open_data` compatibility table has no alpha consumer and
+does not affect product health. The scheduled `staging.corporate_entities`
+input and every configured Radar source family do. The compatibility table
+remains a manual retire candidate until external operator compatibility is
+confirmed.
 
-The Dagster UI is bound to host loopback. Reach it through an SSH tunnel:
+Overall status is green when all sources are green, yellow when more than half
+are green, and red otherwise, then worsened by intelligence-integrity status.
+A new unresolved contradiction is yellow so the prior accepted projection can
+remain available during review. It becomes red after
+`COUNTYIQ_CONTRADICTION_MAX_AGE_HOURS` (72 by default). Any model-backed row
+without accepted provenance or pointing to the wrong pass/output kind is red
+immediately. A deterministic evidence, identity-membership, or citation gate
+rejection in the last 24 hours is yellow and remains a failed canary condition.
+The aggregate exposes no inference payloads or identities.
+
+The result is cached for 60 seconds per Uvicorn worker because navigation also
+consumes it; `COUNTYIQ_OPS_HEALTH_TTL` can change that window.
+
+This remains application health, not infrastructure telemetry. It does not
+report CPU, memory, disk, container state, or step-level Dagster history. The
+Dagster UI is bound to host loopback. Reach it through an SSH tunnel:
 
 ```bash
 ssh -L 3000:localhost:3000 countyiq

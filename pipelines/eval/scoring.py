@@ -7,8 +7,18 @@ import re
 from collections import defaultdict
 from typing import Any
 
-
 PASS2_SCORING_VERSION = "2026-08-30.3"
+
+
+def enforce_production_gate(score: dict, errors: list[str]) -> dict:
+    """Make the serving validator a required part of a promotion result."""
+
+    return {
+        **score,
+        "production_gate_pass": not errors,
+        "production_gate_errors": errors,
+        "gold_pass": bool(score.get("gold_pass")) and not errors,
+    }
 
 
 def _normalized(value: Any) -> str:

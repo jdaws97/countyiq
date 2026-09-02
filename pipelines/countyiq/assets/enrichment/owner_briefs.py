@@ -10,7 +10,7 @@ reading N parcel briefs independently.
 import hashlib
 import json
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dagster import (
     AssetExecutionContext,
@@ -20,12 +20,19 @@ from dagster import (
 )
 
 from countyiq.lib.error_budget import check_error_budget
-from countyiq.lib.pass_llm_config import (
-    PassItemBudget,
-    PassHarnessUnavailable,
-    resolve_pass_harness,
+from countyiq.lib.intelligence_common import (
+    fetch_prior_pass_attempts,
+    pass_attempt_priority,
 )
-from countyiq.lib.pass_schemas import PASS3B_OWNER_BRIEF_SCHEMA
+from countyiq.lib.intelligence_autoresolve import auto_resolve_contradiction
+from countyiq.lib.intelligence_integrity import (
+    content_hash,
+    inference_input_hash,
+    owner_brief_semantic_decision,
+    record_inference_decision,
+    record_validation_rejection,
+    validate_owner_brief_citations,
+)
 from countyiq.lib.pass3_owner_briefs import (
     OWNER_PORTFOLIO_QUERY,
     OWNER_ROLLUP_SYSTEM_PROMPT,
@@ -36,7 +43,20 @@ from countyiq.lib.pass3_owner_briefs import (
     build_owner_rollup_prompt,
     parse_owner_brief_output,
 )
+from countyiq.lib.pass_llm_config import (
+    PassHarnessUnavailable,
+    PassItemBudget,
+    PassSpendLimitExceeded,
+    resolve_pass_harness,
+)
+from countyiq.lib.pass_schemas import PASS3B_OWNER_BRIEF_SCHEMA
 from countyiq.resources.database import DatabaseResource
+
+
+def _owner_subject_key(canonical_name: str) -> str:
+    return "owner_brief:" + hashlib.sha256(
+        canonical_name.encode("utf-8")
+    ).hexdigest()[:20]
 
 
 @asset(
@@ -56,6 +76,26 @@ def owner_briefs(
     database: DatabaseResource,
 ) -> MaterializeResult:
     log = context.log
+
+    # Projection cleanup is deterministic and must still run when Pass 3 is
+    # disabled or unavailable.
+    database.execute(
+        """
+        DELETE FROM public.owner_briefs ob
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM public.owners o
+            JOIN public.owner_source_links osl
+              ON osl.owner_id = o.owner_id AND osl.source_type = 'parcel'
+            JOIN public.evidence e ON e.pidn = osl.source_id
+            WHERE o.canonical_name = ob.canonical_name
+              AND e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+              AND e.adjusted_significance IN ('high', 'medium')
+            GROUP BY o.owner_id
+            HAVING COUNT(DISTINCT osl.source_id) >= 3
+        )
+        """
+    )
 
     try:
         config, invoke_with_retry = resolve_pass_harness(
@@ -84,6 +124,12 @@ def owner_briefs(
         (r["owner_id"], r["canonical_name"]) if isinstance(r, dict) else (r[0], r[1])
         for r in (owner_rows or [])
     ]
+    prior_attempts = fetch_prior_pass_attempts(database, pass_number=3)
+    owners_needing.sort(
+        key=lambda owner: pass_attempt_priority(
+            _owner_subject_key(owner[1]), prior_attempts
+        )
+    )
     if not owners_needing:
         log.info("No owners eligible for rollup briefs.")
         return MaterializeResult(metadata={
@@ -96,8 +142,11 @@ def owner_briefs(
     briefs_created = 0
     skipped_unchanged = 0
     errors = 0
+    spend_limit_reached = False
 
     for i, (owner_id, canonical_name) in enumerate(owners_needing, 1):
+        subject_key = _owner_subject_key(canonical_name)
+        input_hash: str | None = None
         try:
             with database.dict_cursor() as cur:
                 cur.execute(OWNER_PORTFOLIO_QUERY, {"owner_id": owner_id})
@@ -121,18 +170,38 @@ def owner_briefs(
             # out byte-identical. Hashing the RENDERED prompt (+ model + prompt
             # version) skips those without a false-invalidation from volatile
             # timestamp fields — and re-runs when the template itself changes.
-            subject_key = "owner_brief:" + hashlib.sha256(
-                canonical_name.encode("utf-8")
-            ).hexdigest()[:20]
-            input_hash = hashlib.sha256(
-                f"{config.model_path}\x1f{PROMPT_VERSION}\x1f{prompt}".encode("utf-8")
-            ).hexdigest()
+            source_hash = content_hash(
+                {
+                    "owner": owner,
+                    "evidence": [
+                        {
+                            key: row.get(key)
+                            for key in (
+                                "pidn", "signal_key", "validation_status",
+                                "adjusted_significance", "validation_reasoning",
+                                "evidence_data", "confidence", "municipality",
+                            )
+                        }
+                        for row in evidence_rows
+                    ],
+                }
+            )
+            input_hash = inference_input_hash(
+                source_hash,
+                requested_model=config.model_path,
+                prompt_version=PROMPT_VERSION,
+            )
             existing = database.execute(
                 """
-                SELECT input_hash FROM meta.intelligence_passes
-                WHERE pidn = %(key)s AND pass_number = 3 AND status = 'complete'
+                SELECT ip.input_hash
+                FROM meta.intelligence_passes ip
+                JOIN public.owner_briefs ob
+                  ON ob.canonical_name = %(canonical_name)s
+                WHERE ip.pidn = %(key)s
+                  AND ip.pass_number = 3
+                  AND ip.status = 'complete'
                 """,
-                {"key": subject_key},
+                {"key": subject_key, "canonical_name": canonical_name},
             )
             prior_hash = None
             if existing:
@@ -149,17 +218,101 @@ def owner_briefs(
                 config, prompt, archive_key=f"owner-{owner_id}", retries=1,
             )
             if not result.success:
+                _update_owner_pass_status(
+                    database, subject_key, "error", input_hash, result.error
+                )
                 log.warning(f"owner {owner_id}: LLM failed — {result.error}")
                 errors += 1
                 continue
 
             parsed = parse_owner_brief_output(result.parsed or {})
             if "error" in parsed:
+                _update_owner_pass_status(
+                    database, subject_key, "error", input_hash, parsed["error"]
+                )
                 log.warning(f"owner {owner_id}: parse error — {parsed['error']}")
                 errors += 1
                 continue
 
-            now = datetime.now(timezone.utc).isoformat()
+            allowed_signal_keys = {
+                row["signal_key"] for row in evidence_rows if row.get("signal_key")
+            }
+            allowed_pidns = {row["pidn"] for row in evidence_rows if row.get("pidn")}
+            citation_errors = validate_owner_brief_citations(
+                parsed, allowed_signal_keys, allowed_pidns,
+            )
+            if citation_errors:
+                _update_owner_pass_status(
+                    database,
+                    subject_key,
+                    "error",
+                    input_hash,
+                    "; ".join(citation_errors),
+                )
+                record_validation_rejection(
+                    database,
+                    subject_key=subject_key,
+                    pass_number=3,
+                    output_kind="owner_brief",
+                    source_hash=source_hash,
+                    input_hash=input_hash,
+                    requested_model=config.model_path,
+                    prompt_version=PROMPT_VERSION,
+                    errors=citation_errors,
+                )
+                log.warning(
+                    "owner %s: citation validation failed — %s",
+                    owner_id,
+                    "; ".join(citation_errors),
+                )
+                errors += 1
+                continue
+
+            gate = record_inference_decision(
+                database,
+                subject_key=subject_key,
+                pass_number=3,
+                output_kind="owner_brief",
+                decision_key="brief",
+                source_hash=source_hash,
+                input_hash=input_hash,
+                requested_model=config.model_path,
+                served_model=result.metadata.get("served_model"),
+                provider=result.metadata.get("provider"),
+                prompt_version=PROMPT_VERSION,
+                payload=parsed,
+                semantic_decision=owner_brief_semantic_decision(parsed),
+                citations=parsed["citations"],
+                evidence_refs=(
+                    [f"signal:{key}" for key in parsed["citations"]]
+                    + [f"parcel:{pidn}" for pidn in parsed["parcel_citations"]]
+                ),
+            )
+            if not gate.accepted:
+                auto = auto_resolve_contradiction(database, gate.contradiction_id, log)
+                if auto.resolved:
+                    log.info(
+                        "Contradiction %s auto-resolved (%s): %s",
+                        gate.contradiction_id, auto.resolution, auto.rationale,
+                    )
+                    continue
+                _update_owner_pass_status(
+                    database,
+                    subject_key,
+                    "error",
+                    input_hash,
+                    f"quarantined contradiction {gate.contradiction_id}: {gate.reason}",
+                )
+                log.warning(
+                    "owner %s: quarantined as contradiction %s — %s",
+                    owner_id,
+                    gate.contradiction_id,
+                    gate.reason,
+                )
+                errors += 1
+                continue
+
+            now = datetime.now(UTC).isoformat()
             pass_metadata = {
                 "model":       config.model_path,
                 "pass":        "3b-owner-rollup",
@@ -182,7 +335,7 @@ def owner_briefs(
                     "evidence_strength":    parsed["evidence_strength"],
                     "citations":            json.dumps(parsed["citations"]),
                     "parcel_citations":     json.dumps(parsed["parcel_citations"]),
-                    "n_parcels":            len(set(r["pidn"] for r in evidence_rows)),
+                    "n_parcels":            len({r["pidn"] for r in evidence_rows}),
                     "model_version":        config.model_path,
                     "prompt_version":       PROMPT_VERSION,
                     # A single unvoted sample has no agreement measurement;
@@ -192,27 +345,27 @@ def owner_briefs(
                     "confidence":           parsed["confidence"],
                     "pass_metadata":        json.dumps(pass_metadata),
                     "generated_at":         now,
+                    "active_inference_id":  gate.inference_id,
                 },
             )
-            database.execute(
-                """
-                INSERT INTO meta.intelligence_passes
-                    (pidn, pass_number, status, last_run_at, input_hash)
-                VALUES (%(key)s, 3, 'complete', NOW(), %(hash)s)
-                ON CONFLICT (pidn, pass_number)
-                DO UPDATE SET
-                    status = 'complete',
-                    last_run_at = NOW(),
-                    input_hash = EXCLUDED.input_hash,
-                    error_message = NULL
-                """,
-                {"key": subject_key, "hash": input_hash},
+            _update_owner_pass_status(
+                database, subject_key, "complete", input_hash
             )
             briefs_created += 1
             if i % 25 == 0:
                 log.info(f"  progress: {i}/{len(owners_needing)} owners, {briefs_created} briefs")
 
+        except PassSpendLimitExceeded as exc:
+            spend_limit_reached = True
+            log.info(
+                "Pass 3b dollar ceiling reached; remaining owner briefs are deferred: %s",
+                exc,
+            )
+            break
         except Exception as exc:
+            _update_owner_pass_status(
+                database, subject_key, "error", input_hash or "", str(exc)
+            )
             log.warning(f"owner {owner_id}: exception — {exc}")
             errors += 1
             continue
@@ -227,9 +380,43 @@ def owner_briefs(
         "skipped_unchanged": MetadataValue.int(skipped_unchanged),
         "owners_eligible":  MetadataValue.int(len(owners_needing)),
         "briefs_created":   MetadataValue.int(briefs_created),
-        "item_limit":       MetadataValue.int(item_budget.limit),
+        "budget_mode":      MetadataValue.text(item_budget.mode),
+        "item_limit":       (
+            MetadataValue.int(item_budget.limit)
+            if item_budget.limit is not None
+            else MetadataValue.text("cost-only")
+        ),
         "items_claimed":    MetadataValue.int(item_budget.claimed),
+        "spend_limit_reached": MetadataValue.bool(spend_limit_reached),
         "errors":           MetadataValue.int(errors),
         "model":            MetadataValue.text(config.model_path),
         "prompt_version":   MetadataValue.text(PROMPT_VERSION),
     })
+
+
+def _update_owner_pass_status(
+    database: DatabaseResource,
+    subject_key: str,
+    status: str,
+    input_hash: str,
+    error_message: str | None = None,
+) -> None:
+    database.execute(
+        """
+        INSERT INTO meta.intelligence_passes
+            (pidn, pass_number, status, last_run_at, input_hash, error_message)
+        VALUES (%(key)s, 3, %(status)s, NOW(), %(hash)s, %(error)s)
+        ON CONFLICT (pidn, pass_number)
+        DO UPDATE SET
+            status = EXCLUDED.status,
+            last_run_at = EXCLUDED.last_run_at,
+            input_hash = EXCLUDED.input_hash,
+            error_message = EXCLUDED.error_message
+        """,
+        {
+            "key": subject_key,
+            "status": status,
+            "hash": input_hash,
+            "error": error_message,
+        },
+    )

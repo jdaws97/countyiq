@@ -4,7 +4,10 @@ import { Link, useParams } from 'react-router-dom'
 import Badge from '../components/Badge'
 import IntelligenceEventCard from '../components/IntelligenceEventCard'
 import PageShell from '../components/PageShell'
+import ReportActions from '../components/ReportActions'
 import Section from '../components/Section'
+import { Button } from '../components/ui'
+import { downloadText, toCsv } from '../lib/investigationState'
 import { useFetchJson } from '../lib/useFetchJson'
 import {
   isProjectWatched,
@@ -46,9 +49,15 @@ export default function ProjectCaseFile() {
     return Array.from(byId.values())
   }, [events])
 
+  const exportCsv = () => {
+    const rows: Array<Array<string | number | null>> = [['Date', 'Type', 'Title', 'Municipality', 'What happened', 'Why it matters', 'Next step', 'Evidence receipts']]
+    for (const event of events) rows.push([event.event_date ?? event.detected_at, event.event_type, event.title, event.municipality, event.what_happened, event.why_it_matters, event.what_happens_next, event.sources.length])
+    downloadText(`countyiq-project-${project.key || 'case-file'}.csv`, toCsv(rows), 'text/csv')
+  }
+
   return (
     <PageShell maxWidth={1000}>
-      <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 28 }}>
+      <div style={{ marginBottom: 28 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-cyan)', marginBottom: 8 }}>
           Project case file
         </div>
@@ -80,6 +89,8 @@ export default function ProjectCaseFile() {
               {watched ? '★ Watching project' : '☆ Watch project'}
             </button>
           )}
+          {events.length > 0 && <Button tone="quiet" onClick={exportCsv}>Export CSV</Button>}
+          <ReportActions label={`${project.name || 'Project'} case file`} />
         </div>
       </div>
 

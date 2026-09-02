@@ -53,7 +53,7 @@ its reason to exist.
 |---|---|---|
 | Pass 0 — municipal document extraction | **Required** | Heterogeneous PDFs and meeting language need structured extraction. Every result remains source-linked and must pass negative controls. |
 | Pass 1 — ambiguous entity resolution | **Required only for ambiguous clusters** | Exact identifiers and deterministic name/address matches run first. LLM merging is valuable only when evidence is ambiguous, must support abstention, and must never invent identifiers. |
-| Pass 2 — cross-signal validation | **Selective** | Run on shortlisted parcels with multiple meaningful signals, not the county universe. Geometry, thresholds, eligibility, and ranking remain deterministic. |
+| Pass 2 — cross-signal validation | **Selective, annotation only** | Run on shortlisted parcels with multiple meaningful signals, not the county universe. Its output is displayed beside the score (status, reasoning, cross-signal insight) and never changes a rank; geometry, thresholds, eligibility, weights, and ranking are deterministic and back-tested. |
 | Pass 3 / 3b — parcel and owner briefs | **Selective and cached** | A grounded brief helps a user synthesize a real case file. Generate only for materially signaled parcels/owners and only when the input hash changes. |
 | Pass 4 — county narratives | **Off by default** | It does not power the alpha loop, has only provisional two-area evaluation evidence, and adds recurring synthesis cost. Enable explicitly with `COUNTYIQ_PASS4_ENABLED=true` only for a tested product surface. |
 | Feed ranking, map layers, change detection, watch matching, filters | **No LLM** | These are auditable SQL/geometry/rules problems. The API exposes deterministic importance reasons. |

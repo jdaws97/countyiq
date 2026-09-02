@@ -12,6 +12,7 @@ import pytest
 from countyiq.lib.pass1_entity_verification import (
     ENTITY_VERIFICATION_SYSTEM_PROMPT,
     ENTITY_VERIFICATION_USER_TEMPLATE,
+    build_deterministic_entity_resolution,
     build_entity_cluster_prompt,
     parse_entity_verification_output,
     stable_cluster_key,
@@ -20,6 +21,47 @@ from countyiq.lib.pass1_entity_verification import (
 ENTITY_VERIFICATION_PROMPT_TEXT = (
     ENTITY_VERIFICATION_SYSTEM_PROMPT + "\n\n" + ENTITY_VERIFICATION_USER_TEMPLATE
 )
+
+
+def test_deterministic_tier_accepts_only_anchored_legal_name_variants():
+    records = {
+        "candidate_names": ["ACME, L.L.C.", "ACME LLC"],
+        "parcels": [{"pidn": "P1", "owner_full": "ACME LLC", "aprtotal": 100}],
+        "tax_claims": [],
+        "plcb_licenses": [],
+        "corporate_entities": [
+            {"entity_name": "ACME LLC", "entity_number": "123"}
+        ],
+        "proceedings": [],
+    }
+    parsed = build_deterministic_entity_resolution(
+        records,
+        records["candidate_names"],
+    )
+    assert parsed is not None
+    assert parsed["entities"][0]["member_names"] == ["ACME LLC", "ACME, L.L.C."]
+    assert parsed["entities"][0]["linked_records"]["parcels"] == ["P1"]
+
+
+def test_deterministic_tier_refuses_people_and_conflicting_entity_numbers():
+    people = {
+        "corporate_entities": [],
+    }
+    assert build_deterministic_entity_resolution(
+        people,
+        ["SMITH JOHN", "SMITH, JOHN"],
+    ) is None
+
+    conflicting = {
+        "corporate_entities": [
+            {"entity_name": "ACME LLC", "entity_number": "123"},
+            {"entity_name": "ACME, L.L.C.", "entity_number": "456"},
+        ]
+    }
+    assert build_deterministic_entity_resolution(
+        conflicting,
+        ["ACME LLC", "ACME, L.L.C."],
+    ) is None
 
 
 # ---------------------------------------------------------------------------

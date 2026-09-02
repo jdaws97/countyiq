@@ -14,11 +14,6 @@ from dagster import (
 )
 
 from countyiq.lib.intelligence_common import compute_input_hash
-from countyiq.lib.pass_llm_config import (
-    PassItemBudget,
-    PassHarnessUnavailable,
-    resolve_pass_harness,
-)
 from countyiq.lib.pass4_county_narratives import (
     CORRIDOR_SCAN_QUERY,
     CORRIDOR_SYSTEM_PROMPT,
@@ -33,6 +28,11 @@ from countyiq.lib.pass4_county_narratives import (
     build_municipal_prompt,
     build_portfolio_prompt,
     parse_narrative_output,
+)
+from countyiq.lib.pass_llm_config import (
+    PassHarnessUnavailable,
+    PassItemBudget,
+    resolve_pass_harness,
 )
 from countyiq.resources.database import DatabaseResource
 
@@ -98,7 +98,7 @@ PROCEEDINGS_FOR_PIDNS_QUERY = """
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
     WHERE pp.valid_to IS NULL
-      AND pe.extraction_type NOT IN ('_complete', '_no_extractions')
+      AND LEFT(pe.extraction_type, 1) <> '_'
       AND (
           pe.parcel_reference = ANY(%(pidns)s)
           OR pe.parcel_reference IN (
@@ -147,7 +147,7 @@ ZHB_DECISIONS_QUERY = """
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
     WHERE pp.valid_to IS NULL
-      AND pe.extraction_type NOT IN ('_complete', '_no_extractions')
+      AND LEFT(pe.extraction_type, 1) <> '_'
       AND pe.extraction_type ILIKE '%%zoning%%'
       AND EXISTS (
           SELECT 1 FROM staging.parcels p
@@ -728,11 +728,14 @@ def _narrative_archive_key(kind: str, *parts) -> str:
 def _get_prior_hash(database: DatabaseResource, narrative_key: str) -> str | None:
     rows = database.execute(
         """
-        SELECT input_hash
-        FROM meta.intelligence_passes
-        WHERE pidn = %(pidn)s
-          AND pass_number = %(pass_number)s
-          AND status = 'complete'
+        SELECT ip.input_hash
+        FROM meta.intelligence_passes ip
+        JOIN public.county_narratives cn
+          ON cn.narrative_key = ip.pidn
+         AND (cn.expires_at IS NULL OR cn.expires_at >= NOW())
+        WHERE ip.pidn = %(pidn)s
+          AND ip.pass_number = %(pass_number)s
+          AND ip.status = 'complete'
         """,
         {"pidn": narrative_key, "pass_number": PASS_NUMBER},
     ) or []

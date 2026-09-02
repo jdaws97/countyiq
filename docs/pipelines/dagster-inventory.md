@@ -1,7 +1,7 @@
 # Dagster Pipeline Inventory
 
 **Review date:** 2026-08-30
-**Scope:** all 45 registered assets, 18 jobs, 7 schedules, and 2 sensors
+**Scope:** all 45 registered assets, 18 jobs, 7 schedules, and 3 sensors
 
 ## Operational truth
 
@@ -42,8 +42,8 @@ Importance labels:
 | Pass 0, 1, 2, 3, 4 manual jobs | Manual | One model-backed pass each; Pass 1 also refreshes municipality assignments and candidate pairs | Keep. These are the correct paid-pilot and selective-backfill controls. Pass 4 remains off. |
 | `intelligence_data_refresh` | Manual | PA DOS + proceedings + paid Pass 0 | Rename or retire later. Its name hides a paid call boundary. |
 | `intelligence_full_pipeline` | Manual | Passes 1-4 plus deterministic momentum/events | Keep only as an explicitly funded operator convenience; never treat it as the safe default. |
-| County Scout discovery/monitor jobs | Manual | Two Scout assets | Defer. Registered for inspection but blocked by source policy and unused by the alpha. |
-| Success/failure sensors | Daemon-driven | Slack run outcome messages | Important after deployment if Slack is configured; inert now because no daemon is deployed. |
+| Success/failure sensors | Daemon-driven | Slack run outcome messages plus the latest application-health projection in `meta.job_run_status` | Important after deployment; the database projection runs regardless of Slack configuration and remains inert until a daemon processes run events. |
+| `intelligence_integrity_guard` | Every five minutes | Aggregate unresolved contradiction age and projection/provenance health | Critical during paid passes. State-change cursoring avoids repeated alerts; warning/critical webhooks remain optional. |
 
 ## Asset-by-asset review
 
@@ -74,7 +74,7 @@ Their value is the combined parcel-level Radar score and evidence trail.
 | `growth_areas_arcgis` | Growth-area context and site-readiness scoring. | **Important — keep.** |
 | `future_landuse_arcgis` | Future-land-use mismatch/context signals. | **Important — keep.** |
 | `conservation_easements_arcgis` | Parcel exclusion/constraint evidence. | **Important — keep.** |
-| `ag_security_arcgis` | Agricultural-security exclusion/constraint evidence. | **Important — keep.** |
+| `ag_security_arcgis` | Agricultural Security Area planning context. | **Important — keep.** Enrollment is not a development prohibition or conservation easement. |
 | `zoning_overlays_arcgis` | Development overlay and site-readiness evidence. | **Important — keep.** |
 | `business_parks_arcgis` | Economic-park opportunity/site-readiness evidence. | **Important — keep.** |
 | `industrial_parks_arcgis` | Industrial-park opportunity/site-readiness evidence. | **Important — keep.** |
@@ -122,12 +122,10 @@ Their value is the combined parcel-level Radar score and evidence trail.
 | `owner_briefs` (Pass 3b) | Cached portfolio synthesis for owners with at least three signaled parcels. | **Conditional and paid.** Generate only after owner and Pass 2 quality are proven. |
 | `county_narratives` (Pass 4) | Cross-parcel/county synthesis, exposed only as optional parcel context. | **Defer.** Disabled by default, not required by the alpha loop, and excluded from the estimator total. |
 
-### Inactive research and paused sources
+### Paused sources
 
 | Asset | Use | Importance and disposition |
 |---|---|---|
-| `county_scout_discovery` | Source-candidate discovery prototype; zero current product rows/dependencies. | **Defer.** Keep unscheduled and policy-paused until multi-county discovery volume justifies a rights-reviewed redesign. |
-| `county_scout_monitor` | Monitoring for promoted Scout sources; none are active. | **Defer.** Same reactivation gate as discovery. |
 | `cdbg_housing_arcgis` | Housing locations whose publication/privacy posture is unresolved. | **Defer/paused.** Keep outside schedules and scoring until review clears it. |
 | `ecodev_candidates_arcgis` | Candidate parcels without recorded reuse approval. | **Defer/paused.** Keep outside schedules and expire it from current scoring until written approval exists. |
 

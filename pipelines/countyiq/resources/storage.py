@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Union
@@ -32,6 +34,7 @@ class S3StorageResource(ConfigurableResource):
     access_key_id: str = ""
     secret_access_key: str = ""
     strict: bool = False
+    local_archive_dir: str = ""
 
     def _client(self):
         kwargs: dict = {"region_name": self.region}
@@ -46,6 +49,50 @@ class S3StorageResource(ConfigurableResource):
         if self.strict:
             raise RuntimeError(f"{message}: {exc}") from exc
         log.warning(f"{message} ({exc}). Data not persisted.")
+
+    def _local_destination(self, source_path: str, filename: str) -> Path:
+        root = Path(self.local_archive_dir).expanduser().resolve()
+        relative = Path(source_path) / datetime.now(timezone.utc).strftime("%Y-%m-%d") / filename
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("Local archive path must remain beneath its configured root")
+        destination = (root / relative).resolve()
+        if not destination.is_relative_to(root):
+            raise ValueError("Local archive path escaped its configured root")
+        return destination
+
+    def _write_local_bytes(self, destination: Path, body: bytes) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{destination.name}.",
+            dir=destination.parent,
+        )
+        temporary_path = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(body)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary_path, destination)
+        except Exception:
+            temporary_path.unlink(missing_ok=True)
+            raise
+
+    def _copy_local_file(self, destination: Path, local_path: str) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{destination.name}.",
+            dir=destination.parent,
+        )
+        temporary_path = Path(temporary_name)
+        try:
+            with open(local_path, "rb") as source, os.fdopen(descriptor, "wb") as output:
+                shutil.copyfileobj(source, output)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary_path, destination)
+        except Exception:
+            temporary_path.unlink(missing_ok=True)
+            raise
 
     def archive(
         self,
@@ -72,12 +119,17 @@ class S3StorageResource(ConfigurableResource):
             body = data
 
         try:
+            if self.local_archive_dir:
+                destination = self._local_destination(source_path, filename)
+                self._write_local_bytes(destination, body)
+                log.info(f"Archived locally to {destination} ({len(body)} bytes)")
+                return
             self._client().put_object(Bucket=self.bucket, Key=key, Body=body)
             log.info(
                 f"Archived to {self.endpoint_url or 's3 (default AWS endpoint!)'}"
                 f"/{self.bucket}/{key} ({len(body)} bytes)"
             )
-        except (BotoCoreError, ClientError) as e:
+        except (BotoCoreError, ClientError, OSError, ValueError) as e:
             self._handle_failure(log, f"Archive of {key} failed", e)
 
     def archive_file(
@@ -93,13 +145,19 @@ class S3StorageResource(ConfigurableResource):
         key = f"{source_path}/{date_str}/{resolved_name}"
 
         try:
+            if self.local_archive_dir:
+                destination = self._local_destination(source_path, resolved_name)
+                self._copy_local_file(destination, local_path)
+                size = destination.stat().st_size
+                log.info(f"Archived locally to {destination} ({size} bytes)")
+                return
             self._client().upload_file(local_path, self.bucket, key)
             size = os.path.getsize(local_path)
             log.info(
                 f"Archived to {self.endpoint_url or 's3 (default AWS endpoint!)'}"
                 f"/{self.bucket}/{key} ({size} bytes)"
             )
-        except (BotoCoreError, ClientError) as e:
+        except (BotoCoreError, ClientError, OSError, ValueError) as e:
             self._handle_failure(log, f"Archive of {key} failed", e)
 
 
@@ -112,4 +170,5 @@ def make_s3_resource() -> S3StorageResource:
         access_key_id=os.environ.get("R2_ACCESS_KEY_ID", ""),
         secret_access_key=os.environ.get("R2_SECRET_ACCESS_KEY", ""),
         strict=strict_env in {"1", "true", "yes", "on"},
+        local_archive_dir=os.environ.get("COUNTYIQ_LOCAL_RAW_ARCHIVE_DIR", ""),
     )

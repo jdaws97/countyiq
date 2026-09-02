@@ -22,14 +22,26 @@ Design rules:
 from countyiq.lib.pass2_signal_validation import VALID_SIGNIFICANCE, VALID_STATUSES
 from countyiq.lib.pass3_brief_generation import (
     VALID_ASSESSMENTS,
+)
+from countyiq.lib.pass3_brief_generation import (
     VALID_EVIDENCE as VALID_EVIDENCE_P3,
+)
+from countyiq.lib.pass3_brief_generation import (
     VALID_RECOMMENDATIONS as VALID_RECOMMENDATIONS_P3,
+)
+from countyiq.lib.pass3_brief_generation import (
     VALID_URGENCY as VALID_URGENCY_P3,
 )
 from countyiq.lib.pass3_owner_briefs import (
     VALID_EVIDENCE as VALID_EVIDENCE_P3B,
+)
+from countyiq.lib.pass3_owner_briefs import (
     VALID_RECOMMENDATIONS as VALID_RECOMMENDATIONS_P3B,
+)
+from countyiq.lib.pass3_owner_briefs import (
     VALID_STRATEGIES,
+)
+from countyiq.lib.pass3_owner_briefs import (
     VALID_URGENCY as VALID_URGENCY_P3B,
 )
 
@@ -105,6 +117,116 @@ PASS0_EXTRACTION_SCHEMA = {
         },
     },
     "required": ["extractions"],
+    "additionalProperties": False,
+}
+
+
+PASS1_ENTITY_VERIFICATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "entities": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "canonical_name": {"type": "string"},
+                    "member_names": _string_array(),
+                    "entity_type": {
+                        "type": "string",
+                        "enum": [
+                            "individual", "llc", "corporation", "partnership",
+                            "trust", "unknown",
+                        ],
+                    },
+                    "confidence": {"type": "number"},
+                    "reasoning": {"type": "string"},
+                    "linked_records": {
+                        "type": "object",
+                        "properties": {
+                            "parcels": _string_array(),
+                            "tax_claims": _string_array(),
+                            "plcb_licenses": _string_array(),
+                            "corporate_entities": _string_array(),
+                            "proceedings": _string_array(),
+                        },
+                        "required": [
+                            "parcels", "tax_claims", "plcb_licenses",
+                            "corporate_entities", "proceedings",
+                        ],
+                        "additionalProperties": False,
+                    },
+                    "relationships": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "related_entity": {"type": "string"},
+                                "relationship_type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "controls", "officer_of",
+                                        "registered_agent_for", "subsidiary_of",
+                                        "shares_address_with", "same_person",
+                                    ],
+                                },
+                                "evidence": {"type": "string"},
+                            },
+                            "required": [
+                                "related_entity", "relationship_type", "evidence",
+                            ],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "portfolio_summary": {
+                        "type": "object",
+                        "properties": {
+                            "parcel_count": {"type": "integer"},
+                            "total_assessed_value": {"type": "number"},
+                            "tax_delinquent_parcels": {"type": "integer"},
+                            "total_tax_owed": {"type": "number"},
+                        },
+                        "required": [
+                            "parcel_count", "total_assessed_value",
+                            "tax_delinquent_parcels", "total_tax_owed",
+                        ],
+                        "additionalProperties": False,
+                    },
+                },
+                "required": [
+                    "canonical_name", "member_names", "entity_type", "confidence",
+                    "reasoning", "linked_records", "relationships",
+                    "portfolio_summary",
+                ],
+                "additionalProperties": False,
+            },
+        },
+        "rejected_matches": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name_a": {"type": "string"},
+                    "name_b": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["name_a", "name_b", "reason"],
+                "additionalProperties": False,
+            },
+        },
+        "abstentions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "names": _string_array(),
+                    "reason": {"type": "string"},
+                },
+                "required": ["names", "reason"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["entities", "rejected_matches", "abstentions"],
     "additionalProperties": False,
 }
 

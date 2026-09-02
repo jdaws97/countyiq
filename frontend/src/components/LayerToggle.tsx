@@ -28,12 +28,13 @@ const ZONING_LEGEND = [
 export default function LayerToggle({ layers, onToggle }: LayerToggleProps) {
   const zoningEnabled = layers.find(l => l.id === 'zoning')?.enabled ?? false
   return (
-    <div
+    <details
+      className="layer-toggle"
       style={{
         position: 'absolute',
         top: 16,
         right: 16,
-        zIndex: 10,
+        zIndex: 30,
         background: 'var(--bg-panel)',
         border: '1px solid var(--border)',
         borderRadius: 8,
@@ -42,6 +43,10 @@ export default function LayerToggle({ layers, onToggle }: LayerToggleProps) {
         boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
       }}
     >
+      <summary className="layer-toggle-summary">
+        <span>Map layers</span><span>{layers.filter((layer) => layer.enabled).length} on · configure</span>
+      </summary>
+      <div className="layer-toggle-content">
       <div
         style={{
           fontFamily: 'var(--font-mono)',
@@ -141,6 +146,7 @@ export default function LayerToggle({ layers, onToggle }: LayerToggleProps) {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </details>
   )
 }

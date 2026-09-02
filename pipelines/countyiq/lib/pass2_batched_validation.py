@@ -13,41 +13,50 @@ Benefits:
 The per-signal version (pass2_signal_validation.py) is retained for A/B
 comparison and for cases where individual validation is specifically needed.
 """
-from collections import Counter as _Counter
 import hashlib as _hashlib
 import json
+from collections import Counter as _Counter
 
 from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.intelligence_common import (
-    PARCEL_QUERY,
-    TAX_CLAIMS_QUERY,
-    PROCEEDINGS_FOR_PARCEL_QUERY,
-    PROCEEDINGS_FOR_ENTITY_QUERY,
-    NEIGHBORS_QUERY,
     CORPORATE_FOR_NAMES_QUERY,
     ENTITY_GRAPH_QUERY,
+    NEIGHBORS_QUERY,
+    PARCEL_QUERY,
     PORTFOLIO_QUERY,
-    format_parcel_context,
-    format_tax_claims_context,
+    PROCEEDINGS_FOR_ENTITY_QUERY,
+    PROCEEDINGS_FOR_PARCEL_QUERY,
+    TAX_CLAIMS_QUERY,
+    format_corporate_context,
     format_entity_context,
+    format_neighbors_context,
+    format_parcel_context,
     format_portfolio_context,
     format_proceedings_context,
-    format_neighbors_context,
-    format_corporate_context,
+    format_tax_claims_context,
 )
 from countyiq.lib.pass2_signal_validation import (
     SIGNAL_TEMPLATES,
     parse_signal_validation_output,
 )
+from countyiq.lib.pass_schemas import PASS2_BATCHED_VALIDATION_SCHEMA
+from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, schema_block
 
 # ---------------------------------------------------------------------------
 # Signal type classification — which sections of context each signal needs
 # ---------------------------------------------------------------------------
 
-SIGNAL_NEEDS_NEIGHBORS = {"assemblage", "zoning_mismatch", "ownership_change", "active_subdivision"}
-SIGNAL_NEEDS_PORTFOLIO = {"tax_distress", "ownership_change", "assemblage"}
+SIGNAL_NEEDS_NEIGHBORS = {
+    "assemblage",
+    "entity_assemblage",
+    "zoning_mismatch",
+    "ownership_change",
+    "active_subdivision",
+}
+SIGNAL_NEEDS_PORTFOLIO = {"tax_distress", "ownership_change", "assemblage", "entity_assemblage"}
 SIGNAL_NEEDS_PROCEEDINGS = {
     "active_subdivision",
+    "municipal_action",
     "zoning_mismatch",
     "ownership_change",
     "conservation_easement",
@@ -59,6 +68,7 @@ SIGNAL_NEEDS_PROCEEDINGS = {
 # validate. They remain visible to the LLM without consuming validation slots
 # or producing evidence rows.
 CONTEXT_ONLY_SIGNALS = {
+    "nearby_subdivision",
     "economic_development_park",
     "tax_distress",
     "penndot_project",
@@ -235,11 +245,20 @@ _P2_SYSTEM_TEMPLATE = """You are a real estate intelligence analyst validating d
 Your task: for EACH signal listed under "SIGNALS TO VALIDATE", determine if it is meaningful, stale, misclassified, or irrelevant for THIS specific parcel. Consider how the signals INTERACT — a parcel with overlapping signals tells a different story than any single signal alone.
 
 Rules:
-1. Do arithmetic carefully — ratios, percentages, and distances matter for calibration.
+1. Use the PRECOMPUTED METRICS exactly as supplied. Do not recompute ratios,
+   percentages, counts, totals, or distances.
 2. If a signal label doesn't match its evidence (e.g., active_subdivision for a plan with 0 lots), downgrade it.
 3. Consider portfolio and neighbor context — a solo delinquency differs from systemic distress.
 4. Never invent facts. If context is missing, note it in reasoning.
 5. Return exactly one validation per listed signal, in the same order.
+6. cross_references is a machine-readable evidence list. Copy only Evidence
+   ref values printed in the input, and always include the signal's own ref.
+7. Every reasoning field must cite the refs it relies on inline as
+   [Evidence: signal:key] or [Evidence: context:key]; end each factual
+   sentence with its marker. If cross_signal_insight is non-empty it must
+   cite validated signals as [Signal: key].
+8. If validation_status is "stale" or "irrelevant", adjusted_significance
+   MUST be "none". Those statuses are not eligible for serving briefs.
 
 OUTPUT — return ONLY valid JSON with this exact structure:
 {{
@@ -248,9 +267,9 @@ OUTPUT — return ONLY valid JSON with this exact structure:
       "signal_key": "exact signal_key from above",
       "validation_status": "confirmed|upgraded|downgraded|stale|irrelevant",
       "adjusted_significance": "high|medium|low|none",
-      "reasoning": "2-3 sentence explanation specific to this parcel",
+      "reasoning": "2-3 grounded sentences, each with [Evidence: ref]",
       "key_facts": ["fact 1", "fact 2"],
-      "cross_references": ["optional: other signals or context that informed this judgment"]
+      "cross_references": ["signal:own_key", "context:optional_key"]
     }}
   ],
   "cross_signal_insight": "optional: observation about signal combinations on this parcel, or empty string"
@@ -271,17 +290,31 @@ SIGNALS TO VALIDATE ({n_signals} signal{plural}):
 
 Validate each signal above. Return ONLY the JSON object."""
 
-# Final system string sent to the API (single braces).
-BATCHED_VALIDATION_SYSTEM_PROMPT = _P2_SYSTEM_TEMPLATE.format(
-    county_context=county_prompt_context()
+# Final system string sent to the API (single braces). The static schema and
+# citation-format blocks restate the enforced contract and push the
+# byte-identical prefix past the provider caching minimum (prompt_prefix.py).
+BATCHED_VALIDATION_SYSTEM_PROMPT = (
+    _P2_SYSTEM_TEMPLATE.format(county_context=county_prompt_context())
+    + "\n\n"
+    + schema_block(PASS2_BATCHED_VALIDATION_SCHEMA)
+    + "\n\n"
+    + CITATION_FORMAT_BLOCK
 )
 
 
 # Prompt version hash — travels with every persisted evidence row so we can
 # trace a regression to a specific prompt change without diffing git history.
-# Covers both the system and user halves; recompute whenever either changes.
+# The formatter marker also invalidates prior inputs when deterministic context
+# rendering changes without modifying either template string.
+_PROMPT_FORMAT_VERSION = "precomputed-metrics-v1"
 PROMPT_VERSION = _hashlib.sha256(
-    (BATCHED_VALIDATION_SYSTEM_PROMPT + "\n\n" + BATCHED_VALIDATION_USER_TEMPLATE).encode("utf-8")
+    (
+        BATCHED_VALIDATION_SYSTEM_PROMPT
+        + "\n\n"
+        + BATCHED_VALIDATION_USER_TEMPLATE
+        + "\n"
+        + _PROMPT_FORMAT_VERSION
+    ).encode("utf-8")
 ).hexdigest()[:12]
 
 
@@ -387,6 +420,50 @@ def _format_proceedings(proceedings: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_precomputed_metrics(context: dict) -> str:
+    """Render deterministic arithmetic so the model only interprets it."""
+
+    parcel = context.get("parcel") or {}
+    portfolio = context.get("portfolio") or []
+    neighbors = context.get("neighbors") or []
+    tax_claims = context.get("tax_claims") or []
+
+    portfolio_total = sum(float(row.get("assessed_value") or 0) for row in portfolio)
+    target_value = float(parcel.get("assessed_value") or 0)
+    delinquent_neighbors = sum(
+        float(row.get("total_owed") or 0) > 0 for row in neighbors
+    )
+    metrics: list[tuple[str, int | float | None]] = [
+        ("tax_claim_count", len(tax_claims)),
+        (
+            "tax_claim_total",
+            round(sum(float(row.get("amount") or 0) for row in tax_claims), 2),
+        ),
+        ("portfolio_parcel_count", len(portfolio)),
+        ("portfolio_assessed_total", round(portfolio_total, 2)),
+        (
+            "target_assessed_share_pct",
+            round(target_value / portfolio_total * 100, 2)
+            if portfolio_total > 0
+            else None,
+        ),
+        ("adjacent_parcel_count", len(neighbors)),
+        ("adjacent_delinquent_count", delinquent_neighbors),
+        (
+            "adjacent_delinquency_rate_pct",
+            round(delinquent_neighbors / len(neighbors) * 100, 2)
+            if neighbors
+            else None,
+        ),
+    ]
+    lines = ["PRECOMPUTED METRICS (deterministic; do not recompute):"]
+    lines.extend(
+        f"- {name}: {'not_applicable' if value is None else value}"
+        for name, value in metrics
+    )
+    return "\n".join(lines)
+
+
 def _format_signals_list(signals: list[dict]) -> str:
     """Format the numbered list of signals with per-signal validation questions."""
     lines = []
@@ -409,7 +486,8 @@ def _format_signals_list(signals: list[dict]) -> str:
 
         dist_str = f" | distance: {distance:.0f}m" if distance is not None else ""
         lines.append(
-            f"\nSignal {i}: {key} (weight {weight:.2f}{dist_str})\n  Evidence: {ev_str}"
+            f"\nSignal {i}: {key} (weight {weight:.2f}{dist_str})"
+            f"\n  Evidence ref: signal:{key}\n  Evidence: {ev_str}"
         )
 
         # Include base questions for this signal type (if we have them)
@@ -431,7 +509,8 @@ def _format_context_signals(context_signals: list[dict]) -> str:
     for s in context_signals:
         evidence = s.get("evidence") or {}
         detail = ", ".join(f"{k}={v}" for k, v in list(evidence.items())[:4])
-        lines.append(f"- {s['signal_key']}: {detail}" if detail else f"- {s['signal_key']}")
+        prefix = f"- Evidence ref: context:{s['signal_key']}"
+        lines.append(f"{prefix} | {detail}" if detail else prefix)
     return "\n".join(lines)
 
 
@@ -451,7 +530,7 @@ def build_batched_signal_prompt(context: dict, signals_override: list[dict] | No
     parcel = context.get("parcel", {})
     entity = context.get("entity", {})
 
-    optional_parts = []
+    optional_parts = [_format_precomputed_metrics(context)]
     for formatter, data in [
         (_format_tax_claims, context.get("tax_claims")),
         (_format_portfolio, context.get("portfolio")),

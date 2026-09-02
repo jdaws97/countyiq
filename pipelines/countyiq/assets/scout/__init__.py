@@ -1,1 +1,0 @@
-"""County Scout assets."""

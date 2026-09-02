@@ -1,10 +1,11 @@
 # Initial Load and Backfill
 
-CountyIQ has no separate `backfill` mode or `full_history` asset config. Most
+CountyIQ source ingestion has no separate `full_history` asset config. Most
 source assets fetch the source's current complete snapshot, so their first
 successful materialization establishes the baseline. SCD2 history starts from
 that baseline and grows on later refreshes; CountyIQ cannot promise history a
-source does not publish.
+source does not publish. Paid Passes 0-3 do have an explicit cost-only backfill
+mode so an approved historical run need not be split into 25-item launches.
 
 ## Before the First Run
 
@@ -42,21 +43,50 @@ Use the registered jobs in the Dagster UI:
    a pass-specific job. Runtime pass gates are shown as status but do not zero
    the hypothetical estimate: the purpose is to price work while those gates
    are still safely disabled. Explicit runs default to 25 outer work items via
-   `COUNTYIQ_PASS{N}_MAX_ITEMS`; raise that finite cap only for an approved batch.
-5. Run model-backed passes individually in dependency order after approving a
-   budget and inspecting a capped pilot: `proceedings_extraction_refresh`,
-   `entity_verification_refresh`, `signal_validation_refresh`, then
-   `brief_generation_refresh`. `county_narratives_refresh` remains outside the
-   alpha backfill. All passes are disabled by default and must be enabled one at
-   a time for the approved operator run.
+   `COUNTYIQ_PASS{N}_MAX_ITEMS`.
+
+   After the capped pilot is accepted, an approved Pass 0-3 backfill may set
+   `COUNTYIQ_PASS{N}_BACKFILL_MODE=true`. That removes only the item cap. The
+   run still requires `COUNTYIQ_PASS{N}_MAX_COST_USD`, the global prompt and
+   completion price ceilings, and a matching durable authorization file. With
+   the pass disabled, create it once:
+
+   ```bash
+   .venv/bin/python scripts/create_intelligence_backfill_authorization.py \
+     --pass-number <N> \
+     --output /opt/countyiq/receipts/pass-<N>-authorization.json
+   ```
+
+   Set `COUNTYIQ_PASS{N}_BACKFILL_AUTHORIZATION_FILE` to that path before
+   enabling the pass. Every call reserves its worst case in the file before
+   dispatch and settles the provider-reported cost afterward. Reservations
+   survive Dagster retries and process restarts, so the approved cumulative
+   allowance cannot reset with each asset launch.
+5. Run the paid work in this order after approving each budget and inspecting
+   its capped pilot:
+
+   1. `proceedings_extraction_refresh` (Pass 0).
+   2. `entity_verification_refresh` (Pass 1; this refreshes candidate pairs
+      from the Pass 0 output first).
+   3. `deterministic_enrichment_refresh` again. This is required to consume
+      Pass 0 into development signals and Pass 1 into the serving owner graph.
+   4. `signal_validation_refresh` (Pass 2).
+   5. `deterministic_enrichment_refresh` again to rebuild events and momentum
+      from validated evidence.
+   6. `brief_generation_refresh` and, if in scope, `owner_briefs_refresh`.
+
+   Do not launch Pass 2 against the deterministic snapshot from before Passes
+   0 and 1; doing so can pay to validate stale contexts that immediately become
+   eligible again after the next rebuild. `county_narratives_refresh` remains
+   outside the alpha backfill. All passes are disabled by default and must be
+   enabled one at a time for the approved operator run.
 
 Do not use `enrichment_refresh` for the initial load. It selects the entire
 `enrichment` group, which mixes the seven deterministic assets with Passes 0-4.
 It remains registered for an explicitly funded full-group rebuild, but is not
 a cost-isolated path.
 
-County Scout discovery and monitoring do not block the initial product data
-load. The manual jobs in `pipelines/countyiq/jobs/__init__.py` rerun a specific
+The manual jobs in `pipelines/countyiq/jobs/__init__.py` rerun a specific
 source or intelligence pass; they are not a second backfill implementation.
 
 Public-proceedings history is limited to documents reachable through each

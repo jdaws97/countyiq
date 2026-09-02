@@ -8,12 +8,15 @@ transfer/value/structure events from these columns, so silently dropping one
 again would blind that derivation.
 """
 
+import inspect
+
 from countyiq.assets.arcgis.parcels import (
     ALL_COLUMNS,
     KEY_COLUMNS,
     PARCEL_GEOMETRY_DIFF_SQL,
     PARCEL_GEOMETRY_SELECT_SQL,
     VALUE_COLUMNS,
+    parcels_arcgis,
 )
 from countyiq.lib.parsers.arcgis_parcels import FIELD_MAP
 
@@ -49,3 +52,18 @@ def test_event_source_fields_are_persisted():
         "comm_building_sq_ft",
     ):
         assert col in VALUE_COLUMNS, f"parcel_events needs {col} persisted"
+
+
+def test_raw_parcel_payload_is_archived_before_scd2_mutation():
+    source = inspect.getsource(parcels_arcgis.node_def.compute_fn.decorated_fn)
+
+    assert 'require_source_use(authorization, "raw_retention")' in source
+    assert 'archive_file.write(json.dumps(feature, default=str))' in source
+    assert 'ANALYZE _tmp_parcels' in source
+    index_position = source.index("idx_tmp_parcels_pidn")
+    geometry_update_position = source.index("_flush_geometries(")
+    assert index_position < geometry_update_position
+    assert "if existing_count == 0:" in source
+    archive_position = source.index("s3.archive_file(")
+    update_position = source.index("UPDATE staging.parcels")
+    assert archive_position < update_position

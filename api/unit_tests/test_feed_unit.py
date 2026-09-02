@@ -110,12 +110,22 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
         project_keys="project:abc",
         entity_names=None,
         entity_ids="7,not-an-id",
+        boost_pidns="0000000000009",
+        boost_project_keys=None,
+        boost_entity_ids="3",
         sort="priority",
         limit=1,
         offset=2,
     )
 
     feed_sql, feed_params = cursor.executions[0]
+    assert "baseline.source_kind = 'delinquency_event'" in feed_sql
+    # Recency decay and watched-subject boost are part of the priority order.
+    assert "CURRENT_DATE - COALESCE(event_date, detected_at::date)" in feed_sql
+    assert feed_params["boost_pidns"] == ["0000000000009"]
+    assert feed_params["boost_project_keys"] == []
+    assert feed_params["boost_entity_ids"] == [3]
+    assert "source_evidence->0->'details'->>'change_kind'" in feed_sql
     assert "event_tags && %(event_types)s::text[]" in feed_sql
     assert "related_pidns && %(pidns)s::text[]" in feed_sql
     assert "project_key = ANY(%(project_keys)s::text[])" in feed_sql
@@ -131,6 +141,9 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
         "pidns": ["0000000000001"],
         "project_keys": ["project:abc"],
         "entity_ids": [7],
+        "boost_pidns": ["0000000000009"],
+        "boost_project_keys": [],
+        "boost_entity_ids": [3],
     }
     assert response["has_more"] is True
     assert response["limit"] == 1

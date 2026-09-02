@@ -50,9 +50,14 @@ VALUE_COLUMNS = [
     "interest_paid",
     "fees_paid",
     "total",
-    "report_date",
     "source_url",
 ]
+
+# The listing's report date is "when we last saw this claim", not a fact about
+# the claim. Diffing it expired and re-inserted every row on every weekly
+# listing (36,463 of 36,939 rows identical otherwise on 2026-08-31), which
+# destroyed the meaning of valid_from. It is refreshed in place instead.
+CARRY_COLUMNS = ["report_date"]
 
 
 @asset(
@@ -156,6 +161,7 @@ def tax_claims(
             records=records,
             key_columns=KEY_COLUMNS,
             value_columns=VALUE_COLUMNS,
+            carry_columns=CARRY_COLUMNS,
         )
     finally:
         cur.close()

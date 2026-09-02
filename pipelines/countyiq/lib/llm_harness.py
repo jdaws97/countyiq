@@ -18,6 +18,7 @@ import logging
 import os
 import random
 import re
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -257,6 +258,53 @@ def _archive_dir() -> Path:
     return Path.cwd() / "archives"
 
 
+def llm_archive_strict() -> bool:
+    """Return whether transcript archival failures must abort inference."""
+
+    return os.environ.get("COUNTYIQ_ARCHIVE_STRICT", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
+def probe_llm_archive_destination() -> dict[str, str | bool]:
+    """Write, fsync, and remove a small archive probe without calling a model."""
+
+    configured = os.environ.get("COUNTYIQ_ARCHIVE_DIR", "").strip()
+    if not configured:
+        return {
+            "ok": False,
+            "path": "",
+            "reason": "COUNTYIQ_ARCHIVE_DIR is not explicitly configured",
+        }
+
+    archive_root = Path(configured).expanduser().resolve()
+    probe_path: Path | None = None
+    try:
+        archive_root.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".countyiq-archive-probe-",
+            dir=archive_root,
+        )
+        probe_path = Path(temporary_name)
+        with os.fdopen(descriptor, "wb") as probe:
+            probe.write(b"countyiq archive readiness probe\n")
+            probe.flush()
+            os.fsync(probe.fileno())
+        probe_path.unlink()
+        return {"ok": True, "path": str(archive_root), "reason": "write probe passed"}
+    except Exception as exc:
+        if probe_path is not None:
+            try:
+                probe_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return {
+            "ok": False,
+            "path": str(archive_root),
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+
 def llm_archive_retention_days() -> int:
     """Return archive retention in days; zero explicitly disables pruning."""
     return max(
@@ -359,7 +407,11 @@ def archive_raw_output(
         path.write_text(json.dumps(record, default=str))
         _prune_archives_once_per_day(archive_root)
         return str(path)
-    except Exception:
+    except Exception as exc:
+        message = f"LLM transcript archive failed for {label}: {exc}"
+        if llm_archive_strict():
+            raise RuntimeError(message) from exc
+        _telemetry_log.warning(message)
         return None
 
 
@@ -599,7 +651,7 @@ def _invoke_openrouter(
 
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        return "", "OPENROUTER_API_KEY not set"
+        return "", "OPENROUTER_API_KEY not set", {}
 
     payload = build_openrouter_payload(config, prompt, pdf_bytes=pdf_bytes)
 
@@ -707,23 +759,31 @@ def invoke(
         (error or "")[:120] or None,
     )
 
-    if config.archive_label and archive_key and raw_output:
-        archive_raw_output(
-            label=config.archive_label,
-            key=archive_key,
-            prompt=prompt,
-            raw_output=raw_output,
-            metadata={
-                "model": config.model_path,
-                "temperature": config.temperature,
-                "thinking": config.thinking,
-                "reasoning_effort": config.reasoning_effort,
-                "strict_schema": bool(config.json_schema),
-                "elapsed_ms": elapsed_ms,
-                "error": error,
-                **result_meta,
-            },
-        )
+    if config.archive_label and raw_output:
+        if not archive_key:
+            message = (
+                f"LLM transcript archive key is missing for {config.archive_label}"
+            )
+            if llm_archive_strict():
+                raise RuntimeError(message)
+            _telemetry_log.warning(message)
+        else:
+            archive_raw_output(
+                label=config.archive_label,
+                key=archive_key,
+                prompt=prompt,
+                raw_output=raw_output,
+                metadata={
+                    "model": config.model_path,
+                    "temperature": config.temperature,
+                    "thinking": config.thinking,
+                    "reasoning_effort": config.reasoning_effort,
+                    "strict_schema": bool(config.json_schema),
+                    "elapsed_ms": elapsed_ms,
+                    "error": error,
+                    **result_meta,
+                },
+            )
 
     if error:
         return HarnessResult(

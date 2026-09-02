@@ -20,7 +20,11 @@ from contextlib import contextmanager
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from psycopg2.pool import ThreadedConnectionPool
+from psycopg2.pool import PoolError, ThreadedConnectionPool
+
+
+class DatabasePoolExhausted(RuntimeError):
+    """Raised when no database connection becomes available before timeout."""
 
 
 def _connection_kwargs() -> dict[str, str | int]:
@@ -35,38 +39,58 @@ def _connection_kwargs() -> dict[str, str | int]:
 
 
 _pool: ThreadedConnectionPool | None = None
+_pool_gate: threading.BoundedSemaphore | None = None
 _pool_lock = threading.Lock()
 
 
-def _get_pool() -> ThreadedConnectionPool:
-    global _pool
+def _get_pool_resources() -> tuple[ThreadedConnectionPool, threading.BoundedSemaphore]:
+    global _pool, _pool_gate
     if _pool is None:
         with _pool_lock:
             if _pool is None:
-                _pool = ThreadedConnectionPool(
+                max_connections = int(os.environ.get("DATABASE_POOL_MAX", "8"))
+                pool = ThreadedConnectionPool(
                     minconn=int(os.environ.get("DATABASE_POOL_MIN", "1")),
-                    maxconn=int(os.environ.get("DATABASE_POOL_MAX", "8")),
+                    maxconn=max_connections,
                     **_connection_kwargs(),
                 )
-    return _pool
+                _pool = pool
+                _pool_gate = threading.BoundedSemaphore(max_connections)
+    if _pool_gate is None:  # pragma: no cover - defensive invariant
+        raise RuntimeError("database connection gate is not initialized")
+    return _pool, _pool_gate
 
 
 def close_pool() -> None:
     """Close all pooled connections (app shutdown / test teardown)."""
-    global _pool
+    global _pool, _pool_gate
     with _pool_lock:
         if _pool is not None:
             _pool.closeall()
             _pool = None
+            _pool_gate = None
 
 
 @contextmanager
 def get_cursor() -> Iterator[RealDictCursor]:
     """Yield a RealDictCursor backed by a pooled connection."""
-    pool = _get_pool()
-    conn = pool.getconn()
+    pool, gate = _get_pool_resources()
+    wait_seconds = max(
+        0.0,
+        float(os.environ.get("DATABASE_POOL_WAIT_SECONDS", "5")),
+    )
+    if not gate.acquire(timeout=wait_seconds):
+        raise DatabasePoolExhausted("database connection pool is busy")
+
+    conn = None
     broken = False
     try:
+        try:
+            conn = pool.getconn()
+        except PoolError as exc:
+            raise DatabasePoolExhausted(
+                "database connection pool is busy"
+            ) from exc
         with conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 yield cur
@@ -76,4 +100,6 @@ def get_cursor() -> Iterator[RealDictCursor]:
         broken = True
         raise
     finally:
-        pool.putconn(conn, close=broken or conn.closed)
+        if conn is not None:
+            pool.putconn(conn, close=broken or conn.closed)
+        gate.release()

@@ -5,6 +5,7 @@ import IntelligenceEventCard from '../components/IntelligenceEventCard'
 import Nav from '../components/Nav'
 import SearchBar from '../components/SearchBar'
 import { useCountyMeta } from '../lib/useCountyMeta'
+import { watchBoostParams } from '../lib/watchlist'
 import type { IntelligenceFeedResponse } from '../types/api'
 import type { StatsData } from '../types/ops'
 
@@ -50,7 +51,8 @@ export default function HomePage() {
       .then(setStats)
       .catch(() => setStats(null))
 
-    fetch('/api/feed?limit=3&since_days=365&sort=priority')
+    const feedParams = new URLSearchParams({ limit: '3', since_days: '365', sort: 'priority', ...watchBoostParams() })
+    fetch(`/api/feed?${feedParams}`)
       .then((response) => {
         if (!response.ok) throw new Error(String(response.status))
         return response.json() as Promise<IntelligenceFeedResponse>
@@ -71,11 +73,12 @@ export default function HomePage() {
       <main className="home-main">
         <section className="home-hero">
           <div>
-            <div className="home-eyebrow">Local property &amp; development intelligence</div>
-            <h1>Know what changed—and why it matters—before you start searching.</h1>
+            <div className="home-eyebrow">{county.county_name} property &amp; development intelligence</div>
+            <h1>Know what changed, and why it matters, before anyone else does.</h1>
             <p>
-              CountyIQ connects {county.county_name} municipal proceedings, parcel changes,
-              projects, and ownership relationships into source-backed case files you can act on.
+              For investors, developers, and brokers working {county.county_name}: municipal
+              proceedings, parcel and tax changes, and ownership relationships, tied to the
+              original public record so you can act on them with confidence.
             </p>
             <div className="home-hero-actions">
               <Link to="/feed" className="button-primary">See what changed</Link>
@@ -105,7 +108,7 @@ export default function HomePage() {
         <section className="home-section">
           <div className="home-section-heading">
             <div>
-              <div className="home-eyebrow">Prioritized without an LLM</div>
+              <div className="home-eyebrow">Ranked by evidence, not by prose</div>
               <h2>What deserves attention now</h2>
             </div>
             <Link to="/feed">Open the full feed →</Link>

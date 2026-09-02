@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import PageShell from '../components/PageShell'
 import { formatCurrency } from '../lib/format'
 import type { MunicipalitySummary as Municipality } from '../types/api'
@@ -8,7 +8,6 @@ export default function MunicipalityList() {
   const [municipalities, setMunicipalities] = useState<Municipality[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const navigate = useNavigate()
 
   useEffect(() => {
     fetch('/api/municipalities')
@@ -30,7 +29,7 @@ export default function MunicipalityList() {
   return (
     <PageShell maxWidth={1200}>
         {/* Page header */}
-        <div style={{ marginBottom: 40, animation: 'fadeUp 0.4s ease both' }}>
+        <div style={{ marginBottom: 40 }}>
           <div
             style={{
               fontFamily: 'var(--font-mono)',
@@ -102,10 +101,8 @@ export default function MunicipalityList() {
         {/* Table */}
         {!loading && !error && (
           <div
+            className="municipality-table"
             style={{
-              animation: 'fadeUp 0.5s ease both',
-              animationDelay: '0.1s',
-              opacity: 0,
               border: '1px solid var(--border)',
               borderRadius: 8,
               overflow: 'hidden',
@@ -113,6 +110,7 @@ export default function MunicipalityList() {
           >
             {/* Table header */}
             <div
+              className="municipality-table-head"
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 160px 180px 180px',
@@ -143,8 +141,10 @@ export default function MunicipalityList() {
             {municipalities.map((muni, idx) => {
               const isEven = idx % 2 === 0
               return (
-                <div
+                <Link
                   key={muni.name}
+                  className="municipality-table-row"
+                  to={`/municipalities/${encodeURIComponent(muni.name)}`}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr 160px 180px 180px',
@@ -154,16 +154,8 @@ export default function MunicipalityList() {
                       idx < municipalities.length - 1 ? '1px solid var(--border)' : 'none',
                     transition: 'background 0.15s ease',
                     cursor: 'pointer',
-                  }}
-                  onClick={() => navigate(`/municipalities/${encodeURIComponent(muni.name)}`)}
-                  onMouseEnter={(e) => {
-                    ;(e.currentTarget as HTMLDivElement).style.background =
-                      'var(--bg-card-hover)'
-                  }}
-                  onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLDivElement).style.background = isEven
-                      ? 'var(--bg-panel)'
-                      : 'var(--bg-card)'
+                    color: 'inherit',
+                    textDecoration: 'none',
                   }}
                 >
                   {/* Name */}
@@ -231,13 +223,14 @@ export default function MunicipalityList() {
                   >
                     {muni.total_delinquent > 0 ? formatCurrency(muni.total_delinquent) : '—'}
                   </div>
-                </div>
+                </Link>
               )
             })}
 
             {/* Footer row */}
             {municipalities.length > 0 && (
               <div
+                className="municipality-table-footer"
                 style={{
                   padding: '12px 24px',
                   background: 'var(--bg-deep)',

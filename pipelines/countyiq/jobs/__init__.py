@@ -16,7 +16,6 @@ from dagster import AssetSelection, define_asset_job
 
 from countyiq.lib.county_config import get_county_config
 
-
 _county = get_county_config()
 
 
@@ -88,18 +87,6 @@ fema_refresh = define_asset_job(
     description="Refresh FEMA flood hazard zone data",
 )
 
-scout_discovery_refresh = define_asset_job(
-    name="scout_discovery_refresh",
-    selection=AssetSelection.assets("county_scout_discovery"),
-    description="Discover and classify new County Scout source candidates",
-)
-
-scout_monitor_refresh = define_asset_job(
-    name="scout_monitor_refresh",
-    selection=AssetSelection.assets("county_scout_monitor"),
-    description="Monitor promoted County Scout sources for changes and outages",
-)
-
 enrichment_refresh = define_asset_job(
     name="enrichment_refresh",
     selection=AssetSelection.groups("enrichment"),
@@ -155,10 +142,12 @@ entity_verification_refresh = define_asset_job(
         "municipality_join",
         "entity_candidate_pairs_refresh",
         "entity_verification",
+        "development_signals",
+        "owner_resolution",
     ),
     description=(
-        "[Manual] Refresh candidate pairs, then re-run Pass 1 entity verification "
-        "across all sources"
+        "[Manual] Refresh candidate pairs, run Pass 1, then rebuild the "
+        "Pass 0-derived signals and Pass 1-derived owner projection"
     ),
 )
 
@@ -172,6 +161,12 @@ brief_generation_refresh = define_asset_job(
     name="brief_generation_refresh",
     selection=AssetSelection.assets("brief_generation"),
     description="[Manual] Re-run Pass 3: generate intelligence briefs",
+)
+
+owner_briefs_refresh = define_asset_job(
+    name="owner_briefs_refresh",
+    selection=AssetSelection.assets("owner_briefs"),
+    description="[Manual] Re-run Pass 3b: generate owner portfolio briefs",
 )
 
 county_narratives_refresh = define_asset_job(

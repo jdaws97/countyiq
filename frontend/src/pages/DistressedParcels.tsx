@@ -87,7 +87,7 @@ export default function DistressedParcels() {
     <PageShell maxWidth={1100}>
       <BackButton onClick={() => navigate(-1)} />
 
-        <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
+        <div style={{ marginBottom: 32 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-red)', marginBottom: 8 }}>Intelligence</div>
           <h1 style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Distressed Acquisition Opportunities</h1>
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
@@ -99,7 +99,7 @@ export default function DistressedParcels() {
         </div>
 
         {/* Filters */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 24, animation: 'fadeUp 0.4s ease 0.1s both' }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
           <select value={classFilter} onChange={e => setClassFilter(e.target.value)} style={{
             background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 4,
             padding: '6px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)',
@@ -138,7 +138,7 @@ export default function DistressedParcels() {
 
         {/* Results */}
         {!loading && parcels.length > 0 && (
-          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', animation: 'fadeUp 0.4s ease 0.2s both' }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {/* Header */}
             <div style={{ display: 'grid', gridTemplateColumns: '55px 1fr 120px 100px 100px 70px 90px', padding: '12px 20px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
               <div>Score</div><div>Parcel / Address</div><div>District</div><div style={{ textAlign: 'right' }}>Distress</div><div style={{ textAlign: 'right' }}>Assessed</div><div style={{ textAlign: 'right' }}>Acres</div><div style={{ textAlign: 'right' }}>Class</div>

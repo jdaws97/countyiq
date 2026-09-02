@@ -27,15 +27,18 @@ docker compose restart dagster-webserver dagster-daemon
 ### Emergency stop (all services)
 
 ```bash
-# SSH to VPS and stop all containers
+# SSH to VPS and stop all running project containers without removing them
 ssh countyiq
 cd /opt/countyiq/docker
-docker compose down
+docker compose stop -t 60
 ```
 
-**Note:** Stopping all containers stops Dagster jobs, scrapers, and scheduled runs. No data is lost — Postgres data is on a Docker volume. Restart with `cd /opt/countyiq/docker && docker compose up -d`.
+Stopping all containers interrupts in-flight requests and jobs. Named volumes
+remain attached, but an in-flight operation may not have committed. Restart
+with `docker compose up -d --wait`. Never use `docker compose down -v` in
+production; `-v` deletes the named database volume.
 
-### Updating pipeline code
+### Deploying a reviewed release
 
 ```bash
 # Connect to VPS
@@ -47,30 +50,39 @@ git fetch --prune origin
 git log --oneline --decorate HEAD..origin/main
 export COUNTYIQ_DEPLOY_REF=<reviewed-40-character-commit-sha>
 git checkout --detach "$COUNTYIQ_DEPLOY_REF"
-cd /opt/countyiq/docker
 
-# Build first. Leave the currently running release intact if a build fails.
-docker compose build
+# Preflight is read-only. It validates the exact checkout, environment,
+# Compose graph, pass gates, role separation, R2 target, and bucket-lock receipt.
+env COUNTYIQ_DEPLOY_REF="$COUNTYIQ_DEPLOY_REF" \
+  COUNTYIQ_ENV_FILE=/opt/countyiq/.env \
+  /opt/countyiq/docker/deploy.sh --check
 
-# Back up the database before applying migrations.
-sudo /opt/countyiq/docker/backup.sh
-
-# Start the database, apply migrations with the new image, and refresh the
-# non-superuser runtime roles' grants before replacing application containers.
-docker compose up -d postgres
-docker compose run --rm migrate
-docker compose exec postgres /docker-entrypoint-initdb.d/02-runtime-role.sh
-docker compose exec postgres /docker-entrypoint-initdb.d/03-api-role.sh
-
-# Replace application containers only after migrations succeed.
-docker compose up -d --remove-orphans
-docker compose ps
-curl --fail --silent --show-error https://api.countyiq.com/api/ready
+# The release command owns build, quiescence, backup, migration, readiness,
+# and the receipt. Use --initial only before the first recorded release.
+sudo env COUNTYIQ_DEPLOY_REF="$COUNTYIQ_DEPLOY_REF" \
+  COUNTYIQ_ENV_FILE=/opt/countyiq/.env \
+  /opt/countyiq/docker/deploy.sh
 ```
 
-Record the deployed commit and the backup object in the release log. Keep the
-checkout detached at the reviewed commit; do not deploy an unreviewed moving
-branch tip.
+The script refuses a dirty tree or backward release, tags the API and Dagster
+images with the exact commit, stops API/Dagster writers, verifies that their
+database sessions are gone, uploads and reads back the R2 completion manifest,
+then runs Alembic. A migration-started failure leaves application services
+stopped for review. Success atomically updates
+`COUNTYIQ_IMAGE_TAG` in the protected environment and
+`/var/lib/countyiq/releases/current.env`; retain every timestamped receipt.
+The persisted tag keeps later Compose restarts on the recorded images. Keep the
+checkout detached at the reviewed commit.
+
+Before an ordinary release, a successful off-host restore drill must be no
+older than `COUNTYIQ_RESTORE_DRILL_MAX_AGE_DAYS`. The first release uses
+`deploy.sh --initial`, followed immediately by a post-deploy backup and restore
+drill before the daily timer is enabled. See
+[Backup and restore](backup-and-restore.md).
+
+Paid intelligence rollout is a separate manual procedure. Follow
+`docs/operations/intelligence-rollout.md`; do not enable a pass or use the full
+pipeline job during an ordinary deploy.
 
 ### Monitoring Postgres storage usage
 
@@ -89,6 +101,7 @@ docker stats --no-stream
 
 # Disk usage
 df -h
+docker system df
 
 # Memory usage
 free -m
@@ -109,34 +122,35 @@ psql -h localhost -p 5433 -U dagster_admin -d countyiq
 **Bad API deploy (API broken):**
 
 ```bash
-# Check out the previously recorded commit, rebuild only the affected service,
-# and wait for its health check before considering the rollback complete.
+# Only after reviewing that the last-good API is compatible with schema_after
+# in the current release receipt, reuse its retained commit-tagged image.
+# Do not run deploy.sh from an older checkout: it intentionally rejects a
+# backward migration path.
 ssh countyiq
-cd /opt/countyiq
-git checkout --detach <recorded-last-good-40-character-sha>
 cd /opt/countyiq/docker
-docker compose build api
-docker compose up -d --no-deps --wait api
+export COUNTYIQ_IMAGE_TAG=<recorded-last-good-40-character-sha>
+docker image inspect "countyiq-api:$COUNTYIQ_IMAGE_TAG"
+docker compose --env-file /opt/countyiq/.env up -d --no-deps --wait api
 curl --fail --silent --show-error https://api.countyiq.com/api/ready
 ```
 
 **Bad Dagster deploy (pipelines broken):**
 
 ```bash
-# On VPS via SSH:
+# Apply the same schema-compatibility review, then reuse the retained image for
+# both processes so the daemon and code server cannot drift.
 ssh countyiq
-
-cd /opt/countyiq
-git checkout --detach <recorded-last-good-40-character-sha>
 cd /opt/countyiq/docker
-docker compose build dagster-webserver dagster-daemon
-docker compose up -d --no-deps --wait dagster-webserver dagster-daemon
+export COUNTYIQ_IMAGE_TAG=<recorded-last-good-40-character-sha>
+docker image inspect "countyiq-dagster:$COUNTYIQ_IMAGE_TAG"
+docker compose --env-file /opt/countyiq/.env up -d --no-deps --wait \
+  dagster-webserver dagster-daemon
 ```
 
 **Bad migration (schema broken):**
 
 ```bash
-# Alembic supports reversible migrations:
+# Inspect the stopped failure state and both receipt revisions first:
 ssh countyiq
 cd /opt/countyiq/docker
 
@@ -144,15 +158,11 @@ cd /opt/countyiq/docker
 docker compose run --rm migrate \
   alembic -c /opt/pipelines/alembic.ini current
 
-# Review the migration's downgrade implementation before running it. Many
-# production data migrations are intentionally not safely reversible.
-docker compose run --rm migrate \
-  alembic -c /opt/pipelines/alembic.ini downgrade -1
-
-# If downgrade is unsafe or fails, stop writers and restore the pre-deploy
-# backup into a new database/volume. Verify its SHA-256 sidecar and run
-# pg_restore --list before the destructive cutover. Do not use pg_restore -c
-# against the only production database while application services are active.
+# Do not automatically downgrade. Many production data migrations are
+# intentionally not safely reversible. Keep writers stopped and restore the
+# receipt's pre-deploy backup into a new database or volume. Verify the new
+# target and cut over only under an incident plan; never use pg_restore --clean
+# against the only production database.
 ```
 
 See [Backup and restore](backup-and-restore.md) for the tested restore and

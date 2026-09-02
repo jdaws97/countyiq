@@ -8,7 +8,7 @@ All functions are pure — HTML / filename string in, structured dicts out.
 
 import re
 from collections.abc import Callable
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlparse
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -210,8 +210,31 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
             or "/documentcenter/view/" in path_lower
         )
         is_coursevector_doc = re.match(r"^/document/[^/]+/?$", path_lower) is not None
-        if not (is_doc_ext or is_civicengage or is_coursevector_doc):
+        is_bfd_download = path_lower.startswith("/bfd_download/")
+        bfd_type = (
+            re.search(r"Type\s*:\s*(pdf|docx?)\b", link_text, re.IGNORECASE)
+            if is_bfd_download
+            else None
+        )
+        if not (
+            is_doc_ext
+            or is_civicengage
+            or is_coursevector_doc
+            or bfd_type
+        ):
             continue
+
+        if is_civicengage and parsed.query:
+            # CivicEngage emits a duplicate ``?html=true`` preview link beside
+            # the document link. The preview returns HTML from a PDF-shaped
+            # route, so canonicalize both variants to the downloadable file.
+            query = [
+                (key, value)
+                for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+                if key.casefold() != "html"
+            ]
+            parsed = parsed._replace(query=urlencode(query))
+            href = parsed.geturl()
 
         absolute_url = urljoin(base_url, href)
         # Dedup: CivicEngage lists each meeting item 2-3 times per page
@@ -220,12 +243,23 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
         seen_urls.add(absolute_url)
 
         if is_doc_ext:
-            filename = path.split("/")[-1] or href.split("/")[-1]
+            # Municipal CMS/CDN links commonly percent-encode the human
+            # filename. Decode it before date parsing and classification so
+            # names such as ``January%2019%2C%202026%20Minutes.pdf`` retain
+            # their semantic metadata.
+            filename = unquote(path.split("/")[-1] or href.split("/")[-1])
             # Wix serves hex-named files with the human-readable name in the
             # dn= query param — prefer it (it carries the meeting date).
             dn_match = re.search(r"[?&]dn=([^&]+)", href)
             if dn_match:
                 filename = unquote(dn_match.group(1))
+        elif bfd_type:
+            # Better Files Download exposes an extensionless redirect, but
+            # prints the real file type in the link metadata. Preserve that
+            # type so the downloader validates and extracts Word documents
+            # correctly after following the redirect.
+            tail = path.rstrip("/").split("/")[-1] or "document"
+            filename = f"{tail}.{bfd_type.group(1).lower()}"
         else:
             # Synthesize a filename from the URL tail + link text so the
             # date parser and classifier have something to work with.

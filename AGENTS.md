@@ -57,7 +57,7 @@ and project invariants; do not duplicate its context in child prompts.
 
 - Use `uv`, never `pip` or `venv`; use Python 3.11 and never bare `python`.
 - Pipelines: `cd pipelines`; use `.venv/bin/python`. Run
-  `-m pytest tests/ -q -k "not integration"` and the definitions import smoke test
+  `-m pytest tests/ -q -m "not integration"` and the definitions import smoke test
   for wiring changes.
 - API: `api/.venv/bin/python -m pytest api/tests -v` against `postgres-test`.
 - Frontend: `npx tsc -b && npm run lint`; add `npm run build` when bundling may

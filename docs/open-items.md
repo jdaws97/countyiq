@@ -50,36 +50,56 @@ durable architectural decisions belong in `docs/decisions.md`.
   before `2026-11-27`; review PLCB and green/open-data policies before
   `2027-02-27`. Update evidence and methods in a new migration rather than
   bypassing `authorize_source`.
-- Do not invest in County Scout for the York alpha. It remains paused with zero
-  runtime rows and no product/scoring dependency. Reconsider only for later
-  multi-county expansion, and then only as candidate-only discovery with human
-  rights approval before fetch, retention, monitoring, or promotion.
-
 ## Intelligence Pipeline
 
+- Decide the Pass 0 and Pass 1 model defaults from the 2026-09-02 confirmation
+  runs in `docs/research/llm-cost-reduction-2026-09-02.md`: GLM 5.3 Flash for
+  Pass 1 and Gemini 2.5 Flash-Lite for Pass 0 both matched or beat Luna on the
+  frozen corpora at a fraction of the cost, but the corpora are small. Promote
+  by setting `COUNTYIQ_PASS{N}_MODEL` for the first canary rather than editing
+  the code defaults until the canary's gate pass rate and sampled audit hold.
+- Re-enable person-only Pass 1 clusters (`COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS`)
+  only when a customer surface consumes person merges; today person display is
+  policy-disabled and the assemblage signal matches raw owner strings.
+- Re-run `pipelines/scripts/backtest_radar_weights.py` after the first live
+  proceedings backfill and refresh `OPPORTUNITY_WEIGHTS` with the regenerated
+  report; `municipal_action` and `entity_assemblage` currently carry priors
+  because the local corpus had too few rows to calibrate them.
+- Human-review a sample of Pass 0 `_no_landuse_terms` prefilter skips after the
+  first backfill to confirm the vocabulary list has no false negatives.
+- Measure the wall-clock and spend effect of `COUNTYIQ_PASS2_CONCURRENCY` and
+  the fingerprint fast path on the first real Pass 2 run.
 - Evaluate multi-parcel Pass 2 batching against the current per-parcel path
   using a judged, labeled sample before shipping that additional optimization.
 - Measure the live candidate and token reduction from the shipped two-signal
   interpretive gate after the York parcel backfill; do not estimate savings
   from fixture counts.
-- Human-review the expanded Pass 2 rubric labels, prioritizing the 20 selected
-  high-disagreement cases and GLM's arm's-length, development-intent,
-  rezoning-pressure, and development-readiness claims. Luna remains N=1 unless
-  a changed challenger or prompt clears both the reviewed gold and this wider
-  diagnostic.
+- Human-review the 20 selected high-disagreement Pass 2 cases once, before the
+  first Pass 2 run; after that the preflight's live gate pass rate replaces
+  the receipt. Luna remains N=1 unless a changed challenger or prompt clears
+  the reviewed gold.
+- After the first Pass 1 backfill, review the person/organization merge queue
+  (`review_intelligence_contradictions.py list`) as one batch session; every
+  other same-evidence flip is resolved by the recorded policy.
+- Choose and budget a judge model (`COUNTYIQ_JUDGE_MODEL`) once the first
+  backfill shows how many routine flips occur; the 2026-08-30 probe found
+  `x-ai/grok-4.6` matched the human winner on all three bakeoff cases.
+- Run the weekly sampled audit (`sample` → `approve` / `reject`) and promote
+  reviewed candidates into the frozen eval corpus with `eval.build_fixtures`.
 - After the York backfill, refresh the ten-combination Pass 2 live shadow to
   measure actual interaction mix, token/cost distribution, latency, and drift.
   Do not use mutable live selectors as model-promotion truth.
 
 ## Operations
 
-- Extend `/api/ops/health` from current-row presence to source freshness and
-  last-run failure state; a populated but stale table is currently green.
 - Set `COUNTYIQ_CORS_ORIGINS` if the production frontend is hosted on a
   different origin from the API; same-origin deployments need no entry.
 - Keep `.env.example`, deploy scripts, and model-default documentation aligned.
-- Add automated backup-restore verification when manual monthly checks become
-  unreliable or burdensome.
+- Run and record the first live R2 restore drill, enable/monitor the persistent
+  systemd backup timer, and verify R2 bucket-lock/lifecycle settings plus
+  Hetzner deletion protection and server backups on the actual account.
+- Decide when deployment volume justifies publishing signed/SBOM-attested
+  images to a registry instead of building exact-SHA images on the VPS.
 - Complete a live external security/load scan after Cloudflare and the Hetzner
   origin exist; repository checks cannot validate WAF, firewall, TLS, SSH, or
   real proxy behavior before deployment.

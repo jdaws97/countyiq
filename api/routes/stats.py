@@ -25,7 +25,7 @@ def get_stats() -> HomepageStatsResponse:
         cur.execute("""
             SELECT
                 (SELECT COUNT(*) FROM staging.municipalities WHERE valid_to IS NULL) AS municipality_count,
-                (SELECT COUNT(DISTINCT pidn) FROM staging.tax_claims WHERE valid_to IS NULL) AS delinquent_parcels,
+                (SELECT COUNT(DISTINCT pidn) FROM staging.tax_claims WHERE valid_to IS NULL AND total > 0) AS delinquent_parcels,
                 (SELECT COALESCE(SUM(total), 0) FROM staging.tax_claims WHERE valid_to IS NULL AND total > 0) AS total_delinquent,
                 (SELECT COUNT(*) FROM staging.flood_zones WHERE valid_to IS NULL) AS flood_zone_count,
                 (SELECT COUNT(*) FROM staging.plcb_licenses WHERE valid_to IS NULL AND UPPER(status) = 'ACTIVE') AS liquor_license_count,

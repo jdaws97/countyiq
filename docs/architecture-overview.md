@@ -36,6 +36,25 @@ Ubuntu VPS (Hetzner)
 3. The API reads PostgreSQL/PostGIS and serves parcel, owner, search, radar, and ops endpoints.
 4. The frontend renders those surfaces for map, search, intelligence, and monitoring workflows.
 
+## Module and Authority Boundaries
+
+CountyIQ remains one monorepo, but it is not one runtime:
+
+- `frontend/` depends on the documented HTTP contract, never Python internals.
+- `api/` is a read-only serving process. It must not import Dagster or pipeline
+  packages and receives only the API database role.
+- `pipelines/countyiq/` owns ingestion, enrichment, and serving-projection
+  writes. It must not import the API package and uses a separate writer role.
+- `pipelines/alembic/` is the sole schema authority. Only the short-lived
+  `migrate` service receives the administrator URL.
+- `docker/` owns deployment orchestration, release receipts, and backup/restore
+  operations. Application startup never applies migrations.
+
+The import and Compose contracts are executable in
+`pipelines/tests/test_architecture_boundaries.py`. Database tables and HTTP
+schemas are the explicit integration seams; source imports across the API and
+pipeline packages are rejected.
+
 ## Intelligence Pipeline
 
 The current repo is no longer just an MVP property browser. It includes an LLM-backed intelligence pipeline:
@@ -54,5 +73,10 @@ configuration.
 
 - The current deployment story is containerized VPS plus Cloudflare, not AWS Lambda.
 - Hetzner is the selected VPS provider; Netcup is the fallback.
+- The Compose project and persistent-volume names are fixed, while application
+  images are tagged with the exact reviewed Git SHA.
+- `docker/deploy.sh` is the only production release path. It validates the
+  environment, quiesces API and pipeline writers, verifies an off-host backup,
+  applies migrations, checks readiness, and writes a release receipt.
 - AWS/Lambda/Terraform deployment material is historical and is not kept in the
   working tree.

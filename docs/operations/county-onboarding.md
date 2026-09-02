@@ -59,12 +59,7 @@ From `pipelines`:
 ```
 
 The selected county identity is also injected into Passes 1–4 and the API's
-constrained search prompt. County Scout catalog generation can use York's
-curated catalog or a manifest-derived starter catalog for another county, but
-Scout probing and promotion are currently policy-paused. Add deeper
-county-specific discovery seeds only after verifying the county, endpoint,
-method, robots/terms evidence, retention, and reuse decision and then recording
-a deliberate policy change.
+constrained search prompt.
 
 Then run source-specific asset checks against the fresh county database. A
 manifest is not accepted merely because it parses. Verify at minimum:

@@ -9,8 +9,10 @@ Reworked 2026-08-02 for politeness-preserving parallelism:
       robots.txt check, conditional GET of each minutes page
       (If-None-Match / If-Modified-Since -> 304 = whole listing unchanged),
       extract PDF links.
-  Phase 1.5 (main thread): transparent Playwright rendering only for a
-      successful static request whose document list is genuinely JS-rendered.
+  Phase 1.5 (main thread): transparent Playwright transport for a robots.txt
+      network failure, followed by listing rendering only when the browser-read
+      policy allows it; also renders successful static listings whose document
+      list is genuinely JS-rendered.
   Phase 2 (parallel across DOMAINS): download only NEW documents, body-scoped
       content-hash dedup, and enforce global/per-body request caps before
       extracting text and archiving to R2. Workers never touch the database.
@@ -61,6 +63,7 @@ from countyiq.lib.robots import (
     RobotsDeniedError,
     RobotsPolicy,
     SourceOriginDeniedError,
+    assert_public_http_url,
     get_with_robots,
     source_origin,
 )
@@ -90,6 +93,7 @@ _HEADERS = {
         "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"
     )
 }
+_ROBOTS_PRODUCT_TOKEN = "CountyIQ"
 
 # How long to wait for JS-rendered content before grabbing the DOM
 _PLAYWRIGHT_NAV_TIMEOUT_MS = 20000
@@ -227,14 +231,14 @@ class _PlaywrightFetcher:
             launch_args = []
             try:
                 self._browser = self._playwright.chromium.launch(
-                    channel="chrome", headless=True, args=launch_args
-                )
-                self._log.info("Playwright launched real Chrome for JS fallback")
-            except Exception:
-                self._browser = self._playwright.chromium.launch(
                     headless=True, args=launch_args
                 )
                 self._log.info("Playwright Chromium launched for JS fallback")
+            except Exception:
+                self._browser = self._playwright.chromium.launch(
+                    channel="chrome", headless=True, args=launch_args
+                )
+                self._log.info("Playwright launched system Chrome for JS fallback")
             return True
         except Exception as exc:
             self._log.warning("Failed to launch Playwright browser: %s", exc)
@@ -246,6 +250,7 @@ class _PlaywrightFetcher:
         url: str,
         allowed_origins: frozenset[str],
         settle_ms: int = _PLAYWRIGHT_SETTLE_MS,
+        allow_unavailable_robots: bool = False,
     ) -> str | None:
         """Fetch the fully-rendered HTML for a URL, or None on failure."""
         if not self._ensure_browser():
@@ -276,7 +281,12 @@ class _PlaywrightFetcher:
                         route.continue_()
                         return
                     decision = self._robots.decision(request.url)
-                    if decision.allowed:
+                    unavailable_accepted = (
+                        allow_unavailable_robots
+                        and request_origin == source_origin(url)
+                        and decision.reason.startswith("robots_network_error:")
+                    )
+                    if decision.allowed or unavailable_accepted:
                         route.continue_()
                     else:
                         self._log.warning(
@@ -290,7 +300,11 @@ class _PlaywrightFetcher:
                 # requests of their own. Intercept them before access so browser
                 # rendering cannot leave the fail-closed robots boundary.
                 page.route("**/*", authorize_request)
-                page.goto(url, timeout=_PLAYWRIGHT_NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+                # GoDaddy listings can stream or retain page work long enough
+                # that DOMContentLoaded never arrives under routed automation.
+                # The document anchors are server-rendered, so commit plus the
+                # bounded settle below is the correct acquisition boundary.
+                page.goto(url, timeout=_PLAYWRIGHT_NAV_TIMEOUT_MS, wait_until="commit")
                 page.wait_for_timeout(settle_ms)
                 return page.content()
             finally:
@@ -298,6 +312,62 @@ class _PlaywrightFetcher:
         except Exception as exc:
             self._log.warning("Playwright fetch failed for %s: %s", url, exc)
             return None
+
+    def fetch_robots(
+        self,
+        robots_url: str,
+        allowed_origins: frozenset[str],
+    ) -> bool:
+        """Load and cache robots.txt through Chromium without weakening policy."""
+
+        if source_origin(robots_url) not in allowed_origins:
+            self._log.warning(
+                "Blocked browser robots access to unreviewed origin %s",
+                source_origin(robots_url),
+            )
+            return False
+        try:
+            assert_public_http_url(robots_url)
+        except Exception as exc:
+            self._log.warning("Unsafe browser robots URL %s: %s", robots_url, exc)
+            return False
+        if not self._ensure_browser():
+            return False
+
+        page = self._browser.new_page(user_agent=_BROWSER_UA)
+        try:
+            def authorize_request(route, request):
+                if source_origin(request.url) in allowed_origins:
+                    route.continue_()
+                else:
+                    self._log.warning(
+                        "Blocked browser robots redirect to unreviewed origin %s",
+                        source_origin(request.url),
+                    )
+                    route.abort()
+
+            page.route("**/*", authorize_request)
+            response = page.goto(
+                robots_url,
+                timeout=_PLAYWRIGHT_NAV_TIMEOUT_MS,
+                wait_until="domcontentloaded",
+            )
+            if response is None:
+                self._log.warning("Browser robots fetch returned no response for %s", robots_url)
+                return False
+            body = response.body().decode("utf-8", errors="replace")
+            self._robots.cache_browser_response(
+                robots_url,
+                text=body,
+                status_code=response.status,
+                resolved_url=page.url,
+            )
+            return True
+        except Exception as exc:
+            self._log.warning("Browser robots fetch failed for %s: %s", robots_url, exc)
+            return False
+        finally:
+            page.close()
 
     def close(self) -> None:
         if self._browser is not None:
@@ -468,7 +538,10 @@ def public_proceedings_scrape(
         len(known_pairs), len(validators_by_url),
     )
 
-    robots = RobotsPolicy(_HEADERS["User-Agent"])
+    robots = RobotsPolicy(
+        _HEADERS["User-Agent"],
+        product_token=_ROBOTS_PRODUCT_TOKEN,
+    )
     claimed_lock = threading.Lock()
     claimed_pairs: set[tuple[str, str]] = set()
     claimed_hashes: set[tuple[str, str]] = set(known_hashes)
@@ -526,7 +599,19 @@ def public_proceedings_scrape(
             entry_result["robots_allowed"] = robots_decision.allowed
             entry_result["robots_reason"] = robots_decision.reason
             if not robots_decision.allowed:
-                entry_result["status"] = "robots_skipped"
+                if (
+                    authorization.robots_unavailable_risk_accepted
+                    and robots_decision.reason.startswith("robots_network_error:")
+                ):
+                    entry_result["status"] = "needs_playwright"
+                    entry_result["robots_allowed"] = None
+                    entry_result["robots_reason"] = (
+                        "robots_unavailable_risk_accepted"
+                    )
+                elif robots_decision.reason.startswith("robots_network_error:"):
+                    entry_result["status"] = "needs_browser_robots"
+                else:
+                    entry_result["status"] = "robots_skipped"
                 entry_result["last_error"] = robots_decision.reason
                 results.append(entry_result)
                 continue
@@ -631,13 +716,39 @@ def public_proceedings_scrape(
     playwright_fetcher = _PlaywrightFetcher(log, robots)
     try:
         for entry_result in listing_results:
-            if entry_result["status"] != "needs_playwright":
+            if entry_result["status"] not in {
+                "needs_browser_robots",
+                "needs_playwright",
+            }:
                 continue
             resolved_url = entry_result["resolved_url"]
-            allowed_origins = municipality_authorizations[
-                entry_result["source_key"]
-            ].allowed_origins
-            rendered = playwright_fetcher.fetch_html(resolved_url, allowed_origins)
+            authorization = municipality_authorizations[entry_result["source_key"]]
+            allowed_origins = authorization.allowed_origins
+            if entry_result["status"] == "needs_browser_robots":
+                robots_decision = robots.decision(resolved_url)
+                if not playwright_fetcher.fetch_robots(
+                    robots_decision.robots_url,
+                    allowed_origins,
+                ):
+                    entry_result["status"] = "robots_skipped"
+                    entry_result["robots_allowed"] = False
+                    entry_result["robots_reason"] = "browser_robots_unavailable"
+                    entry_result["last_error"] = "browser robots transport unavailable"
+                    continue
+                robots_decision = robots.decision(resolved_url)
+                entry_result["robots_allowed"] = robots_decision.allowed
+                entry_result["robots_reason"] = robots_decision.reason
+                if not robots_decision.allowed:
+                    entry_result["status"] = "robots_skipped"
+                    entry_result["last_error"] = robots_decision.reason
+                    continue
+            rendered = playwright_fetcher.fetch_html(
+                resolved_url,
+                allowed_origins,
+                allow_unavailable_robots=(
+                    authorization.robots_unavailable_risk_accepted
+                ),
+            )
             links = extract_pdf_links(rendered or "", resolved_url) if rendered else []
             links, blocked_urls = _filter_allowed_document_links(
                 links,
@@ -651,6 +762,9 @@ def public_proceedings_scrape(
                     resolved_url,
                     allowed_origins,
                     settle_ms=_PLAYWRIGHT_XHR_SETTLE_MS,
+                    allow_unavailable_robots=(
+                        authorization.robots_unavailable_risk_accepted
+                    ),
                 )
                 links = extract_pdf_links(rendered or "", resolved_url) if rendered else []
                 links, blocked_urls = _filter_allowed_document_links(
@@ -667,6 +781,11 @@ def public_proceedings_scrape(
                     entry_result["last_error"] = (
                         f"{blocked_count} document link(s) blocked by source-origin policy"
                     )
+                else:
+                    # The browser path successfully completed the listing
+                    # acquisition, so do not retain the direct transport error
+                    # as a false current-health failure.
+                    entry_result["last_error"] = None
                 # No validators for JS-rendered listings — always refetch.
                 entry_result["validators"] = None
             elif rendered is None:
@@ -790,6 +909,7 @@ def public_proceedings_scrape(
                     )
                     pdf_resp.raise_for_status()
                     pdf_bytes = pdf_resp.content
+                    filename = _resolved_document_filename(filename, pdf_resp)
                     if not _valid_document_content(filename, pdf_bytes):
                         raise ValueError("response content does not match document type")
                 except Exception as exc:
@@ -1101,6 +1221,39 @@ def _valid_document_content(filename: str, data: bytes) -> bool:
     return data.startswith(b"%PDF-")
 
 
+def _resolved_document_filename(filename: str, response) -> str:
+    """Align an extensionless route's filename with the bytes it returned."""
+
+    content_type = str(response.headers.get("Content-Type") or "")
+    content_type = content_type.partition(";")[0].strip().casefold()
+    extension = {
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    }.get(content_type)
+
+    if extension is None:
+        final_path = urlparse(str(getattr(response, "url", "") or "")).path.lower()
+        extension = next(
+            (candidate for candidate in (".docx", ".doc", ".pdf") if final_path.endswith(candidate)),
+            None,
+        )
+
+    if extension is None:
+        data = response.content
+        if data.startswith(b"%PDF-"):
+            extension = ".pdf"
+        elif data.startswith(b"PK\x03\x04"):
+            extension = ".docx"
+        elif data.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+            extension = ".doc"
+
+    if extension is None:
+        return filename
+    stem = re.sub(r"\.(?:pdf|docx?)$", "", filename, flags=re.IGNORECASE)
+    return f"{stem}{extension}"
+
+
 def _fetch_drive_listing(
     url: str,
     robots: RobotsPolicy,
@@ -1162,8 +1315,13 @@ def _extract_raw_text(filename: str, data: bytes) -> str | None:
     lower = filename.lower()
     try:
         if lower.endswith((".docx", ".doc")):
-            return extract_text_from_docx_bytes(data) or None
-        return extract_text_from_pdf_bytes(data) or None
+            text = extract_text_from_docx_bytes(data)
+        else:
+            text = extract_text_from_pdf_bytes(data)
+        # PostgreSQL text values cannot contain U+0000.  Some PDFs encode
+        # padding/control bytes as literal NUL characters in extracted text;
+        # retain the rest of the evidence instead of rejecting the row.
+        return text.replace("\x00", "") or None
     except Exception:
         return None
 

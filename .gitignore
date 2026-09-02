@@ -44,13 +44,17 @@ models/
 .tmp_playwright/
 /output/
 /outputs/
+/receipts/
 /tmp/
 test-results/
 pipelines/.tmp_dagster_home_*/
+.dagster/
 pipelines/eval/results/
 pipelines/eval/results_live/
 pipelines/archives/
 /archives/
+benchmarks/arcgis-ingestion/rust-worker/target/
+benchmarks/arcgis-ingestion/*.ndjson
 
 # Ad hoc repo-root screenshots
 homepage-current.png
@@ -58,3 +62,4 @@ property-detail-momentum.png
 radar-header-detail.png
 radar-loaded.png
 radar-page.png
+pipelines/eval/fixtures/candidates/

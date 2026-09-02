@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the CountyIQ verified off-host backup daily
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+RandomizedDelaySec=15m
+Unit=countyiq-backup.service
+
+[Install]
+WantedBy=timers.target

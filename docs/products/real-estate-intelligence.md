@@ -62,13 +62,14 @@ local alpha codebase; they do not imply that CountyIQ is deployed.
 
 | Surface | Pipeline source | Status |
 |---|---|---|
-| Property page (`/property/:pidn`) | parcels, tax_claims, flood, structures, Pass 2 evidence, Pass 3 brief | Implemented locally, including cross-signal insight and linked proceedings. |
-| Owner page (`/owner/:id`) | stable `public.owners` identity + licenses + portfolio | Compatibility route; uses the same identity contract as entity case files. |
-| Entity case file (`/entity/:id`) | stable `public.owners` identity with Pass 1 aliases, relationships, verification, events, portfolio, and cached brief | Implemented. |
+| Property page (`/property/:pidn`) | parcels, tax_claims, flood, structures, Pass 2 evidence, Pass 3 brief | Implemented locally, including cross-signal insight, linked proceedings, and numbered source receipts. |
+| Owner page (`/owner/:id`) | stable `public.owners` identity + licenses + portfolio | Compatibility route; uses the same identity and verification-receipt contract as entity case files. |
+| Entity case file (`/entity/:id`) | stable `public.owners` identity with Pass 1 aliases, relationships, verification, events, portfolio, and cached brief | Implemented with source-record verification receipts and resolvable inline citations. |
 | Project case file (`/project/:key`) | source-backed event timeline with connected entities, parcels, municipalities, and local watch action | Implemented alpha; notifications and server persistence remain later work. |
-| Development radar (`/radar`) | `public.development_momentum` | Implemented locally. |
-| Distressed parcels (`/distressed`) | tax claims + sheriff sales composite | Implemented behind the restricted-distress feature gate. |
-| Intelligence feed (`/feed`) | deterministic parcel/tax events + cached Pass 0 development extraction | Unified event cards with evidence, relationships, event tags, and next actions are implemented. |
+| Development radar (`/radar`) | `public.development_momentum` + `public.development_momentum_history` | Implemented locally; score version 7 is deterministic, back-tested against historical plan filings, and keeps weekly history for the Movers view. |
+| Municipality page (`/municipalities/:name`) | `public.intelligence_events`, `public.development_momentum` | Implemented locally: planning pipeline, top opportunity parcels, recent feed, tax aggregates. Answers the P2 job "what is moving through planning in Municipality X". |
+| Distress changes | tax claims + sheriff sales composite | Served as evidence-backed Feed events; the legacy standalone `/distressed` browser redirects to `/feed`. |
+| Intelligence feed (`/feed`) | deterministic parcel/tax events + cached Pass 0 development extraction | Unified event cards with evidence receipts, original/internal links, relationships, event tags, and next actions are implemented. |
 | Watchlist (`/watch`) | browser-local entity, project, and parcel watches + `/api/feed` filters | MVP live; server-side persistence and notifications are not built. |
 
 ## Entity Profile Contract

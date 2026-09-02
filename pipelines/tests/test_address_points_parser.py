@@ -1,9 +1,11 @@
 """Tests for address points parser."""
 
 import json
+import inspect
 import pathlib
 
 from countyiq.lib.parsers.address_points import parse_address_points_features
+from countyiq.assets.arcgis.address_points import _geom_scd2_upsert_streaming
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "address_points_sample.json"
 
@@ -39,3 +41,12 @@ def test_parse_address_points_preserves_numeric_fields():
     assert records[0]["add_number"] == 123
     assert records[0]["long"] == -76.7
     assert records[0]["lat"] == 39.9
+
+
+def test_county_sized_streaming_upsert_indexes_staged_source_key():
+    source = inspect.getsource(_geom_scd2_upsert_streaming)
+
+    index_position = source.index("idx_tmp_address_points_site_nguid")
+    update_position = source.index("UPDATE {fqn}")
+    assert index_position < update_position
+    assert "ANALYZE _tmp_address_points" in source

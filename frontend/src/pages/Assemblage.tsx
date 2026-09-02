@@ -57,7 +57,7 @@ export default function Assemblage() {
     <PageShell maxWidth={1100}>
       <BackButton onClick={() => navigate(-1)} />
 
-        <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
+        <div style={{ marginBottom: 32 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--accent-purple)', marginBottom: 8 }}>Intelligence</div>
           <h1 style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Assemblage Opportunities</h1>
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
@@ -93,7 +93,7 @@ export default function Assemblage() {
         )}
 
         {/* Results */}
-        {!loading && clusters.map((c, i) => {
+        {!loading && clusters.map((c) => {
           const isExpanded = expanded === c.seed_pidn
           return (
             <div key={c.seed_pidn} style={{
@@ -101,7 +101,6 @@ export default function Assemblage() {
               border: '1px solid var(--border)',
               borderRadius: 8,
               overflow: 'hidden',
-              animation: `fadeUp 0.4s ease ${0.05 + i * 0.02}s both`,
               opacity: 0,
             }}>
               {/* Cluster header */}

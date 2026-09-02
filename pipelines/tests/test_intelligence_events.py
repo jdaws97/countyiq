@@ -11,9 +11,15 @@ from countyiq.lib.intelligence_events import (
     normalize_development_tags,
     primary_development_event_type,
 )
-
+from countyiq.assets.enrichment.intelligence_events import _DEVELOPMENT_EVENTS_SQL
 
 NOW = datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc)
+
+
+def test_development_event_address_match_is_scoped_to_municipality():
+    assert "FROM meta.municipality_source_rights msr" in _DEVELOPMENT_EVENTS_SQL
+    assert "msr.body_name = pp.body_name" in _DEVELOPMENT_EVENTS_SQL
+    assert "msr.municipality_name = p.municipality" in _DEVELOPMENT_EVENTS_SQL
 
 
 def test_development_tags_combine_model_and_source_facts():
@@ -118,6 +124,30 @@ def test_delinquency_event_describes_direction_and_limit():
     assert event["event_type"] == "delinquency_change"
     assert "$1,000.00" in event["what_happened"]
     assert "does not establish willingness to sell" in event["why_it_matters"]
+    assert event["confidence"] is None
+
+
+def test_delinquency_transition_kind_prevents_same_timestamp_key_collision():
+    base = {
+        "pidn": "0000000000001",
+        "detected_at": NOW,
+        "event_date": date(2026, 8, 20),
+        "affected_claims": 1,
+    }
+    added = build_delinquency_event(
+        {**base, "old_total": 0, "new_total": 100, "change_kind": "new"}
+    )
+    resolved = build_delinquency_event(
+        {
+            **base,
+            "old_total": 100,
+            "new_total": 0,
+            "change_kind": "resolved",
+        }
+    )
+
+    assert added["event_key"] != resolved["event_key"]
+    assert added["source_record_id"] != resolved["source_record_id"]
 
 
 def test_development_event_uses_cached_llm_interpretation_and_evidence():

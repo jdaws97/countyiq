@@ -9,6 +9,7 @@ import json
 
 
 from countyiq.lib.intelligence_common import (
+    PROCEEDINGS_FOR_PARCEL_QUERY,
     compute_input_hash,
     format_corporate_context,
     format_entity_context,
@@ -18,6 +19,12 @@ from countyiq.lib.intelligence_common import (
     format_proceedings_context,
     format_tax_claims_context,
 )
+
+
+def test_parcel_proceeding_address_match_is_normalized_and_municipality_scoped():
+    assert "public.normalize_street_address" in PROCEEDINGS_FOR_PARCEL_QUERY
+    assert "FROM meta.municipality_source_rights msr" in PROCEEDINGS_FOR_PARCEL_QUERY
+    assert "msr.municipality_name = parcel.municipality" in PROCEEDINGS_FOR_PARCEL_QUERY
 
 
 # ---------------------------------------------------------------------------

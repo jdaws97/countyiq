@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { Map } from 'react-map-gl/maplibre'
 import { DeckGL } from '@deck.gl/react'
-import { GeoJsonLayer } from '@deck.gl/layers'
+import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { PickingInfo, MapViewState } from '@deck.gl/core'
 import type { Feature, Geometry } from 'geojson'
 import Nav from '../components/Nav'
@@ -16,12 +16,22 @@ import type {
   ParcelFeatureProperties,
   PenndotProjectProperties,
   PropertyReport,
+  RadarBboxItem,
+  RadarBboxResponse,
   ZoningProperties,
 } from '../types/api'
+
+type RadarBasis = 'opportunity' | 'momentum'
+interface RadarPoint {
+  properties: { pidn: string; radar_score: number; top_signal: string | null; radar_basis: RadarBasis }
+  lng: number
+  lat: number
+}
 
 type ParcelFeature = Feature<Geometry, ParcelFeatureProperties>
 type ZoningFeature = Feature<Geometry, ZoningProperties>
 type TooltipProperties =
+  | RadarPoint['properties']
   | ParcelFeatureProperties
   | PenndotProjectProperties
   | ZoningProperties
@@ -69,6 +79,16 @@ const URL_LAYER_MAP: Record<string, string> = {
   penndot: 'penndot_projects',
   vacant: 'parcels',
   delinquent: 'parcels',
+  radar: 'parcels',
+}
+
+const RADAR_MIN_ZOOM = 11
+
+function radarColor(score: number): [number, number, number, number] {
+  if (score >= 60) return [61, 189, 111, 220]
+  if (score >= 40) return [232, 181, 60, 220]
+  if (score >= 20) return [96, 165, 250, 200]
+  return [148, 163, 184, 160]
 }
 
 export default function MapView() {
@@ -89,6 +109,9 @@ export default function MapView() {
     }
     if (layer === 'vacant' || layer === 'delinquent') {
       return { ...DEFAULT_VIEW, zoom: 14 }
+    }
+    if (layer === 'radar') {
+      return { ...DEFAULT_VIEW, zoom: 12 }
     }
     return DEFAULT_VIEW
   }, [searchParams])
@@ -123,14 +146,17 @@ export default function MapView() {
     }
   }, [highlightPidn, isClusterMode])
 
-  const [parcelFilter, setParcelFilter] = useState<'all' | 'delinquent' | 'vacant' | 'vacant_delinquent'>(
+  const [parcelFilter, setParcelFilter] = useState<'all' | 'delinquent' | 'vacant' | 'vacant_delinquent' | 'radar'>(
     () => {
       const layer = searchParams.get('layer')
       if (layer === 'vacant') return 'vacant'
       if (layer === 'delinquent') return 'delinquent'
+      if (layer === 'radar') return 'radar'
       return 'all'
     }
   )
+  const [radarBasis] = useState<RadarBasis>(() => (searchParams.get('radar') === 'momentum' ? 'momentum' : 'opportunity'))
+  const [radarData, setRadarData] = useState<RadarPoint[] | null>(null)
 
   const [geoData, setGeoData] = useState<Record<string, GeoJSON.FeatureCollection>>({})
   const [parcelData, setParcelData] = useState<ParcelFeatureCollection | null>(null)
@@ -163,7 +189,45 @@ export default function MapView() {
     })
   }, [])
 
+  const fetchRadar = useCallback((vs: MapViewState) => {
+    if (!vs || vs.zoom < RADAR_MIN_ZOOM) {
+      setRadarData(null)
+      return
+    }
+    const degPerPixel = 360 / (512 * Math.pow(2, vs.zoom))
+    const halfW = degPerPixel * 700
+    const halfH = degPerPixel * 450
+    const params = new URLSearchParams({
+      west: (vs.longitude - halfW).toFixed(6),
+      south: (vs.latitude - halfH).toFixed(6),
+      east: (vs.longitude + halfW).toFixed(6),
+      north: (vs.latitude + halfH).toFixed(6),
+      view: radarBasis,
+      min_score: '10',
+    })
+    fetch(`/api/radar/development/bbox?${params}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`)
+        return r.json()
+      })
+      .then((data: RadarBboxResponse) => {
+        setRadarData(
+          (data.parcels || [])
+            .filter((item: RadarBboxItem) => item.lng != null && item.lat != null)
+            .map((item: RadarBboxItem) => ({
+              properties: { pidn: item.pidn, radar_score: Number(item.score), top_signal: item.top_signal, radar_basis: radarBasis },
+              lng: Number(item.lng),
+              lat: Number(item.lat),
+            }))
+        )
+      })
+      .catch(() => {
+        // Radar data unavailable
+      })
+  }, [radarBasis])
+
   const fetchParcels = useCallback((vs: MapViewState) => {
+    if (parcelFilter === 'radar') fetchRadar(vs)
     if (!vs || vs.zoom < MIN_PARCEL_ZOOM) {
       setParcelData(null)
       return
@@ -197,7 +261,7 @@ export default function MapView() {
       .catch(() => {
         // Parcel data unavailable
       })
-  }, [parcelFilter])
+  }, [parcelFilter, fetchRadar])
 
   const onViewStateChange = useCallback(
     ({ viewState }: { viewState: MapViewState }) => {
@@ -224,7 +288,8 @@ export default function MapView() {
   useEffect(() => {
     const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
     const vs = viewStateRef.current || initialViewState
-    if (!parcelsEnabled || (vs.zoom ?? 0) < MIN_PARCEL_ZOOM) return
+    const minZoom = parcelFilter === 'radar' ? RADAR_MIN_ZOOM : MIN_PARCEL_ZOOM
+    if (!parcelsEnabled || (vs.zoom ?? 0) < minZoom) return
     // Deferred a tick: fetchParcels sets state, which must not happen
     // synchronously inside the effect; the timer also coalesces rapid
     // filter flips.
@@ -316,7 +381,33 @@ export default function MapView() {
           autoHighlight: true,
           highlightColor: [255, 255, 255, 60],
           updateTriggers: {
-            getFillColor: [parcelData],
+            getFillColor: [parcelFilter, highlightPidn, isClusterMode, clusterPidns, seedPidn],
+            getLineColor: [parcelFilter, highlightPidn, isClusterMode, clusterPidns, seedPidn],
+            getLineWidth: [highlightPidn, isClusterMode, clusterPidns, seedPidn],
+          },
+        })
+      )
+    }
+
+    if (parcelFilter === 'radar' && radarData && currentZoom >= RADAR_MIN_ZOOM) {
+      result.push(
+        new ScatterplotLayer<RadarPoint>({
+          id: 'radar-points',
+          data: radarData,
+          getPosition: (d: RadarPoint) => [d.lng, d.lat],
+          getFillColor: (d: RadarPoint) => radarColor(d.properties.radar_score),
+          getRadius: (d: RadarPoint) => 18 + d.properties.radar_score * 0.6,
+          radiusUnits: 'meters' as const,
+          radiusMinPixels: 3,
+          radiusMaxPixels: 14,
+          stroked: true,
+          getLineColor: [10, 14, 26, 160],
+          lineWidthMinPixels: 1,
+          pickable: true,
+          onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
+          onClick: (info: PickingInfo) => {
+            const pidn = (info.object as RadarPoint | undefined)?.properties?.pidn
+            if (pidn) setSelectedPidn(pidn)
           },
         })
       )
@@ -405,16 +496,17 @@ export default function MapView() {
     }
 
     return result
-  }, [layers, geoData, parcelData, currentZoom, handleParcelClick, parcelFilter, highlightPidn, isClusterMode, clusterPidns, seedPidn])
+  }, [layers, geoData, parcelData, radarData, currentZoom, handleParcelClick, parcelFilter, highlightPidn, isClusterMode, clusterPidns, seedPidn])
 
   const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
   const showZoomMessage = parcelsEnabled && currentZoom < MIN_PARCEL_ZOOM
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div className="map-shell" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Nav />
-      <div style={{ position: 'relative', flex: 1 }}>
+      <div className="map-canvas" style={{ position: 'relative', flex: 1 }}>
         <Link
+          className="map-back-link"
           to="/"
           style={{
             position: 'absolute',
@@ -457,8 +549,29 @@ export default function MapView() {
 
         <LayerToggle layers={layers} onToggle={handleToggle} />
 
+        {currentZoom < MIN_PARCEL_ZOOM && currentZoom >= RADAR_MIN_ZOOM && (
+          <div className="map-filter-bar" style={{
+            position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 10, display: 'flex', gap: 8, alignItems: 'center',
+            background: 'var(--bg-panel)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)',
+          }}>
+            <button onClick={() => { if (parcelFilter !== 'radar') { setParcelFilter('radar'); setParcelData(null) } }} style={{
+              padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 0.5,
+              background: parcelFilter === 'radar' ? 'var(--accent-cyan)' : 'transparent',
+              color: parcelFilter === 'radar' ? '#0a0e1a' : 'var(--text-secondary)',
+              fontWeight: parcelFilter === 'radar' ? 700 : 400,
+            }}>
+              Radar ({radarBasis})
+            </button>
+            <span>Zoom in for parcel outlines</span>
+          </div>
+        )}
+
         {currentZoom >= MIN_PARCEL_ZOOM && (
-          <div style={{
+          <div className="map-filter-bar" style={{
             position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
             zIndex: 10, display: 'flex', gap: 2,
             background: 'var(--bg-panel)', border: '1px solid var(--border)',
@@ -469,6 +582,7 @@ export default function MapView() {
               { key: 'delinquent', label: 'Delinquent', color: 'var(--accent-red)' },
               { key: 'vacant', label: 'Vacant', color: 'var(--accent-green)' },
               { key: 'vacant_delinquent', label: 'Vacant + Delinquent', color: 'var(--accent-gold)' },
+              { key: 'radar', label: 'Radar', color: 'var(--accent-cyan)' },
             ] as const).map(f => (
               <button key={f.key} onClick={() => { if (parcelFilter !== f.key) { setParcelFilter(f.key); setParcelData(null) } }} style={{
                 padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -535,6 +649,7 @@ export default function MapView() {
 
         {showZoomMessage && (
           <div
+            className="map-zoom-message"
             style={{
               position: 'absolute',
               bottom: 32,
@@ -590,6 +705,8 @@ export default function MapView() {
         )}
 
         <div
+          className="map-property-panel"
+          data-open={panelOpen}
           style={{
             position: 'absolute',
             top: 0,
@@ -687,7 +804,7 @@ function PropertyPanel({
               marginBottom: 4,
             }}
           >
-            {p.owner_full || 'Owner not displayed'}
+            {p.propadr || 'Address unavailable'}
           </div>
           <div
             style={{
@@ -697,7 +814,7 @@ function PropertyPanel({
               lineHeight: 1.4,
             }}
           >
-            {p.propadr || 'No address'}
+            {p.owner_full || 'Owner not displayed'}
           </div>
           {p.municipality && (
             <span
@@ -730,7 +847,7 @@ function PropertyPanel({
         <DataField label="Acres" value={p.acres ? Number(p.acres).toFixed(2) : '--'} />
         <DataField label="Sale Date" value={p.saledt || '--'} />
         <DataField label="Sale Price" value={formatCurrency(p.price)} />
-        {p.prev_price && <DataField label="Prev Price" value={formatCurrency(p.prev_price)} />}
+        {p.prev_price != null && <DataField label="Prev Price" value={formatCurrency(p.prev_price)} />}
         <DataField label="Class" value={getPropertyClassLabel(p.class) || '--'} />
       </div>
       {(p.aprland || p.aprbldg) && (
@@ -745,12 +862,12 @@ function PropertyPanel({
           <Divider />
           <SectionTitle>Property Details</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-            {p.yrblt && <DataField label="Year Built" value={String(p.yrblt)} />}
+            {p.yrblt != null && <DataField label="Year Built" value={String(p.yrblt)} />}
             {p.style && <DataField label="Style" value={p.style} />}
-            {p.num_stories && <DataField label="Stories" value={String(p.num_stories)} />}
-            {p.res_living_area && <DataField label="Living Area" value={`${Number(p.res_living_area).toLocaleString()} sf`} />}
+            {p.num_stories != null && <DataField label="Stories" value={String(p.num_stories)} />}
+            {p.res_living_area != null && <DataField label="Living Area" value={`${Number(p.res_living_area).toLocaleString()} sf`} />}
             {p.luc && <DataField label="LUC" value={p.luc} />}
-            {p.heatsys && <DataField label="Heat" value={p.heatsys} />}
+            {p.heatsys != null && <DataField label="Heat" value={String(p.heatsys)} />}
           </div>
         </>
       )}
@@ -1023,6 +1140,18 @@ function formatDate(d: string | null): string {
 }
 
 function MapTooltip({ properties }: { properties: TooltipProperties }) {
+  if ('radar_score' in properties) {
+    const p = properties
+    return (
+      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{p.radar_basis === 'momentum' ? 'Momentum' : 'Opportunity'} score {p.radar_score}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{p.top_signal || 'No headline signal'}</div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{p.pidn}</div>
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>Click for details</div>
+      </div>
+    )
+  }
+
   if ('pidn' in properties && properties.pidn) {
     const p = properties
     const schoolName = getSchoolDistrictLabel(p.school_dis ?? null)

@@ -68,7 +68,7 @@ export default function LicenseBrowser() {
   return (
     <PageShell maxWidth={1200}>
         {/* Page header */}
-        <div style={{ marginBottom: 32, animation: 'fadeUp 0.4s ease both' }}>
+        <div style={{ marginBottom: 32 }}>
           <div
             style={{
               fontFamily: 'var(--font-mono)',
@@ -151,7 +151,6 @@ export default function LicenseBrowser() {
                 gap: 12,
                 marginBottom: 24,
                 flexWrap: 'wrap',
-                animation: 'fadeUp 0.4s ease both',
                 animationDelay: '0.05s',
                 opacity: 0,
               }}
@@ -209,7 +208,6 @@ export default function LicenseBrowser() {
             {/* Table */}
             <div
               style={{
-                animation: 'fadeUp 0.5s ease both',
                 animationDelay: '0.1s',
                 opacity: 0,
                 border: '1px solid var(--border)',

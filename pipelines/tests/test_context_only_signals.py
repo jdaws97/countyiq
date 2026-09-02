@@ -6,6 +6,7 @@ background context and never as validation targets.
 
 from countyiq.lib.pass2_batched_validation import (
     CONTEXT_ONLY_SIGNALS,
+    _PROMPT_FORMAT_VERSION,
     _format_context_signals,
     build_batched_signal_prompt,
 )
@@ -40,6 +41,7 @@ GROWTH_SIGNAL = {
 
 def test_context_only_set_matches_eval_findings():
     assert CONTEXT_ONLY_SIGNALS == {
+        "nearby_subdivision",
         "growth_area",
         "development_overlay",
         "local_traffic_activity",
@@ -73,3 +75,23 @@ def test_prompt_excludes_context_signals_from_validation_list():
 def test_no_context_signals_no_section():
     prompt = build_batched_signal_prompt(_ctx([VACANCY_SIGNAL], []))
     assert "AREA CONTEXT" not in prompt
+
+
+def test_prompt_supplies_deterministic_arithmetic_instead_of_asking_model():
+    context = _ctx([VACANCY_SIGNAL], [])
+    context.update(
+        {
+            "parcel": {"owner": "SMITH JOHN", "assessed_value": 100},
+            "portfolio": [
+                {"assessed_value": 100},
+                {"assessed_value": 300},
+            ],
+            "tax_claims": [{"amount": 10}, {"amount": 20}],
+            "neighbors": [{"total_owed": 50}, {"total_owed": 0}],
+        }
+    )
+    prompt = build_batched_signal_prompt(context)
+    assert "tax_claim_total: 30.0" in prompt
+    assert "target_assessed_share_pct: 25.0" in prompt
+    assert "adjacent_delinquency_rate_pct: 50.0" in prompt
+    assert _PROMPT_FORMAT_VERSION == "precomputed-metrics-v1"

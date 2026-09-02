@@ -22,7 +22,7 @@ _USE_COLUMNS: dict[SourceUse, str] = {
 }
 
 PUBLIC_ORGANIZATION_TYPES = frozenset(
-    {"llc", "corporation", "partnership", "nonprofit", "government"}
+    {"business", "llc", "corporation", "partnership", "nonprofit", "government"}
 )
 
 

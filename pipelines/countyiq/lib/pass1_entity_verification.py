@@ -15,18 +15,37 @@ Two stages:
 from __future__ import annotations
 
 import hashlib
+import os
+import re
 
 from countyiq.lib.county_config import county_prompt_context
-
+from countyiq.lib.entity_types import is_organization_name
+from countyiq.lib.pass_schemas import PASS1_ENTITY_VERIFICATION_SCHEMA
+from countyiq.lib.prompt_prefix import schema_block
 
 # =============================================================================
 # SQL CONSTANTS
 # =============================================================================
 
+# Office addresses shared by at least this many active PA DOS entities are
+# registered-agent or law-firm hubs (2026-09-02: 14 addresses in Harrisburg,
+# Erie, and York generated 3,673 candidate pairs and 28 clusters of 10+
+# unrelated LLCs). A shared hub address is not identity evidence.
+SHARED_ADDRESS_HUB_LIMIT = 10
+
 # Reads from the pre-computed materialized view instead of running the
 # expensive trgm self-join live. The deterministic
 # entity_candidate_pairs_refresh asset populates it after municipality_join.
-CANDIDATE_CLUSTERS_QUERY = """
+CANDIDATE_CLUSTERS_QUERY = f"""
+    WITH hub_addresses AS (
+        SELECT office_address
+        FROM staging.corporate_entities
+        WHERE valid_to IS NULL
+          AND office_address IS NOT NULL
+          AND office_address != ''
+        GROUP BY office_address
+        HAVING COUNT(*) >= {SHARED_ADDRESS_HUB_LIMIT}
+    )
     SELECT name_a, name_b, municipality, sim
     FROM public.entity_candidate_pairs
 
@@ -45,6 +64,7 @@ CANDIDATE_CLUSTERS_QUERY = """
       AND c2.valid_to IS NULL
       AND c1.office_address IS NOT NULL
       AND c1.office_address != ''
+      AND c1.office_address NOT IN (SELECT office_address FROM hub_addresses)
 """
 
 # Standalone refresh query — used by the Dagster asset that maintains the matview.
@@ -59,11 +79,189 @@ ENTITY_CANDIDATE_PAIRS_READY_QUERY = """
 """
 
 
+# =============================================================================
+# CLUSTER SELECTION
+# =============================================================================
+
+def include_person_clusters() -> bool:
+    """Whether person-only clusters may be sent to the model.
+
+    Off by default: natural-person display is disabled by source policy and
+    the assemblage signal matches raw owner strings, so person merges reach
+    no customer surface today. 5,078 of 6,110 York clusters (83% of Pass 1
+    spend) were person-only on 2026-09-02.
+    """
+    return os.environ.get(
+        "COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS", ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def cluster_involves_organization(cluster_names: list[str]) -> bool:
+    """True when at least one name is a business, trust, or government entity."""
+    return any(is_organization_name(name) for name in cluster_names)
+
+
+def select_pass1_clusters(
+    clusters: list[list[str]],
+    *,
+    include_person_only: bool | None = None,
+) -> tuple[list[list[str]], int]:
+    """Return the clusters Pass 1 should send and the count it skipped.
+
+    The estimator and the asset share this selector so the read-only estimate
+    prices exactly the work the asset will dispatch.
+    """
+    if include_person_only is None:
+        include_person_only = include_person_clusters()
+    if include_person_only:
+        return list(clusters), 0
+    kept = [cluster for cluster in clusters if cluster_involves_organization(cluster)]
+    return kept, len(clusters) - len(kept)
+
+
 def stable_cluster_key(cluster_names: list[str]) -> str:
     """Return a deterministic tracking key for a candidate entity cluster."""
     canonical_names = sorted({name.strip() for name in cluster_names if name and name.strip()})
     digest = hashlib.sha256("\x1f".join(canonical_names).encode("utf-8")).hexdigest()[:20]
     return f"entity_cluster:{digest}"
+
+
+DETERMINISTIC_VARIANT_VERSION = "exact-pa-dos-legal-name-v1"
+
+
+def _legal_name_key(name: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "", name.upper())
+
+
+def build_deterministic_entity_resolution(
+    records: dict,
+    cluster_names: list[str],
+) -> dict | None:
+    """Resolve only punctuation/case variants of one anchored legal entity.
+
+    This tier deliberately excludes natural people, trusts, suffix-stripped
+    similarities, shared-address candidates, and conflicting PA DOS entity
+    numbers. Every other cluster remains in the LLM voting path.
+    """
+
+    names = sorted({name.strip() for name in cluster_names if name and name.strip()})
+    if len(names) < 2 or len({_legal_name_key(name) for name in names}) != 1:
+        return None
+    legal_key = _legal_name_key(names[0])
+    entity_type = next(
+        (
+            kind
+            for suffix, kind in (
+                ("PLLC", "llc"),
+                ("LLC", "llc"),
+                ("CORPORATION", "corporation"),
+                ("CORP", "corporation"),
+                ("INC", "corporation"),
+                ("LLP", "partnership"),
+                ("LP", "partnership"),
+                ("LTD", "corporation"),
+                ("PC", "corporation"),
+            )
+            if legal_key.endswith(suffix)
+        ),
+        None,
+    )
+    if entity_type is None:
+        return None
+
+    corporate_rows = records.get("corporate_entities", []) or []
+    matching_corporate = [
+        row
+        for row in corporate_rows
+        if _legal_name_key(str(row.get("entity_name") or "")) == legal_key
+    ]
+    entity_numbers = {
+        str(row.get("entity_number")).strip()
+        for row in matching_corporate
+        if row.get("entity_number") is not None
+        and str(row.get("entity_number")).strip()
+    }
+    if not matching_corporate or len(entity_numbers) != 1:
+        return None
+
+    canonical_name = sorted(
+        {
+            str(row.get("entity_name")).strip()
+            for row in matching_corporate
+            if str(row.get("entity_name") or "").strip() in names
+        }
+        or set(names)
+    )[0]
+
+    def identifiers(source: str, field: str) -> list[str]:
+        return sorted(
+            {
+                str(row.get(field)).strip()
+                for row in records.get(source, []) or []
+                if row.get(field) is not None and str(row.get(field)).strip()
+            }
+        )
+
+    parcels = records.get("parcels", []) or []
+    tax_claims = records.get("tax_claims", []) or []
+    summary = records.get("portfolio_summary") or {}
+    parcel_count = int(summary.get("total_parcels", len(parcels)))
+    total_assessed = float(
+        summary.get(
+            "total_assessed_value",
+            sum(float(row.get("aprtotal") or 0) for row in parcels),
+        )
+    )
+    total_tax_owed = float(
+        summary.get(
+            "total_tax_owed",
+            sum(float(row.get("total") or 0) for row in tax_claims),
+        )
+    )
+    entity_number = next(iter(entity_numbers))
+    candidate_refs = " ".join(f"[Evidence: candidate:{name}]" for name in names)
+    corporate_ref = f"[Evidence: corporate_entities:{canonical_name}]"
+    reasoning = (
+        "The candidate names differ only by case, spacing, or punctuation "
+        f"and map to PA DOS entity number {entity_number} "
+        f"{candidate_refs} {corporate_ref}."
+    )
+    return {
+        "entities": [
+            {
+                "canonical_name": canonical_name,
+                "member_names": names,
+                "entity_type": entity_type,
+                "confidence": 1.0,
+                "reasoning": reasoning,
+                "linked_records": {
+                    "parcels": identifiers("parcels", "pidn"),
+                    "tax_claims": identifiers("tax_claims", "pidn"),
+                    "plcb_licenses": identifiers("plcb_licenses", "license_number"),
+                    "corporate_entities": identifiers(
+                        "corporate_entities", "entity_name"
+                    ),
+                    "proceedings": identifiers("proceedings", "applicant_name"),
+                },
+                "relationships": [],
+                "portfolio_summary": {
+                    "parcel_count": parcel_count,
+                    "total_assessed_value": total_assessed,
+                    "tax_delinquent_parcels": len(
+                        {
+                            str(row.get("pidn"))
+                            for row in tax_claims
+                            if row.get("pidn") is not None
+                        }
+                    ),
+                    "total_tax_owed": total_tax_owed,
+                },
+            }
+        ],
+        "rejected_matches": [],
+        "abstentions": [],
+        "resolution_tier": DETERMINISTIC_VARIANT_VERSION,
+    }
 
 CLUSTER_RECORDS_QUERY_PARCELS = """
     SELECT
@@ -155,14 +353,23 @@ TASKS:
 3. FLAG any matches you REJECT — cases where similar names are clearly different entities.
 4. PORTFOLIO SUMMARY — for each confirmed entity, summarize the property portfolio (count of parcels, total assessed value, any tax delinquencies).
 
+Every candidate name must be accounted for: place it in exactly one entity's
+member_names, or name it in rejected_matches/abstentions. Copy member_names and
+all linked-record identifiers exactly from the input. Never invent or normalize
+an identifier. canonical_name must also be a name present in the input.
+Every reasoning field, relationship evidence string, and rejection/abstention
+reason must cite one or more printed refs inline as
+[Evidence: group:identifier]; end each factual sentence with its marker.
+
 OUTPUT FORMAT:
 {{
   "entities": [
     {{
       "canonical_name": "the primary/official name for this entity",
+      "member_names": ["exact candidate names assigned to this entity"],
       "entity_type": "individual|llc|corporation|partnership|trust|unknown",
       "confidence": 0.0 to 1.0,
-      "reasoning": "brief explanation of why these records are grouped together",
+      "reasoning": "cited explanation of why these records are grouped together",
       "linked_records": {{
         "parcels": ["list of PIDNs"],
         "tax_claims": ["list of PIDNs with tax claims"],
@@ -213,10 +420,21 @@ ENTITY_VERIFICATION_USER_TEMPLATE = """{sections}
 
 Group, relate, reject, or abstain on the records above. Return ONLY the JSON object."""
 
-# Final system string sent to the API (single braces).
-ENTITY_VERIFICATION_SYSTEM_PROMPT = _P1_SYSTEM_TEMPLATE.format(
-    county_context=county_prompt_context()
+# Final system string sent to the API (single braces). The static schema
+# block restates the enforced contract and pushes the byte-identical prefix
+# past the provider caching minimum (see prompt_prefix.py).
+ENTITY_VERIFICATION_SYSTEM_PROMPT = (
+    _P1_SYSTEM_TEMPLATE.format(county_context=county_prompt_context())
+    + "\n\n"
+    + schema_block(PASS1_ENTITY_VERIFICATION_SCHEMA)
 )
+
+
+PROMPT_VERSION = hashlib.sha256(
+    (ENTITY_VERIFICATION_SYSTEM_PROMPT + "\n\n" + ENTITY_VERIFICATION_USER_TEMPLATE).encode(
+        "utf-8"
+    )
+).hexdigest()[:12]
 
 
 # =============================================================================
@@ -245,7 +463,7 @@ def _format_parcel_records(parcels: list[dict]) -> str:
         sale_dt = _safe_str(p.get("saledt"))
         price = p.get("price") or 0
         prev = _safe_str(p.get("prev_owner"))
-        line = f"- PIDN {pidn} | Owner: {owner} | {addr}"
+        line = f"- Evidence ref: parcels:{pidn} | PIDN {pidn} | Owner: {owner} | {addr}"
         if sale_dt:
             line += f" | Sold {sale_dt} for ${price:,.0f}"
         if prev:
@@ -268,7 +486,10 @@ def _format_tax_claims(claims: list[dict]) -> str:
         authority = _safe_str(c.get("authority_name"))
         year = c.get("tax_year", "")
         total = c.get("total") or 0
-        lines.append(f"- PIDN {pidn} | Owner: {owner} | {authority} tax {year}: ${total:,.2f}")
+        lines.append(
+            f"- Evidence ref: tax_claims:{pidn} | PIDN {pidn} | "
+            f"Owner: {owner} | {authority} tax {year}: ${total:,.2f}"
+        )
     return "\n".join(lines)
 
 
@@ -285,7 +506,10 @@ def _format_plcb(licenses: list[dict]) -> str:
         licensee = _safe_str(lic.get("licensee"))
         prem_owner = _safe_str(lic.get("premises_owner"))
         addr = _safe_str(lic.get("premises_address"))
-        lines.append(f"- License #{num} | Licensee: {licensee} | Premises owner: {prem_owner} | {addr}")
+        lines.append(
+            f"- Evidence ref: plcb_licenses:{num} | License #{num} | "
+            f"Licensee: {licensee} | Premises owner: {prem_owner} | {addr}"
+        )
     return "\n".join(lines)
 
 
@@ -303,7 +527,10 @@ def _format_corporate(entities: list[dict]) -> str:
         status = _safe_str(e.get("status"))
         formed = _safe_str(e.get("formation_date"))
         office = _safe_str(e.get("office_address"))
-        lines.append(f"- {name} (#{number}) | Status: {status} | Formed: {formed} | Office: {office}")
+        lines.append(
+            f"- Evidence ref: corporate_entities:{name} | {name} (#{number}) | "
+            f"Status: {status} | Formed: {formed} | Office: {office}"
+        )
     return "\n".join(lines)
 
 
@@ -322,7 +549,10 @@ def _format_proceedings(procs: list[dict]) -> str:
         decision = _safe_str(p.get("decision"))
         body = _safe_str(p.get("body_name"))
         date = _safe_str(p.get("meeting_date"))
-        lines.append(f"- {etype} by {applicant} | Re: {parcel} | Decision: {decision} | {body} {date}")
+        lines.append(
+            f"- Evidence ref: proceedings:{applicant} | {etype} by {applicant} | "
+            f"Re: {parcel} | Decision: {decision} | {body} {date}"
+        )
     return "\n".join(lines)
 
 
@@ -345,6 +575,16 @@ def build_entity_cluster_prompt(records: dict) -> str:
         Fully formatted prompt string ready for LLM invocation.
     """
     sections = []
+
+    candidate_names = records.get("candidate_names", [])
+    if candidate_names:
+        sections.append(
+            "CANDIDATE NAMES (account for every name):\n"
+            + "\n".join(
+                f"- {name} | Evidence ref: candidate:{name}"
+                for name in candidate_names
+            )
+        )
 
     # Parcel records — always included if present
     parcel_text = _format_parcel_records(records.get("parcels", []))
@@ -430,6 +670,11 @@ def parse_entity_verification_output(output: dict) -> dict:
 
         normalized = {
             "canonical_name": entity.get("canonical_name", ""),
+            "member_names": [
+                name.strip()
+                for name in entity.get("member_names", [])
+                if isinstance(name, str) and name.strip()
+            ] if isinstance(entity.get("member_names", []), list) else [],
             "entity_type": entity.get("entity_type", "unknown"),
             "confidence": confidence,
             "reasoning": entity.get("reasoning", ""),
@@ -481,6 +726,13 @@ _MAX_TAX_CLAIMS_DETAIL = 30
 
 def _entity_member_names(entity: dict, cluster_names: list[str]) -> set[str]:
     """Names from the candidate cluster that this entity claims."""
+    explicit = entity.get("member_names")
+    if isinstance(explicit, list):
+        explicit_names = {value for value in explicit if isinstance(value, str)}
+        return {name for name in cluster_names if name in explicit_names}
+
+    # Legacy fallback for archived eval fixtures created before member_names
+    # became an explicit production contract.
     linked = entity.get("linked_records", {}) or {}
     claimed: set[str] = set()
     for value in [entity.get("canonical_name", "")]:
@@ -597,7 +849,8 @@ def merge_entity_trial_partitions(
                 "names": members,
                 "reason": (
                     f"cross-trial disagreement: {len(unsupported)} pair(s) in this "
-                    f"grouping lacked majority support across {n} trials"
+                    f"grouping lacked majority support across {n} trials "
+                    "[Evidence: trial:voting]"
                 ),
             })
         else:
@@ -658,6 +911,7 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
     proceedings = [dict(row) for row in cursor.fetchall()] if cursor.description else []
 
     result = {
+        "candidate_names": sorted(names),
         "parcels": all_parcels[:_MAX_PARCELS_DETAIL],
         "tax_claims": all_tax[:_MAX_TAX_CLAIMS_DETAIL],
         "plcb_licenses": plcb_licenses,

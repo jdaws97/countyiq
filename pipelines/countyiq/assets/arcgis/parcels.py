@@ -8,6 +8,8 @@ instead of materializing all 176K features in Python memory.
 """
 
 import json
+import os
+import tempfile
 
 import requests
 from psycopg2.extras import execute_batch
@@ -21,7 +23,7 @@ from dagster import (
     MetadataValue,
 )
 
-from countyiq.lib.arcgis_client import fetch_all_features_parallel
+from countyiq.lib.arcgis_client import iterate_feature_pages_parallel
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import county_open_data_source_key, get_county_config
 from countyiq.lib.geometry import rings_to_multipolygon_geojson
@@ -87,11 +89,20 @@ def parcels_arcgis(
     county = get_county_config()
     authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="parcels_arcgis", dagster_run_id=context.run_id)
     require_source_use(authorization, "derived_product")
+    require_source_use(authorization, "raw_retention")
     context.log.info(f"Querying ArcGIS parcels for {county.name}: {county.arcgis_parcels_url}")
 
     cur = database.cursor()
     conn = cur.connection
     was_autocommit = conn.autocommit
+    archive_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".ndjson",
+        prefix="parcels_",
+        delete=False,
+        encoding="utf-8",
+    )
+    archive_path = archive_file.name
     if was_autocommit:
         conn.autocommit = False
 
@@ -99,61 +110,70 @@ def parcels_arcgis(
         # Create temp table
         cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
         cur.execute("CREATE TEMP TABLE _tmp_parcels (LIKE staging.parcels INCLUDING DEFAULTS)")
+        # Geometry batches update staged rows by pidn while pages are still
+        # arriving. Build the lookup index before those updates; creating it
+        # after the fetch makes each batch scan an ever-growing temp table.
+        cur.execute("CREATE INDEX idx_tmp_parcels_pidn ON _tmp_parcels (pidn)")
 
-        # Fetch ALL pages in parallel (8 concurrent HTTP requests)
-        # ~5-8x faster than sequential for 176K parcels
-        context.log.info("Fetching all parcel pages in parallel (4 workers)...")
-        all_features = fetch_all_features_parallel(
+        # Fetch at most four pages concurrently and release each page after it
+        # is staged. The previous all-pages buffer peaked around 1.27 GiB for
+        # York parcels before parsing or PostgreSQL work began.
+        context.log.info("Streaming parcel pages in parallel (4-page window)...")
+        feature_pages = iterate_feature_pages_parallel(
             url=county.arcgis_parcels_url,
             where="1=1",
             out_fields="*",
             out_sr=4326,
             batch_size=2000,
-            max_workers=4,  # 4 workers to avoid ArcGIS rate limiting
+            max_workers=4,
         )
-        context.log.info(f"Fetched {len(all_features):,} features total")
 
-        # Parse and insert in batches
+        # Parse and insert each page before requesting the next one.
         total_staged = 0
         insert_sql = f"INSERT INTO _tmp_parcels ({', '.join(ALL_COLUMNS)}) VALUES ({', '.join(['%s'] * len(ALL_COLUMNS))})"
         geom_updates = []
 
         CHUNK = 5000
-        for i in range(0, len(all_features), CHUNK):
-            chunk_features = all_features[i:i + CHUNK]
-            records = parse_parcels_features(chunk_features)
+        for page_features in feature_pages:
+            for feature in page_features:
+                archive_file.write(json.dumps(feature, default=str))
+                archive_file.write("\n")
 
-            rows = []
-            for rec in records:
-                rec["source_url"] = county.arcgis_parcels_url
-                row = [rec.get(col) for col in ALL_COLUMNS]
-                rows.append(row)
-            execute_batch(cur, insert_sql, rows, page_size=1000)
-            total_staged += len(rows)
+            for i in range(0, len(page_features), CHUNK):
+                chunk_features = page_features[i:i + CHUNK]
+                records = parse_parcels_features(chunk_features)
 
-            for feat in chunk_features:
-                geom = feat.get("geometry")
-                attrs = feat.get("attributes", {})
-                pidn = attrs.get("PIDN")
-                if geom and pidn:
-                    geojson = rings_to_multipolygon_geojson(geom.get("rings"))
-                    if geojson:
-                        geom_updates.append((json.dumps(geojson), pidn))
+                rows = []
+                for rec in records:
+                    rec["source_url"] = county.arcgis_parcels_url
+                    row = [rec.get(col) for col in ALL_COLUMNS]
+                    rows.append(row)
+                execute_batch(cur, insert_sql, rows, page_size=1000)
+                total_staged += len(rows)
 
-            if len(geom_updates) >= 5000:
-                _flush_geometries(cur, geom_updates)
-                geom_updates = []
+                for feat in chunk_features:
+                    geom = feat.get("geometry")
+                    attrs = feat.get("attributes", {})
+                    pidn = attrs.get("PIDN")
+                    if geom and pidn:
+                        geojson = rings_to_multipolygon_geojson(geom.get("rings"))
+                        if geojson:
+                            geom_updates.append((json.dumps(geojson), pidn))
 
-            context.log.info(f"  Staged {total_staged:,} records")
+                if len(geom_updates) >= 5000:
+                    _flush_geometries(cur, geom_updates)
+                    geom_updates = []
+
+                context.log.info(f"  Staged {total_staged:,} records")
 
         if geom_updates:
             _flush_geometries(cur, geom_updates)
 
         context.log.info(f"Total staged: {total_staged:,}")
 
-        # Index temp table for fast SCD2 expire query
-        cur.execute("CREATE INDEX ON _tmp_parcels (pidn)")
-        context.log.info("Temp table indexed")
+        # Refresh planner statistics after the full source has been staged.
+        cur.execute("ANALYZE _tmp_parcels")
+        context.log.info("Temp table analyzed")
 
         if total_staged == 0:
             cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
@@ -190,6 +210,15 @@ def parcels_arcgis(
             )
             context.log.error(msg)
             raise RuntimeError(msg)
+
+        archive_file.flush()
+        os.fsync(archive_file.fileno())
+        archive_file.close()
+        s3.archive_file(
+            f"{county.s3_prefix}/arcgis/parcels",
+            archive_path,
+            filename="response.ndjson",
+        )
 
         context.log.info(
             f"Data loss guard passed: {total_staged:,} staged vs "
@@ -231,15 +260,18 @@ def parcels_arcgis(
         # so a reinsert doesn't lose the spatial-join enrichment until the next
         # weekly municipality_join run.
         col_list = ", ".join([*ALL_COLUMNS, "geom"])
-        select_exprs = [
-            "COALESCE(t.municipality, prev.municipality)" if c == "municipality" else f"t.{c}"
-            for c in ALL_COLUMNS
-        ]
-        select_exprs.append(PARCEL_GEOMETRY_SELECT_SQL)
-        cur.execute(f"""
-            INSERT INTO staging.parcels ({col_list}, valid_from)
-            SELECT {', '.join(select_exprs)}, NOW()
-            FROM _tmp_parcels t
+        if existing_count == 0:
+            # The first load has no prior enrichment or geometry to preserve.
+            # Avoid a pointless lateral lookup for every county parcel.
+            select_exprs = [*(f"t.{c}" for c in ALL_COLUMNS), "t.geom"]
+            prior_join = ""
+        else:
+            select_exprs = [
+                "COALESCE(t.municipality, prev.municipality)" if c == "municipality" else f"t.{c}"
+                for c in ALL_COLUMNS
+            ]
+            select_exprs.append(PARCEL_GEOMETRY_SELECT_SQL)
+            prior_join = """
             LEFT JOIN LATERAL (
                 SELECT p_prev.municipality, p_prev.geom
                 FROM staging.parcels p_prev
@@ -247,6 +279,12 @@ def parcels_arcgis(
                 ORDER BY p_prev.valid_from DESC
                 LIMIT 1
             ) prev ON TRUE
+            """
+        cur.execute(f"""
+            INSERT INTO staging.parcels ({col_list}, valid_from)
+            SELECT {', '.join(select_exprs)}, NOW()
+            FROM _tmp_parcels t
+            {prior_join}
             WHERE NOT EXISTS (
                 SELECT 1 FROM staging.parcels c WHERE c.valid_to IS NULL AND {key_join}
             )
@@ -261,6 +299,10 @@ def parcels_arcgis(
         conn.rollback()
         raise
     finally:
+        if not archive_file.closed:
+            archive_file.close()
+        if os.path.exists(archive_path):
+            os.unlink(archive_path)
         if was_autocommit:
             conn.autocommit = True
         cur.close()

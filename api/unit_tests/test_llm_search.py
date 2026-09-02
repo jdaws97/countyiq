@@ -8,6 +8,7 @@ from api.lib.llm_search import (
     ALLOWED_REDIRECT_PATHS,
     DEFAULT_MODELS,
     SYSTEM_PROMPT,
+    _clean_llm_json,
     parse_query_with_llm,
     resolve_search_models,
 )
@@ -18,6 +19,17 @@ def test_redirect_paths_match_the_frontend_watch_route():
     assert "/watch" in ALLOWED_REDIRECT_PATHS
     assert "/watchlist" not in ALLOWED_REDIRECT_PATHS
     assert all(path in SYSTEM_PROMPT for path in ALLOWED_REDIRECT_PATHS)
+
+
+def test_clean_llm_json_accepts_single_line_markdown_fence():
+    assert _clean_llm_json('```json {"intent":"lookup"}```') == {
+        "intent": "lookup"
+    }
+
+
+def test_search_prompt_only_advertises_compiler_supported_parcel_fields():
+    assert "parcels: pidn, owner_full" not in SYSTEM_PROMPT
+    assert "Use lookup intent for a person or company name" in SYSTEM_PROMPT
 
 
 def test_resolve_search_models_uses_search_override_only_for_primary_slot(monkeypatch):
@@ -121,3 +133,41 @@ def test_search_llm_requires_explicit_opt_in(monkeypatch):
 
     assert response["mode"] == "redirect"
     assert response["redirect_path"] == "/feed"
+
+
+def test_empty_smart_query_result_does_not_fall_through_to_fuzzy(monkeypatch):
+    monkeypatch.setenv("COUNTYIQ_SEARCH_LLM_ENABLED", "true")
+    monkeypatch.setattr(
+        search_route,
+        "llm_search_limiter",
+        SimpleNamespace(allow=lambda client: True),
+    )
+    monkeypatch.setattr(
+        search_route,
+        "llm_search_daily_budget",
+        SimpleNamespace(spend=lambda: True),
+    )
+    monkeypatch.setattr(
+        search_route,
+        "parse_query_with_llm",
+        lambda query: {
+            "intent": "query",
+            "table": "parcels",
+            "description": "No matching parcels",
+        },
+    )
+    monkeypatch.setattr(search_route, "_execute_llm_query", lambda intent, limit: [])
+    monkeypatch.setattr(
+        search_route,
+        "_trgm_search_with_reversal",
+        lambda query, limit: (_ for _ in ()).throw(
+            AssertionError("fuzzy fallback must not run for a valid empty query")
+        ),
+    )
+
+    response = search_route.search(
+        request=_request(), q="parcels matching an impossible filter", limit=20
+    )
+
+    assert response["mode"] == "smart"
+    assert response["results"] == []

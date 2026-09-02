@@ -128,6 +128,56 @@ class TestExtractPdfLinks:
         links = extract_pdf_links(html, "https://x.com")
         assert links[0]["filename"] == "minutes 1-3-22.docx"
 
+    def test_better_files_download_route_uses_declared_document_type(self):
+        html = (
+            '<a href="https://shrewsburyborough.org/bfd_download/'
+            'bc-minutes-january-2025/">'
+            '<strong>BC minutes January 2025</strong>'
+            '<small>Type : pdf</small></a>'
+            '<a href="https://shrewsburyborough.org/bfd_download/'
+            'bc-minutes-december-2025/">'
+            '<strong>BC Minutes December 2025</strong>'
+            '<small>Type : doc</small></a>'
+        )
+
+        assert extract_pdf_links(html, "https://shrewsburyborough.org/minutes/") == [
+            {
+                "url": (
+                    "https://shrewsburyborough.org/bfd_download/"
+                    "bc-minutes-january-2025/"
+                ),
+                "filename": "bc-minutes-january-2025.pdf",
+                "link_text": "BC minutes January 2025Type : pdf",
+            },
+            {
+                "url": (
+                    "https://shrewsburyborough.org/bfd_download/"
+                    "bc-minutes-december-2025/"
+                ),
+                "filename": "bc-minutes-december-2025.doc",
+                "link_text": "BC Minutes December 2025Type : doc",
+            },
+        ]
+
+    def test_civicengage_html_preview_is_canonicalized_to_document(self):
+        html = (
+            '<a href="/AgendaCenter/ViewFile/Agenda/_09212026-992?html=true">'
+            "HTML preview</a>"
+            '<a href="/AgendaCenter/ViewFile/Agenda/_09212026-992">'
+            "September 21, 2026 agenda</a>"
+        )
+
+        assert extract_pdf_links(html, "https://hanoverboroughpa.gov/") == [
+            {
+                "url": (
+                    "https://hanoverboroughpa.gov/AgendaCenter/ViewFile/Agenda/"
+                    "_09212026-992"
+                ),
+                "filename": "_09212026-992.pdf",
+                "link_text": "HTML preview",
+            }
+        ]
+
     def test_required_keys_present(self):
         for link in self.links:
             for key in ("url", "filename", "link_text"):
@@ -153,6 +203,27 @@ class TestExtractPdfLinks:
     def test_absolute_url_preserved(self):
         urls = [r["url"] for r in self.links]
         assert "https://springvale.gov/documents/ZHB_Minutes_March_2025.pdf" in urls
+
+    def test_protocol_relative_godaddy_document_url_uses_listing_scheme(self):
+        html = (
+            '<a href="//img1.wsimg.com/blobby/go/source/downloads/'
+            'July%2028%2C%202026%20Meeting%20Minutes.pdf?ver=1">'
+            "Meeting Minutes</a>"
+        )
+
+        assert extract_pdf_links(html, "https://newberrytwp.com/minutes") == [
+            {
+                "url": (
+                    "https://img1.wsimg.com/blobby/go/source/downloads/"
+                    "July%2028%2C%202026%20Meeting%20Minutes.pdf?ver=1"
+                ),
+                "filename": "July 28, 2026 Meeting Minutes.pdf",
+                "link_text": "Meeting Minutes",
+            }
+        ]
+        assert parse_meeting_date_from_filename(
+            "July 28, 2026 Meeting Minutes.pdf"
+        ) == "2026-07-28"
 
     def test_filenames_extracted(self):
         filenames = {r["filename"] for r in self.links}

@@ -81,20 +81,36 @@ class TestShouldGenerateBrief:
 
     def test_yes_with_high_signal(self):
         signals = [
-            {"signal_key": "active_subdivision", "adjusted_significance": "high"},
+            {
+                "signal_key": "active_subdivision",
+                "validation_status": "confirmed",
+                "adjusted_significance": "high",
+            },
         ]
         assert should_generate_brief(signals) is True
 
     def test_yes_with_medium_signal(self):
         signals = [
-            {"signal_key": "zoning_mismatch", "adjusted_significance": "medium"},
+            {
+                "signal_key": "zoning_mismatch",
+                "validation_status": "upgraded",
+                "adjusted_significance": "medium",
+            },
         ]
         assert should_generate_brief(signals) is True
 
     def test_yes_with_mixed_signals(self):
         signals = [
-            {"signal_key": "active_subdivision", "adjusted_significance": "high"},
-            {"signal_key": "flood_zone", "adjusted_significance": "low"},
+            {
+                "signal_key": "active_subdivision",
+                "validation_status": "confirmed",
+                "adjusted_significance": "high",
+            },
+            {
+                "signal_key": "flood_zone",
+                "validation_status": "downgraded",
+                "adjusted_significance": "low",
+            },
         ]
         assert should_generate_brief(signals) is True
 
@@ -112,6 +128,16 @@ class TestShouldGenerateBrief:
         signals = [
             {"signal_key": "ag_security", "adjusted_significance": "none"},
         ]
+        assert should_generate_brief(signals) is False
+
+    @pytest.mark.parametrize("status", ["stale", "irrelevant"])
+    def test_no_with_non_serving_status_even_if_legacy_row_is_high(self, status):
+        signals = [{
+            "signal_key": "vacancy",
+            "validation_status": status,
+            "adjusted_significance": "high",
+        }]
+
         assert should_generate_brief(signals) is False
 
 

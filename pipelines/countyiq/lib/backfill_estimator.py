@@ -12,30 +12,46 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
-from countyiq.assets.enrichment.brief_generation import PARCELS_NEEDING_BRIEFS_QUERY
+from countyiq.assets.enrichment.brief_generation import (
+    PARCELS_NEEDING_BRIEFS_QUERY,
+    resolve_brief_rank_limit,
+)
 from countyiq.assets.enrichment.proceeding_extraction import (
-    PENDING_PROCEEDINGS_QUERY,
     _MAX_RAW_TEXT_CHARS,
     _MIN_RAW_TEXT_CHARS,
+    PENDING_PROCEEDINGS_QUERY,
     _is_pdf_document,
+    has_landuse_vocabulary,
 )
 from countyiq.assets.enrichment.signal_validation_batched import (
     PARCELS_NEEDING_VALIDATION_QUERY,
 )
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.intelligence_common import fetch_prior_pass_hashes
-from countyiq.lib.pass0_templates import EXTRACTION_USER_TEMPLATE, PASS0_SYSTEM_PROMPT
+from countyiq.lib.intelligence_common import (
+    fetch_prior_pass_hashes,
+    fetch_reusable_pass_hashes,
+)
+from countyiq.lib.intelligence_integrity import content_hash, inference_input_hash
+from countyiq.lib.pass0_templates import (
+    EXTRACTION_USER_TEMPLATE,
+    PASS0_SYSTEM_PROMPT,
+)
+from countyiq.lib.pass0_templates import (
+    PROMPT_VERSION as PASS0_PROMPT_VERSION,
+)
 from countyiq.lib.pass1_entity_verification import (
     CANDIDATE_CLUSTERS_QUERY,
     ENTITY_CANDIDATE_PAIRS_READY_QUERY,
     ENTITY_VERIFICATION_SYSTEM_PROMPT,
     build_entity_cluster_prompt,
     gather_cluster_records,
+    select_pass1_clusters,
     stable_cluster_key,
 )
 from countyiq.lib.pass2_batched_validation import (
@@ -49,14 +65,17 @@ from countyiq.lib.pass3_brief_generation import (
     gather_brief_context,
 )
 from countyiq.lib.pass3_owner_briefs import (
-    OWNERS_NEEDING_BRIEFS_QUERY,
     OWNER_PORTFOLIO_QUERY,
     OWNER_ROLLUP_SYSTEM_PROMPT,
+    OWNERS_NEEDING_BRIEFS_QUERY,
     PORTFOLIO_EVIDENCE_QUERY,
     build_owner_rollup_prompt,
 )
-from countyiq.lib.pass_llm_config import resolve_pass_enabled, resolve_pass_model
-
+from countyiq.lib.pass_llm_config import (
+    estimate_reserved_call_cost,
+    resolve_pass_enabled,
+    resolve_pass_model,
+)
 
 _TOKENS_PER_CHARACTER = Decimal("0.25")
 _PASS1_ADAPTIVE_CALLS_PER_CLUSTER = Decimal(23) / Decimal(11)
@@ -140,6 +159,8 @@ class PassEstimate:
     retry_ceiling_calls: int
     sampled_units: int
     average_input_tokens: int
+    runtime_max_input_tokens_per_call: int
+    runtime_reservation_calls: int
     assumed_output_tokens_per_call: int
     max_output_tokens_per_call: int
     planning_cost_min: float | None
@@ -155,6 +176,12 @@ def approximate_tokens(text: str) -> int:
     if not text:
         return 0
     return math.ceil(Decimal(len(text)) * _TOKENS_PER_CHARACTER)
+
+
+def runtime_prompt_tokens(text: str) -> int:
+    """Match the runtime ledger's conservative one-token-per-three-characters rule."""
+
+    return math.ceil(len(text) / 3) if text else 0
 
 
 def build_name_clusters(pairs: Iterable[Any]) -> list[list[str]]:
@@ -202,8 +229,11 @@ def estimate_backfill(database, *, sample_size: int = 50) -> dict[str, Any]:
     ]
 
     costs_known = all(item.planning_cost_max is not None for item in estimates)
+    retry_costs_known = all(
+        item.retry_ceiling_cost is not None for item in estimates
+    )
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "read_only": True,
         "sample_size_per_pass": sample_size,
         "data_profile": data_profile,
@@ -222,7 +252,7 @@ def estimate_backfill(database, *, sample_size: int = 50) -> dict[str, Any]:
             ),
             "retry_ceiling_cost": (
                 round(sum(item.retry_ceiling_cost or 0 for item in estimates), 6)
-                if costs_known else None
+                if retry_costs_known else None
             ),
         },
         "excluded": [
@@ -249,16 +279,19 @@ def estimate_backfill(database, *, sample_size: int = 50) -> dict[str, Any]:
                 "tables are called out because they make a zero candidate estimate provisional."
             ),
             "input_tokens": (
-                "Stable sample of production system+user prompts at one token per "
-                "four characters. PDF fallbacks use an explicit 8,000-token planning assumption."
+                "Planning costs use a stable sample at one token per four "
+                "characters. The retry ceiling separately mirrors runtime at "
+                "one token per three characters and uses the configured "
+                "50,000-token PDF ceiling."
             ),
             "output_tokens": (
                 "Visible planning assumptions, not measured truth. Retry ceilings use "
                 "each pass's configured maximum output tokens."
             ),
             "costs": (
-                "No-cache provider cost. Prompt caching can lower actual input cost; "
-                "provider retries, routing, and unusually long outputs can raise it."
+                "Planning values are no-cache provider estimates. The retry "
+                "ceiling uses the runtime reservation shape: configured price "
+                "ceilings when present, retry output growth, and the 10% buffer."
             ),
         },
     }
@@ -312,25 +345,74 @@ def _data_profile(database) -> dict[str, Any]:
 def _estimate_pass0(database, sample_size: int) -> PassEstimate:
     county = get_county_config()
     rows = list(database.execute(PENDING_PROCEEDINGS_QUERY) or [])
+    prior_rows = database.execute(
+        """
+        SELECT DISTINCT ON (subject_key) subject_key, input_hash
+        FROM meta.intelligence_inference_history
+        WHERE pass_number = 0
+          AND output_kind = 'proceeding_extraction'
+          AND disposition = 'accepted'
+        ORDER BY subject_key, inference_id DESC
+        """
+    ) or []
+    prior_hashes = {
+        str(_row_value(row, "subject_key", 0)): str(_row_value(row, "input_hash", 1))
+        for row in prior_rows
+    }
     eligible: list[Any] = []
+    skipped_unchanged = 0
     raw_text_count = 0
     pdf_fallback_count = 0
     unsupported_count = 0
+    deterministic_prefilter_skips = 0
     eligible_dates: list[date] = []
     for row in rows:
         raw_text = _row_value(row, "raw_text", 5) or ""
         document_url = str(_row_value(row, "document_url", 4) or "")
         call_eligible = False
         if isinstance(raw_text, str) and len(raw_text.strip()) >= _MIN_RAW_TEXT_CHARS:
-            raw_text_count += 1
-            eligible.append(row)
-            call_eligible = True
+            if has_landuse_vocabulary(raw_text[:_MAX_RAW_TEXT_CHARS]):
+                raw_text_count += 1
+                eligible.append(row)
+                call_eligible = True
+            else:
+                deterministic_prefilter_skips += 1
         elif _is_pdf_document(document_url):
             pdf_fallback_count += 1
             eligible.append(row)
             call_eligible = True
         else:
             unsupported_count += 1
+        if call_eligible:
+            document_content_hash = _row_value(row, "content_hash", 6)
+            source_version = (
+                content_hash({
+                    "document_content_hash": document_content_hash,
+                    "raw_text_hash": content_hash(raw_text[:_MAX_RAW_TEXT_CHARS]),
+                })
+                if isinstance(raw_text, str)
+                and len(raw_text.strip()) >= _MIN_RAW_TEXT_CHARS
+                else document_content_hash
+            )
+            if source_version:
+                source_hash = content_hash({
+                    "proceeding_id": _row_value(row, "id", 0),
+                    "body_name": _row_value(row, "body_name", 1),
+                    "meeting_date": _row_value(row, "meeting_date", 2),
+                    "proceeding_type": _row_value(row, "proceeding_type", 3),
+                    "document_url": document_url,
+                    "source_version": source_version,
+                })
+                input_hash = inference_input_hash(
+                    source_hash,
+                    requested_model=resolve_pass_model(0) or "",
+                    prompt_version=PASS0_PROMPT_VERSION,
+                )
+                subject_key = f"proceeding:{_row_value(row, 'id', 0)}"
+                if prior_hashes.get(subject_key) == input_hash:
+                    eligible.pop()
+                    skipped_unchanged += 1
+                    call_eligible = False
         if call_eligible:
             meeting_date = _row_value(row, "meeting_date", 2)
             if isinstance(meeting_date, datetime):
@@ -340,6 +422,7 @@ def _estimate_pass0(database, sample_size: int) -> PassEstimate:
 
     sample = _stable_sample(eligible, sample_size, lambda row: _row_value(row, "id", 0))
     token_samples = []
+    runtime_token_samples = []
     for row in sample:
         meeting_date = _row_value(row, "meeting_date", 2)
         prompt = EXTRACTION_USER_TEMPLATE.format(
@@ -352,15 +435,22 @@ def _estimate_pass0(database, sample_size: int) -> PassEstimate:
         raw_text = _row_value(row, "raw_text", 5) or ""
         if isinstance(raw_text, str) and len(raw_text.strip()) >= _MIN_RAW_TEXT_CHARS:
             prompt += "\n\nDOCUMENT TEXT:\n" + raw_text[:_MAX_RAW_TEXT_CHARS]
-            token_samples.append(approximate_tokens(PASS0_SYSTEM_PROMPT + prompt))
+            rendered_prompt = PASS0_SYSTEM_PROMPT + prompt
+            token_samples.append(approximate_tokens(rendered_prompt))
+            runtime_token_samples.append(runtime_prompt_tokens(rendered_prompt))
         else:
+            rendered_prompt = PASS0_SYSTEM_PROMPT + prompt
             token_samples.append(
-                approximate_tokens(PASS0_SYSTEM_PROMPT + prompt)
+                approximate_tokens(rendered_prompt)
                 + _PDF_FALLBACK_INPUT_TOKENS
+            )
+            runtime_token_samples.append(
+                runtime_prompt_tokens(rendered_prompt)
+                + max(_positive_int_env("COUNTYIQ_PASS0_PDF_TOKEN_CEILING", 50_000), 1)
             )
 
     units = len(eligible)
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     dated_future_over_90 = sum((value - today).days > 90 for value in eligible_dates)
     recent_365 = sum(-90 <= (today - value).days <= 365 for value in eligible_dates)
     recent_730 = sum(-90 <= (today - value).days <= 730 for value in eligible_dates)
@@ -375,19 +465,24 @@ def _estimate_pass0(database, sample_size: int) -> PassEstimate:
         planning_calls_max=units,
         retry_ceiling_calls=units * 2,
         token_samples=token_samples,
+        runtime_token_samples=runtime_token_samples,
         details={
-            "unprocessed_rows": len(rows),
+            "eligible_source_rows": len(rows),
+            "skipped_unchanged": skipped_unchanged,
             "raw_text_inputs": raw_text_count,
             "pdf_fallback_inputs": pdf_fallback_count,
             "unsupported_without_text": unsupported_count,
+            "deterministic_prefilter_skips": deterministic_prefilter_skips,
             "eligible_dated_last_365_days": recent_365,
             "eligible_dated_last_730_days": recent_730,
             "eligible_future_over_90_days": dated_future_over_90,
             "eligible_older_or_undated": units - recent_730 - dated_future_over_90,
         },
         notes=[
-            "One base call per eligible unprocessed document; one provider retry is the ceiling.",
-            "The production selector has no date cutoff, so the total includes all reachable unprocessed history.",
+            "One base call per changed eligible document; one provider retry is the ceiling.",
+            "The selector scans all reachable history, then skips exact source/model/prompt hashes already accepted.",
+            "Raw-text documents without land-use vocabulary are deterministic zero-cost skips.",
+            "PDF fallback rows remain conservatively priced because their text is extracted only at runtime.",
             "Dates more than 90 days in the future are reported separately as likely source/parser anomalies.",
         ],
     )
@@ -421,8 +516,8 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
             "deterministic_enrichment_refresh before estimating paid Pass 1 work"
         )
     pairs = list(database.execute(CANDIDATE_CLUSTERS_QUERY) or [])
-    clusters = build_name_clusters(pairs)
-    prior_hashes = fetch_prior_pass_hashes(database, pass_number=1)
+    clusters, person_only_skipped = select_pass1_clusters(build_name_clusters(pairs))
+    prior_hashes = fetch_reusable_pass_hashes(database, pass_number=1)
     definitely_new = sum(
         stable_cluster_key(cluster) not in prior_hashes for cluster in clusters
     )
@@ -431,14 +526,15 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
 
     sample = _stable_sample(clusters, sample_size, stable_cluster_key)
     token_samples = []
+    runtime_token_samples = []
     for cluster in sample:
         with database.dict_cursor() as cursor:
             records = gather_cluster_records(cursor, cluster)
-        token_samples.append(
-            approximate_tokens(
-                ENTITY_VERIFICATION_SYSTEM_PROMPT + build_entity_cluster_prompt(records)
-            )
+        rendered_prompt = (
+            ENTITY_VERIFICATION_SYSTEM_PROMPT + build_entity_cluster_prompt(records)
         )
+        token_samples.append(approximate_tokens(rendered_prompt))
+        runtime_token_samples.append(runtime_prompt_tokens(rendered_prompt))
 
     trials = max(1, int(os.environ.get("COUNTYIQ_PASS1_TRIALS", "3")))
     adaptive = os.environ.get(
@@ -470,8 +566,10 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
         planning_calls_max=calls_max,
         retry_ceiling_calls=retry_ceiling,
         token_samples=token_samples,
+        runtime_token_samples=runtime_token_samples,
         details={
             "candidate_pairs": len(pairs),
+            "person_only_clusters_skipped": person_only_skipped,
             "prior_completed_hashes": len(prior_hashes),
             "trials": trials,
             "adaptive_voting": adaptive,
@@ -487,21 +585,22 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
 def _estimate_pass2(database, sample_size: int) -> PassEstimate:
     rows = list(database.execute(PARCELS_NEEDING_VALIDATION_QUERY) or [])
     pidns = [str(_row_value(row, "pidn", 0)) for row in rows]
-    prior_hashes = fetch_prior_pass_hashes(database, pass_number=2)
+    prior_hashes = fetch_reusable_pass_hashes(database, pass_number=2)
     units_min = sum(pidn not in prior_hashes for pidn in pidns) if prior_hashes else len(pidns)
     units_max = len(pidns)
     trials = max(1, int(os.environ.get("COUNTYIQ_PASS2_TRIALS", "1")))
 
     sample = _stable_sample(pidns, sample_size, lambda pidn: pidn)
     token_samples = []
+    runtime_token_samples = []
     for pidn in sample:
         with database.dict_cursor() as cursor:
             context = gather_parcel_batch_context(cursor, pidn)
-        token_samples.append(
-            approximate_tokens(
-                BATCHED_VALIDATION_SYSTEM_PROMPT + build_batched_signal_prompt(context)
-            )
+        rendered_prompt = (
+            BATCHED_VALIDATION_SYSTEM_PROMPT + build_batched_signal_prompt(context)
         )
+        token_samples.append(approximate_tokens(rendered_prompt))
+        runtime_token_samples.append(runtime_prompt_tokens(rendered_prompt))
 
     return _make_estimate(
         key="pass2",
@@ -514,6 +613,7 @@ def _estimate_pass2(database, sample_size: int) -> PassEstimate:
         planning_calls_max=units_max * trials,
         retry_ceiling_calls=units_max * (trials * 2 + 2),
         token_samples=token_samples,
+        runtime_token_samples=runtime_token_samples,
         details={
             "prior_completed_hashes": len(prior_hashes),
             "trials": trials,
@@ -526,7 +626,13 @@ def _estimate_pass2(database, sample_size: int) -> PassEstimate:
 
 
 def _estimate_pass3(database, sample_size: int) -> PassEstimate:
-    rows = list(database.execute(PARCELS_NEEDING_BRIEFS_QUERY) or [])
+    rows = list(
+        database.execute(
+            PARCELS_NEEDING_BRIEFS_QUERY,
+            {"rank_limit": resolve_brief_rank_limit()},
+        )
+        or []
+    )
     pidns = [str(_row_value(row, "pidn", 0)) for row in rows]
     prior_hashes = fetch_prior_pass_hashes(database, pass_number=3)
     units_min = sum(pidn not in prior_hashes for pidn in pidns) if prior_hashes else len(pidns)
@@ -534,14 +640,15 @@ def _estimate_pass3(database, sample_size: int) -> PassEstimate:
 
     sample = _stable_sample(pidns, sample_size, lambda pidn: pidn)
     token_samples = []
+    runtime_token_samples = []
     for pidn in sample:
         with database.dict_cursor() as cursor:
             context = gather_brief_context(cursor, pidn)
-        token_samples.append(
-            approximate_tokens(
-                BRIEF_GENERATION_SYSTEM_PROMPT + build_brief_generation_prompt(context)
-            )
+        rendered_prompt = (
+            BRIEF_GENERATION_SYSTEM_PROMPT + build_brief_generation_prompt(context)
         )
+        token_samples.append(approximate_tokens(rendered_prompt))
+        runtime_token_samples.append(runtime_prompt_tokens(rendered_prompt))
 
     return _make_estimate(
         key="pass3",
@@ -554,6 +661,7 @@ def _estimate_pass3(database, sample_size: int) -> PassEstimate:
         planning_calls_max=units_max,
         retry_ceiling_calls=units_max * 2,
         token_samples=token_samples,
+        runtime_token_samples=runtime_token_samples,
         details={"prior_completed_hashes": len(prior_hashes)},
         notes=["Only parcels with medium/high validated evidence are selected."],
     )
@@ -570,6 +678,7 @@ def _estimate_pass3b(database, sample_size: int) -> PassEstimate:
     ]
     sample = _stable_sample(owners, sample_size, lambda owner: owner["owner_id"])
     token_samples = []
+    runtime_token_samples = []
     for owner_ref in sample:
         owner_rows = database.execute(
             OWNER_PORTFOLIO_QUERY, {"owner_id": owner_ref["owner_id"]}
@@ -600,11 +709,11 @@ def _estimate_pass3b(database, sample_size: int) -> PassEstimate:
             }
             for row in evidence_rows
         ]
-        token_samples.append(
-            approximate_tokens(
-                OWNER_ROLLUP_SYSTEM_PROMPT + build_owner_rollup_prompt(owner, evidence)
-            )
+        rendered_prompt = (
+            OWNER_ROLLUP_SYSTEM_PROMPT + build_owner_rollup_prompt(owner, evidence)
         )
+        token_samples.append(approximate_tokens(rendered_prompt))
+        runtime_token_samples.append(runtime_prompt_tokens(rendered_prompt))
 
     units = len(owners)
     return _make_estimate(
@@ -618,6 +727,7 @@ def _estimate_pass3b(database, sample_size: int) -> PassEstimate:
         planning_calls_max=units,
         retry_ceiling_calls=units * 2,
         token_samples=token_samples,
+        runtime_token_samples=runtime_token_samples,
         details={"minimum_signaled_parcels": 3},
         notes=["The selector already excludes current owner briefs."],
     )
@@ -635,6 +745,7 @@ def _make_estimate(
     planning_calls_max: int,
     retry_ceiling_calls: int,
     token_samples: Sequence[int],
+    runtime_token_samples: Sequence[int],
     details: dict[str, Any],
     notes: list[str],
 ) -> PassEstimate:
@@ -642,6 +753,8 @@ def _make_estimate(
     average_input = (
         math.ceil(sum(token_samples) / len(token_samples)) if token_samples else 0
     )
+    runtime_max_input = max(runtime_token_samples, default=0)
+    runtime_reservation_calls = math.ceil(retry_ceiling_calls / 2)
     enabled_in_environment = resolve_pass_enabled(pass_number)
     model = resolve_pass_model(pass_number)
     profile = KNOWN_PRICE_PROFILES.get(model or "")
@@ -659,6 +772,19 @@ def _make_estimate(
             f"No checked price profile for {model or 'unconfigured model'}; cost is omitted.",
         ]
 
+    provider_retry_ceiling_cost = _cost(
+        profile,
+        retry_ceiling_calls,
+        average_input,
+        assumptions.max_output_tokens_per_call,
+    )
+    retry_ceiling_cost, runtime_price_basis = _runtime_reservation_cost(
+        profile,
+        runtime_reservation_calls,
+        runtime_max_input,
+        assumptions.max_output_tokens_per_call,
+    )
+
     return PassEstimate(
         key=key,
         label=label,
@@ -672,6 +798,8 @@ def _make_estimate(
         retry_ceiling_calls=retry_ceiling_calls,
         sampled_units=len(token_samples),
         average_input_tokens=average_input,
+        runtime_max_input_tokens_per_call=runtime_max_input,
+        runtime_reservation_calls=runtime_reservation_calls,
         assumed_output_tokens_per_call=assumptions.output_tokens_per_call,
         max_output_tokens_per_call=assumptions.max_output_tokens_per_call,
         planning_cost_min=_cost(
@@ -686,15 +814,12 @@ def _make_estimate(
             average_input,
             assumptions.output_tokens_per_call,
         ),
-        retry_ceiling_cost=_cost(
-            profile,
-            retry_ceiling_calls,
-            average_input,
-            assumptions.max_output_tokens_per_call,
-        ),
+        retry_ceiling_cost=retry_ceiling_cost,
         details={
             **details,
             "price_basis": profile.basis if profile else None,
+            "provider_retry_ceiling_cost": provider_retry_ceiling_cost,
+            "runtime_reservation_price_basis": runtime_price_basis,
         },
         notes=notes,
     )
@@ -721,6 +846,72 @@ def _cost(
         / Decimal(1_000_000)
     )
     return round(float(prompt_cost + completion_cost), 6)
+
+
+def _runtime_reservation_cost(
+    profile: PriceProfile | None,
+    calls: int,
+    input_tokens_per_call: int,
+    max_output_tokens_per_call: int,
+) -> tuple[float | None, str | None]:
+    """Return the same conservative ceiling the runtime would reserve."""
+
+    if profile is None:
+        return None, None
+    if calls == 0:
+        return 0.0, "no calls"
+    if input_tokens_per_call <= 0:
+        return None, "unavailable without a sampled production prompt"
+
+    prompt_ceiling = _positive_float_env(
+        "COUNTYIQ_MAX_PRICE_PROMPT",
+        float(profile.prompt_per_million),
+    )
+    completion_ceiling = _positive_float_env(
+        "COUNTYIQ_MAX_PRICE_COMPLETION",
+        float(profile.completion_per_million),
+    )
+    configured = (
+        os.environ.get("COUNTYIQ_MAX_PRICE_PROMPT", "").strip()
+        and os.environ.get("COUNTYIQ_MAX_PRICE_COMPLETION", "").strip()
+    )
+    per_call = estimate_reserved_call_cost(
+        prompt_tokens=input_tokens_per_call,
+        max_tokens=max_output_tokens_per_call,
+        max_price_prompt=prompt_ceiling,
+        max_price_completion=completion_ceiling,
+        retries=1,
+    )
+    basis = (
+        "configured runtime price ceilings"
+        if configured
+        else "checked provider prices (set runtime ceilings before enablement)"
+    )
+    return round(per_call * calls, 6), basis
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value:
+        try:
+            parsed = float(value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+    return default
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value:
+        try:
+            parsed = int(value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+    return default
 
 
 def _stable_sample(

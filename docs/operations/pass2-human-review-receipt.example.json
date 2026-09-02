@@ -1,0 +1,9 @@
+{
+  "reviewer": "replace-with-reviewer-name",
+  "reviewed_at": "replace-with-ISO-8601-timestamp",
+  "fixture_sha256": "copy-from-preflight-output",
+  "case_decisions": {
+    "replace-with-each-of-the-20-case-ids": "approved"
+  },
+  "notes": "Record corrections in the frozen promotion corpus before approving a case whose generated rubric is wrong."
+}

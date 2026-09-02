@@ -13,7 +13,6 @@ import hashlib
 import json
 from decimal import Decimal
 
-
 # =============================================================================
 # SQL QUERY CONSTANTS
 # =============================================================================
@@ -62,14 +61,26 @@ PROCEEDINGS_FOR_PARCEL_QUERY = """
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
     WHERE pp.valid_to IS NULL
-      AND pe.extraction_type NOT IN ('_complete', '_no_extractions')
+      AND LEFT(pe.extraction_type, 1) <> '_'
       AND (
-          -- Match by exact PIDN
-          pe.parcel_reference = %(pidn)s
-          -- OR match by address (LLM may extract address instead of PIDN)
-          OR pe.parcel_reference IN (
-              SELECT propadr FROM staging.parcels
-              WHERE pidn = %(pidn)s AND valid_to IS NULL AND propadr IS NOT NULL
+          -- Match by canonical PIDN even when the minutes contain punctuation.
+          REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g') = %(pidn)s
+          -- Address matches are valid only inside the proceeding municipality.
+          OR EXISTS (
+              SELECT 1
+              FROM staging.parcels parcel
+              WHERE parcel.pidn = %(pidn)s
+                AND parcel.valid_to IS NULL
+                AND parcel.propadr IS NOT NULL
+                AND public.normalize_street_address(parcel.propadr)
+                    = public.normalize_street_address(pe.parcel_reference)
+                AND EXISTS (
+                    SELECT 1
+                    FROM meta.municipality_source_rights msr
+                    WHERE msr.body_name = pp.body_name
+                      AND msr.municipality_name = parcel.municipality
+                      AND msr.derived_product_allowed = TRUE
+                )
           )
       )
     ORDER BY pp.meeting_date DESC, pe.id
@@ -466,3 +477,136 @@ def fetch_prior_pass_hashes(database, pass_number: int) -> dict[str, str]:
         if key is not None:
             hashes[key] = value
     return hashes
+
+
+def fetch_reusable_pass_hashes(
+    database,
+    *,
+    pass_number: int,
+) -> dict[str, str]:
+    """Return hashes whose latest accepted output is completely projected.
+
+    A bare completion-status row is not enough: a projection may have been
+    retracted by a migration or cleanup. Conversely, a worker may have
+    committed the projection and crashed before updating the status row. The
+    live projection is therefore the primary completion proof.
+
+    Pass 1 may legitimately accept an all-abstain partition with no projection;
+    that case also requires the matching completion-status write.
+    """
+
+    if pass_number == 1:
+        output_kind = "entity_verification"
+        projection_table = "public.entity_graph"
+        projection_clause = """
+            (
+                jsonb_array_length(
+                    COALESCE(latest.payload->'entities', '[]'::jsonb)
+                ) > 0
+                AND COALESCE(projected.projection_count, 0) =
+                    jsonb_array_length(
+                        COALESCE(latest.payload->'entities', '[]'::jsonb)
+                    )
+            )
+            OR (
+                jsonb_array_length(
+                    COALESCE(latest.payload->'entities', '[]'::jsonb)
+                ) = 0
+                AND EXISTS (
+                    SELECT 1
+                    FROM meta.intelligence_passes completed
+                    WHERE completed.pidn = latest.subject_key
+                      AND completed.pass_number = %(pass_number)s
+                      AND completed.status = 'complete'
+                      AND completed.input_hash = latest.input_hash
+                )
+            )
+        """
+    elif pass_number == 2:
+        output_kind = "signal_validation"
+        projection_table = "public.evidence"
+        projection_clause = """
+            jsonb_array_length(
+                COALESCE(latest.payload->'validations', '[]'::jsonb)
+            ) > 0
+            AND COALESCE(projected.projection_count, 0) =
+                jsonb_array_length(
+                    COALESCE(latest.payload->'validations', '[]'::jsonb)
+                )
+        """
+    else:
+        raise ValueError(
+            "reusable projection hashes are defined only for Passes 1 and 2"
+        )
+
+    rows = database.execute(
+        f"""
+        WITH latest AS (
+            SELECT DISTINCT ON (subject_key)
+                subject_key, input_hash, inference_id, payload
+            FROM meta.intelligence_inference_history
+            WHERE pass_number = %(pass_number)s
+              AND output_kind = %(output_kind)s
+              AND disposition = 'accepted'
+            ORDER BY subject_key, inference_id DESC
+        ),
+        projected AS (
+            SELECT active_inference_id, COUNT(*) AS projection_count
+            FROM {projection_table}
+            WHERE active_inference_id IS NOT NULL
+            GROUP BY active_inference_id
+        )
+        SELECT latest.subject_key AS pidn, latest.input_hash
+        FROM latest
+        LEFT JOIN projected
+          ON projected.active_inference_id = latest.inference_id
+        WHERE {projection_clause}
+        """,
+        {"pass_number": pass_number, "output_kind": output_kind},
+    ) or []
+    hashes: dict[str, str] = {}
+    for row in rows:
+        if isinstance(row, dict):
+            key, value = row.get("pidn"), row.get("input_hash")
+        else:
+            key, value = row[0], row[1]
+        if key is not None:
+            hashes[str(key)] = value
+    return hashes
+
+
+def fetch_prior_pass_attempts(database, pass_number: int) -> dict[str, object]:
+    """Fetch last-attempt timestamps used to rotate capped work fairly."""
+    rows = database.execute(
+        """
+        SELECT pidn, last_run_at
+        FROM meta.intelligence_passes
+        WHERE pass_number = %(pass_number)s
+        """,
+        {"pass_number": pass_number},
+    ) or []
+    attempts: dict[str, object] = {}
+    for row in rows:
+        if isinstance(row, dict):
+            key, value = row.get("pidn"), row.get("last_run_at")
+        else:
+            key, value = row[0], row[1]
+        if key is not None and value is not None:
+            attempts[str(key)] = value
+    return attempts
+
+
+def pass_attempt_priority(
+    subject_key: str,
+    prior_attempts: dict[str, object],
+) -> tuple[int, str, str]:
+    """Sort never-attempted work first, then least-recently attempted work."""
+    last_attempt = prior_attempts.get(subject_key)
+    if last_attempt is None:
+        return (0, "", subject_key)
+    serialized = (
+        last_attempt.isoformat()
+        if hasattr(last_attempt, "isoformat")
+        else str(last_attempt)
+    )
+    return (1, serialized, subject_key)

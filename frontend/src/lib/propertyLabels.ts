@@ -14,10 +14,10 @@ const SCHOOL_DISTRICT_LABELS: Record<string, string> = {
   '026': 'West York',
   '028': 'York City',
   '030': 'York Suburban',
-  '17F': 'York City',
-  '17G': 'York City',
-  '17L': 'York City',
-  '17N': 'York City',
+  '17F': 'West Shore',
+  '17G': 'West Shore',
+  '17L': 'West Shore',
+  '17N': 'West Shore',
 }
 
 const PROPERTY_CLASS_LABELS: Record<string, string> = {

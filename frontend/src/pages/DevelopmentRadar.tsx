@@ -1,119 +1,204 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import BackButton from '../components/BackButton'
 import PageShell from '../components/PageShell'
-import { formatCurrencyCompact } from '../lib/format'
+import { Button, ButtonLink } from '../components/ui'
+import { formatCurrencyCompact, formatShortDate } from '../lib/format'
+import { getComparison, radarSearchName, saveSearch, toggleComparison } from '../lib/investigationState'
 import type {
+  RadarMoversDirection,
+  RadarMoversResponse,
   RadarMunicipalitiesResponse,
   RadarParcel,
   RadarParcelListResponse,
   RadarViewMode,
+  ReasonSignal,
 } from '../types/api'
 
+type RadarTab = RadarViewMode | 'movers'
+
+const TABS: { key: RadarTab; label: string }[] = [
+  { key: 'opportunity', label: 'Opportunity' },
+  { key: 'momentum', label: 'Momentum' },
+  { key: 'movers', label: 'Movers' },
+  { key: 'readiness', label: 'Site Screening' },
+]
+
+const PARCEL_CLASSES = [
+  { value: '', label: 'All classes' },
+  { value: 'R', label: 'Residential' },
+  { value: 'C', label: 'Commercial' },
+  { value: 'I', label: 'Industrial' },
+  { value: 'F,A', label: 'Farm / agricultural' },
+  { value: 'E', label: 'Exempt' },
+]
+
+const ACRE_OPTIONS = [
+  { value: '', label: 'Any size' },
+  { value: '1', label: '1+ acres' },
+  { value: '5', label: '5+ acres' },
+  { value: '10', label: '10+ acres' },
+  { value: '25', label: '25+ acres' },
+]
+
+const PAGE_SIZE = 200
+
 function scoreColor(s: number): string {
-  if (s >= 60) return '#22c55e'
-  if (s >= 40) return '#eab308'
-  if (s >= 20) return '#06b6d4'
+  if (s >= 60) return 'var(--accent-green)'
+  if (s >= 40) return 'var(--accent-gold)'
+  if (s >= 20) return 'var(--accent-ink)'
   return 'var(--text-secondary)'
+}
+
+function scoreOptionsFor(view: RadarTab) {
+  if (view === 'opportunity') {
+    return [
+      { value: '30', label: '30+ Recommended' },
+      { value: '40', label: '40+' },
+      { value: '50', label: '50+' },
+      { value: '60', label: '60+' },
+      { value: '0', label: '0+ Any' },
+    ]
+  }
+  if (view === 'momentum') {
+    return [
+      { value: '30', label: '30+ Recommended' },
+      { value: '40', label: '40+' },
+      { value: '50', label: '50+' },
+      { value: '60', label: '60+' },
+      { value: '0', label: '0+ Any' },
+    ]
+  }
+  if (view === 'movers') {
+    return [
+      { value: '5', label: 'Moved 5+ points' },
+      { value: '10', label: 'Moved 10+ points' },
+      { value: '20', label: 'Moved 20+ points' },
+    ]
+  }
+  return [
+    { value: '40', label: '40+ Higher screen' },
+    { value: '50', label: '50+' },
+    { value: '60', label: '60+' },
+    { value: '70', label: '70+' },
+    { value: '0', label: '0+ Review all' },
+  ]
+}
+
+const DEFAULT_SCORE: Record<RadarTab, string> = { opportunity: '30', momentum: '30', readiness: '40', movers: '5' }
+
+function isTab(value: string | null): value is RadarTab {
+  return value === 'opportunity' || value === 'momentum' || value === 'readiness' || value === 'movers'
 }
 
 export default function DevelopmentRadar() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedView = searchParams.get('view')
+  const initialView: RadarTab = isTab(requestedView) ? requestedView : 'opportunity'
+  const requestedScore = searchParams.get('min_score')
   const [parcels, setParcels] = useState<RadarParcel[]>([])
   const [resolvedKey, setResolvedKey] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [muniFilter, setMuniFilter] = useState('')
-  const [minScoreByView, setMinScoreByView] = useState<Record<RadarViewMode, string>>({
-    opportunity: '30',
-    momentum: '50',
-    readiness: '40',
+  const [muniFilter, setMuniFilter] = useState(() => searchParams.get('municipality') ?? '')
+  const [minAcres, setMinAcres] = useState(() => searchParams.get('min_acres') ?? '')
+  const [parcelClass, setParcelClass] = useState(() => searchParams.get('class') ?? '')
+  const [moversDirection, setMoversDirection] = useState<RadarMoversDirection>(() => {
+    const direction = searchParams.get('direction')
+    return direction === 'down' || direction === 'new' ? direction : 'up'
   })
+  const [moversBasis, setMoversBasis] = useState<'opportunity' | 'momentum'>(() => (searchParams.get('basis') === 'momentum' ? 'momentum' : 'opportunity'))
+  const [minScoreByView, setMinScoreByView] = useState<Record<RadarTab, string>>(() => ({
+    ...DEFAULT_SCORE,
+    ...(requestedScore ? { [initialView]: requestedScore } : {}),
+  }))
   const [page, setPage] = useState(0)
-  const [view, setView] = useState<RadarViewMode>('opportunity')
-  const PAGE_SIZE = 200
+  const [view, setView] = useState<RadarTab>(initialView)
+  const [comparison, setComparison] = useState(() => getComparison())
+  const [saved, setSaved] = useState(false)
+  const [previousComputedAt, setPreviousComputedAt] = useState<string | null>(null)
+  const requestGeneration = useRef(0)
 
   const [municipalities, setMunicipalities] = useState<string[]>([])
   const [screeningCoverage, setScreeningCoverage] = useState<RadarParcelListResponse['coverage']>()
   const minScore = minScoreByView[view]
-  // Derived: true until the current filter combination has resolved.
-  const loading = resolvedKey !== `${view}|${minScore}|${muniFilter}`
-  const setMinScore = (value: string) => {
-    setMinScoreByView(prev => ({ ...prev, [view]: value }))
-  }
-  const scoreOptions = view === 'opportunity'
-    ? [
-        { value: '30', label: '30+ Recommended' },
-        { value: '40', label: '40+' },
-        { value: '50', label: '50+' },
-        { value: '60', label: '60+' },
-        { value: '0', label: '0+ Any' },
-      ]
-    : view === 'momentum' ? [
-        { value: '50', label: '50+ Recommended' },
-        { value: '60', label: '60+' },
-        { value: '70', label: '70+' },
-        { value: '80', label: '80+' },
-        { value: '0', label: '0+ Any' },
-      ]
-    : [
-        { value: '40', label: '40+ Higher screen' },
-        { value: '50', label: '50+' },
-        { value: '60', label: '60+' },
-        { value: '70', label: '70+' },
-        { value: '0', label: '0+ Review all' },
-      ]
+  const requestKey = `${view}|${minScore}|${muniFilter}|${minAcres}|${parcelClass}|${moversDirection}|${moversBasis}`
+  const loading = resolvedKey !== requestKey
+  const setMinScore = (value: string) => setMinScoreByView(prev => ({ ...prev, [view]: value }))
+  const scoreOptions = scoreOptionsFor(view)
 
-  const fetchPage = (pageNum: number, append: boolean) => {
-    // Only the Load More (event-handler) path sets state synchronously; the
-    // effect-triggered initial load derives `loading` from the request key.
-    if (append) {
-      setLoadingMore(true)
-    }
-    const key = `${view}|${minScore}|${muniFilter}`
+  const buildParams = (pageNum: number) => {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(pageNum * PAGE_SIZE) })
     if (muniFilter) params.set('municipality', muniFilter)
-    params.set('min_score', minScore)
+    if (view === 'movers') {
+      params.set('view', moversBasis)
+      params.set('direction', moversDirection)
+      params.set('min_delta', minScore)
+    } else {
+      params.set('min_score', minScore)
+      if (minAcres) params.set('min_acres', minAcres)
+      if (parcelClass) params.set('class', parcelClass)
+    }
+    return params
+  }
 
-    const endpoint = view === 'opportunity'
-      ? '/api/radar/opportunity'
-      : view === 'momentum'
-        ? '/api/radar/development'
-        : '/api/radar/site-readiness'
+  const endpointFor = (tab: RadarTab) => (
+    tab === 'opportunity' ? '/api/radar/opportunity'
+      : tab === 'momentum' ? '/api/radar/development'
+        : tab === 'movers' ? '/api/radar/movers'
+          : '/api/radar/site-readiness'
+  )
 
-    fetch(`${endpoint}?${params}`)
-      .then(r => {
-        if (!r.ok) throw new Error(`Radar request failed (${r.status})`)
-        return r.json()
-      })
-      .then((d: RadarParcelListResponse) => {
-        const items = d.parcels || []
-        if (!append && view === 'readiness') setScreeningCoverage(d.coverage)
-        if (append) {
-          setParcels(prev => [...prev, ...items])
-        } else {
-          setParcels(items)
-          setPage(0)
-          setResolvedKey(key)
-        }
-        setLoadingMore(false)
-      })
-      .catch((err) => {
-        console.error('Failed to load radar parcels', err)
-        setError(err.message)
-        if (!append) setResolvedKey(key)
-        setLoadingMore(false)
-      })
+  const fetchPage = async (pageNum: number, append: boolean, generation: number, signal?: AbortSignal) => {
+    if (append) setLoadingMore(true)
+    const key = requestKey
+    try {
+      const response = await fetch(`${endpointFor(view)}?${buildParams(pageNum)}`, { signal })
+      if (!response.ok) throw new Error(`Radar request failed (${response.status})`)
+      const data = await response.json() as RadarParcelListResponse | RadarMoversResponse
+      if (signal?.aborted || generation !== requestGeneration.current) return
+
+      const items = data.parcels || []
+      if (!append && view === 'readiness') setScreeningCoverage((data as RadarParcelListResponse).coverage)
+      if (!append && view === 'movers') setPreviousComputedAt((data as RadarMoversResponse).previous_computed_at)
+      if (append) {
+        setParcels(prev => [...prev, ...items])
+      } else {
+        setParcels(items)
+        setPage(0)
+        setResolvedKey(key)
+      }
+      setError(null)
+    } catch (caught) {
+      if (signal?.aborted || generation !== requestGeneration.current) return
+      const message = caught instanceof Error ? caught.message : 'Unknown radar error'
+      console.error('Failed to load radar parcels', caught)
+      setError(message)
+      if (!append) {
+        setParcels([])
+        setScreeningCoverage(undefined)
+        setPreviousComputedAt(null)
+        setResolvedKey(key)
+      }
+    } finally {
+      if (generation === requestGeneration.current) setLoadingMore(false)
+    }
   }
 
   useEffect(() => {
-    fetchPage(0, false)
+    const controller = new AbortController()
+    const generation = ++requestGeneration.current
+    void fetchPage(0, false, generation, controller.signal)
+    return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [muniFilter, minScore, view])
+  }, [requestKey])
 
   useEffect(() => {
-    const params = new URLSearchParams({ view, min_score: minScore })
-    fetch(`/api/radar/municipalities?${params}`)
+    const controller = new AbortController()
+    const listView: RadarViewMode = view === 'movers' ? moversBasis : view
+    const params = new URLSearchParams({ view: listView, min_score: view === 'movers' ? '0' : minScore })
+    fetch(`/api/radar/municipalities?${params}`, { signal: controller.signal })
       .then(r => {
         if (!r.ok) throw new Error(`Municipalities request failed (${r.status})`)
         return r.json()
@@ -121,181 +206,231 @@ export default function DevelopmentRadar() {
       .then((d: RadarMunicipalitiesResponse) => {
         const munis = (d.municipalities || []) as string[]
         setMunicipalities(munis)
-        if (muniFilter && !munis.includes(muniFilter)) {
-          setMuniFilter('')
-        }
+        if (muniFilter && !munis.includes(muniFilter)) setMuniFilter('')
       })
       .catch((err) => {
+        if (controller.signal.aborted) return
         console.error('Failed to load radar municipalities', err)
       })
-  }, [view, minScore, muniFilter])
+    return () => controller.abort()
+  }, [view, minScore, muniFilter, moversBasis])
+
+  useEffect(() => {
+    const refresh = () => setComparison(getComparison())
+    window.addEventListener('countyiq-investigation-changed', refresh)
+    return () => window.removeEventListener('countyiq-investigation-changed', refresh)
+  }, [])
+
+  const currentPath = () => {
+    const params = new URLSearchParams({ view, min_score: minScore })
+    if (muniFilter) params.set('municipality', muniFilter)
+    if (minAcres) params.set('min_acres', minAcres)
+    if (parcelClass) params.set('class', parcelClass)
+    if (view === 'movers') {
+      params.set('direction', moversDirection)
+      params.set('basis', moversBasis)
+    }
+    return `/radar?${params}`
+  }
+
+  const saveCurrentSearch = () => {
+    saveSearch(radarSearchName(view, muniFilter, minScore), 'radar', currentPath())
+    setSaved(true)
+    window.setTimeout(() => setSaved(false), 1800)
+  }
+
+  const mapLayer = view === 'momentum' ? 'momentum' : 'opportunity'
+  const countLabel = view === 'opportunity' ? 'opportunities'
+    : view === 'momentum' ? 'active sites'
+      : view === 'movers' ? (moversDirection === 'new' ? 'new on radar' : moversDirection === 'up' ? 'risers' : 'fallers')
+        : 'screened candidates'
 
   return (
-    <PageShell maxWidth={1100}>
+    <PageShell maxWidth={1180}>
       <BackButton onClick={() => navigate(-1)} />
 
-        <div style={{ animation: 'fadeUp 0.4s ease both', marginBottom: 32 }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: '#22c55e', marginBottom: 8 }}>Intelligence</div>
-          <h1 style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Development Radar</h1>
-          <p style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            {view === 'opportunity'
-              ? 'Parcels with strong fundamentals but no developer activity yet \u2014 the early signal.'
-              : view === 'momentum'
-                ? 'Where development activity is already happening \u2014 market awareness.'
+      <div style={{ marginBottom: 28 }}>
+        <div className="record-eyebrow">Deterministic screening · score version 7</div>
+        <h1 className="page-title">Development Radar</h1>
+        <p style={{ maxWidth: '72ch', fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          {view === 'opportunity'
+            ? 'Parcels with the fundamentals that historically preceded a plan filing, but no plan or municipal matter of their own yet. Weights are calibrated against past York County plan filings.'
+            : view === 'momentum'
+              ? 'Where development activity is already happening: plans on or beside the parcel, municipal matters, park designations, recent sales, and owners assembling sites.'
+              : view === 'movers'
+                ? 'What changed since the previous radar rebuild. Rising scores mean new evidence arrived; new parcels had no signals at all last time.'
                 : 'Parcel screening from public policy, infrastructure, physical constraints, and diligence records. Verify the linked evidence before relying on a score.'}
-          </p>
-        </div>
+        </p>
+      </div>
 
-        {view === 'readiness' && screeningCoverage && (
-          <div style={{ marginTop: -18, marginBottom: 24, fontFamily: 'var(--font-mono)', fontSize: 10, color: screeningCoverage.missing_layers.length ? 'var(--accent-gold)' : 'var(--accent-green)' }}>
-            Evidence coverage: {screeningCoverage.loaded_count}/{screeningCoverage.total_count} screening layers loaded
-            {screeningCoverage.missing_layers.length > 0 ? ` · missing ${screeningCoverage.missing_layers.join(', ').replace(/_/g, ' ')}` : ''}
-          </div>
+      {view === 'readiness' && screeningCoverage && (
+        <div style={{ marginTop: -14, marginBottom: 20, fontSize: 13.5, color: screeningCoverage.missing_layers.length ? 'var(--accent-gold)' : 'var(--accent-green)' }}>
+          Evidence coverage: {screeningCoverage.loaded_count}/{screeningCoverage.total_count} screening layers loaded
+          {screeningCoverage.missing_layers.length > 0 ? ` · missing ${screeningCoverage.missing_layers.join(', ').replace(/_/g, ' ')}` : ''}
+        </div>
+      )}
+      {view === 'movers' && (
+        <div style={{ marginTop: -14, marginBottom: 20, fontSize: 13.5, color: 'var(--text-secondary)' }}>
+          {previousComputedAt
+            ? `Compared with the radar snapshot from ${formatShortDate(previousComputedAt)}.`
+            : 'No previous snapshot yet. Movers appear after the second weekly radar rebuild.'}
+        </div>
+      )}
+
+      <div className="segmented" role="group" aria-label="Radar view" style={{ marginBottom: 18 }}>
+        {TABS.map((tab) => (
+          <button key={tab.key} type="button" aria-pressed={view === tab.key} onClick={() => setView(tab.key)}>{tab.label}</button>
+        ))}
+      </div>
+
+      <div className="filter-row">
+        <label className="sr-only" htmlFor="radar-municipality">Municipality</label>
+        <select id="radar-municipality" value={muniFilter} onChange={e => setMuniFilter(e.target.value)}>
+          <option value="">All Municipalities</option>
+          {municipalities.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <label className="sr-only" htmlFor="radar-min-score">{view === 'movers' ? 'Minimum change' : 'Minimum score'}</label>
+        <select id="radar-min-score" value={minScore} onChange={e => setMinScore(e.target.value)}>
+          {scoreOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+        {view === 'movers' ? (
+          <>
+            <label className="sr-only" htmlFor="radar-direction">Direction</label>
+            <select id="radar-direction" value={moversDirection} onChange={e => setMoversDirection(e.target.value as RadarMoversDirection)}>
+              <option value="up">Rising</option>
+              <option value="new">New on radar</option>
+              <option value="down">Falling</option>
+            </select>
+            <label className="sr-only" htmlFor="radar-basis">Score basis</label>
+            <select id="radar-basis" value={moversBasis} onChange={e => setMoversBasis(e.target.value as 'opportunity' | 'momentum')}>
+              <option value="opportunity">Opportunity score</option>
+              <option value="momentum">Momentum score</option>
+            </select>
+          </>
+        ) : (
+          <>
+            <label className="sr-only" htmlFor="radar-min-acres">Minimum acres</label>
+            <select id="radar-min-acres" value={minAcres} onChange={e => setMinAcres(e.target.value)}>
+              {ACRE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+            <label className="sr-only" htmlFor="radar-class">Property class</label>
+            <select id="radar-class" value={parcelClass} onChange={e => setParcelClass(e.target.value)}>
+              {PARCEL_CLASSES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </>
         )}
-
-        {/* View Toggle */}
-        <div style={{ display: 'flex', gap: 0, marginBottom: 20, animation: 'fadeUp 0.4s ease 0.05s both' }}>
-          <button
-            onClick={() => setView('opportunity')}
-            style={{
-              fontFamily: 'var(--font-mono)', fontSize: 12, padding: '8px 20px', cursor: 'pointer',
-              background: view === 'opportunity' ? '#22c55e' : 'var(--bg-panel)',
-              color: view === 'opportunity' ? '#000' : 'var(--text-secondary)',
-              border: '1px solid var(--border)', borderRadius: '4px 0 0 4px', fontWeight: view === 'opportunity' ? 700 : 400,
-            }}
-          >
-            Opportunity
-          </button>
-          <button
-            onClick={() => setView('momentum')}
-            style={{
-              fontFamily: 'var(--font-mono)', fontSize: 12, padding: '8px 20px', cursor: 'pointer',
-              background: view === 'momentum' ? '#06b6d4' : 'var(--bg-panel)',
-              color: view === 'momentum' ? '#000' : 'var(--text-secondary)',
-              border: '1px solid var(--border)', borderLeft: 'none', fontWeight: view === 'momentum' ? 700 : 400,
-            }}
-          >
-            Momentum
-          </button>
-          <button
-            onClick={() => setView('readiness')}
-            style={{
-              fontFamily: 'var(--font-mono)', fontSize: 12, padding: '8px 20px', cursor: 'pointer',
-              background: view === 'readiness' ? 'var(--accent-purple)' : 'var(--bg-panel)',
-              color: view === 'readiness' ? '#000' : 'var(--text-secondary)',
-              border: '1px solid var(--border)', borderLeft: 'none', borderRadius: '0 4px 4px 0', fontWeight: view === 'readiness' ? 700 : 400,
-            }}
-          >
-            Site Screening
-          </button>
+        <div className="filter-count">
+          {loading ? 'Loading…' : `${parcels.length} ${countLabel}`}
         </div>
+        <Button tone="quiet" onClick={saveCurrentSearch}>{saved ? 'Search saved' : 'Save search'}</Button>
+        {view !== 'readiness' && <ButtonLink to={`/map?layer=radar&radar=${mapLayer}`} tone="quiet">Map view</ButtonLink>}
+        {comparison.length > 0 && <ButtonLink to="/compare" tone="secondary">Compare {comparison.length}/4</ButtonLink>}
+      </div>
 
-        {/* Filters */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24, animation: 'fadeUp 0.4s ease 0.1s both' }}>
-          <select value={muniFilter} onChange={e => setMuniFilter(e.target.value)} style={{
-            background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 4,
-            padding: '6px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)',
-          }}>
-            <option value="">All Municipalities</option>
-            {municipalities.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <select value={minScore} onChange={e => setMinScore(e.target.value)} style={{
-            background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 4,
-            padding: '6px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)',
-          }}>
-            {scoreOptions.map(option => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
-            {loading ? 'Loading...' : `${parcels.length} ${view === 'opportunity' ? 'opportunities' : view === 'momentum' ? 'active sites' : 'screened candidates'}`}
+      {error && <div className="error-box" role="alert">Failed to load data: {error}</div>}
+
+      {!loading && !error && parcels.length > 0 && (
+        <div className="radar-results data-table">
+          <div className="radar-results-header data-table-head" style={{ minWidth: 960, gridTemplateColumns: '64px 72px 1fr 130px 70px 100px minmax(240px, 1.4fr) 92px' }}>
+            <div>Score</div><div>Change</div><div>Address</div><div>Municipality</div><div className="cell-right">Acres</div><div className="cell-right" style={{ paddingRight: 12 }}>Value</div><div style={{ paddingLeft: 12 }}>Why It Ranked</div><div className="cell-right">Compare</div>
           </div>
-        </div>
 
-        {error && (
-          <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-red)',
-            padding: 24, background: 'rgba(224, 82, 82, 0.08)',
-            border: '1px solid rgba(224, 82, 82, 0.2)', borderRadius: 6, marginBottom: 24,
-          }}>
-            Failed to load data: {error}
-          </div>
-        )}
-
-        {/* Results */}
-        {!loading && parcels.length > 0 && (
-          <div className="radar-results" style={{ border: '1px solid var(--border)', borderRadius: 8, overflowX: 'auto', animation: 'fadeUp 0.4s ease 0.2s both' }}>
-            {/* Header */}
-            <div className="radar-results-header" style={{ display: 'grid', minWidth: 850, gridTemplateColumns: '55px 1fr 120px 80px 100px 1fr 60px', padding: '12px 20px', background: 'var(--bg-card)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-              <div>Score</div><div>Address</div><div>Municipality</div><div style={{ textAlign: 'right' }}>Acres</div><div style={{ textAlign: 'right' }}>Value</div><div>Why It Ranked</div><div style={{ textAlign: 'right' }}>Signals</div>
-            </div>
-
-            {parcels.map((p, i) => (
-              <Link className="radar-results-row" key={p.pidn} to={`/property/${p.pidn}`} style={{
-                display: 'grid', minWidth: 850, gridTemplateColumns: '55px 1fr 120px 80px 100px 1fr 60px',
-                padding: '14px 20px', alignItems: 'center', textDecoration: 'none', color: 'inherit',
-                background: i % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)',
-                borderTop: '1px solid var(--border)', transition: 'background 0.15s',
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-card-hover)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? 'var(--bg-panel)' : 'var(--bg-card)' }}
+          {parcels.map((p) => (
+            <div className="radar-results-row data-table-row" key={p.pidn} style={{ minWidth: 960, gridTemplateColumns: '64px 72px 1fr 130px 70px 100px minmax(240px, 1.4fr) 92px', padding: '12px 16px' }}>
+              <div>
+                <span className="score-pill" style={{ '--score-color': scoreColor(p.score) } as React.CSSProperties}>{p.score}</span>
+              </div>
+              <div><DeltaBadge parcel={p} basis={view === 'movers' ? moversBasis : view === 'momentum' ? 'momentum' : 'opportunity'} /></div>
+              <div style={{ minWidth: 0 }}>
+                <Link to={`/property/${p.pidn}`} className="cell-strong">{p.propadr || p.pidn}</Link>
+                <div className="cell-muted" style={{ marginTop: 2 }}>{p.owner_full || 'Owner not displayed'}</div>
+              </div>
+              <div className="cell-muted">{p.municipality || '--'}</div>
+              <div className="cell-right">{p.acres ? Number(p.acres).toFixed(1) : '--'}</div>
+              <div className="cell-right" style={{ paddingRight: 12 }}>{formatCurrencyCompact(p.aprtotal)}</div>
+              <div style={{ paddingLeft: 12, borderLeft: '1px solid var(--border)', minWidth: 0 }}>
+                <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{p.top_signal || '--'}</div>
+                <ReasonChips reasons={p.reason_signals} />
+              </div>
+              <Button
+                tone={comparison.includes(p.pidn) ? 'secondary' : 'quiet'}
+                aria-label={`${comparison.includes(p.pidn) ? 'Remove' : 'Add'} ${p.propadr || p.pidn} ${comparison.includes(p.pidn) ? 'from' : 'to'} comparison`}
+                onClick={() => {
+                  const result = toggleComparison(p.pidn)
+                  if (result.full) window.alert('Comparison is limited to four parcels.')
+                }}
               >
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: scoreColor(p.score) }}>
-                  {p.score}
-                </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.propadr || p.pidn}</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{p.owner_full || 'Owner not displayed'}</div>
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)' }}>
-                  {p.municipality || '--'}
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                  {p.acres ? Number(p.acres).toFixed(1) : '--'}
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                  {formatCurrencyCompact(p.aprtotal)}
-                </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: view === 'opportunity' ? '#22c55e' : view === 'momentum' ? '#06b6d4' : 'var(--accent-purple)' }}>
-                    {p.top_signal || '--'}
-                  </div>
-                  {Array.isArray(p.reason_signals) && p.reason_signals.length > 1 && (
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {p.reason_signals[1]?.label}
-                    </div>
-                  )}
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', textAlign: 'right' }}>
-                  {p.signal_count ?? '--'}
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+                {comparison.includes(p.pidn) ? '✓ Added' : '+ Add'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
 
-        {!loading && parcels.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
-            No parcels match the current filters.
-          </div>
-        )}
+      {!loading && !error && parcels.length === 0 && (
+        <div className="status-message">
+          {view === 'movers' && !previousComputedAt
+            ? 'No previous radar snapshot to compare against yet.'
+            : 'No parcels match the current filters.'}
+        </div>
+      )}
 
-        {/* Load More */}
-        {!loading && parcels.length > 0 && parcels.length % PAGE_SIZE === 0 && (
-          <div style={{ textAlign: 'center', marginTop: 24 }}>
-            <button
-              onClick={() => { const next = page + 1; setPage(next); fetchPage(next, true) }}
-              disabled={loadingMore}
-              style={{
-                fontFamily: 'var(--font-mono)', fontSize: 11, color: '#22c55e',
-                background: 'none', border: '1px solid var(--border)', borderRadius: 4,
-                padding: '8px 24px', cursor: 'pointer',
-              }}
-            >
-              {loadingMore ? 'Loading...' : 'Load More'}
-            </button>
-          </div>
-        )}
+      {!loading && !error && parcels.length > 0 && parcels.length % PAGE_SIZE === 0 && (
+        <div style={{ textAlign: 'center', marginTop: 24 }}>
+          <button
+            onClick={() => {
+              const next = page + 1
+              setPage(next)
+              void fetchPage(next, true, requestGeneration.current)
+            }}
+            disabled={loadingMore}
+            style={{
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: '#22c55e',
+              background: 'none', border: '1px solid var(--border)', borderRadius: 4,
+              padding: '8px 24px', cursor: 'pointer',
+            }}
+          >
+            {loadingMore ? 'Loading...' : 'Load More'}
+          </button>
+        </div>
+      )}
     </PageShell>
+  )
+}
+
+function DeltaBadge({ parcel, basis }: { parcel: RadarParcel; basis: 'opportunity' | 'momentum' }) {
+  if (parcel.is_new) return <span className="cell-muted" style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>New</span>
+  const delta = basis === 'momentum' ? parcel.score_delta : parcel.opportunity_delta
+  if (delta == null || delta === 0) return <span className="cell-muted">—</span>
+  const color = delta > 0 ? 'var(--accent-green)' : 'var(--accent-red)'
+  return <span style={{ color, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{delta > 0 ? '▲' : '▼'} {Math.abs(delta)}</span>
+}
+
+function ReasonChips({ reasons }: { reasons: ReasonSignal[] | undefined }) {
+  if (!Array.isArray(reasons) || reasons.length <= 1) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+      {reasons.slice(1, 4).map((reason) => (
+        <span
+          key={reason.key}
+          title={reason.label}
+          style={{
+            fontSize: 11.5,
+            lineHeight: 1.4,
+            padding: '2px 8px',
+            borderRadius: 999,
+            border: '1px solid var(--border)',
+            color: reason.is_risk ? 'var(--accent-red)' : reason.is_direct ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background: 'var(--bg-panel)',
+            maxWidth: 260,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {reason.label}
+        </span>
+      ))}
+    </div>
   )
 }
