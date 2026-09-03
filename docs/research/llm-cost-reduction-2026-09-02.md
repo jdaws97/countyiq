@@ -355,6 +355,37 @@ hold. Both models still disagree on whether an individual owner and a couple
 that includes that individual are one entity (cluster 3); the product should
 decide that rule and put it in the prompt rather than leave it to the model.
 
+## 12. Individual-versus-joint-owner rule, third round (same day, $0.07)
+
+Product decision: an individual owner name and a joint owner name that
+includes that individual are separate entities (the owner of record differs),
+linked by a new relationship type `co_owner_of` from the individual to the
+joint name. The prompt states the rule and the Pass 1 schema enum carries the
+new type; downstream consumers group relationships by type string, so no
+other code changed.
+
+| Lane | Model | Round 2 | Round 3 |
+|---|---|---|---|
+| Frozen partitions correct | Luna high | 6/8 | 7/8 (the household case now passes) |
+| Frozen gate accepted | Luna high | 8/8 | 8/8 |
+| Frozen partitions correct | GLM 5.3 Flash | 7/8 | 7/8 |
+| Frozen gate accepted | GLM 5.3 Flash | 7/8 | 6/8 |
+| Live gate accepted | Luna low | 12/12 | 11/12 (one bare PIDN marker without its group prefix) |
+| Live gate accepted | GLM 5.3 Flash | 12/12 | 12/12 |
+| Live cost, 12 clusters | Luna low / GLM | $0.0231 / $0.0175 | $0.0232 / $0.0195 |
+
+On the Sanders cluster both models now produce exactly the intended output:
+two entities, each with a cited `co_owner_of` relationship, accepted by the
+gate. Luna's West Manchester partition also returned to the correct shape
+(township variants together, general authority and sewer authority apart).
+GLM still merges the three same-couple Haggerty variants where Luna abstains
+on all four; GLM's frozen gate slip this round (two reasoning fields without
+a marker, two corporate identifiers not in the input) is the single-trial
+noise that adaptive N=3 voting exists to absorb.
+
+Standing decision unchanged: revised prompt stays; Luna is the code default;
+GLM is promotable on the canary with Luna as the escalation model.
+
 ### 4e. Pass 3, 4 frozen brief cases
 
 Only Solar Pro 4 passed a case end to end (required facts 4/4 for GLM and

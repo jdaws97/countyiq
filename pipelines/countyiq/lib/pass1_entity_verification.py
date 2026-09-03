@@ -379,6 +379,13 @@ RULES FOR NAMES, RELATIONSHIPS, AND CITATIONS:
   place them in separate entities with high confidence. Either merge them
   citing the shared address or co-owner evidence, or list them together
   under abstentions with the conflict stated.
+- An individual owner name and a joint owner name that includes that
+  individual (for example "SMITH KAREN E" and "SMITH PERRY S & KAREN E") are
+  separate entities: the owner of record differs. Keep them in separate
+  entities, do not abstain on the pair, and link them with a relationship of
+  type co_owner_of from the individual to the joint owner, citing the parcel
+  records that show each name. The same applies to a person and a joint
+  name that pairs them with a different co-owner.
 - Reasoning states what the records show. Do not add interpretation such as
   "consistent with", "suggesting", or motive; if a fact is not in a record,
   say the records do not establish it.
@@ -402,7 +409,7 @@ OUTPUT FORMAT:
       "relationships": [
         {{
           "related_entity": "name of related entity",
-          "relationship_type": "controls|officer_of|registered_agent_for|subsidiary_of|shares_address_with|same_person",
+          "relationship_type": "controls|officer_of|registered_agent_for|subsidiary_of|shares_address_with|same_person|co_owner_of",
           "evidence": "brief evidence for this relationship"
         }}
       ],

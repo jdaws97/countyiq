@@ -167,6 +167,7 @@ PASS1_ENTITY_VERIFICATION_SCHEMA = {
                                         "controls", "officer_of",
                                         "registered_agent_for", "subsidiary_of",
                                         "shares_address_with", "same_person",
+                                        "co_owner_of",
                                     ],
                                 },
                                 "evidence": {"type": "string"},
