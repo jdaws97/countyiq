@@ -26,7 +26,7 @@ from countyiq.lib.backfill_authorization import BackfillAuthorization, create_ba
 from countyiq.lib.intelligence_integrity import validate_pass0_extractions
 from countyiq.lib.pass0_templates import EXTRACTION_USER_TEMPLATE, PROMPT_VERSION
 from countyiq.lib.pass_llm_config import resolve_pass_model
-from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA, review_claims
+from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA, PASS0_MODEL_SCHEMA, bind_model_claims, review_claims
 from countyiq.lib.pass0_templates import document_prompt
 from countyiq.lib.llm_harness import probe_llm_archive_destination
 from countyiq.lib.quality_release import release_identity
@@ -78,12 +78,20 @@ def load_sources(manifest: dict) -> list[dict]:
     return result
 
 
-def evaluate_format(parsed: dict | None, source_text: str, meeting_date=None) -> dict:
-    schema_errors = [e.message for e in Draft202012Validator(PASS0_CLAIMS_SCHEMA).iter_errors(parsed)]
+def evaluate_format(parsed: dict | None, source_text: str, meeting_date=None, *, expected_source_sha256: str | None = None) -> dict:
+    """Review an archived envelope, or current wire claims with a pre-call hash.
+
+    Historical responses keep their original hash validation. New invocations
+    explicitly supply the fingerprint captured before sending the request.
+    """
+    schema = PASS0_MODEL_SCHEMA if expected_source_sha256 is not None else PASS0_CLAIMS_SCHEMA
+    schema_errors = [e.message for e in Draft202012Validator(schema).iter_errors(parsed)]
     extractions, evidence_errors, rejected_items = [], [], []
     citation_repairs, field_rejections, coverage = [], [], None
     try:
-        review = review_claims(parsed, source_text, meeting_date=meeting_date)
+        bound = (bind_model_claims(parsed, source_text, expected_source_sha256=expected_source_sha256)
+                 if expected_source_sha256 is not None else parsed)
+        review = review_claims(bound, source_text, meeting_date=meeting_date)
         extractions, rejected_items = review["extractions"], review["rejected_items"]
         citation_repairs, coverage = review["citation_repairs"], review["coverage"]
         field_rejections = review["field_rejections"]
@@ -94,6 +102,7 @@ def evaluate_format(parsed: dict | None, source_text: str, meeting_date=None) ->
     # Item-level shape errors do not invalidate good siblings. Report them,
     # distinguishing partial acceptance from an entirely clean document.
     return {"schema_errors": schema_errors, "evidence_errors": evidence_errors,
+            "source_binding": "caller" if expected_source_sha256 is not None else "envelope",
             "runtime_gate_passed": publishable,
             "complete_document_gate_passed": publishable and not rejected_items and not field_rejections and not schema_errors,
             "rejected_items": rejected_items, "citation_repairs": citation_repairs, "field_rejections": field_rejections, "coverage": coverage,
@@ -157,6 +166,7 @@ def main() -> int:
     records = {r["id"]: r for r in manifest["records"]}
     for row in rows:
         key = str(row["id"])
+        expected_source_sha256 = digest(row["raw_text"])
         reservation = authorization.reserve(estimate_max_call_cost(config, prompt_for(row), retries=0))
         try:
             result = invoke_tracked(ledger, config, prompt_for(row), retries=0, archive_key=key)
@@ -171,7 +181,8 @@ def main() -> int:
             parsed=result.parsed, raw_output=result.raw_output, success=result.success, error=result.error,
             usage=result.metadata, source=records[row["id"]],
             would_pass_prefilter=has_landuse_vocabulary(row["raw_text"]),
-            format_review=evaluate_format(result.parsed, row["raw_text"], row["meeting_date"]),
+            format_review=evaluate_format(result.parsed, row["raw_text"], row["meeting_date"],
+                                          expected_source_sha256=expected_source_sha256),
         )
         report["ledger"] = ledger.summary()
         (output / "results.json").write_text(json.dumps(report, indent=2))

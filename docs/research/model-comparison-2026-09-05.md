@@ -1,7 +1,8 @@
 # Lower-cost model review — September 5, 2026
 
-**Decision: compare Luna Batch alongside both alternative models before selecting
-the backfill route; do not switch every pass yet.** GLM 5.3 Flash is the stronger
+**Decision: qualify the best route on the user's existing OpenRouter account;
+do not switch every pass yet.** Direct Luna Batch remains an untested option
+requiring a separate account and key, not a prerequisite for this work. GLM 5.3 Flash is the stronger
 current alternative model, with entity verification the first pass to qualify.
 DeepSeek V4 Flash 0731 needs more work on provider routing, reasoning allocation
 and the output contract before it is a dependable default.
@@ -193,3 +194,82 @@ best option on the existing OpenRouter account and present the documented
 Batch saving as an untested alternative. Batch results must retain frozen
 input/model/prompt identity and be revalidated before publication;
 asynchronous processing does not relax the evidence or authorization gates.
+
+## Caller-owned source binding and population review
+
+The next 18 calls cost **$0.032608442**, bringing this release review to
+**174 calls / $0.266998087**. They are matched diagnostic repeats, not unseen
+qualification. Both protocols, all raw outputs and usage remain under
+`fair-model-comparison/pass0-caller-binding/` and
+`fair-model-comparison/source-population-retest/`. Neither run approved a release.
+
+Pass 0 now asks the model only for cited extractions. The synchronous caller
+captures the source fingerprint before the request, verifies the retained text
+against it, and constructs the bound review envelope. Stored evidence retains
+exact source hashes and offsets; raw responses remain unchanged. A model-supplied
+hash is rejected by the new wire schema. Historical responses still undergo their
+original hash check and are never silently repaired. This changes the prompt and
+quality identity, without changing the stored projection schema.
+
+| Two-document Pass 0 repeat | Actual cost | Median / maximum seconds | Original clean-document gate |
+|---|---:|---:|---:|
+| Luna | $0.009809390 | 22.2 / 22.3 | 2/2 |
+| GLM 5.3 Flash | $0.005597515 | 32.9 / 49.5 | 0/2 |
+| DeepSeek 0731 | $0.005220598 | 248.0 / 419.1 | 1/2 |
+
+DeepSeek returned substantive claims for both documents: the former empty output
+and hash-copy failure did not recur. That does not qualify the output. In the
+Loganville agenda it described a listed Commission expansion as already reviewed
+and a listed storage project as already noted. Other items failed literal passage
+checks or attached a current meeting date/authority to an earlier reported award.
+Luna called the Dallastown deed-execution vote plan approval and described a
+scheduled comprehensive-plan RFP report as already reviewed. GLM called bid
+advertisement/administration a contract decision and lost a pump purchase to an
+incorrect literal project reference.
+
+The source review added narrowly scoped rejections for deed execution labeled
+as plan approval, bid administration labeled as a contract award, and completed
+review/discussion wording unsupported by an agenda entry. Explicit past awards,
+completed work and previously reviewed plans remain valid source facts. The
+separate `scope-gate-replay.json` reapplies those checks to the six unchanged
+responses without paid reruns. Accepted item counts move from Luna 6/8 to 5/7,
+GLM 5/7 to 4/7, and DeepSeek 4/4 to 4/2 for Dallastown/Loganville respectively.
+Document success and retained-item counts must not conceal omitted useful matters.
+These are rejection/recall findings, not a new semantic quality receipt.
+
+For p2x-050, source code and frozen rows explain the apparent contradiction:
+`development_signals.py` counts 11 parcels belonging to 10 other resolved owners;
+`NEIGHBORS_QUERY` returns all 12 intersecting neighbors. Their total is 67.838 acres.
+The same-owner school parcel accounts for 6.87 acres of that total. No historical
+resolved-owner snapshot was recovered, so 60.968 acres computed by excluding the
+same raw owner name is a diagnostic, not newly asserted production evidence.
+The prompt labels the two populations and forbids attributing all-neighbor acreage
+to the other-owner subset. Frozen contexts and gold labels remain unchanged.
+
+| Four-case Pass 2 repeat | Actual cost | Reference gate | Median / maximum seconds |
+|---|---:|---:|---:|
+| Luna | $0.006847250 | 4/4 | 14.0 / 17.2 |
+| GLM 5.3 Flash | $0.003472050 | 4/4 | 12.2 / 19.5 |
+| DeepSeek 0731 | $0.001661639 | 2/4 | 15.5 / 160.2 |
+
+Luna and GLM now separate the 11/10 owner counts from the 12-parcel acreage total.
+All three acknowledge that a missing mapped footprint does not establish actual
+vacancy. Their conservative vacancy downgrades disagree with the frozen rubric's
+confirmed/upgraded range; the source evidence supports the conservative reading.
+Some required-fact checks also miss explicit machine-key facts such as
+`different_owner_neighbors=7`; those scoring limitations are separate from defects.
+
+The reference gates still miss material semantic errors. Luna p2x-086 calls an
+$1,800 assessment zero while listing the correct number elsewhere. GLM p2x-049
+calls a one-lot plan zero-lot in both reasoning and synthesis. DeepSeek p2x-050
+infers a school-site conversion/expansion from an eight-unit plan within 30 meters;
+p2x-049 infers development restrictions and a lower approval likelihood from
+future land-use labels without ordinance evidence. Its p2x-086 response drops a
+required validation and its p2x-050/086 syntheses fail citation checks. None of
+these costs can be presented as the price of a qualified replacement.
+
+The next simplification should reduce repeated generated facts and prevent earlier
+model narration from becoming evidence for a later pass. A missing-footprint
+screen also deserves evaluation as deterministic context rather than another
+paid vacancy judgment. Keep source facts directly rendered, retain the original
+canary failures, and qualify any simpler contract before changing runtime models.

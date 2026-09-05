@@ -39,7 +39,7 @@ from countyiq.lib.pass_llm_config import (
     PassSpendLimitExceeded,
     resolve_pass_harness,
 )
-from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA, review_claims
+from countyiq.lib.proceeding_claims import PASS0_MODEL_SCHEMA, bind_model_claims, review_claims
 from countyiq.lib.pass0_templates import document_prompt
 from countyiq.lib.robots import RobotsPolicy
 from countyiq.lib.source_rights import (
@@ -357,7 +357,7 @@ def proceeding_extraction(
             archive_label="pass0_extraction",
             reasoning_task=False,
             default_max_tokens=8192,
-            json_schema=PASS0_CLAIMS_SCHEMA,
+            json_schema=PASS0_MODEL_SCHEMA,
             schema_name="pass0_extractions",
             # Static block goes out as a byte-identical system message so
             # providers with implicit prompt caching can reuse it per doc.
@@ -645,6 +645,7 @@ def proceeding_extraction(
             break
 
         try:
+            expected_source_sha256 = hashlib.sha256(verification_text.encode("utf-8")).hexdigest()
             prompt = document_prompt(verification_text, body_name=body_name, county_name=county.name,
                                      state=county.state, proceeding_type=proceeding_type, meeting_date=meeting_date)
         except ValueError as exc:
@@ -687,7 +688,9 @@ def proceeding_extraction(
         extractions, rejected_items = [], []
         model_used = Path(config.model_path).name
         try:
-            review = review_claims(result.parsed, verification_text, meeting_date=meeting_date)
+            bound_claims = bind_model_claims(result.parsed, verification_text,
+                                            expected_source_sha256=expected_source_sha256)
+            review = review_claims(bound_claims, verification_text, meeting_date=meeting_date)
             extractions, rejected_items = review["extractions"], review["rejected_items"]
             validation_errors = validate_pass0_extractions(extractions, verification_text, meeting_date=meeting_date, require_contract=True)
             if rejected_items and not extractions:
@@ -744,6 +747,7 @@ def proceeding_extraction(
                 provider=result.metadata.get("provider"),
                 prompt_version=PROMPT_VERSION,
                 payload={"extractions": extractions, "model_claims": result.parsed,
+                         "source_sha256": expected_source_sha256,
                          "rejected_items": rejected_items, "accepted_indices": review["accepted_indices"],
                          "citation_repairs": review["citation_repairs"], "coverage": review["coverage"],
                          "field_rejections": review["field_rejections"]},

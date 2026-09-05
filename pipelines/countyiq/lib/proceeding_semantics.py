@@ -11,15 +11,15 @@ def scheduled_action_errors(summary):
     # Remove only explicit prospective/passive prerequisites, not past actions.
     # An attributive historical approval describes the existing use, not the
     # scheduled request's outcome ("a currently approved three-unit conversion").
-    text = re.sub(r"\b(a|an|the|its)\s+(?:currently|previously|already)\s+approved\s+",
+    text = re.sub(r"\b(a|an|the|its)\s+(?:currently|previously|already)\s+(?:approved|reviewed|discussed)\s+",
                   r"\1 existing ", text, flags=re.I)
     prospective = re.sub(
-        r"\b(?:be|been)\s+(?:submitted\s+and\s+)?(?:approved|denied|considered|held|voted on)\b",
+        r"\b(?:be|been)\s+(?:submitted\s+and\s+)?(?:approved|denied|considered|held|voted on|reviewed|discussed)\b",
         "", text, flags=re.I)
     # A past perfect action remains completed; it is not prospective.
-    if re.search(r"\b(?:has|had|have)\s+been\s+(?:approved|denied|considered|held)\b", text, re.I):
+    if re.search(r"\b(?:has|had|have)\s+been\s+(?:approved|denied|considered|held|reviewed|discussed)\b", text, re.I):
         return ["scheduled item uses completed-action wording"]
-    if re.search(r"\b(?:held|considered|approved|denied|voted)\b", prospective, re.I):
+    if re.search(r"\b(?:held|considered|approved|denied|voted|reviewed|discussed)\b", prospective, re.I):
         return ["scheduled item uses completed-action wording"]
     return []
 
@@ -117,6 +117,15 @@ def decision_errors(decision, action):
             r"integrate.{0,80}(?:adopted|standalone)|advertis.{0,60}for adoption", text, re.I):
         if not re.search(r"(?:adopted|enacted)\s+(?:the\s+)?(?:ordinance|ordinances)", text, re.I):
             errors.append("Draft amendment, referral or advertisement is not ordinance adoption")
+    if decision["scope"] == "plan" and re.search(
+            r"\b(?:execut\w*|record\w*)\b.{0,100}\bdeed\b", text, re.I):
+        if not re.search(r"\b(?:approv\w*|reapprov\w*|grant\w*)\b.{0,100}\bplan\b", text, re.I):
+            errors.append("Deed execution or recording does not establish plan approval")
+    if decision["scope"] == "contract" and re.search(
+            r"\b(?:advertis\w*|administer\w*)\b.{0,80}\bbids?\b", text, re.I):
+        if not re.search(r"\b(?:award\w*|accept\w*|purchas\w*)\b|"
+                         r"\bapprov\w*\b.{0,80}\b(?:contract|proposal|purchase)\b", text, re.I):
+            errors.append("Advertising or administering bids does not establish a contract award")
     if decision["outcome"] == "continued" and re.search(r"remove.{0,100}(?:future|agenda)", text, re.I):
         errors.append("Removal from future agendas is not a continuance")
     explicit = {
@@ -294,8 +303,8 @@ def relevance_projection(category, scope, basis, evidence, *, summary='', source
 
 def agenda_update_errors(status, summary, source_text, item_excerpt):
     if (status == "update" and re.search(r"\bagenda\b", source_text[:600], re.I)
-            and re.search(r"report(?:ed| included)|report.{0,20}included", summary, re.I)
+            and re.search(r"\b(?:reported|reviewed|noted|discussed|considered)\b|report.{0,20}included", summary, re.I)
             and not re.search(r"motion (?:carried|passed)|all members.{0,60}aye", source_text, re.I)
-            and not re.search(r"\b(?:reported|completed|received|issued|awarded)\b", item_excerpt, re.I)):
+            and not re.search(r"\b(?:reported|reviewed|noted|discussed|considered|completed|received|issued|awarded)\b", item_excerpt, re.I)):
         return ["An agenda-listed report is scheduled, not a completed report"]
     return []

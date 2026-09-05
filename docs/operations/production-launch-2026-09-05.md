@@ -109,8 +109,8 @@ workspace and cross-session persistence verification remain outstanding.
 ## LLM qualification and cost
 
 The [model comparison](../research/model-comparison-2026-09-05.md) contains the
-current source reviews and preserved raw results: 156 evaluation-only calls,
-$0.234389645 total. None issued a quality receipt or wrote serving intelligence.
+current source reviews and preserved raw results: 174 evaluation-only calls,
+$0.266998087 total. None issued a quality receipt or wrote serving intelligence.
 
 The harness now uses explicit model-appropriate reasoning and sampling settings.
 Removing factual examples from the shared citation prompt materially improved
@@ -119,9 +119,13 @@ all model capability failures. Unknown references remain rejected.
 
 GLM 5.3 Flash is the strongest lower-cost challenger so far. DeepSeek still has
 long/variable latency and unsupported interpretations. Luna is not qualified
-for full backfill merely because its format scores are higher. Pass 2 source
-semantics, including vacancy claims and an 11/12-neighbor counting discrepancy,
-still need resolution. Models and frozen labels have not been silently changed.
+for full backfill merely because its format scores are higher. The 11/12-neighbor
+discrepancy is resolved: other-owner counts and all-neighbor acreage describe
+different populations, now labeled in the prompt. Pass 0 source fingerprints
+are caller-owned; replay checks retain the original source binding. New canaries
+still expose agenda/decision-scope errors and incorrect repeated numeric facts.
+Models and frozen labels have not been silently changed. Reduce unnecessary
+model narration before another broad comparison; full backfill remains disabled.
 
 The current harness uses synchronous OpenRouter Chat Completions. Parcel-level
 “batching” in Pass 2 is unrelated to the discounted provider Batch API. Direct

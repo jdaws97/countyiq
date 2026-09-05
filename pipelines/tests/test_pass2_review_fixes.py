@@ -101,6 +101,26 @@ def test_precomputed_metrics_include_neighbor_acreage():
     assert "adjacent_acres_total: 3.75 [Evidence: signal:assemblage]" in text
 
 
+def test_neighbor_totals_keep_same_owner_parcels_and_label_the_population():
+    # Two other-owner parcels share owner B; a third belongs to the subject.
+    # Signal counts describe 2 parcels / 1 other owner, not all 3 neighbors.
+    context = {
+        "parcel": {"owner": "A"},
+        "neighbors": [{"owner": "B", "acres": 1}, {"owner": "B", "acres": 2},
+                      {"owner": "A", "acres": 3}],
+        "signals": [{"signal_key": "assemblage", "signal_weight": .1,
+                     "evidence": {"neighbor_parcels": 2, "different_owner_neighbors": 1}}],
+    }
+    metrics = _format_precomputed_metrics(context)
+    signal = _format_signals_list(context["signals"])
+    assert "adjacent_parcel_count: 3" in metrics
+    assert "adjacent_acres_total: 6.0" in metrics
+    assert "includes all intersecting neighbors, including same-owner parcels" in metrics
+    assert "neighbor_parcels=2" in signal
+    assert "different_owner_neighbors=1" in signal
+    assert "Do not attribute all-neighbor acreage to the other-owner subset" in BATCHED_VALIDATION_SYSTEM_PROMPT
+
+
 def test_neighbor_context_uses_the_same_topology_as_the_assemblage_signal():
     assert "AND ST_Intersects(p.geom, n.geom)" in NEIGHBORS_QUERY
     assert "AND ST_Touches" not in NEIGHBORS_QUERY

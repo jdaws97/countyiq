@@ -266,6 +266,7 @@ def test_partial_projection_preserves_rejected_claims_for_operator_review(monkey
     module = importlib.import_module("countyiq.assets.enrichment.proceeding_extraction")
     source = SOURCE.replace('TEST RECORD', 'TEST SUBDIVISION RECORD')
     wire = payload(source)
+    source_fingerprint = wire.pop("source_sha256")
     bad = deepcopy(wire["extractions"][0])
     bad["application_ids"][0]["text"] = "invented"
     wire["extractions"].append(bad)
@@ -298,6 +299,8 @@ def test_partial_projection_preserves_rejected_claims_for_operator_review(monkey
     result = module.proceeding_extraction.op.compute_fn.decorated_fn(SimpleNamespace(log=log, run_id="synthetic"), Database())
     assert len(calls["projection"]["extractions"]) == 1
     assert calls["inference"]["payload"]["model_claims"] == wire
+    assert calls["inference"]["payload"]["source_sha256"] == source_fingerprint
+    assert "source_sha256" not in wire
     assert calls["inference"]["payload"]["coverage"]["version"] == 1
     assert calls["inference"]["payload"]["citation_repairs"] == []
     fields = calls["inference"]["payload"]["field_rejections"]

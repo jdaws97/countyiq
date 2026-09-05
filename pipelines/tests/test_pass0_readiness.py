@@ -1,7 +1,7 @@
 """Synthetic adversarial cases for consequential Pass 0 boundaries."""
 from copy import deepcopy
 import pytest
-from countyiq.lib.proceeding_semantics import decision_errors, scheduled_action_errors, relevance_projection
+from countyiq.lib.proceeding_semantics import agenda_update_errors, decision_errors, scheduled_action_errors, relevance_projection
 from countyiq.lib.proceeding_claims import hydrate_claims, review_claims, passage_document
 from countyiq.lib.proceeding_contract import details_for
 from tests.test_proceeding_item_review import simple
@@ -26,6 +26,18 @@ def test_carried_or_approval_words_do_not_override_the_actual_motion(action):
     assert decision_errors({"authority": "Council", "outcome": "approved", "scope": "plan"}, action)
 
 
+@pytest.mark.parametrize("action,scope,allowed", [
+    ("Council voted to execute and record the consolidation deed. Motion carried: 6-0.", "plan", False),
+    ("Council voted to execute and record the consolidation deed. Motion carried: 6-0.", "procedural", True),
+    ("Council approved the final subdivision plan and authorized recording the deed.", "plan", True),
+    ("Council authorized the authority to advertise and administer bids. Motion carried: 6-0.", "contract", False),
+    ("Council authorized the authority to advertise and administer bids. Motion carried: 6-0.", "procedural", True),
+    ("Council approved the construction contract and authorized advertising bids for another phase.", "contract", True),
+])
+def test_execution_and_bidding_authority_do_not_approve_a_plan_or_award_a_contract(action, scope, allowed):
+    assert (not decision_errors({"authority": "Council", "outcome": "approved", "scope": scope}, action)) is allowed
+
+
 @pytest.mark.parametrize("summary,allowed", [
     ("A variance is scheduled to add a fourth unit to a currently approved three-unit conversion.", True),
     ("The previously approved plan is scheduled for a new variance hearing.", True),
@@ -35,6 +47,25 @@ def test_carried_or_approval_words_do_not_override_the_actual_motion(action):
 ])
 def test_historical_modifier_is_distinct_from_completed_action(summary, allowed):
     assert bool(scheduled_action_errors(summary)) != allowed
+
+
+@pytest.mark.parametrize("verb", ["reviewed", "noted", "discussed", "reported"])
+def test_agenda_heading_does_not_establish_a_completed_commission_review(verb):
+    excerpt = "Planning Commission: Proposed fire company expansion."
+    summary = f"Planning Commission {verb} the proposed fire company expansion."
+    assert agenda_update_errors("update", summary, "SYNTHETIC COUNCIL AGENDA. " + excerpt, excerpt)
+    # An agenda can explicitly recount an earlier completed review.
+    historical = f"Planning Commission {verb} the expansion on July 1."
+    assert not agenda_update_errors("update", historical, "SYNTHETIC COUNCIL AGENDA. " + historical, historical)
+
+
+def test_scheduled_record_cannot_describe_a_review_as_having_happened():
+    assert scheduled_action_errors("Council reviewed comprehensive plan RFP results.")
+    assert not scheduled_action_errors("The previously reviewed plan is scheduled for discussion.")
+    assert not scheduled_action_errors("The plan will be reviewed by Council.")
+    assert scheduled_action_errors("The plan has been reviewed by Council.")
+    assert not scheduled_action_errors("The plan is scheduled to be discussed.")
+    assert scheduled_action_errors("The plan had been discussed by Council.")
 
 
 def decision_fixture(action, *, scope="procedural", outcome="approved"):

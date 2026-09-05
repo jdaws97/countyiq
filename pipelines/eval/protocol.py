@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA
+from countyiq.lib.proceeding_claims import PASS0_MODEL_SCHEMA
 
 import dataclasses
 import json
@@ -44,7 +44,7 @@ PASS_EVAL_PROTOCOLS = {
         reasoning_task=False,
         default_thinking=False,
         system_prompt=PASS0_SYSTEM_PROMPT,
-        json_schema=PASS0_CLAIMS_SCHEMA,
+        json_schema=PASS0_MODEL_SCHEMA,
         schema_name="pass0_extractions",
         pdf_engine="native",
     ),

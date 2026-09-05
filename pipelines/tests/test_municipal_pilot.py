@@ -47,4 +47,17 @@ def test_prompt_uses_current_document_metadata_and_whole_text():
     assert row["meeting_date"] in prompt
     indexed = json.loads(prompt.split("SOURCE PASSAGES:\n", 1)[1])
     assert "".join(p["text"] for p in indexed["passages"]) == row["raw_text"]
-    assert indexed["source_sha256"] == digest(row["raw_text"])
+    assert set(indexed) == {"passages"}
+
+
+def test_current_wire_response_uses_request_fingerprint_and_keeps_replay_strict():
+    text = "Some source text."
+    raw = {"extractions": []}
+    result = evaluate_format(raw, text, expected_source_sha256=digest(text))
+    assert result["runtime_gate_passed"]
+    assert result["source_binding"] == "caller"
+    assert not result["semantic_review_complete"]
+    assert not evaluate_format(raw, text, expected_source_sha256=digest("Other source"))["runtime_gate_passed"]
+    assert not evaluate_format({**raw, "source_sha256": "0" * 64}, text)["runtime_gate_passed"]
+    assert not evaluate_format({**raw, "source_sha256": "0" * 64}, text,
+                               expected_source_sha256=digest(text))["runtime_gate_passed"]

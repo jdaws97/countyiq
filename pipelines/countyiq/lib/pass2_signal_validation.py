@@ -43,14 +43,14 @@ SIGNAL_QUESTIONS: dict[str, list[str]] = {
         "Is this part of a corridor-wide pattern or an isolated anomaly?",
     ],
     "vacancy": [
-        "Is this genuinely vacant land, or a data gap (missing structure footprint)?",
-        "Is the assessed value consistent with vacant status?",
-        "How long has the parcel appeared vacant — recent demolition or long-term?",
+        "Does any cited evidence establish current vacant use beyond the missing mapped footprint?",
+        "Do assessment, classification, or public/institutional ownership limit the usefulness of this screen?",
+        "Keep current use and vacancy duration unknown unless independently established by cited evidence.",
     ],
     "assemblage": [
         "Do cited records establish common ownership or active consolidation, or only fragmented neighboring ownership? Do not speculate about hidden shared ownership.",
         "Which neighbors have recorded tax claims or positive balances? A missing or zero amount does not negate a recorded claim.",
-        "Preserve the supplied adjacent acreage and owner count. Large acreage alone does not establish an assemblage opportunity.",
+        "Keep all-neighbor acreage separate from other-owner parcel and distinct-owner counts. Large acreage alone does not establish an assemblage opportunity.",
     ],
     "economic_development_park": [
         "Is the parcel actually within the mapped business or industrial park boundary?",

@@ -1,7 +1,7 @@
 """Synthetic contract regressions: no model calls or real-data writes."""
 from copy import deepcopy
 import pytest
-from countyiq.lib.proceeding_claims import hydrate_claims, passage_document, MAX_SOURCE_CHARS
+from countyiq.lib.proceeding_claims import bind_model_claims, hydrate_claims, review_claims, passage_document, MAX_SOURCE_CHARS
 from countyiq.lib.proceeding_contract import details_for, project_aliases, distinctive_project_reference
 from countyiq.lib.intelligence_events import build_development_event
 
@@ -61,6 +61,41 @@ def test_hydration_recovers_exact_source_and_separate_scoped_dates():
     assert "scoped_decision" in event["event_tags"]
     assert event["event_date"] == "2026-07-20"
     assert event["source_evidence"][0]["details"]["milestones"] == item["milestones"]
+
+
+def test_caller_binding_preserves_raw_claims_and_source_evidence():
+    archived = payload()
+    raw = {"extractions": deepcopy(archived["extractions"])}
+    before = deepcopy(raw)
+    bound = bind_model_claims(raw, SOURCE, expected_source_sha256=archived["source_sha256"])
+    assert hydrate_claims(bound, SOURCE) == hydrate_claims(archived, SOURCE)
+    assert raw == before
+    bound["extractions"][0]["project_name"] = "Changed after binding"
+    assert raw == before
+
+
+@pytest.mark.parametrize("raw", [None, {}, [], {"extractions": None},
+                                   {"extractions": [], "source_sha256": "0" * 64}])
+def test_caller_binding_rejects_bad_envelopes_and_model_supplied_fingerprints(raw):
+    with pytest.raises(ValueError, match="Invalid model-claims envelope"):
+        bind_model_claims(raw, SOURCE, expected_source_sha256=passage_document(SOURCE).source_sha256)
+
+
+def test_caller_binding_detects_source_change_even_for_empty_output():
+    expected = passage_document(SOURCE).source_sha256
+    with pytest.raises(ValueError, match="request snapshot"):
+        bind_model_claims({"extractions": []}, SOURCE + " Changed.", expected_source_sha256=expected)
+
+
+def test_caller_binding_does_not_bypass_citations_or_bad_sibling_quarantine():
+    raw = {"extractions": deepcopy(payload()["extractions"])}
+    bad = deepcopy(raw["extractions"][0])
+    bad["what_happened"]["passage_ids"] = ["unknown"]
+    raw["extractions"].append(bad)
+    bound = bind_model_claims(raw, SOURCE, expected_source_sha256=passage_document(SOURCE).source_sha256)
+    result = review_claims(bound, SOURCE)
+    assert result["accepted_indices"] == [0]
+    assert result["rejected_items"][0]["index"] == 1
 
 @pytest.mark.parametrize("change", ["hash", "source", "unknown", "duplicate", "missing", "invented", "extra"])
 def test_bad_citations_and_invented_literal_fail_closed(change):

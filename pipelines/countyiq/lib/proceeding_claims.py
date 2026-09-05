@@ -1,6 +1,7 @@
 """Pass 0 v3: cited claims hydrated from a source-bound passage index.
 
-Model output never supplies quotations, ISO dates, field-assignment lists or
+The caller binds model claims to the source fingerprint captured before the call.
+Model output never supplies that fingerprint, ISO dates, field-assignment lists or
 display evidence. Membership and conservative counterexamples are checked here;
 semantic release evaluation remains mandatory.
 """
@@ -70,6 +71,10 @@ decision_schema["required"].append("action_text")
 relevance_schema = ITEM["properties"]["relevance"]
 relevance_schema["properties"]["source_text"] = {"type": "string", "minLength": 1}
 relevance_schema["required"].append("source_text")
+# The stored/replay envelope retains its fingerprint. The model only selects
+# claims; copying a cryptographic hash cannot establish request provenance.
+PASS0_MODEL_SCHEMA = obj({"extractions": deepcopy(PASS0_CLAIMS_SCHEMA["properties"]["extractions"])})
+_MODEL_ENVELOPE_VALIDATOR = Draft202012Validator(obj({"extractions": array({})}))
 _VALIDATOR = Draft202012Validator(PASS0_CLAIMS_SCHEMA)
 
 def passage_document(source_text):
@@ -81,12 +86,27 @@ def passage_document(source_text):
 
 def source_input(source_text):
     doc = passage_document(source_text)
-    return json.dumps({"source_sha256": doc.source_sha256,
-                       "passages": [{"id": p.passage_id, "text": p.text} for p in doc.passages]},
+    return json.dumps({"passages": [{"id": p.passage_id, "text": p.text} for p in doc.passages]},
                       ensure_ascii=False, separators=(",", ":"))
 
+def bind_model_claims(payload, source_text, *, expected_source_sha256):
+    """Bind a response to its caller's pre-call source snapshot without editing it.
+
+    The caller must retain request/response identity; passage IDs are local to
+    one document. Never obtain expected_source_sha256 from model output or use
+    this function to repair historical responses with an incorrect copied hash.
+    Item validation remains in review_claims so bad siblings can be quarantined.
+    """
+    doc = passage_document(source_text)
+    if expected_source_sha256 != doc.source_sha256:
+        raise ValueError("Source text changed from the request snapshot")
+    errors = list(_MODEL_ENVELOPE_VALIDATOR.iter_errors(payload))
+    if errors:
+        raise ValueError("Invalid model-claims envelope: " + "; ".join(e.message for e in errors[:5]))
+    return {"source_sha256": expected_source_sha256, "extractions": deepcopy(payload["extractions"])}
+
 def hydrate_claims(payload, source_text, *, meeting_date=None, legacy_evaluation=False):
-    """Validate the wire object before producing a compatible stored projection."""
+    """Validate a source-bound envelope before producing a stored projection."""
     validator = Draft202012Validator(LEGACY_CLAIMS_SCHEMA) if legacy_evaluation else _VALIDATOR
     errors = sorted(validator.iter_errors(payload), key=lambda e: str(e.path))
     if errors:

@@ -12,7 +12,7 @@ from countyiq.lib.pass_schemas import (
     PASS2_BATCHED_VALIDATION_SCHEMA,
     PASS3_BRIEF_SCHEMA,
 )
-from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA
+from countyiq.lib.proceeding_claims import PASS0_MODEL_SCHEMA
 from eval.protocol import (
     EvalCostLedger,
     EvalCostLimitExceeded,
@@ -43,7 +43,7 @@ def test_pass0_eval_uses_production_schema_system_and_native_pdf():
     config = build_production_eval_config(
         "openai/gpt-5.6-luna", 0, archive_label="test"
     )
-    assert config.json_schema == PASS0_CLAIMS_SCHEMA
+    assert config.json_schema == PASS0_MODEL_SCHEMA
     assert config.system_prompt
     assert config.pdf_engine == "native"
 

@@ -285,7 +285,10 @@ Rules:
    not automatically high significance; use its acreage and context.
 4. When prop_lots and prop_du are both present, copy both values into
    key_facts even when one of them is zero.
-5. Treat zero assessment, exempt classification, or institutional/public
+5. A zero structure_count means no mapped county building footprint; it does
+   not establish current land use, occupancy, availability, or vacancy duration.
+   Low assessment and a property class do not establish those facts either.
+   Treat zero assessment, exempt classification, or institutional/public
    ownership as a vacancy data-gap or non-market parcel. Downgrade the vacancy
    signal unless direct cited evidence establishes genuine vacant land.
 6. A low sale price or organizational-looking buyer name does not establish
@@ -296,8 +299,12 @@ Rules:
    an assemblage interpretation when there is no cited common ownership or
    active consolidation, regardless of total acreage. A tax-claim neighbor
    provides a follow-up question, not evidence of a development plan.
-   For assemblage, retain the supplied adjacent_acres_total and distinct-owner
-   count in key_facts. Tax claim years record claims even when no positive
+   For assemblage, retain adjacent_acres_total and different_owner_neighbors in
+   key_facts with their populations: adjacent_* metrics cover ALL intersecting
+   neighbors, including same-owner parcels; neighbor_parcels counts only parcels
+   with a different resolved owner; different_owner_neighbors counts distinct
+   other owners. Do not attribute all-neighbor acreage to the other-owner subset.
+   Tax claim years record claims even when no positive
    amount is supplied; do not call those neighbors non-delinquent or paid off.
 8. Never invent facts. If context is missing, note it in reasoning.
 9. Return exactly one validation per listed signal, in the same order.
@@ -541,6 +548,8 @@ def _format_precomputed_metrics(context: dict) -> str:
         ),
     ]
     lines = ["PRECOMPUTED METRICS (deterministic; do not recompute):"]
+    if neighbors:
+        lines.append("Population: adjacent_* includes all intersecting neighbors, including same-owner parcels.")
     for name, value in metrics:
         suffix = (
             f" [Evidence: {adjacent_ref}]"
