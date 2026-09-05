@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
-PASS2_SCORING_VERSION = "2026-09-05.1"
+PASS2_SCORING_VERSION = "2026-09-05.2"
 
 
 def enforce_production_gate(score: dict, errors: list[str]) -> dict:
@@ -107,6 +107,7 @@ def _forbidden_assertions(value: Any, claims: list[str]) -> list[str]:
         "not",
         "without",
         "absent",
+        "absence of",
         "lack",
         "lacking",
         "unproven",

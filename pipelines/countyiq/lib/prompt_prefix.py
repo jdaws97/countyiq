@@ -28,7 +28,7 @@ def schema_block(schema: dict) -> str:
 
 
 CITATION_FORMAT_BLOCK = """CITATION FORMAT RULES (checked mechanically before any output is served):
-- A citation marker is square-bracketed and copied verbatim from a ref printed in the input, for example [Evidence: parcels:1234567890123], [Evidence: signal:vacancy], [Evidence: context:growth_area], [Signal: vacancy], or [Parcel: 1234567890123].
+- A citation marker is square-bracketed and copied verbatim from one ref printed in this request: [Evidence: <printed-ref>], [Signal: <printed-signal-key>], or [Parcel: <printed-parcel-id>].
 - Put each marker at the end of the sentence it supports. Several markers may follow one sentence; use one bracket pair per ref.
 - Never invent a ref, and never change its prefix, group, spelling, spacing, or case. A ref that was not printed in the input is invalid even if it looks plausible.
 - Every prose field that states a fact must contain at least one valid marker. When no printed ref supports a statement, say that the evidence is missing instead of asserting the fact.
@@ -36,18 +36,17 @@ CITATION_FORMAT_BLOCK = """CITATION FORMAT RULES (checked mechanically before an
 - Identifiers copied into structured fields (member_names, linked_records, signal_key, PIDNs) must match the input byte for byte.
 
 Well-formed examples:
-- "The parcel has no mapped building footprint [Evidence: signal:vacancy]."
-- "Two touching parcels list the same recorded owner [Evidence: signal:entity_assemblage] [Evidence: context:growth_area]."
-- "The recorded sale is not corroborated by any listed proceeding [Signal: ownership_change]."
-- "Three of the six parcels carry a current delinquency indicator [Signal: tax_distress] [Parcel: 1234567890123]."
-- "The candidate names share a PA DOS entity number [Evidence: candidate:ACME HOLDINGS LLC] [Evidence: corporate_entities:ACME HOLDINGS LLC]."
+- A factual sentence ends with one exact marker copied from this request: [Evidence: <printed-ref>].
+- A sentence supported by two printed refs uses two separate bracket pairs: [Evidence: <printed-ref-one>] [Evidence: <printed-ref-two>].
+- A signal narrative uses an exact printed signal key: [Signal: <printed-signal-key>].
+- An owner narrative may use an exact printed signal key and parcel ID: [Signal: <printed-signal-key>] [Parcel: <printed-parcel-id>].
 
 Malformed examples (rejected):
-- "[evidence: vacancy]" — wrong prefix case and missing group.
-- "[Signal: Vacancy]" — key case changed.
-- "[Evidence: signal:vacancy, context:growth_area]" — two refs in one bracket pair.
-- "(signal:vacancy)" — not bracketed.
-- "[Parcel: 1234567890123 and 1234567890124]" — two identifiers in one marker."""
+- "[evidence: <printed-ref>]" — wrong prefix case.
+- "[Signal: <changed-key>]" — changed key.
+- "[Evidence: <printed-ref-one>, <printed-ref-two>]" — two refs in one bracket pair.
+- "(<printed-ref>)" — not bracketed.
+- "[Parcel: <printed-parcel-id-one> and <printed-parcel-id-two>]" — two identifiers in one marker."""
 
 
 PASS3_FIELD_CONTRACT = """FIELD CONTRACT (restates the enforced schema; every value must be one of the listed options):

@@ -123,6 +123,14 @@ jobs:
           DATABASE_URL: postgresql://dagster_admin:localtest@localhost:5434/countyiq_test
         run: uv run alembic upgrade head
 
+      - name: Provision the pipeline maintenance role
+        run: |
+          docker exec countyiq-pipeline-contracts createdb -U dagster_admin dagster
+          docker exec -i \
+            -e DATABASE_PIPELINE_USER=countyiq_pipeline_test \
+            -e DATABASE_PIPELINE_PASSWORD=test-pipeline-role-password-000000000000000000000 \
+            countyiq-pipeline-contracts bash < pipelines/init-db/02-runtime-role.sh
+
       - name: Run pipeline database contracts
         env:
           DATABASE_HOST: localhost

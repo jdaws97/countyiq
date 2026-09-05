@@ -1,9 +1,10 @@
 # Lower-cost model review — September 5, 2026
 
-**Decision: keep both candidates open; do not switch every pass yet.** GLM 5.3
-Flash is the stronger current replacement candidate. Entity verification is the
-first pass to qualify. DeepSeek V4 Flash 0731 needs more work on provider routing,
-reasoning allocation and the output contract before it is a dependable default.
+**Decision: compare Luna Batch alongside both alternative models before selecting
+the backfill route; do not switch every pass yet.** GLM 5.3 Flash is the stronger
+current alternative model, with entity verification the first pass to qualify.
+DeepSeek V4 Flash 0731 needs more work on provider routing, reasoning allocation
+and the output contract before it is a dependable default.
 This review does not approve a quality receipt or a backfill.
 
 ## Controlled comparison
@@ -115,3 +116,71 @@ is `model-route-audit-20260905.json`. Promotional prices and provider offerings
 change; route ceilings must be checked again before a funded run. Current listings:
 [GLM](https://openrouter.ai/z-ai/glm-5.3-flash),
 [DeepSeek 0731](https://openrouter.ai/deepseek/deepseek-v4-flash-0731).
+
+## Follow-up qualification and prompt repeat
+
+Six additional GLM entity cases cost **$0.002455925**. Together with the two
+matched cases, GLM produces 8/8 valid, source-cited partitions/abstentions and
+7/8 exact gold decisions. The remaining case abstains because the two recorded
+names have conflicting middle initials despite a matching address and spouse.
+That is a defensible uncertainty, not an invented identity. Keep the frozen
+merge label unchanged and adjudicate the ambiguity before choosing a fallback;
+forcing a merge to raise a score would be the wrong identity policy.
+
+The citation prefix then lost its concrete example IDs and factual examples;
+Passes 2 and 3 received concise checks restating the existing citation contract.
+The eight P2/P3 cases were repeated for all three models with unchanged input,
+labels, validators, model settings and output ceilings: **24 calls, $0.018893261**.
+
+| Model | Cost for 8 cases | Reference gate | Median / worst latency |
+|---|---:|---:|---:|
+| Luna | $0.009514 | 8/8 | 7.2 / 11.2 s |
+| GLM 5.3 Flash | $0.005410 | 7/8 | 9.9 / 17.0 s |
+| DeepSeek V4 Flash 0731 | $0.003970 | 7/8 | 31.3 / 182.1 s |
+
+DeepSeek's four briefs now all parse and pass reference checks. This supports
+the user's concern that prior failures partly reflected the interface. It does
+not establish semantic equivalence: its school-acquisition brief suggests
+development interest from the price/assessment gap; its fragmented-neighbor
+brief suggests an assemblage play and a low-density restriction without the
+necessary source evidence. An owner-matched nearby plan can reasonably prompt
+a question about parcel inclusion, provided inclusion remains unestablished.
+Watch itself is valid for a documented transfer and is not an intent claim.
+
+GLM's former invented `context:growth_area` reference disappeared, but one new
+output misspells `zoning_mismatch`. DeepSeek adds an invalid `Parcel:` entry to
+a P2 evidence-reference array. Both remain rejected. GLM still misses the
+watch-versus-static distinction for the large farm transfer. Both models also
+need better handling of footprint-screen uncertainty and the ambiguous neighbor
+counting bases in p2x-050. No model default or quality receipt was promoted.
+
+Luna's farm brief exposed another scorer defect: explicit "absence of" a
+coordinated acquisition was counted as asserting it. Added that negation with
+regressions retaining rejection of a separate positive claim. Offline scoring
+version 2026-09-05.2 gives Luna 4/4 strict brief cases, GLM 3/4 and DeepSeek 1/4.
+The raw scores and responses are preserved; this is not another paid run or a
+changed gold label. The full launch ledger is now **156 calls, $0.234389645**.
+
+## Direct OpenAI Batch must be included in the backfill decision
+
+The user identified an omission in the initial cost comparison: the current
+OpenRouter harness uses synchronous Chat Completions. Grouping all signals for
+a parcel into one Pass 2 request does not receive asynchronous Batch pricing.
+[OpenAI's current pricing](https://developers.openai.com/api/docs/pricing) lists
+Luna Batch short-context input at $0.10/M, cached input at $0.01/M and output at
+$0.60/M. [Batch](https://developers.openai.com/api/docs/guides/batch) processes
+uploaded request files within 24 hours at half the direct standard rate.
+
+The eight Luna retest cases used 18,938 input tokens (10,086 cached) and 5,917
+output tokens. Repricing those counts yields an illustrative **$0.00453626**,
+versus $0.00540953 actually charged for the eight GLM calls. This is not a Batch
+invoice: cache behavior, cache-write charges and direct-provider execution must
+be tested. Nevertheless, comparing alternative models only against synchronous
+Luna overstates their potential backfill savings.
+
+Keep synchronous canaries for short feedback cycles. Before requesting full
+backfill approval, qualify a bounded direct Batch sample and estimate accepted
+output cost, including retries, rejects, cache effects and dependent-pass
+turnaround. Batch results must retain frozen input/model/prompt identity and be
+revalidated before publication; asynchronous processing does not relax the
+existing evidence or authorization gates.

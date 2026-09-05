@@ -554,6 +554,7 @@ def test_pass2_forbidden_claims_ignore_explicit_disclaimers_only():
     ("Arm's-length status and buyer development intent are unestablished.", "arm's length"),
     ("Acquisition prices and a verified developer profile are missing.", "developer"),
     ("There is no verified developer profile and the delinquency rate is 0.0%.", "developer"),
+    ("Material gaps include the absence of any confirmed filing or coordinated neighboring acquisition.", "coordinated acquisition"),
 ])
 def test_forbidden_claims_accept_explicit_absence(text, claim):
     from eval.scoring import _forbidden_assertions
@@ -566,6 +567,7 @@ def test_forbidden_claims_accept_explicit_absence(text, claim):
     "There is no development application; the seller is distressed.",
     "The buyer is not only a developer but also a distressed seller.",
     "A development plan is missing. The seller is distressed.",
+    "There is an absence of planning records, but the seller is distressed.",
 ])
 def test_disclaimer_cannot_hide_separate_asserted_claim(text):
     from eval.scoring import _forbidden_assertions

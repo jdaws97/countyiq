@@ -4,6 +4,37 @@ Status: active implementation and verification. **Full backfill is not approved.
 The user authorized product iteration, bounded canaries, commits/pushes to main,
 and deployment. Full backfill remains a separate explicit user decision.
 
+Current release: **7d047035820d72e22ef449cc124dff36b909a34e** is committed,
+pushed to main, and checked out cleanly on the VPS. Application images are built;
+the application is not serving yet. The protected revision-061 source dump was
+checksum-verified on the VPS and restored into `countyiq_import_20260905`, with
+175,928 current parcels and 6,459 proceedings. Its final candidate-view refresh
+was interrupted when the credential guard stopped storage operations; all base
+data, constraints and preceding archive entries are restored. The original
+empty production database remains preserved. The indexed view migration now
+passes on the real candidate at revision 065 with 19,870 name pairs and zero
+intelligence integrity discrepancies. Whole-result comparison against the
+original local view is recorded separately before promotion. Fresh integration
+checks pass 104 tests; the non-integration pipeline suite passes 1,357 tests.
+
+The 1,110 raw source files (**2,738,271,652 bytes**) are now uploaded to private
+R2 with unchanged relative paths; a full download check reports zero differences.
+The empty pre-import off-host baseline is
+`20260905T180740Z-preimport-empty-baseline`. A backup of the imported data and a
+restore drill remain necessary before the daily timer is enabled.
+
+The obsolete uploader exposed the backup credential in debug output. The log
+was redacted, the user rolled that token, and a hidden-input helper verified
+old-secret rejection before encrypting and publishing the replacement. The
+replacement works; the cost guard is rearmed. Upstream rclone 1.75.1 fixed the
+false upload errors, with first-attempt and download checks passing.
+
+The live edge certificate covers `countyiq.net` and `*.countyiq.net`, issued by
+Google Trust Services and valid September 4–December 3, 2026. Cloudflare manages
+renewal; Tunnel encrypts the route to the VPS, with HTTP only on the internal
+Docker hop. SOPS uses the Ed25519 SSH recipient in `.sops.yaml`; decryption uses
+the local `/home/jdaws/.ssh/jdawskey`, which is not copied to the VPS.
+
 ## Product acceptance work
 
 The launch lane is one York County investigation workspace for local developers

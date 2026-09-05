@@ -42,6 +42,10 @@ SELECT format(
 ) \gexec
 SELECT format('GRANT USAGE ON SCHEMA public, staging, meta TO %I', :'pipeline_user') \gexec
 SELECT format('REVOKE CREATE ON SCHEMA public, staging, meta FROM %I', :'pipeline_user') \gexec
+-- PostgreSQL 16 requires ownership to refresh a materialized view. Scheduled
+-- enrichment owns this rebuildable result only, not its source tables.
+SELECT format('ALTER MATERIALIZED VIEW public.entity_candidate_pairs OWNER TO %I', :'pipeline_user')
+WHERE to_regclass('public.entity_candidate_pairs') IS NOT NULL \gexec
 SELECT format(
     'GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public, staging, meta TO %I',
     :'pipeline_user'

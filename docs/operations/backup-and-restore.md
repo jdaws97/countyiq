@@ -13,10 +13,16 @@ for expiry and an
 for at least the required recovery window. Set
 `COUNTYIQ_BACKUP_BUCKET_LOCK_CONFIRMED=true` only after reviewing that lock.
 The dedicated `COUNTYIQ_BACKUP_R2_*` storage credential in
-`/opt/countyiq/.env` should be scoped to the private backup bucket and must be
+`/etc/countyiq/production.env` should be scoped to the private backup bucket and must be
 different from Dagster's raw-archive credential. Bucket-configuration
 authority belongs to a third, operator-only credential that is not stored on
 the VPS.
+
+Use the checksum-pinned upstream rclone build installed by the Ansible playbook.
+Ubuntu 24.04's older 1.60.1 build reported HTTP 501 after successful R2 uploads;
+1.75.1 passed first-attempt uploads and exact download checks on this host.
+Do not enable rclone debug logging with environment-defined credentials: the
+old build printed credential values during remote configuration.
 
 ## First-host gate
 

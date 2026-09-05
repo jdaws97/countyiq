@@ -309,6 +309,11 @@ Rules:
    cite validated signals as [Signal: key].
 12. If validation_status is "stale" or "irrelevant", adjusted_significance
    MUST be "none". Those statuses are not eligible for serving briefs.
+13. FINAL FORMAT CHECK: for each validation, its cross_references must contain
+   its own printed signal ref, every listed ref must appear in that validation's
+   reasoning, and every marker/ref must have been printed in this request. A
+   non-empty cross_signal_insight must cite at least one validated signal using
+   [Signal: key], with keys copied only from the signals listed in this request.
 
 OUTPUT — return ONLY valid JSON with this exact structure:
 {{
@@ -319,7 +324,7 @@ OUTPUT — return ONLY valid JSON with this exact structure:
       "adjusted_significance": "high|medium|low|none",
       "reasoning": "2-3 grounded sentences, each with [Evidence: ref]",
       "key_facts": ["every decision-determinative fact used for status or significance"],
-      "cross_references": ["signal:own_key", "context:optional_key"]
+      "cross_references": ["<this signal's printed ref>", "<other printed ref used in reasoning, if any>"]
     }}
   ],
   "cross_signal_insight": "optional: observation about signal combinations on this parcel, or empty string"

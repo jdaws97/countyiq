@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC
+from datetime import UTC, datetime
 
 import psycopg2
 import pytest
@@ -886,6 +886,78 @@ def test_current_municipal_event_types_can_be_persisted(event_type):
                 RETURNING event_type
             """, ('schema-contract:' + event_type, event_type))
             assert cursor.fetchone()[0] == event_type
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("caller_threshold", ["0.1", "0.9"])
+def test_indexed_candidates_preserve_pairs_and_caller_settings(caller_threshold):
+    connection = _connect()
+    municipalities = ["CANDIDATE TEST A", "CANDIDATE TEST B"]
+    try:
+        with connection.cursor() as cursor:
+            names = ["SMITH JOHN", "SMITH JOHN", "SMITH JOHN JR", "A", "A B", "", None]
+            for index, name in enumerate(names):
+                cursor.execute(
+                    "INSERT INTO staging.parcels (pidn, owner_full, municipality) VALUES (%s,%s,%s)",
+                    (f"candidate-test-{index}", name, municipalities[0]),
+                )
+            cursor.execute(
+                "INSERT INTO staging.parcels (pidn, owner_full, municipality, valid_to) VALUES (%s,%s,%s,%s)",
+                ("candidate-expired", "SMITH JOHN SR", municipalities[0], datetime.now(UTC)),
+            )
+            cursor.execute(
+                "INSERT INTO staging.parcels (pidn, owner_full, municipality) VALUES (%s,%s,%s)",
+                ("candidate-other-town", "SMITH JOHN II", municipalities[1]),
+            )
+            cursor.execute("SELECT similarity('A','A B')")
+            assert cursor.fetchone()[0] == 0.5
+            cursor.execute("SELECT set_config('pg_trgm.similarity_threshold',%s,true)", (caller_threshold,))
+            cursor.execute("""
+                SELECT DISTINCT a.owner_full, b.owner_full, a.municipality,
+                    similarity(a.owner_full,b.owner_full)
+                FROM staging.parcels a JOIN staging.parcels b
+                  ON a.municipality=b.municipality AND a.owner_full<b.owner_full
+                  AND similarity(a.owner_full,b.owner_full)>0.5
+                WHERE a.valid_to IS NULL AND b.valid_to IS NULL
+                  AND a.owner_full IS NOT NULL AND b.owner_full IS NOT NULL
+                  AND a.owner_full<>'' AND b.owner_full<>''
+                  AND a.municipality = ANY(%s)
+                ORDER BY 1,2,3,4
+            """, (municipalities,))
+            original = cursor.fetchall()
+            assert len(original) == 1
+            cursor.execute("""
+                SELECT * FROM public.compute_entity_candidate_pairs()
+                WHERE municipality = ANY(%s) ORDER BY 1,2,3,4
+            """, (municipalities,))
+            assert cursor.fetchall() == original
+            cursor.execute("SHOW pg_trgm.similarity_threshold")
+            assert cursor.fetchone()[0] == caller_threshold
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
+def test_pipeline_role_can_refresh_candidates_without_owning_source_tables():
+    from psycopg2 import sql
+
+    connection = _connect()
+    role = os.environ.get("DATABASE_PIPELINE_USER", "countyiq_pipeline_test")
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT pg_get_userbyid(relowner) FROM pg_class
+                WHERE oid='staging.parcels'::regclass
+            """)
+            assert cursor.fetchone()[0] != role
+            cursor.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
+            cursor.execute("REFRESH MATERIALIZED VIEW public.entity_candidate_pairs")
+            cursor.execute("SELECT count(*) FROM public.entity_candidate_pairs")
+            assert cursor.fetchone()[0] >= 0
     finally:
         connection.rollback()
         connection.close()

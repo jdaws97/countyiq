@@ -8,6 +8,8 @@
     countyiq_deploy_user: ubuntu
     countyiq_swap_file: /swapfile
     countyiq_swap_size_mb: 2048
+    countyiq_rclone_version: "1.75.1"
+    countyiq_rclone_sha256: "982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab"
     countyiq_packages:
       - ca-certificates
       - curl
@@ -16,8 +18,8 @@
       - git
       - openssh-client
       - postgresql-client
-      - rclone
       - unattended-upgrades
+      - unzip
       - ufw
       - util-linux
 
@@ -52,6 +54,43 @@
         state: present
         update_cache: true
         cache_valid_time: 3600
+
+    # Ubuntu 24.04's rclone 1.60.1 reports 501 after successful R2 uploads.
+    # The tested upstream build completes both uploads and download verification.
+    - name: Require the reviewed rclone architecture
+      ansible.builtin.assert:
+        that: ansible_facts["architecture"] == "x86_64"
+
+    - name: Create the rclone package cache
+      ansible.builtin.file:
+        path: /var/cache/countyiq/rclone
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download the verified rclone release
+      ansible.builtin.get_url:
+        url: "https://downloads.rclone.org/v{{ countyiq_rclone_version }}/rclone-v{{ countyiq_rclone_version }}-linux-amd64.zip"
+        dest: "/var/cache/countyiq/rclone/rclone-v{{ countyiq_rclone_version }}.zip"
+        checksum: "sha256:{{ countyiq_rclone_sha256 }}"
+        mode: "0644"
+
+    - name: Extract the verified rclone release
+      ansible.builtin.unarchive:
+        src: "/var/cache/countyiq/rclone/rclone-v{{ countyiq_rclone_version }}.zip"
+        dest: /var/cache/countyiq/rclone
+        remote_src: true
+        creates: "/var/cache/countyiq/rclone/rclone-v{{ countyiq_rclone_version }}-linux-amd64/rclone"
+
+    - name: Install the reviewed rclone binary
+      ansible.builtin.copy:
+        src: "/var/cache/countyiq/rclone/rclone-v{{ countyiq_rclone_version }}-linux-amd64/rclone"
+        dest: /usr/local/bin/rclone
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
 
     - name: Apply available safe package upgrades
       ansible.builtin.apt:

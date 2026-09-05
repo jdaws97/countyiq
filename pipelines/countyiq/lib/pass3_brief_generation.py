@@ -59,6 +59,10 @@ CONSTRAINTS:
 3. Do not provide legal or financial advice.
 4. If signals conflict (opportunity vs constraint), you MUST acknowledge the tension explicitly.
 5. The narrative MUST be consistent with the structured fields below — no recommendation may read like an acquisition pitch.
+6. FINAL FORMAT CHECK: citations must be the exact, duplicate-free union of
+   [Signal: key] markers actually used in nonempty assessment_reasoning,
+   top_risk, and brief. Every marker must name a signal printed below, and a
+   non-null top_signal_key must appear in citations.
 
 RECOMMENDATION:
 - investigate: a specific documented activity tied to this property warrants a concrete follow-up, such as checking the scope or decision of an owner-matched active plan. Name that record and the unresolved question. A generic suggestion to check deeds, zoning, or missing information does not qualify by itself.
