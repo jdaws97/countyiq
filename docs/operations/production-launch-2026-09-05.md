@@ -1,7 +1,7 @@
 # Production launch record — September 5, 2026
 
 The private application is live at **https://app.countyiq.net** on commit
-`f39b305fe929281df4ae3a97be09b5597187f208`, deployed at 22:51:22 UTC. All six
+`2deb61d8f4f91185358d7c0da8484f8b3f13e085`, deployed at 23:40:13 UTC. All six
 services are running; authenticated public readiness returns HTTP 200 with
 `{"status":"ok"}`. The same service credential receives a customer challenge
 on `/api/session` (302), so it cannot access customer workspaces. **Full
@@ -9,8 +9,8 @@ backfill is not approved.** The user authorized product iteration, bounded canar
 pushes to main and deployment; full backfill remains a separate user decision.
 
 The immutable release receipt is
-`/var/lib/countyiq/releases/20260905T225122Z-f39b305fe929281df4ae3a97be09b5597187f208.env`.
-Its rollback backup is `20260905T224949Z-pre-deploy-f39b305fe929`. PostgreSQL
+`/var/lib/countyiq/releases/20260905T234012Z-2deb61d8f4f91185358d7c0da8484f8b3f13e085.env`.
+Its rollback backup is `20260905T233840Z-pre-deploy-2deb61d8f4f9`. PostgreSQL
 and the API have no host port; Dagster is bound only to loopback.
 
 ## Data and recovery
@@ -235,8 +235,8 @@ Saved-response replay after the source-bound vote and building-reuse fixes
 retains all four applications and two of three reference discovery matters.
 Unsupported narrative next steps, one wrong passage citation, and a resolved
 zoning correction treated as an identity conflict remain qualification issues.
-The current [metadata cleanup plan](../research/proceeding-metadata-review-2026-09-05.md)
-is unapplied. Dispatch now requires current-version metadata; production paid
+At that stage the [metadata cleanup plan](../research/proceeding-metadata-review-2026-09-05.md)
+was unapplied. Dispatch now requires current-version metadata; production paid
 passes remain disabled throughout this review.
 
 The 22:51:22 UTC release includes those ownership limits, the metadata/version
@@ -290,7 +290,33 @@ and lint were repeated after preserving original evidence-array indexes.
 The integration suite uses a separate migrated pipeline database on port 5434;
 an initial run against API fixture state on 5433 was invalid environment evidence.
 
-Deployment is pending at this point in the record. All production paid flags
-remain disabled, metadata version 6 is unapplied, and no backfill is approved.
+The release above is deployed with its remotely verified rollback backup. All six
+main CI jobs pass in [run 33999067172](https://github.com/jdaws97/countyiq/actions/runs/33999067172).
+The separate CodeQL run again fails during upload because code scanning is not
+enabled for the private repository; no clean security-analysis result is claimed.
+The exact image tags, release receipt, disabled paid/search flags and customer
+session challenge are recorded in `recorded-facts/verification.log` under the
+production-readiness output directory. Public readiness passes after deployment.
 Browser evidence: `output/playwright/recorded-facts-*` and
 `output/playwright/customer-review-20260905/`.
+
+## Metadata version 6 applied
+
+The refreshed local plan exactly matched the reviewed September 5 plan and both
+parser hashes. A protected local custom-format database backup was created before
+application. The production plan then matched the local plan exactly, including
+every original source fingerprint and review decision. Its recovery point is the
+release's remotely verified pre-deployment backup above. The R2 cost guard passed
+at 4,822,699,881 bytes against the 8 GB ceiling before production application.
+
+Both databases now have 3,511 ready and 2,948 held current documents at metadata
+version 6, including 488 ready documents dated in 2026 through September 5. Each
+has 6,459 audit receipts. Verification checked every original source fingerprint
+and all 638 replacements: original source fields remain intact, replacement text,
+URLs and content hashes are identical, and only reviewed metadata changed.
+The 175,928 current parcels remain intact and proceeding extractions remain zero.
+Public readiness passes after application. This cleanup neither calls an LLM nor
+approves model quality or full backfill; all five paid passes and AI search remain
+disabled. Evidence is under `output/production-readiness-2026-09-05/metadata-v6/`:
+`apply-local-plan.json`, `production-plan.json`, `apply-local-result.log`,
+`verify-local-result.json`, `production-apply.log`, and `production-verify.log`.

@@ -4,14 +4,17 @@ Version `proceeding-metadata-6` fixes source-selection errors found while
 preparing fresh Pass 0 canaries. The final dry run covers 6,459 current rows:
 3,511 ready and 2,948 requiring review, with 488 ready documents dated in 2026
 through September 5. It proposes 638 preserved-source SCD2 replacements and
-5,821 annotation updates. **This cleanup has not been applied.** No proceeding
+5,821 annotation updates. **This cleanup is applied locally and in production.**
+The refreshed plans match exactly; every original fingerprint and replacement's
+source text, URLs and content hash passed verification. No proceeding
 extractions exist against the affected rows. These are metadata classifications,
 not evidence of model quality or permission to run the full backfill.
 
 The final artifact is
 `output/production-readiness-2026-09-05/metadata-v6/source-conflict-local-dry-run.json`.
-It hashes the source snapshot and both parser/review modules. Earlier draft
-plans remain alongside it for diagnosis and must not be applied.
+It hashes the source snapshot and both parser/review modules. The application
+receipts and backup details are in the [launch record](../operations/production-launch-2026-09-05.md#metadata-version-6-applied).
+Earlier draft plans remain alongside it for diagnosis and must not be applied.
 
 ## Source findings and changes
 

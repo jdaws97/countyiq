@@ -524,4 +524,5 @@ source/reference copies, protocol, route snapshot, responses/transcripts,
 saved-response replay, semantic review and separate key diagnostic. This is a
 matched regression after the findings informed changes, not an unseen source
 sample or full-pass qualification. No serving writes, quality receipts, model
-default changes or backfill occurred. Metadata version 6 remains unapplied.
+default changes or backfill occurred. Metadata version 6 was subsequently
+applied and verified locally and in production; it does not qualify these models.
