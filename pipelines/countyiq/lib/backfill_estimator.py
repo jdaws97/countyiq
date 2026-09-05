@@ -22,6 +22,10 @@ from countyiq.assets.enrichment.brief_generation import (
     PARCELS_NEEDING_BRIEFS_QUERY,
     resolve_brief_rank_limit,
 )
+from countyiq.assets.enrichment.entity_verification import (
+    MAX_CANDIDATE_NAMES_PER_CONTEXT,
+    MAX_DYNAMIC_PROMPT_CHARACTERS,
+)
 from countyiq.assets.enrichment.proceeding_extraction import (
     _MAX_RAW_TEXT_CHARS,
     _MIN_RAW_TEXT_CHARS,
@@ -517,24 +521,34 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
         )
     pairs = list(database.execute(CANDIDATE_CLUSTERS_QUERY) or [])
     clusters, person_only_skipped = select_pass1_clusters(build_name_clusters(pairs))
+    deferred_name_count = sum(len(cluster) > MAX_CANDIDATE_NAMES_PER_CONTEXT for cluster in clusters)
+    clusters = [cluster for cluster in clusters if len(cluster) <= MAX_CANDIDATE_NAMES_PER_CONTEXT]
     prior_hashes = fetch_reusable_pass_hashes(database, pass_number=1)
-    definitely_new = sum(
-        stable_cluster_key(cluster) not in prior_hashes for cluster in clusters
-    )
-    units_min = definitely_new if prior_hashes else len(clusters)
     units_max = len(clusters)
 
     sample = _stable_sample(clusters, sample_size, stable_cluster_key)
     token_samples = []
     runtime_token_samples = []
+    deferred_sample_keys = set()
     for cluster in sample:
         with database.dict_cursor() as cursor:
             records = gather_cluster_records(cursor, cluster)
-        rendered_prompt = (
-            ENTITY_VERIFICATION_SYSTEM_PROMPT + build_entity_cluster_prompt(records)
-        )
+        prompt = build_entity_cluster_prompt(records)
+        if len(prompt) > MAX_DYNAMIC_PROMPT_CHARACTERS:
+            deferred_sample_keys.add(stable_cluster_key(cluster))
+            continue
+        rendered_prompt = ENTITY_VERIFICATION_SYSTEM_PROMPT + prompt
         token_samples.append(approximate_tokens(rendered_prompt))
         runtime_token_samples.append(runtime_prompt_tokens(rendered_prompt))
+
+    # Unsampled contexts may also exceed the runtime character bound. Report
+    # a conservative range instead of counting them as definitely callable.
+    units_max -= len(deferred_sample_keys)
+    units_min = sum(
+        stable_cluster_key(cluster) not in prior_hashes
+        and stable_cluster_key(cluster) not in deferred_sample_keys
+        for cluster in sample
+    )
 
     trials = max(1, int(os.environ.get("COUNTYIQ_PASS1_TRIALS", "3")))
     adaptive = os.environ.get(
@@ -569,6 +583,11 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
         runtime_token_samples=runtime_token_samples,
         details={
             "candidate_pairs": len(pairs),
+            "clusters_deferred_name_limit": deferred_name_count,
+            "sampled_clusters_deferred_character_limit": len(deferred_sample_keys),
+            "unsampled_contexts": len(clusters) - len(sample),
+            "max_candidate_names": MAX_CANDIDATE_NAMES_PER_CONTEXT,
+            "max_dynamic_prompt_characters": MAX_DYNAMIC_PROMPT_CHARACTERS,
             "person_only_clusters_skipped": person_only_skipped,
             "prior_completed_hashes": len(prior_hashes),
             "trials": trials,
@@ -577,7 +596,7 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
         },
         notes=[
             "Adaptive N=3 planning uses the observed 23 calls for 11 archived clusters.",
-            "When prior hashes exist, units_min counts only new cluster keys; changed existing clusters are included in units_max.",
+            "units_min counts new sampled clusters within the context bounds; units_max also includes unsampled and changed existing clusters. Unsampled character-limit deferrals and deterministic resolutions may reduce paid calls.",
         ],
     )
 

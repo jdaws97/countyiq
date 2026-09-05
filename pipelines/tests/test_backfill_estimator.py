@@ -156,3 +156,36 @@ def test_report_fails_closed_when_pass1_candidate_view_is_unpopulated():
 
     with pytest.raises(RuntimeError, match="deterministic_enrichment_refresh"):
         estimate_backfill(UnpopulatedDatabase(), sample_size=10)
+
+
+def test_pass1_estimate_excludes_runtime_context_deferrals(monkeypatch):
+    from contextlib import nullcontext
+    from countyiq.lib import backfill_estimator as estimator
+
+    large = [f"LARGE {n} LLC" for n in range(41)]
+    pairs = list(zip(large, large[1:])) + [
+        ("SMALL A LLC", "SMALL B LLC"), ("LONG A LLC", "LONG B LLC"),
+    ]
+    gathered = []
+
+    class CandidateDatabase(FakeDatabase):
+        def execute(self, query, params=None):
+            return pairs if query == estimator.CANDIDATE_CLUSTERS_QUERY else super().execute(query, params)
+
+        def dict_cursor(self):
+            return nullcontext(None)
+
+    def gather(cursor, names):
+        gathered.append(names)
+        return {"names": names}
+
+    monkeypatch.setattr(estimator, "gather_cluster_records", gather)
+    monkeypatch.setattr(estimator, "build_entity_cluster_prompt", lambda records:
+                        "x" * 64_001 if records["names"][0].startswith("LONG") else "small context")
+    result = estimator._estimate_pass1(CandidateDatabase(), sample_size=10)
+
+    assert all(len(names) == 2 for names in gathered)
+    assert result.units_min == result.units_max == result.sampled_units == 1
+    assert result.details["clusters_deferred_name_limit"] == 1
+    assert result.details["sampled_clusters_deferred_character_limit"] == 1
+    assert result.details["unsampled_contexts"] == 0

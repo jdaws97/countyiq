@@ -257,6 +257,10 @@ class TestParseEntityVerificationOutput:
         assert "rejected_matches" in result
         assert len(result["entities"]) == 2
         assert result["entities"][0]["canonical_name"] == "SMITH JOHN A"
+        # Historical transcripts remain parseable, but their ungrounded,
+        # unused model-generated arithmetic must not enter new decisions.
+        assert all("portfolio_summary" not in entity for entity in result["entities"])
+        assert result["entities"][0]["linked_records"] == valid_llm_output["entities"][0]["linked_records"]
 
     def test_confidence_preserved(self, valid_llm_output):
         result = parse_entity_verification_output(valid_llm_output)
@@ -357,7 +361,6 @@ class TestStableClusterKey:
         assert entity["reasoning"] == ""
         assert entity["linked_records"] == {}
         assert entity["relationships"] == []
-        assert entity["portfolio_summary"] == {}
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ from countyiq.lib.pass1_entity_verification import parse_entity_verification_out
 from countyiq.lib.pass_llm_config import build_pass_harness_config
 from countyiq.lib.pass_schemas import (
     PASS0_EXTRACTION_SCHEMA,
+    PASS1_ENTITY_VERIFICATION_SCHEMA,
     PASS2_BATCHED_VALIDATION_SCHEMA,
     PASS3_BRIEF_SCHEMA,
     PASS3B_OWNER_BRIEF_SCHEMA,
@@ -25,6 +26,7 @@ from countyiq.lib.pass_schemas import (
 
 ALL_SCHEMAS = [
     PASS0_EXTRACTION_SCHEMA,
+    PASS1_ENTITY_VERIFICATION_SCHEMA,
     PASS2_BATCHED_VALIDATION_SCHEMA,
     PASS3_BRIEF_SCHEMA,
     PASS3B_OWNER_BRIEF_SCHEMA,

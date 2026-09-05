@@ -65,6 +65,13 @@ from countyiq.lib.pass_llm_config import (
 from countyiq.lib.pass_schemas import PASS1_ENTITY_VERIFICATION_SCHEMA
 from countyiq.resources.database import DatabaseResource
 
+# A connected candidate component is an input unit, not an identity decision.
+# Do not split oversized components: that would change the candidate graph.
+# Defer them before dispatch so an incomplete prompt can neither spend money nor
+# replace the existing entity projection.
+MAX_CANDIDATE_NAMES_PER_CONTEXT = 40
+MAX_DYNAMIC_PROMPT_CHARACTERS = 64_000
+
 # ---------------------------------------------------------------------------
 # Union-Find cluster builder
 # ---------------------------------------------------------------------------
@@ -224,15 +231,43 @@ def entity_verification(
     deterministic_clusters = 0
     skipped = 0
     errors = 0
+    clusters_deferred_context = 0
     spend_limit_reached = False
 
     for i, cluster_names in enumerate(clusters, 1):
         input_hash: str | None = None
         cluster_key = stable_cluster_key(cluster_names)
         try:
+            if len(cluster_names) > MAX_CANDIDATE_NAMES_PER_CONTEXT:
+                message = (
+                    "deferred: context exceeds reviewed limits: "
+                    f"candidate_names={len(cluster_names)} "
+                    f"limit={MAX_CANDIDATE_NAMES_PER_CONTEXT}"
+                )
+                _update_pass_status(database, cluster_key, 1, "error", "", message)
+                log.warning("Cluster %s %s", cluster_key, message)
+                errors += 1
+                clusters_deferred_context += 1
+                continue
+
             # Gather records for this cluster using the public dict_cursor
             with database.dict_cursor() as cur:
                 records = gather_cluster_records(cur, cluster_names)
+
+            # Build before the reusable-hash skip so a previously accepted
+            # projection cannot bypass a newly reviewed context bound.
+            prompt = build_entity_cluster_prompt(records)
+            if len(prompt) > MAX_DYNAMIC_PROMPT_CHARACTERS:
+                message = (
+                    "deferred: context exceeds reviewed limits: "
+                    f"dynamic_prompt_characters={len(prompt)} "
+                    f"limit={MAX_DYNAMIC_PROMPT_CHARACTERS}"
+                )
+                _update_pass_status(database, cluster_key, 1, "error", "", message)
+                log.warning("Cluster %s %s", cluster_key, message)
+                errors += 1
+                clusters_deferred_context += 1
+                continue
 
             deterministic_resolution = build_deterministic_entity_resolution(
                 records,
@@ -268,8 +303,7 @@ def entity_verification(
             ):
                 break
 
-            # Build prompt and invoke LLM (N trials; N=1 by default)
-            prompt = build_entity_cluster_prompt(records)
+            # Invoke the LLM (N trials; N=1 by default).
             trial_parses: list[dict] = (
                 [deterministic_resolution]
                 if deterministic_resolution is not None
@@ -553,6 +587,7 @@ def entity_verification(
             "abstentions": MetadataValue.int(abstentions_total),
             "voting_demotions": MetadataValue.int(demotions_total),
             "escalations": MetadataValue.int(escalations),
+            "clusters_deferred_context": MetadataValue.int(clusters_deferred_context),
             "errors": MetadataValue.int(errors),
         }
     )

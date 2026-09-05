@@ -196,25 +196,10 @@ PASS1_ENTITY_VERIFICATION_SCHEMA = {
                             "additionalProperties": False,
                         },
                     },
-                    "portfolio_summary": {
-                        "type": "object",
-                        "properties": {
-                            "parcel_count": {"type": "integer"},
-                            "total_assessed_value": {"type": "number"},
-                            "tax_delinquent_parcels": {"type": "integer"},
-                            "total_tax_owed": {"type": "number"},
-                        },
-                        "required": [
-                            "parcel_count", "total_assessed_value",
-                            "tax_delinquent_parcels", "total_tax_owed",
-                        ],
-                        "additionalProperties": False,
-                    },
                 },
                 "required": [
                     "canonical_name", "member_names", "entity_type", "confidence",
                     "reasoning", "linked_records", "relationships",
-                    "portfolio_summary",
                 ],
                 "additionalProperties": False,
             },

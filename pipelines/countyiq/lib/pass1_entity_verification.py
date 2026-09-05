@@ -208,22 +208,6 @@ def build_deterministic_entity_resolution(
             }
         )
 
-    parcels = records.get("parcels", []) or []
-    tax_claims = records.get("tax_claims", []) or []
-    summary = records.get("portfolio_summary") or {}
-    parcel_count = int(summary.get("total_parcels", len(parcels)))
-    total_assessed = float(
-        summary.get(
-            "total_assessed_value",
-            sum(float(row.get("aprtotal") or 0) for row in parcels),
-        )
-    )
-    total_tax_owed = float(
-        summary.get(
-            "total_tax_owed",
-            sum(float(row.get("total") or 0) for row in tax_claims),
-        )
-    )
     entity_number = next(iter(entity_numbers))
     candidate_refs = " ".join(f"[Evidence: candidate:{name}]" for name in names)
     corporate_ref = f"[Evidence: corporate_entities:{canonical_name}]"
@@ -250,18 +234,6 @@ def build_deterministic_entity_resolution(
                     "proceedings": identifiers("proceedings", "applicant_name"),
                 },
                 "relationships": [],
-                "portfolio_summary": {
-                    "parcel_count": parcel_count,
-                    "total_assessed_value": total_assessed,
-                    "tax_delinquent_parcels": len(
-                        {
-                            str(row.get("pidn"))
-                            for row in tax_claims
-                            if row.get("pidn") is not None
-                        }
-                    ),
-                    "total_tax_owed": total_tax_owed,
-                },
             }
         ],
         "rejected_matches": [],
@@ -359,7 +331,6 @@ TASKS:
 1. GROUP records that belong to the same real-world entity (person or organization). Consider name variations, abbreviations, and common patterns (e.g., "SMITH JOHN A" and "J A SMITH HOLDINGS LLC" may be related).
 2. IDENTIFY relationship structures — e.g., an individual who controls an LLC, or multiple LLCs sharing an office address with the same registered agent.
 3. FLAG any matches you REJECT — cases where similar names are clearly different entities.
-4. PORTFOLIO SUMMARY — for each confirmed entity, summarize the property portfolio (count of parcels, total assessed value, any tax delinquencies).
 
 Every candidate name must be accounted for: place it in exactly one entity's
 member_names, or name it in rejected_matches/abstentions. Copy member_names and
@@ -420,13 +391,7 @@ OUTPUT FORMAT:
           "relationship_type": "controls|officer_of|registered_agent_for|subsidiary_of|shares_address_with|same_person|co_owner_of",
           "evidence": "brief evidence for this relationship"
         }}
-      ],
-      "portfolio_summary": {{
-        "parcel_count": 0,
-        "total_assessed_value": 0,
-        "tax_delinquent_parcels": 0,
-        "total_tax_owed": 0
-      }}
+      ]
     }}
   ],
   "rejected_matches": [
@@ -730,7 +695,6 @@ def parse_entity_verification_output(output: dict) -> dict:
             "reasoning": entity.get("reasoning", ""),
             "linked_records": entity.get("linked_records", {}),
             "relationships": entity.get("relationships", []),
-            "portfolio_summary": entity.get("portfolio_summary", {}),
         }
         normalized_entities.append(normalized)
 

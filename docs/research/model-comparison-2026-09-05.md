@@ -346,3 +346,76 @@ tests passed and Dagster definitions imported. No production pass was enabled.
 The next product decision is how much repeated prose and categorical assessment
 the customer actually needs: factual records, one consistent action and a concrete
 question should take precedence over preserving redundant generated narratives.
+
+## Full-component ownership canaries
+
+The next Pass 1 review found two harness problems before judging model quality.
+The prompt requested per-entity portfolio totals, but most prompts omitted
+individual assessments and no serving consumer used the generated totals.
+That output field and task are removed; historical transcripts remain intact
+and parseable. Large-context source summaries remain factual input.
+
+The actual candidate query includes both name similarity and corporate-office
+edges. A pair-only shortlist hid a 1,429-name connected component, with 4,529
+parcels and 1,806 tax rows truncated to 50 and 30 while all 1,411 corporate rows
+remained. Its dynamic prompt was 409,482 characters. A preliminary independent
+audit omitted the office-edge UNION and incorrectly called the A-1 cluster a
+three-name deterministic case. Root's execution of the production query found
+the full six-name A-1/Otter Creek component; that complete context was used.
+
+Runtime now defers components above 40 names before gathering, or dynamic
+prompts above 64,000 characters before hash reuse, item claims or any model,
+inference or graph write. Deferrals retain previous graph assignments and are
+reported as errors with explicit counts. Components are not split. The cost
+estimate excludes the name deferrals and known sampled character deferrals;
+unsampled contexts remain an explicit upper-bound uncertainty. Quality receipts
+also bind this dispatch code. This guard limits dispatch; it does not establish
+adequate evidence coverage or qualify every context below those limits.
+A full read-only count finds 20,707 candidate edges and 6,151 components. Three
+components (1,429, 86 and 44 names) exceed the name bound, deferring 1,559 names.
+This count does not yet measure the character bound across all remaining
+contexts. Validation includes 1,396 pipeline unit/regression tests, including
+dispatch/retained-projection boundaries and estimate deferrals, plus the Dagster
+definitions import. Root corrected the new boundary test's prior-hash setup so
+it actually supplies a reusable hash before testing non-bypass.
+
+Nine matched calls on three complete components cost **$0.021047066**,
+bringing this review to **204 calls / $0.304713606**. The cases cover 17 similar
+person names, six storage/partnership names linked by an office address, and two
+Precision organization names sharing a mailing address. Requests use the same
+current prompt, high reasoning and 16,384-token output allowance, with no
+generation retries; open models require FP8. Source decimal tax amounts were
+restored from archived strings for formatting without changing the original
+snapshot. No serving write or quality receipt was issued.
+
+| Model | Actual three-call cost | Production reference gate | Median / maximum seconds |
+| --- | ---: | ---: | ---: |
+| Luna | $0.014253150 | 3/3 | 20.3 / 44.2 |
+| GLM 5.3 Flash | $0.003251420 | 3/3 | 30.9 / 33.2 |
+| DeepSeek 0731 | $0.003542496 | 0/3 | 89.4 / 160.4 |
+
+Luna and GLM account for all 17 person names and 19 parcels without merging
+conflicting middle initials. Both preserve the two separately numbered
+organizations in the six-name case and all 21 parcel links; both keep the two
+Precision owners of record separate. GLM costs about 77% less than Luna in
+these three cases. One GLM sentence repeats a supported co-owner relationship
+without its own marker; its field and relationship object are cited, so it
+passes the intentionally field-level gate. This prompt/gate difference is not
+an invented relationship.
+
+Some corporate prose remains imprecise: a CountyIQ registry lookup with
+`not_found_in_current_dos_dataset` is not an affirmative registry record, proof
+that a separate legal entity does not exist, or proof of an officer role from
+an attention line. The grouping has separate name/address evidence; preserve
+this provenance limitation rather than calling every sentence qualified.
+
+DeepSeek exhausts its output allowance on the 17-name case, including 13,860
+reasoning tokens. Its other two responses make the same supported groupings
+but combine references inside brackets or put evidence-group prefixes into
+linked identifier fields. Existing gates reject them. These are output-contract
+and budget failures, not evidence that it cannot reason about the records.
+Before another broad comparison, examine whether Pass 1 needs to repeat every
+singleton explanation and linked-record identifier in model output. The current
+results do not establish N=3 voting stability or full-pass quality. Exact sources,
+payloads, raw responses and separate reviews are in
+`fair-model-comparison/pass1-source-canaries/`.

@@ -44,6 +44,8 @@ def release_identity(pass_number: int) -> dict:
         ])
     if pass_number == 3:
         source_paths.append(Path(pass3_owner_briefs.__file__))
+    if pass_number == 1:
+        source_paths.append(Path(__file__).parents[1] / "assets/enrichment/entity_verification.py")
     if pass_number in (2, 3):
         source_paths.extend(Path(__file__).with_name(name) for name in
                             ("signal_policy.py", "intelligence_common.py"))

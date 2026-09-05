@@ -1,4 +1,5 @@
 import json
+import pytest
 from countyiq.lib.quality_release import check_quality_release, release_identity
 from eval.fixture_io import load_frozen_cases
 from eval.feature_cases import FIXTURE, prompt_for, score
@@ -36,7 +37,11 @@ def test_quality_receipts_fail_closed_on_bad_shape(tmp_path):
         assert not check_quality_release(2, path)["ok"]
 
 
-def test_quality_receipt_expires_when_spatial_source_rules_change(tmp_path, monkeypatch):
+@pytest.mark.parametrize("pass_numbers, source_name", [
+    ((2, 3), "066_parcel_spatial_facts.py"),
+    ((1,), "entity_verification.py"),
+])
+def test_quality_receipt_expires_when_source_or_dispatch_rules_change(tmp_path, monkeypatch, pass_numbers, source_name):
     from datetime import date
     import hashlib
     from pathlib import Path
@@ -44,7 +49,7 @@ def test_quality_receipt_expires_when_spatial_source_rules_change(tmp_path, monk
     artifact = tmp_path / "reviewed.json"
     artifact.write_text("reviewed source outputs")
     paths = []
-    for pass_number in (2, 3):
+    for pass_number in pass_numbers:
         path = tmp_path / f"pass{pass_number}.json"
         path.write_text(json.dumps({
             "identity": release_identity(pass_number), "decision": "approved",
@@ -59,7 +64,7 @@ def test_quality_receipt_expires_when_spatial_source_rules_change(tmp_path, monk
 
     def changed_source(path):
         contents = original_read(path)
-        return contents + b"\n-- changed spatial selection" if path.name == "066_parcel_spatial_facts.py" else contents
+        return contents + b"\n# changed production rules" if path.name == source_name else contents
 
     monkeypatch.setattr(Path, "read_bytes", changed_source)
     assert all(not check_quality_release(number, path)["ok"] for number, path in paths)
