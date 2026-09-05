@@ -18,6 +18,26 @@ def test_existing_shell_housing_conversion_is_discoverable(source):
 
 
 @pytest.mark.parametrize("source", [
+    "Plans to renovate an existing industrial building into an emergency shelter.",
+    "Repurpose the existing building into a municipal office.",
+])
+def test_explicit_building_reuse_does_not_require_the_word_conversion(source):
+    assert relevance_projection("development", "redevelopment", "Proposed reuse.", source) == (
+        "development", "conversion", True)
+
+
+@pytest.mark.parametrize("source", [
+    "Renovate the existing shelter building; roof repairs only.",
+    "No plans to renovate the industrial building into an emergency shelter.",
+    "Previously renovated the industrial building into an emergency shelter.",
+    "Renovate the industrial building. The neighboring building will become a shelter.",
+    "Renovate the industrial building into full code compliance.",
+])
+def test_repairs_negated_and_historical_reuse_do_not_gain_discovery_from_rationale(source):
+    assert not relevance_projection("development", "redevelopment", "Proposed building reuse.", source)[2]
+
+
+@pytest.mark.parametrize("source", [
     "Parking variance for an existing lawful multifamily use; no conversion proposed.",
     "Apartments previously converted in 1998; routine repair.",
     "No proposed conversion to apartments.",

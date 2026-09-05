@@ -5,9 +5,10 @@ import hashlib
 import re
 from urllib.parse import unquote, urlsplit
 from countyiq.lib.county_config import municipality_name_from_body
-from countyiq.lib.parsers.public_proceedings import _DATE_PATTERNS
+from countyiq.lib.parsers.public_proceedings import _DATE_PATTERNS, _MONTH_MAP
 
-VERSION = "proceeding-metadata-5"
+VERSION = "proceeding-metadata-6"
+AGENDA_HEADING = re.compile(r"^[ \t]*(?:[A-Z][A-Z \t/-]{0,80}[ \t]+)?AGENDA[ \t]*$", re.I | re.M)
 TYPE_BY_CONFIG = {
     "board_of_supervisors": "supervisors", "borough_council": "council",
     "city_council": "council", "planning_commission": "planning_commission",
@@ -100,7 +101,7 @@ def review_metadata(row, entries, excluded_domains=(), *, today=None):
 
     # Stop before agenda business so previous-meeting approval dates are not headers.
     header = text[:800]
-    cutoff = re.search(r"approval of|approve.{0,15}minutes|public comment|members present|roll call|call to order", header, re.I)
+    cutoff = re.search(r"approval of|approve.{0,15}minutes|public comment|members\s+present|roll call|call to order", header, re.I)
     if cutoff:
         header = header[:cutoff.start()]
     # Attendance starts meeting business for date extraction, but may still
@@ -109,9 +110,16 @@ def review_metadata(row, entries, excluded_domains=(), *, today=None):
         r"\b(?:supervisors?|borough council)\s+present\b|"
         r"^\s*present\s*:|attendance was as\s+follows", header, re.I | re.M)
     date_header = header[:attendance.start()] if attendance else header
+    # A numbered agenda item can contain a prior approval or future event date.
+    # Only the title/date block before business identifies this meeting.
+    agenda_heading = AGENDA_HEADING.search(date_header)
+    if agenda_heading:
+        first_item = re.search(r"(?m)^[ \t]*\d+[.)][ \t]+\S", date_header[agenda_heading.end():])
+        if first_item:
+            date_header = date_header[:agenda_heading.end() + first_item.start()]
     dates = exact_dates(date_header)
     values = sorted({v for _, v in dates})
-    filename = unquote(urlsplit(row.get("document_url") or "").path.rsplit("/", 1)[-1])
+    filename = unquote(urlsplit(row.get("document_url") or "").path.rstrip("/").rsplit("/", 1)[-1])
     filename = parse_qs(urlsplit(row.get("document_url") or "").query).get("dn", [filename])[0]
     filename_values = sorted({v for _, v in exact_dates(filename)})
     filename_date = filename_values[0] if len(filename_values) == 1 else None
@@ -126,6 +134,15 @@ def review_metadata(row, entries, excluded_domains=(), *, today=None):
         issues.append("conflicting_header_dates")
     else:
         meeting_date, basis = filename_date, "document_filename" if filename_date else None
+    if basis == "document_filename":
+        # A yearless header cannot establish the year, but can contradict the
+        # filename's month/day. Never manufacture a year to hide that conflict.
+        partial_dates = re.finditer(r"\b(" + "|".join(_MONTH_MAP) +
+            r")[\s_-]*(\d{1,2})(?:st|nd|rd|th)?(?!\d)", date_header, re.I)
+        expected = date.fromisoformat(meeting_date)
+        if any((int(_MONTH_MAP[match[1].lower()]), int(match[2])) !=
+               (expected.month, expected.day) for match in partial_dates):
+            issues.append("header_filename_date_conflict")
     if not meeting_date:
         issues.append("exact_meeting_date_unverified")
     # A verified future date is valid metadata. The extraction query waits until
@@ -159,9 +176,17 @@ def review_metadata(row, entries, excluded_domains=(), *, today=None):
         proceeding_type = TYPE_BY_CONFIG[kind]
 
     # Whole packets cannot be interpreted under one date or decision stage.
-    has_agenda = bool(re.search(r"(?im)^\s*AGENDA\s*$", text))
-    has_minutes = bool(re.search(r"(?im)^\s*(?:MINUTES OF|(?:[A-Z ]+ )?MEETING MINUTES)\b", text))
-    if has_agenda and has_minutes:
+    # Qualified agenda titles must occur before meeting business. Minutes often
+    # contain a later "Consent Agenda" section that is not a separate document.
+    has_agenda = bool(agenda_heading or re.search(r"(?im)^[ \t]*AGENDA[ \t]*$", text))
+    minutes_headings = re.finditer(
+        r"(?im)^[ \t]*(?:MINUTES OF\b[^\n]*|(?:[A-Z ]+ )?MEETING MINUTES)[ \t]*$", text)
+    has_minutes = any(not re.search(r"\b(?:approv\w*|amend\w*|adopt\w*|consideration)\b", match[0], re.I)
+                      for match in minutes_headings)
+    # Combined packets sometimes title the recorded meeting "Financial Review"
+    # rather than "Minutes". An explicit agenda/minutes filename also holds it.
+    filename_words = set(re.findall(r"[a-z]+", filename.lower()))
+    if (has_agenda and has_minutes) or {"agenda", "minutes"} <= filename_words:
         issues.append("mixed_agenda_minutes_packet")
     if has_meeting_cancellation(text, meeting_date):
         issues.append("cancelled_meeting")

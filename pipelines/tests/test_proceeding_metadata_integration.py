@@ -154,13 +154,16 @@ def test_later_batch_deduplicates_against_current_reviewed_replacement(db):
 def test_extraction_query_excludes_future_and_unreviewed_documents(db):
     from psycopg2.extras import Json
     from countyiq.assets.enrichment.proceeding_extraction import PENDING_PROCEEDINGS_QUERY
+    from countyiq.lib.proceeding_quality import VERSION
     with db.cursor(cursor_factory=RealDictCursor) as cur:
         ids = []
-        for future, issues, status in [
-            (False, [], "ready"),
-            (True, [], "ready"),
-            (False, ["primary_board_unverified"], "review_required"),
-            (False, [], "unreviewed"),
+        for future, issues, status, version in [
+            (False, [], "ready", VERSION),
+            (True, [], "ready", VERSION),
+            (False, ["primary_board_unverified"], "review_required", VERSION),
+            (False, [], "unreviewed", VERSION),
+            (False, [], "ready", "older-review"),
+            (False, [], "ready", None),
         ]:
             source = seed(cur)
             ids.append(source["id"])
@@ -169,7 +172,7 @@ def test_extraction_query_excludes_future_and_unreviewed_documents(db):
                 SET meeting_date = CURRENT_DATE + %s,
                     metadata_quality = %s
                 WHERE id = %s
-            """, (1 if future else -1, Json({"status": status, "issues": issues}), source["id"]))
+            """, (1 if future else -1, Json({"status": status, "issues": issues, "version": version}), source["id"]))
         cur.execute(PENDING_PROCEEDINGS_QUERY)
         selected = {row["id"] for row in cur.fetchall()}
         assert ids[0] in selected

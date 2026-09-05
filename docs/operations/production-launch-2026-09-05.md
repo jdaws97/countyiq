@@ -110,8 +110,8 @@ workspace and cross-session persistence verification remain outstanding.
 ## LLM qualification and cost
 
 The [model comparison](../research/model-comparison-2026-09-05.md) contains the
-current source reviews and preserved raw results: 204 evaluation-only calls,
-$0.304713606 total. None issued a quality receipt or wrote serving intelligence.
+current source reviews and preserved raw results: 207 evaluation-only calls,
+$0.314540116 total. None issued a quality receipt or wrote serving intelligence.
 
 The harness now uses explicit model-appropriate reasoning and sampling settings.
 Removing factual examples from the shared citation prompt materially improved
@@ -227,3 +227,14 @@ three reference gates with source-supported record groupings; GLM costs about
 two responses rejected for identifier/citation formatting. Corporate lookup
 provenance wording and repeatability remain under review. No model default or
 full-backfill approval changed; all production paid passes remain disabled.
+
+The subsequent three-model York City minutes canary cost $0.009826510. It found
+an actual validator false rejection: all models recognized recorded advisory
+votes, but the retained agenda template caused three records to be dropped.
+Saved-response replay after the source-bound vote and building-reuse fixes
+retains all four applications and two of three reference discovery matters.
+Unsupported narrative next steps, one wrong passage citation, and a resolved
+zoning correction treated as an identity conflict remain qualification issues.
+The current [metadata cleanup plan](../research/proceeding-metadata-review-2026-09-05.md)
+is unapplied. Dispatch now requires current-version metadata; production paid
+passes remain disabled throughout this review.

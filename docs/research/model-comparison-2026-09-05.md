@@ -419,3 +419,55 @@ singleton explanation and linked-record identifier in model output. The current
 results do not establish N=3 voting stability or full-pass quality. Exact sources,
 payloads, raw responses and separate reviews are in
 `fair-model-comparison/pass1-source-canaries/`.
+
+## Fresh York City minutes: model output versus validator behavior
+
+Three new calls on July 13 planning minutes, source 6712, cost **$0.009826510**.
+The cumulative review is **207 calls / $0.314540116**. All models received the
+same complete source, current prompt, low reasoning, 16,384-token allowance and
+zero generation retries; the open models used FP8. A source-first reference
+was frozen before generation. This is a small diagnostic case, not independent
+human gold or full-pass qualification.
+
+| Model | Actual cost | Seconds | Accepted records before / after saved-response replay |
+| --- | ---: | ---: | ---: |
+| Luna | $0.004287350 | 13.6 | 1 / 4 |
+| GLM 5.3 Flash | $0.002409000 | 10.3 | 1 / 4 |
+| DeepSeek 0731 | $0.003130160 | 236.1 | 1 / 4 |
+
+All three correctly retained the four applications, recognized three actual
+advisory recommendations, left final decisions null, and preserved the no-show
+application as an update. The validator rejected all three recommendations
+because retained `[approve/deny]` text coexisted with a seconded motion followed
+by “Unanimous.” A narrow check now recognizes that form inside the cited,
+identified application's section. Missing, failed and uncited votes, and the
+next application's unanimous vote, cannot use this exception. This does not
+turn advisory recommendations into final approvals.
+
+Replay also exposed a discovery-classification miss: “renovate an existing
+industrial building into an emergency shelter” established reuse without saying
+“redevelopment.” An exact excerpt naming the building and destination use now
+supports conversion; routine repairs, negation, historical work and neighboring
+building references have negative regression controls. Both fixes reuse the
+original responses. No additional model calls or serving writes were made.
+
+All four records now pass the format/evidence gate, but only **two of three**
+reference development matters reach discovery. The community-center renovation
+still lacks accepted scope in the selected excerpt; all models also put the
+staff's explicit UN1-to-UN2 correction into unresolved identity conflicts.
+The original source-first reference remains unchanged.
+
+There are model defects too. GLM adds Zoning Hearing Board next steps for the
+first two cases without support in their cited passages; only the no-show case
+explicitly states that route. DeepSeek's separate-approvals next step is true in
+passage p0004 but cites p0005. These narrative entailment errors pass the current
+format gate. Luna avoids those extra next steps, but still misses the discovery
+recall threshold. No model is qualified by this result. Remove unnecessary
+generated narration and distinguish resolved source corrections before the next
+matched evaluation. DeepSeek's 11,450 reasoning tokens also make its latency and
+real per-document cost materially different from its advertised token price.
+
+Artifacts: `fair-model-comparison/pass0-york-july-canary/` contains the source,
+reference, request protocol, original results/transcripts and separate
+`replay-and-source-review.json`. The [metadata review](proceeding-metadata-review-2026-09-05.md)
+records pre-model selection fixes and preserves unapplied drafts.

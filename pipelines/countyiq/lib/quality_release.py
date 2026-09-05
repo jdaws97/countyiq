@@ -35,8 +35,9 @@ def release_identity(pass_number: int) -> dict:
                     Path(__file__).with_name("intelligence_integrity.py")]
     if pass_number == 0:
         source_paths.extend(Path(__file__).with_name(name) for name in
-                            ("proceeding_contract.py", "proceeding_claims.py", "proceeding_semantics.py", "proceeding_coverage.py", "source_passages.py"))
+                            ("proceeding_contract.py", "proceeding_claims.py", "proceeding_semantics.py", "proceeding_coverage.py", "source_passages.py", "proceeding_quality.py"))
         source_paths.extend([
+            Path(__file__).parent / "parsers/public_proceedings.py",
             Path(__file__).parents[1] / "assets/enrichment/proceeding_extraction.py",
             Path(__file__).parents[2] / "alembic/versions/061_proceeding_evidence_contract.py",
             Path(__file__).parents[2] / "alembic/versions/063_intelligence_event_types.py",

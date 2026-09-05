@@ -83,6 +83,129 @@ def test_mixed_packet_is_held():
     assert "mixed_agenda_minutes_packet" in result["issues"]
 
 
+def test_numbered_agenda_business_does_not_supply_the_meeting_date():
+    source = row("Hanover Borough Council\nBUDGET AGENDA\nAugust 21, 2025 @ 9:00 AM\n"
+                 "1. APPROVE OR AMEND AGENDA\n2. SPECIAL REQUEST\n"
+                 "2.1. Donation request for the Halloween Parade on Sunday, October 19, 2025.")
+    result = review(source)
+    assert result["meeting_date"] == "2025-08-21"
+    assert result["status"] == "ready"
+
+
+def test_conflicting_agenda_header_dates_remain_held_before_numbered_business():
+    source = row("Hanover Borough Council\nBUDGET AGENDA\nAugust 21, 2025\n"
+                 "August 22, 2025\n1. APPROVE OR AMEND AGENDA")
+    assert "conflicting_header_dates" in review(source)["issues"]
+
+
+def test_numbered_line_without_agenda_heading_does_not_hide_conflicting_dates():
+    source = row("Hanover Borough Council\nAugust 21, 2025\n"
+                 "1. Meeting date correction: August 22, 2025")
+    assert "conflicting_header_dates" in review(source)["issues"]
+
+
+def test_named_agenda_minutes_packet_stays_held_without_explicit_minutes_heading():
+    source = row("Hanover Borough Council\nBUDGET AGENDA\nAugust 21, 2025\n"
+                 "1. APPROVE OR AMEND AGENDA\n2. Donation request for October 19, 2025\n"
+                 "ADJOURN MEETING\nPage 1 of 1\n\nHanover Borough Council\nAugust 21, 2025\n"
+                 "Financial Review\nPresent: A. Example\n"
+                 "The chairman called the meeting to order at 9:02 a.m.",
+                 url="https://example.test/2025_8_21_BOS-FINANCIAL-RVW-AGENDA-MINUTES.pdf")
+    result = review(source)
+    assert result["meeting_date"] == "2025-08-21"
+    assert result["issues"] == ["mixed_agenda_minutes_packet"]
+    assert result["status"] == "review_required"
+
+
+def test_agenda_with_minutes_approval_item_is_not_a_combined_packet():
+    source = row("Hanover Borough Council\nBUDGET AGENDA\nAugust 21, 2025\n"
+                 "1. Approve minutes from July 23, 2025\n2. Financial Review",
+                 url="https://example.test/2025_8_21_BUDGET_AGENDA.pdf")
+    assert review(source)["status"] == "ready"
+
+
+def test_agenda_minutes_approval_continuation_is_not_a_minutes_title():
+    source = row("Hanover Borough Council\nMeeting Agenda\nAugust 21, 2025\n"
+                 "1. Meeting Call to Order\n2. Approval of the BOS Meeting Minutes\n"
+                 "Consideration of a motion to approve the July BOS Meeting Minutes")
+    assert review(source)["status"] == "ready"
+
+
+def test_minutes_with_regular_agenda_section_are_not_a_combined_packet():
+    source = row("Hanover Borough Council\nAugust 21, 2025\nPresent: A. Example\n"
+                 "The January meeting minutes were approved.\nRegular agenda\nCommittee reports")
+    assert review(source)["status"] == "ready"
+
+
+def test_minutes_title_and_later_consent_agenda_are_not_a_combined_packet():
+    source = row("Hanover Borough Council MEETING MINUTES\nAugust 21, 2025\n"
+                 "Present: A. Example\nThe meeting was called to order.\nConsent Agenda\n"
+                 "The council approved the treasurer's report.")
+    assert review(source)["status"] == "ready"
+
+
+def test_missing_header_date_uses_exact_document_permalink_with_trailing_slash():
+    source = row("Hanover Borough Council\nAGENDA\n7:00 PM\n"
+                 "1. Open meeting\n2. Approve minutes of January 9, 2023",
+                 url="https://example.test/document/council-agenda-february-13th-2023/")
+    result = review(source)
+    assert result["status"] == "ready"
+    assert result["meeting_date"] == "2023-02-13"
+    assert result["date_basis"] == "document_filename"
+
+
+def test_trailing_permalink_cannot_hide_header_date_conflict():
+    source = row("Hanover Borough Council\nFebruary 14, 2023\nRoll call",
+                 url="https://example.test/document/council-agenda-february-13th-2023/")
+    assert "header_filename_date_conflict" in review(source)["issues"]
+
+
+@pytest.mark.parametrize("header", ["January 13,2025", "January13, 2025", "January 13.2025"])
+def test_missing_spaces_or_dot_before_full_year_do_not_hide_conflicting_date(header):
+    source = row("Hanover Borough Council\n" + header + "\nRoll call",
+                 url="https://example.test/document/council-minutes-january-6th-2025/")
+    result = review(source)
+    assert result["meeting_date"] == "2025-01-13"
+    assert "header_filename_date_conflict" in result["issues"]
+
+
+def test_unspaced_conflicting_opening_dates_are_not_replaced_by_filename():
+    source = row("Hanover Borough Council\nMARCH 4,2023\n"
+                 "The Council meeting was called to order February 5,2024 at 7 PM.",
+                 url="https://example.test/document/council-minutes-march-4th-2024/")
+    result = review(source)
+    assert result["meeting_date"] is None
+    assert "conflicting_header_dates" in result["issues"]
+
+
+@pytest.mark.parametrize("header,filename", [
+    ("June 3rd", "agenda-june-2nd-2024"),
+    ("June 7th", "agenda-june-3rd-2021"),
+    ("Monday, February 2, 7:00 PM", "council-agenda-january-29th-2026"),
+])
+def test_yearless_opening_date_can_contradict_exact_filename(header, filename):
+    source = row("Hanover Borough Council\n" + header + "\nAGENDA\n1. Open meeting",
+                 url="https://example.test/document/" + filename + "/")
+    result = review(source)
+    assert result["status"] == "review_required"
+    assert "header_filename_date_conflict" in result["issues"]
+
+
+def test_matching_yearless_header_uses_filename_without_inventing_header_year():
+    source = row("Hanover Borough Council\nJune 3rd\nAGENDA\n1. Open meeting",
+                 url="https://example.test/document/agenda-june-3rd-2024/")
+    result = review(source)
+    assert (result["status"], result["meeting_date"], result["date_basis"]) == (
+        "ready", "2024-06-03", "document_filename")
+
+
+@pytest.mark.parametrize("title", ["MEETING MINUTES", "BOROUGH COUNCIL MEETING MINUTES", "MINUTES OF THE"])
+def test_budget_agenda_with_separate_minutes_title_is_held(title):
+    source = row("Hanover Borough Council\nBUDGET AGENDA\nAugust 21, 2025\n"
+                 "1. Budget workshop\nADJOURN MEETING\n\n" + title + "\nAugust 21, 2025")
+    assert "mixed_agenda_minutes_packet" in review(source)["issues"]
+
+
 def test_wrong_jurisdiction_cannot_become_ready_from_plausible_header():
     source = row("Hanover Borough Council\nJuly 23, 2026")
     source["source_url"] = "https://www.wrong.test/minutes"
@@ -215,7 +338,7 @@ def test_exact_spelled_month_slug_dates_are_recognized(filename):
     assert parse_meeting_date_from_filename(filename) == "2026-01-06"
 
 
-@pytest.mark.parametrize("attendance", ["Supervisor present: A. Example", "Supervisors present: A. Example", "Present: A. Example", "Attendance was as follows:"])
+@pytest.mark.parametrize("attendance", ["Supervisor present: A. Example", "Supervisors present: A. Example", "Present: A. Example", "Attendance was as follows:", "Board members\npresent were: A. Example"])
 def test_attendance_ends_header_before_prior_meeting_references(attendance):
     source = row("Hanover Borough Council\nJuly 23, 2026\n"
                  "The meeting was called to order at 7 pm.\n" + attendance +
@@ -232,6 +355,20 @@ def test_conflicting_opening_meeting_date_is_not_hidden_by_attendance_cutoff():
     result = review(source)
     assert result["status"] == "review_required"
     assert "conflicting_header_dates" in result["issues"]
+
+
+def test_correcting_attendance_date_boundary_does_not_release_unconfigured_board():
+    source = row("The Codorus Township Planning Commission met on Tuesday, June 25, 2024. "
+                 "Board members\npresent were: A. Example.\n"
+                 "The plan was approved at the January 30, 2024 planning commission meeting.",
+                 url="https://codorustownship.org/20240625-Planning-Commission-Minutes.pdf")
+    source["body_name"] = "Codorus Twp Board of Supervisors"
+    source["proceeding_type"] = "planning_commission"
+    county = get_county_config("york")
+    result = review_metadata(source, county.municipality_websites, today=TODAY)
+    assert result["meeting_date"] == "2024-06-25"
+    assert result["status"] == "review_required"
+    assert result["issues"] == ["primary_board_not_configured"]
 
 
 @pytest.mark.parametrize("notice", [

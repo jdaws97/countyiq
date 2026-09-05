@@ -38,6 +38,8 @@ def test_quality_receipts_fail_closed_on_bad_shape(tmp_path):
 
 
 @pytest.mark.parametrize("pass_numbers, source_name", [
+    ((0,), "proceeding_quality.py"),
+    ((0,), "public_proceedings.py"),
     ((2, 3), "066_parcel_spatial_facts.py"),
     ((1,), "entity_verification.py"),
 ])

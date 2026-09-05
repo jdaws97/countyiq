@@ -133,6 +133,46 @@ def test_known_procedural_counterexamples(wording, status, outcome):
     with pytest.raises(ValueError):
         hydrate_claims(wire, source)
 
+
+def advisory_payload(source):
+    wire = payload(source)
+    item = wire["extractions"][0]
+    item.update(record_status="recommendation", decision=None)
+    item["what_happened"]["text"] = "The Planning Commission recommended approval."
+    return wire
+
+
+def test_recorded_seconded_unanimous_recommendation_survives_retained_template():
+    source = ("SD-03-2026 | Willow Creek Meadows\n" + SOURCE +
+              "Recommend to [approve/deny] the requested variance.\n"
+              "Mr. Example made a motion to recommend approval Ms. Test 2nd.\nUnanimous.")
+    item = hydrate_claims(advisory_payload(source), source)[0]
+    assert item["record_status"] == "recommendation"
+    assert item["decision"] is None
+    assert item["event_tags"] == ["recommendation"]
+
+
+@pytest.mark.parametrize("result", [
+    "Mr. Example made a motion to recommend approval Ms. Test 2nd.",
+    "Mr. Example made a motion to recommend approval Ms. Test 2nd. Not unanimous.",
+    "Mr. Example made a motion to recommend approval Ms. Test 2nd. Vote 2-3. Unanimous.",
+    "Mr. Example made a motion to recommend approval Ms. Test 2nd. Motion failed. Unanimous.",
+    "SD-04-2026 | Neighboring project\nMr. Example made a motion to recommend approval Ms. Test 2nd. Unanimous.",
+])
+def test_template_cannot_borrow_missing_failed_or_neighboring_recommendation_vote(result):
+    source = ("SD-03-2026 | Willow Creek Meadows\n" + SOURCE +
+              "Recommend to [approve/deny] the requested variance.\n" + result)
+    with pytest.raises(ValueError, match="unselected agenda template"):
+        hydrate_claims(advisory_payload(source), source)
+
+
+def test_uncited_unanimous_recommendation_does_not_rescue_template():
+    source = ("SD-03-2026 | Willow Creek Meadows\n" + SOURCE +
+              "Recommend to [approve/deny] the requested variance.\n" + "Meeting discussion. " * 90 +
+              "\nMr. Example made a motion to recommend approval Ms. Test 2nd. Unanimous.")
+    with pytest.raises(ValueError, match="unselected agenda template"):
+        hydrate_claims(advisory_payload(source), source)
+
 @pytest.mark.parametrize("scope,category,eligible", [
     ("new_construction", "development", False),
     ("expansion", "development", False),

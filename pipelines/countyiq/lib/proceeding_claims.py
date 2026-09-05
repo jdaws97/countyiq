@@ -201,7 +201,11 @@ def hydrate_claims(payload, source_text, *, meeting_date=None, legacy_evaluation
                 milestone["date"] = None
         if result["record_status"] == "recommendation":
             wording = " ".join(passages(item["what_happened"]["passage_ids"], ["what_happened"]))
-            if re.search(r"approve\s*/\s*deny", wording, re.I) and not re.search(r"recommended|recommendation (?:carried|passed)|motion (?:carried|passed)|voted", wording, re.I):
+            from countyiq.lib.proceeding_semantics import cited_unanimous_recommendation
+            if (re.search(r"approve\s*/\s*deny", wording, re.I)
+                    and not re.search(r"recommended|recommendation (?:carried|passed)|motion (?:carried|passed)|voted", wording, re.I)
+                    and not cited_unanimous_recommendation(source_text, result["application_ids"],
+                        doc.resolve(doc.source_sha256, item["what_happened"]["passage_ids"]))):
                 raise ValueError("An unselected agenda template is not an advisory recommendation")
         decision = item["decision"]
         result.update(decision=None, decision_scope=None, decision_authority=None, decision_outcome=None)

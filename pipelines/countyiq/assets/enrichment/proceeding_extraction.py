@@ -28,6 +28,7 @@ from countyiq.lib.intelligence_integrity import (
     validate_pass0_extractions,
 )
 from countyiq.lib.proceeding_contract import details_for
+from countyiq.lib.proceeding_quality import VERSION as METADATA_REVIEW_VERSION
 from countyiq.lib.pass0_templates import (
     EXTRACTION_USER_TEMPLATE,
     PASS0_SYSTEM_PROMPT,
@@ -72,6 +73,7 @@ PENDING_PROCEEDINGS_QUERY = f"""
       AND {PROCEEDING_USE_ALLOWED_SQL}
       AND pp.document_url IS NOT NULL
       AND pp.metadata_quality->>'status' = 'ready'
+      AND pp.metadata_quality->>'version' = '{METADATA_REVIEW_VERSION}'
       AND pp.meeting_date <= CURRENT_DATE
     ORDER BY pp.meeting_date DESC
 """

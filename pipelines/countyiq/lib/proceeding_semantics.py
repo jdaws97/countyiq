@@ -70,6 +70,43 @@ def recorded_vote(action):
     return None
 
 
+def cited_unanimous_recommendation(source, application_ids, selected):
+    """Recognize a seconded advisory motion within one cited application section.
+
+    This narrow minutes form can coexist with an unselected agenda template.
+    A neighboring application's vote or an uncited result cannot rescue it.
+    """
+    from countyiq.lib.proceeding_coverage import _CASE
+
+    headings = list(re.finditer(r"(?m)^[ \t]*(" + _CASE.pattern + r")[^\n]*", source, re.I))
+    targets = [i for i, heading in enumerate(headings)
+               if heading[1].casefold() in {value.casefold() for value in application_ids}]
+    if len(targets) != 1:
+        return False
+    index = targets[0]
+    start = headings[index].start()
+    end = headings[index + 1].start() if index + 1 < len(headings) else len(source)
+    groups = []
+    for passage in selected:
+        left, right = max(start, passage.start), min(end, passage.end)
+        if left >= right:
+            continue
+        if groups and groups[-1][1] == left:
+            groups[-1] = (groups[-1][0], right)
+        else:
+            groups.append((left, right))
+    for left, right in groups:
+        for motion in re.finditer(
+                r"\bmotion to recommend (?:approval|denial)\b(?P<result>[\s\S]{0,160}?)\bUnanimous\b",
+                source[left:right], re.I):
+            between = motion["result"]
+            if (re.search(r"\b(?:seconded|second|2nd)\b", between, re.I)
+                    and not re.search(r"\b(?:not|failed|tied|defeated|withdrawn|deferred|tabled|continued|motion)\b|no vote", between, re.I)
+                    and recorded_vote(motion[0]) is not False):
+                return True
+    return False
+
+
 def header_authority_supported(authority, action, header):
     from countyiq.lib.proceeding_contract import compact
     if authority.casefold().strip() == "board":
@@ -228,6 +265,18 @@ def relevance_projection(category, scope, basis, evidence, *, summary='', source
         r"conver(?:sion|t(?:ed|ing)?)", evidence, re.I)
     if housing and conversion and linked and not negative and not historical:
         category, scope = "development", "conversion"
+    # Repurposing a building can be stated without the word "conversion".
+    # Require an explicit destination use in the exact excerpt; renovations or
+    # repairs alone do not establish a change of use.
+    reuse_text = " ".join(evidence.split())
+    adaptive_reuse = bool(re.search(
+        r"\b(?:renovat|repurpos|adapt)\w*\b[^.;:]{0,100}\b(?:building|structure)\s+into\s+"
+        r"(?:an?\s+)?(?:[a-z-]+\s+){0,2}(?:shelter|community cent(?:er|re)|apartments?|housing|offices?|school|hotel|retail|warehouse)\b",
+        reuse_text, re.I)) and not re.search(
+        r"\b(?:no|not|without)\s+(?:plans? to\s+|proposed\s+)?(?:renovat|repurpos|adapt)|"
+        r"\bpreviously\b|\bin \d{4}\b|\bnot proposed\b", reuse_text, re.I)
+    if adaptive_reuse:
+        category, scope = "development", "conversion"
     # Model labels alone cannot qualify an opportunity. Require physical scope
     # or a land-use subject in the item's exact excerpt/limited source context.
     # Unknown work remains available as context instead of guessed construction.
@@ -259,7 +308,7 @@ def relevance_projection(category, scope, basis, evidence, *, summary='', source
             "conversion": r"conver|change of use",
             "redevelopment": r"redevelop|rehabilitat|adaptive reuse",
         }
-        if not re.search(work[scope], grounded, re.I):
+        if not re.search(work[scope], grounded, re.I) and not (scope == "conversion" and adaptive_reuse):
             category, scope = "context_only", "unknown"
     if category == "landuse_policy" and scope == "policy_change":
         subject = re.search(r"zon(?:e|ing)|rezon|comprehensive plan|land use plan|ZO Sections?|wireless communications facilities|stormwater|"

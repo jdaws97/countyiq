@@ -45,11 +45,11 @@ def _mdy(m: re.Match) -> str:
     return f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}"
 
 
-# "Month Day, Year" or "Month Dayth, Year" — e.g. "January 5, 2026", "March 9th, 2026"
+# Also tolerate PDF text losing spaces, or using a dot before the full year.
 @_register(
-    r"(january|february|march|april|may|june|july|august|"
-    r"september|october|november|december)[\s_-]+(\d{1,2})(?:st|nd|rd|th)?"
-    r",?[\s_-]+(\d{4})"
+    r"(?<![a-z])(january|february|march|april|may|june|july|august|"
+    r"september|october|november|december)[\s_-]*(\d{1,2})(?:st|nd|rd|th)?"
+    r"(?:[,.][\s_-]*|[\s_-]+)(\d{4})(?!\d)"
 )
 def _month_day_year(m: re.Match) -> str:
     month_num = _MONTH_MAP[m.group(1).lower()]
