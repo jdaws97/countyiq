@@ -18,11 +18,17 @@ ROOT = Path(__file__).resolve().parents[2]
     (200, b'<html>Sign in</html>', False),
     (200, b'{"status":"unavailable"}', False),
     (503, b'{"detail":"database unavailable"}', False),
+    ([530, 200], b'{"status":"ok"}', True),
+    ([401, 200], b'{"status":"ok"}', False),
 ])
 def test_public_readiness_requires_successful_api_response(status, body, expected):
+    statuses = status if isinstance(status, list) else [status]
+    requests = []
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            self.send_response(status)
+            current = statuses[min(len(requests), len(statuses) - 1)]
+            requests.append(current)
+            self.send_response(current)
             self.end_headers()
             self.wfile.write(body)
 
@@ -40,6 +46,12 @@ def test_public_readiness_requires_successful_api_response(status, body, expecte
             env={**os.environ, "COUNTYIQ_PUBLIC_READY_CURL_CONFIG": ""},
         )
         assert (result.returncode == 0) == expected, result.stderr
+        if status == 503:
+            assert len(requests) == 6
+        elif statuses == [530, 200]:
+            assert requests == [530, 200]
+        else:
+            assert len(requests) == 1
     finally:
         server.shutdown()
         server.server_close()

@@ -273,21 +273,34 @@ countyiq_validate_production_environment() {
 # Optional credentials belong in a root-owned curl config, never argv/logs.
 countyiq_check_public_readiness() {
     local url="$1"
-    local response status body
+    local response status body attempt transport_ok
     local -a options=()
     if [ -n "${COUNTYIQ_PUBLIC_READY_CURL_CONFIG:-}" ]; then
         countyiq_validate_secret_file "$COUNTYIQ_PUBLIC_READY_CURL_CONFIG" || return 1
         options+=(--config "$COUNTYIQ_PUBLIC_READY_CURL_CONFIG")
     fi
-    response="$(curl "${options[@]}" --fail --silent --show-error --max-time 20 \
-        --write-out $'\n%{http_code}' "$url")" || return 1
-    status="${response##*$'\n'}"
-    body="${response%$'\n'*}"
-    body="${body//[[:space:]]/}"
-    if [ "$status" != "200" ] || [ "$body" != '{"status":"ok"}' ]; then
-        echo "Public readiness did not return HTTP 200 with the expected API health response; check Access authentication and the origin" >&2
-        return 1
-    fi
+    # Container startup precedes Tunnel registration at Cloudflare. Retry only
+    # transient origin/transport failures, never an Access challenge or bad body.
+    for attempt in 1 2 3 4 5 6; do
+        transport_ok=true
+        response="$(curl "${options[@]}" --silent --show-error --max-time 10 \
+            --write-out $'\n%{http_code}' "$url")" || transport_ok=false
+        status="${response##*$'\n'}"
+        body="${response%$'\n'*}"
+        body="${body//[[:space:]]/}"
+        if [ "$transport_ok" = true ] && [ "$status" = "200" ] \
+            && [ "$body" = '{"status":"ok"}' ]; then
+            return 0
+        fi
+        if [ "$transport_ok" = true ] && ! [[ "$status" =~ ^5[0-9]{2}$ ]]; then
+            break
+        fi
+        if [ "$attempt" -lt 6 ]; then
+            sleep 2
+        fi
+    done
+    echo "Public readiness did not return HTTP 200 with the expected API health response; check Access authentication and the origin" >&2
+    return 1
 }
 
 # Every live/temporary database must be distinct, including cross-pair names.
