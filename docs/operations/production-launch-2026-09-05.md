@@ -163,11 +163,12 @@ not configured or published. The apex marketing Access gate stays in place until
 contact and live customer checks are complete. No billing or outreach was sent.
 ## Latest private-alpha access and LLM review
 
-The live apex and app Access policies now allow `thowe095@gmail.com` alongside
-the existing operator address. OpenTofu applied only the two email-policy changes
-and the subsequent plan showed no drift. The change is committed as `7f74243`;
-its main CI passed. The brother's address is still pending. No invitation email
-was sent. A browser remains at the Cloudflare sign-in screen, so successful live
+The live apex and app Access policies now allow `thowe095@gmail.com` and
+`tyler.j.daws@gmail.com` alongside the existing operator address. Each invitation
+changed only the two email policies; both subsequent plans showed no drift.
+The friend's change is committed as `7f74243`; its main CI passed. The brother's
+address was added after the user's follow-up. No invitation email was sent.
+A browser remains at the Cloudflare sign-in screen, so successful live
 customer authentication and account-workspace persistence are still unverified.
 
 The source-context simplification and its 21-call diagnostic repeat bring the
