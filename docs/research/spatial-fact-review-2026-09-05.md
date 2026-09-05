@@ -63,6 +63,16 @@ the sequence. The four real database publication/rollback cases now run under
 that restricted role. The original production snapshot remained readable and
 intact after the failed attempt; no broader permission was granted.
 
+The corrected production rebuild finished at 21:56:56 UTC in 677.05 seconds.
+Its full added/removed PIDN sets exactly match the local receipt. Production now
+has 361,293 unique source signals, 162,886 scored parcels, 175,928 current parcel
+records and zero accepted LLM evidence rows. The shared helper and cached signal
+both select zoning record 1706 and MOD 25.2% for the example. Readiness remained
+available through computation and passed after publication. The immutable
+deployment receipt is
+`/var/lib/countyiq/releases/20260905T214434Z-6b661c4adae1c7f84d64e6d6faa2aa83a23de88d.env`;
+`production-refresh.json` and the source/momentum/readiness logs record verification.
+
 The report keeps soil findings visible and puts detailed unit cards behind one
 expansion. Print expands those details and restores their prior state. The
 header identifies the municipality; school district remains in property facts.

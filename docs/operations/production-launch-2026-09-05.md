@@ -1,7 +1,7 @@
 # Production launch record — September 5, 2026
 
 The private application is live at **https://app.countyiq.net** on commit
-`77a34f3cb4d6ef385c5626b65fa9fd1a55af1d42`, deployed at 19:17:53 UTC. All six
+`6b661c4adae1c7f84d64e6d6faa2aa83a23de88d`, deployed at 21:44:34 UTC. All six
 services are running; authenticated public readiness returns HTTP 200 with
 `{"status":"ok"}`. The same service credential receives a customer challenge
 on `/api/session` (302), so it cannot access customer workspaces. **Full
@@ -9,14 +9,15 @@ backfill is not approved.** The user authorized product iteration, bounded canar
 pushes to main and deployment; full backfill remains a separate user decision.
 
 The immutable release receipt is
-`/var/lib/countyiq/releases/20260905T191753Z-77a34f3cb4d6ef385c5626b65fa9fd1a55af1d42.env`.
-Its rollback backup is `20260905T191619Z-pre-deploy-77a34f3cb4d6`. PostgreSQL
+`/var/lib/countyiq/releases/20260905T214434Z-6b661c4adae1c7f84d64e6d6faa2aa83a23de88d.env`.
+Its rollback backup is `20260905T214301Z-pre-deploy-6b661c4adae1`. PostgreSQL
 and the API have no host port; Dagster is bound only to loopback.
 
 ## Data and recovery
 
 The real local revision-061 database was checksum-verified, restored to an
-isolated VPS candidate and migrated to revision 065. Promotion preserved the
+isolated VPS candidate and initially migrated to revision 065. The spatial-fact
+release subsequently applied revision 066. Promotion preserved the
 original empty database as `countyiq_preimport_20260905`. The live data contains
 175,928 current parcels and 6,459 current proceedings. No evaluation results
 were imported as accepted production intelligence.
@@ -109,8 +110,8 @@ workspace and cross-session persistence verification remain outstanding.
 ## LLM qualification and cost
 
 The [model comparison](../research/model-comparison-2026-09-05.md) contains the
-current source reviews and preserved raw results: 174 evaluation-only calls,
-$0.266998087 total. None issued a quality receipt or wrote serving intelligence.
+current source reviews and preserved raw results: 204 evaluation-only calls,
+$0.304713606 total. None issued a quality receipt or wrote serving intelligence.
 
 The harness now uses explicit model-appropriate reasoning and sampling settings.
 Removing factual examples from the shared citation prompt materially improved
@@ -171,16 +172,16 @@ address was added after the user's follow-up. No invitation email was sent.
 A browser remains at the Cloudflare sign-in screen, so successful live
 customer authentication and account-workspace persistence are still unverified.
 
-The source-context simplification and its 21-call diagnostic repeat bring the
-release review to **195 calls / $0.283666540**. All outputs were reviewed against
+The source-context simplification and its 21-call diagnostic repeat brought the
+release review to **195 calls / $0.283666540**, before the ownership follow-up. All outputs were reviewed against
 their frozen records; source and action-consistency failures remain across the
 candidate models. The full backfill is **not approved**, no quality receipt was
 issued, and production LLM flags remain disabled. See the updated
 [model comparison](../research/model-comparison-2026-09-05.md) for evidence,
-measured call reduction and limitations. These newer pipeline changes are not
-included in the production revision recorded above.
+measured call reduction and limitations. These source-policy and brief changes
+are included in the production revision recorded above.
 
-The local property report now presents the accepted brief's action: investigate,
+The deployed property report now presents the accepted brief's action: investigate,
 watch, or no clear development lead. It reads that action from the same inference
 history that authenticates its text. It removes the old opportunity assessment badge, repeated rationale and
 duplicate citation badges. Source links and questions remain. API contract and
@@ -192,12 +193,37 @@ published as a real brief. Screenshots are
 `output/playwright/research-brief-390-fixture.png` and
 `output/playwright/research-brief-1440-fixture.png`.
 
-That walkthrough exposed a source-refresh follow-up on local PIDN
-`54000HJ012400`: the property report selects current zoning record 1706,
-Residential Low Density, adopted 2026-05-12, but its cached zoning-mismatch signal
-still names record 1291, Commercial Industrial, whose adoption date is absent.
-Both polygons intersect the parcel center. Verify the production snapshot and
-refresh deterministic signals consistently before downstream LLM qualification;
-do not treat the cached label as the current zoning. The soil panel also repeats
-separate polygons of the same mapped soil unit; consider consolidating their
-display while preserving source IDs and avoiding double-counted overlap.
+That walkthrough exposed inconsistent zoning selection and fragmented soil
+cards on PIDN `54000HJ012400`. The deployed revision-066 helpers now share
+spatial selection between API reports and source signals, preserve contributing
+source IDs and calculate soil coverage from unioned geometries. The municipality
+appears in the report header; detailed soil units expand on request. See the
+[spatial-fact review](../research/spatial-fact-review-2026-09-05.md).
+
+The first production deterministic refresh computed all replacement signals but
+rolled back when `RESTART IDENTITY` required sequence ownership. The previous
+363,146-row snapshot remained readable. The current release removes that
+unnecessary reset; all four publication/rollback integration cases pass under
+the restricted pipeline role. All six main CI jobs pass in
+[run 33993768168](https://github.com/jdaws97/countyiq/actions/runs/33993768168).
+The production retry completed at 21:56:56 UTC in 677.05 seconds. It published
+361,293 unique PIDN/key signals and refreshed 162,886 scored parcels. The changed
+zoning and soil PIDN sets exactly match the reviewed local rebuild: zoning
+13,351 → 11,569 (1,782 removed); soil 38,701 → 38,735 (62 added, 28 removed).
+Current parcels remain 175,928; accepted evidence remains zero; current Pass 2
+eligibility is 3,160. The example report and cached source signal both use
+zoning record 1706 and MOD soil coverage 25.2% across source IDs 810/16498.
+Public authenticated readiness passed during both attempts and after completion;
+the readiness credential still cannot access customer sessions. Evidence is
+under `output/production-readiness-2026-09-05/spatial-facts/`.
+
+The later ownership-context changes are committed on main as `50a28db` and
+are not yet in the deployed revision above. They remove unused generated
+portfolio arithmetic, defer oversized components before spending or graph writes,
+and make the estimate report context deferrals. Their nine matched canaries
+bring the total to **204 calls / $0.304713606**. Luna and GLM each pass the
+three reference gates with source-supported record groupings; GLM costs about
+77% less in this small comparison. DeepSeek returns one truncated response and
+two responses rejected for identifier/citation formatting. Corporate lookup
+provenance wording and repeatability remain under review. No model default or
+full-backfill approval changed; all production paid passes remain disabled.
