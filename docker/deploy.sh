@@ -131,6 +131,12 @@ if ! flock -n 8; then
     exit 1
 fi
 
+# Compose cannot materialize an environment-backed secret in a read-only
+# container. Stage one protected file for cloudflared's explicit runtime GID.
+COUNTYIQ_TUNNEL_TOKEN_FILE="${COUNTYIQ_TUNNEL_TOKEN_FILE:-/etc/countyiq/cloudflared.token}"
+export COUNTYIQ_TUNNEL_TOKEN_FILE
+countyiq_prepare_tunnel_secret "$COUNTYIQ_TUNNEL_TOKEN_FILE"
+
 if [ "$INITIAL_DEPLOY" = true ] \
     && ! docker volume inspect countyiq-postgres-data >/dev/null 2>&1; then
     legacy_database_volumes="$(

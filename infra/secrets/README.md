@@ -42,6 +42,13 @@ Publish it atomically to the VPS with `docker/publish-production-env.sh`.
 That script validates the critical fail-closed settings and streams plaintext
 over strict host-key-checked SSH into `/etc/countyiq/production.env` mode 0600.
 
+Deployment derives `/etc/countyiq/cloudflared.token` from that environment for
+the Tunnel container's read-only secret mount. The parent directory is root-only
+0700; the file is root-owned, group 65532, mode 0440. Only cloudflared receives
+the mount and runs as UID/GID 65532. Compose cannot create an environment-backed
+secret inside a read-only service. A Tunnel-token rotation requires publishing
+the encrypted environment and redeploying to replace the file and container.
+
 `cloudflare-iac.sops.env` contains only `CLOUDFLARE_API_TOKEN` and the
 state-bucket `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`. Run OpenTofu only
 through `infra/cloudflare/tofu-sops.sh`; it injects those values into one child

@@ -148,6 +148,24 @@ countyiq_validate_account_environment() {
     fi
 }
 
+countyiq_prepare_tunnel_secret() {
+    local destination="$1"
+    local directory
+    local temporary
+    if [[ "$destination" != /* ]] || [ -L "$destination" ]; then
+        echo "Tunnel secret must use an absolute non-symlink file path" >&2
+        return 1
+    fi
+    : "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN must be set}"
+    directory="$(dirname -- "$destination")"
+    install -d -o root -g root -m 700 "$directory"
+    temporary="$(mktemp "$directory/.cloudflared-token.XXXXXX")"
+    printf '%s' "$CLOUDFLARE_TUNNEL_TOKEN" > "$temporary"
+    chown root:65532 "$temporary"
+    chmod 440 "$temporary"
+    mv -f -- "$temporary" "$destination"
+}
+
 countyiq_validate_production_environment() {
     local credential
     local pass_number
