@@ -461,6 +461,7 @@ def _apply_projection(
 
 def _project_proceeding(cur, contradiction, challenger, payload, inference_id: int) -> None:
     from countyiq.lib.intelligence_events import normalize_development_tags
+    from countyiq.lib.proceeding_contract import details_for
 
     proceeding_id = int(contradiction["subject_key"].split(":", 1)[1])
     model_used = Path(challenger["requested_model"].split("|", 1)[0]).name
@@ -478,6 +479,8 @@ def _project_proceeding(cur, contradiction, challenger, payload, inference_id: i
             proposed_tags=extraction.get("event_tags") or [],
             what_happens_next=extraction.get("what_happens_next"),
             upcoming_date=extraction.get("upcoming_date"),
+            record_status=extraction.get("record_status"),
+                decision_scope=extraction.get("decision_scope"),
         )
         related_entities = list(dict.fromkeys(
             value.strip()
@@ -498,10 +501,10 @@ def _project_proceeding(cur, contradiction, challenger, payload, inference_id: i
                 supporting_text, extraction_confidence, model_used, page_number,
                 event_tags, project_name, related_entities, what_happened,
                 why_it_matters, what_happens_next, upcoming_date,
-                interpretation_generated_at, active_inference_id
+                interpretation_generated_at, active_inference_id, extraction_details
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, NULL,
-                %s, %s, %s, %s, %s, %s, %s, NOW(), %s
+                %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s::jsonb
             )
             """,
             (
@@ -513,7 +516,7 @@ def _project_proceeding(cur, contradiction, challenger, payload, inference_id: i
                 extraction.get("project_name"), related_entities,
                 extraction.get("what_happened"), extraction.get("why_it_matters"),
                 extraction.get("what_happens_next"), extraction.get("upcoming_date"),
-                inference_id,
+                inference_id, canonical_json(details_for(extraction)),
             ),
         )
     if not extractions:

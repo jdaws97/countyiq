@@ -72,8 +72,10 @@ def close_pool() -> None:
 
 
 @contextmanager
-def get_cursor() -> Iterator[RealDictCursor]:
-    """Yield a RealDictCursor backed by a pooled connection."""
+def get_cursor(*, write: bool = False, snapshot: bool = False) -> Iterator[RealDictCursor]:
+    """Yield a pooled cursor; snapshot reads keep related queries consistent."""
+    if snapshot and write:
+        raise ValueError("Snapshot cursors are read-only")
     pool, gate = _get_pool_resources()
     wait_seconds = max(
         0.0,
@@ -93,6 +95,10 @@ def get_cursor() -> Iterator[RealDictCursor]:
             ) from exc
         with conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if snapshot:
+                    cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+                elif write:
+                    cur.execute("SET TRANSACTION READ WRITE")
                 yield cur
     except psycopg2.OperationalError:
         # Connection likely died (server restart, network); drop it from the
@@ -100,6 +106,10 @@ def get_cursor() -> Iterator[RealDictCursor]:
         broken = True
         raise
     finally:
-        if conn is not None:
-            pool.putconn(conn, close=broken or conn.closed)
-        gate.release()
+        try:
+            if conn is not None:
+                pool.putconn(conn, close=broken or conn.closed)
+        finally:
+            # Returning a connection can itself fail (for example at shutdown).
+            # Never permanently consume capacity on the error path.
+            gate.release()

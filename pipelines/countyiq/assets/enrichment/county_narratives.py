@@ -94,17 +94,17 @@ PROCEEDINGS_FOR_PIDNS_QUERY = """
         pe.applicant_name AS applicant,
         pe.decision,
         pp.meeting_date,
-        pp.body_name AS body
+        pp.body_name AS body,
+        pe.extraction_details
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
     WHERE pp.valid_to IS NULL
       AND LEFT(pe.extraction_type, 1) <> '_'
-      AND (
-          pe.parcel_reference = ANY(%(pidns)s)
-          OR pe.parcel_reference IN (
-              SELECT propadr FROM staging.parcels
-              WHERE pidn = ANY(%(pidns)s) AND valid_to IS NULL AND propadr IS NOT NULL
-          )
+      AND EXISTS (
+          SELECT 1 FROM public.proceeding_parcel_matches(
+              COALESCE(pe.extraction_details->'parcel_references',
+                       jsonb_build_array(pe.parcel_reference)), pp.body_name) matched
+          WHERE matched.pidn = ANY(%(pidns)s)
       )
     ORDER BY pp.meeting_date DESC
     LIMIT 20
@@ -149,13 +149,16 @@ ZHB_DECISIONS_QUERY = """
     WHERE pp.valid_to IS NULL
       AND LEFT(pe.extraction_type, 1) <> '_'
       AND pe.extraction_type ILIKE '%%zoning%%'
+      AND (pe.extraction_details->>'decision_scope' IS NULL
+           OR pe.extraction_details->>'decision_scope' IN ('plan','variance','special_exception','conditional_use'))
       AND EXISTS (
           SELECT 1 FROM staging.parcels p
           WHERE p.valid_to IS NULL
             AND p.municipality = %(municipality)s
-            AND (
-                p.pidn = pe.parcel_reference
-                OR (p.propadr IS NOT NULL AND p.propadr = pe.parcel_reference)
+            AND p.pidn IN (
+                SELECT matched.pidn FROM public.proceeding_parcel_matches(
+                    COALESCE(pe.extraction_details->'parcel_references',
+                             jsonb_build_array(pe.parcel_reference)), pp.body_name) matched
             )
       )
     GROUP BY pe.decision

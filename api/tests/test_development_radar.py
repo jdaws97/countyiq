@@ -97,7 +97,7 @@ def test_tax_claim_amounts_are_suppressed_even_when_people_display_is_allowed():
         }
     }
 
-    public = sanitize_signals_for_public(signals, allow_people=True)
+    public = sanitize_signals_for_public(signals)
     evidence = public["tax_distress"]["evidence"]
 
     assert evidence["has_current_delinquency"] is True

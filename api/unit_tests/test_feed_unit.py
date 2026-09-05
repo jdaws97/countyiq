@@ -99,7 +99,7 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
 
     monkeypatch.setattr(feed, "get_cursor", fake_get_cursor)
     monkeypatch.setattr(feed, "require_source_use", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(feed, "source_use_allowed", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(feed, "restricted_distress_enabled", lambda: False)
 
     response = feed.intelligence_feed(
         category="development",
@@ -113,12 +113,16 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
         boost_pidns="0000000000009",
         boost_project_keys=None,
         boost_entity_ids="3",
+        boost_municipalities="Test Township",
+        near_pidns=None,
+        near_radius_m=400,
         sort="priority",
         limit=1,
         offset=2,
     )
 
     feed_sql, feed_params = cursor.executions[0]
+    assert "new_affected_total" in feed_sql
     assert "baseline.source_kind = 'delinquency_event'" in feed_sql
     # Recency decay and watched-subject boost are part of the priority order.
     assert "CURRENT_DATE - COALESCE(event_date, detected_at::date)" in feed_sql
@@ -130,13 +134,20 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
     assert "related_pidns && %(pidns)s::text[]" in feed_sql
     assert "project_key = ANY(%(project_keys)s::text[])" in feed_sql
     assert "watched_owner.owner_id = ANY(%(entity_ids)s::integer[])" in feed_sql
+    assert "municipality ILIKE ANY(%(municipalities)s::text[])" in feed_sql
+    # A watched entity or municipality counts as a watched match, not only a
+    # watched parcel or project.
+    assert feed_sql.count("watched_owner.owner_id = ANY(%(boost_entity_ids)s::integer[])") == 2
+    assert feed_sql.count("municipality ILIKE ANY(%(boost_municipalities)s::text[])") == 2
     assert "priority_score DESC" in feed_sql
     assert feed_params == {
+        "text_query": None,
+        "matter_category": None,
         "fetch_limit": 2,
         "offset": 2,
         "category": "development",
         "event_types": ["approval"],
-        "municipality": "Test Township",
+        "municipalities": ["Test TWP%", "Test Township%"],
         "since_days": 30,
         "pidns": ["0000000000001"],
         "project_keys": ["project:abc"],
@@ -144,6 +155,7 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
         "boost_pidns": ["0000000000009"],
         "boost_project_keys": [],
         "boost_entity_ids": [3],
+        "boost_municipalities": ["Test TWP%", "Test Township%"],
     }
     assert response["has_more"] is True
     assert response["limit"] == 1

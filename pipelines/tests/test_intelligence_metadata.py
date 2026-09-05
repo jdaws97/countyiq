@@ -94,16 +94,16 @@ def test_parse_structured_brief_happy_path():
         "assessment_reasoning": "because [Signal: tax_distress]",
         "key_questions": ["q1"],
         "citations": ["tax_distress"],
-        "recommendation": "pursue_now",
-        "urgency": "near_term_90d",
+        "recommendation": "investigate",
+        "urgency": "none",
         "top_signal_key": "tax_distress",
         "top_risk": "owner pays it off",
         "evidence_strength": "moderate",
         "confidence": 0.75,
     })
     assert "error" not in out
-    assert out["recommendation"] == "pursue_now"
-    assert out["urgency"] == "near_term_90d"
+    assert out["recommendation"] == "investigate"
+    assert out["urgency"] == "none"
     assert out["confidence"] == 0.75
     assert out["evidence_strength"] == "moderate"
 
@@ -152,15 +152,15 @@ def test_owner_brief_parser_clamps_and_defaults():
     out = parse_owner_brief_output({
         "narrative": "portfolio story",
         "portfolio_strategy": "accumulator",
-        "recommendation": "pursue_acquisition",
-        "urgency": "urgent_30d",
+        "recommendation": "investigate",
+        "urgency": "none",
         "evidence_strength": "strong",
         "confidence": 0.81,
         "citations": ["tax_distress"],
         "parcel_citations": ["0100101000100"],
     })
     assert out["portfolio_strategy"] == "accumulator"
-    assert out["recommendation"] == "pursue_acquisition"
+    assert out["recommendation"] == "investigate"
     assert out["confidence"] == 0.81
 
 

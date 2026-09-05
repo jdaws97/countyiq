@@ -1,0 +1,269 @@
+{
+  "as_of": "2026-09-04",
+  "database": "countyiq (real, read-only)",
+  "method": "Six deterministic SHA256(id)-ordered documents per proceeding group, distinct body per group, deduplicated whitespace-normalized full text. Current records dated 2026-01-01 through 2026-09-04 with at least 500 text characters. Coverage sample, not a countywide yield estimate.",
+  "inventory": {
+    "documents": 7414,
+    "text_ge_500": 6037,
+    "recent_text_ge_500": 842,
+    "recent_unique_text": 814,
+    "future_documents": 13,
+    "recent_by_group": {
+      "supervisors": 246,
+      "council": 405,
+      "planning": 120,
+      "zoning": 43
+    },
+    "sample_size": 24
+  },
+  "classification_counts": {
+    "investigate": 12,
+    "routine": 2,
+    "minor_case": 5,
+    "wrong_county": 2,
+    "policy": 2,
+    "weak_anchor": 1
+  },
+  "reviewed_documents": [
+    {
+      "id": 671,
+      "body_name": "Codorus Twp Board of Supervisors",
+      "meeting_date": "2026-04-02",
+      "proceeding_type": "supervisors",
+      "document_url": "https://codorustownship.org/wp-content/uploads/2026/04/20260402-April-BOS-Agenda.pdf",
+      "raw_text_sha256": "aee39baf99aa751e8b5fd626f97187fbc59a8cdcc9755356189683c5dd52b46d",
+      "classification": "investigate",
+      "assessment": "Hills at Valley View phase 2B appears on an agenda; approval is not established."
+    },
+    {
+      "id": 6500,
+      "body_name": "Washington Twp Board of Supervisors",
+      "meeting_date": "2026-03-16",
+      "proceeding_type": "board_of_supervisors",
+      "document_url": "https://img1.wsimg.com/blobby/go/29d7f08b-34b1-43b6-900e-c1657757b676/downloads/f1fed27c-65cd-4b44-990d-6dd743b1ea62/March%20Meeting%20Minutes.pdf?ver=1788191963676",
+      "raw_text_sha256": "0e27c9998bcee9247da6cec99ebc110512cd6ce52d0c73e7b955e5b712157a0c",
+      "classification": "routine",
+      "assessment": "Explicitly no subdivision plans presented."
+    },
+    {
+      "id": 4742,
+      "body_name": "West Manchester Twp Board of Supervisors",
+      "meeting_date": "2026-07-01",
+      "proceeding_type": "board_of_supervisors",
+      "document_url": "https://westmanchestertownship.com/wp-content/uploads/Public-Hearing-Agenda-Rezoning-July-2026.pdf",
+      "raw_text_sha256": "c8392da5f966bce65ad9074be4ed987f52f88cf0069eefbd762aa0be15105e1d",
+      "classification": "investigate",
+      "assessment": "99 Hokes Mill Road residential-to-industrial rezoning hearing; actual date July 23, not July 1."
+    },
+    {
+      "id": 1172,
+      "body_name": "Franklin Twp Board of Supervisors",
+      "meeting_date": "2026-08-12",
+      "proceeding_type": "board_of_supervisors",
+      "document_url": "https://franklintownship.org/wp-content/uploads/CUH-2026-8-244-Coffeetown-Road-Gude.pdf",
+      "raw_text_sha256": "13c58d5adca42ac2684159a09cd6516de35431d7ccd64e0b47080b098ae3650f",
+      "classification": "minor_case",
+      "assessment": "244 Coffeetown Road steep-slope conditional use; development scale unknown."
+    },
+    {
+      "id": 2221,
+      "body_name": "East Manchester Twp Board of Supervisors",
+      "meeting_date": "2026-04-14",
+      "proceeding_type": "supervisors",
+      "document_url": "https://emanchestertwp.com/wp-content/uploads/2026/05/2026_4_14_EMT-BOS-AGENDA-MINUTES.pdf",
+      "raw_text_sha256": "9a697edb15d074df579b13a8997bdc48ecdf8f2dfc90d990237229d36148e9c5",
+      "classification": "investigate",
+      "assessment": "Kinsley/Musser Farm industrial rezoning discussion; expressly not a formal submission."
+    },
+    {
+      "id": 3806,
+      "body_name": "Penn Twp Board of Supervisors",
+      "meeting_date": "2026-05-12",
+      "proceeding_type": "board_of_supervisors",
+      "document_url": "https://penntownship.org/wp-content/uploads/2026/07/May-12-2026.pdf",
+      "raw_text_sha256": "efbe5d27a887f6406eabc60f0bb3acebde8b1b6aeaee1267f5b83d90330496a6",
+      "classification": "wrong_county",
+      "assessment": "Penn Township minutes identify Butler PA 16002. Exclude from York."
+    },
+    {
+      "id": 6572,
+      "body_name": "Mount Wolf Borough Council",
+      "meeting_date": "2026-04-14",
+      "proceeding_type": "council",
+      "document_url": "https://mtwolfpa.gov/document/council-agenda-april-14th-2026/",
+      "raw_text_sha256": "5f1221b53135a372c000e258402e1fab134656f10e429db14b862a014437c2dc",
+      "classification": "investigate",
+      "assessment": "Eagle Fire Company demolition permit at 42 South 2nd Street; no replacement development established."
+    },
+    {
+      "id": 5283,
+      "body_name": "New Freedom Borough Council",
+      "meeting_date": "2026-03-09",
+      "proceeding_type": "borough_council",
+      "document_url": "https://newfreedomboro.org/wp-content/uploads/2026/03/Complete-Public-Packet-March-9-2026.pdf",
+      "raw_text_sha256": "5f2b0d172dfe7d825feda0a01ee257e650a6dc4e54b6c861bbcd80dd56d93122",
+      "classification": "investigate",
+      "assessment": "Museum expansion feasibility and 1 East Franklin Street discussion. Packet contains February draft minutes under March agenda; separate dates and statuses."
+    },
+    {
+      "id": 1587,
+      "body_name": "Hanover Borough Council",
+      "meeting_date": "2026-06-11",
+      "proceeding_type": "borough_council",
+      "document_url": "https://hanoverboroughpa.gov/AgendaCenter/ViewFile/Minutes/_06112026-960",
+      "raw_text_sha256": "ace82c6536f51b7647f760eaae80d8bdf9618c846e61a70cdf6242229984e690",
+      "classification": "routine",
+      "assessment": "Guthrie Library Board of Governors minutes mislabeled as borough council; reopening/operations."
+    },
+    {
+      "id": 5324,
+      "body_name": "Stewartstown Borough Council",
+      "meeting_date": "2026-04-01",
+      "proceeding_type": "council",
+      "document_url": "https://www.stewartstown.org/pdf/borough/Stown_Council-April_2026.pdf",
+      "raw_text_sha256": "92d98ca9ad8dac34aa3c7fb13f8da375c4f3445e4d90fe62861322c13f0a32c1",
+      "classification": "investigate",
+      "assessment": "3 South Main Street theater-lot bid accepted conditionally on deposit; not a closed sale or development approval. Header April 6, not April 1."
+    },
+    {
+      "id": 3996,
+      "body_name": "Yoe Borough Council",
+      "meeting_date": "2026-05-05",
+      "proceeding_type": "council",
+      "document_url": "https://yoeborough.org/document/council-minutes-may-5th-2026/",
+      "raw_text_sha256": "032565d5ae16e8553fc73bad981527d6f6dfa5373edc07f98dc561f0391970a6",
+      "classification": "policy",
+      "assessment": "Industrial waste and quality-of-life ordinances; not a site project."
+    },
+    {
+      "id": 351,
+      "body_name": "Hallam Borough Council",
+      "meeting_date": "2026-04-13",
+      "proceeding_type": "council",
+      "document_url": "https://hallamborough.com/document/council-minutes-april-13th-2026",
+      "raw_text_sha256": "90bae018845fef790fde83653c20b03eb0c56b7281d4bd4df9901b42e012f182",
+      "classification": "policy",
+      "assessment": "Data-center ordinance discussion without a named development; separate municipal policy."
+    },
+    {
+      "id": 5842,
+      "body_name": "Warrington Twp Planning Commission",
+      "meeting_date": "2026-04-15",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://warringtontwp.org/wp-content/uploads/2026/05/04-15-2026.pdf",
+      "raw_text_sha256": "8acdd934d23f55d45920be3cfb6d37ead9bdcf251a8b15bb1e6e564aed5f7be6",
+      "classification": "investigate",
+      "assessment": "1825/1835 Pennsylvania Avenue sketch for one house on each lot; encouraged formal submission, not approved."
+    },
+    {
+      "id": 1234,
+      "body_name": "Franklin Twp Planning Commission",
+      "meeting_date": "2026-07-14",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://franklintownship.org/wp-content/uploads/7.14.26-FINAL-PC-Mtg-Minutes.pdf",
+      "raw_text_sha256": "49d7174c0b0d496ba532beb973a90a6bbdbd76403d3d240fcc1a56e43930868d",
+      "classification": "minor_case",
+      "assessment": "609/613 Range End Road consolidation explicitly says no intention for development. Header also contains inconsistent 2025 footer."
+    },
+    {
+      "id": 743,
+      "body_name": "Codorus Twp Board of Supervisors",
+      "meeting_date": "2026-03-17",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://codorustownship.org/wp-content/uploads/2026/03/Planning-Comm-Agenda-3-17-26.pdf",
+      "raw_text_sha256": "a362ec0a5f97ac8f6eb6be78e5e484b79a89cbba790c96afc5ab09941cc2646a",
+      "classification": "weak_anchor",
+      "assessment": "Barley Farms, Miller and Hartenstein plan agenda items; names need stronger site anchors before merging case files."
+    },
+    {
+      "id": 2665,
+      "body_name": "East Manchester Twp Planning Commission",
+      "meeting_date": "2026-04-28",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://emanchestertwp.com/wp-content/uploads/2026/07/4_28_2026_PC_MINUTES.pdf",
+      "raw_text_sha256": "e53ce1d95fd18db5ed453060a1e17da99419bda21c627e7c7683c1e3f767f1ed",
+      "classification": "investigate",
+      "assessment": "Motor Technology addition at 515 Willow Springs Lane; PC recommendation subject to review comments. Also references Musser Farm discussion."
+    },
+    {
+      "id": 1562,
+      "body_name": "Hanover Borough Council",
+      "meeting_date": "2026-03-04",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://hanoverboroughpa.gov/AgendaCenter/ViewFile/Agenda/_03042026-900",
+      "raw_text_sha256": "84b5c0e5b68ebb53144852d3795ff02774ecce9ab90d623b390517d70780863f",
+      "classification": "investigate",
+      "assessment": "301 Eisenhower Drive Wawa revision plus 118 Frederick and 300/300-half Third Street plans. PC agenda mislabeled council; no final decision."
+    },
+    {
+      "id": 6843,
+      "body_name": "Shrewsbury Borough Council",
+      "meeting_date": "2026-07-01",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://shrewsburyborough.org/bfd_download/pc-minutes-july-2026/",
+      "raw_text_sha256": "8b687a68a6b4d358edb54acbc857d3e03c6ae32b0894f200a667e67c87afc8e9",
+      "classification": "investigate",
+      "assessment": "Gateway Logistics Center warehouse/consolidation and Shaub 19-lot subdivision. Actual PC July 27, not July 1. PC recommends consolidation; land-development review still ahead."
+    },
+    {
+      "id": 3335,
+      "body_name": "Fairview Twp Zoning Hearing Board",
+      "meeting_date": "2026-08-20",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://twp.fairview.pa.us/wp-content/uploads/2026/07/2026-03-Webpacket-3-8.20.26.pdf",
+      "raw_text_sha256": "643ca7ed825d12ccc7f38fd38e96b6a4e55b76ac5b66f7fde1f7176beb7dd792",
+      "classification": "minor_case",
+      "assessment": "850/854 Cardinal Lane lot-line adjustment. No construction established."
+    },
+    {
+      "id": 1438,
+      "body_name": "Manchester Twp Board of Supervisors",
+      "meeting_date": "2026-08-05",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://www.mantwp.com/wp-content/uploads/ZHB-Agenda-08-05-26-1.pdf",
+      "raw_text_sha256": "2e2367020e1f78e9df6a543aa65554c87521e16214cf6548b89b053a1c628a5a",
+      "classification": "minor_case",
+      "assessment": "FedEx 505 Farmbrook Lane and 300 Spring Lane fences. Not major expansions; ZHB mislabeled supervisors."
+    },
+    {
+      "id": 5048,
+      "body_name": "York City Zoning Hearing Board",
+      "meeting_date": "2026-01-01",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://www.yorkcity.org/wp-content/uploads/2026/01/January-2026-AGENDA_-Spanish.pdf",
+      "raw_text_sha256": "99051068af6a4a701e51d5e534cfc4192753b785bbf66278300214b532037a14",
+      "classification": "investigate",
+      "assessment": "Spanish agenda: retail at 345 East Cottage, quick-service food at 743 East Market, fourth unit at 442-446 North Pershing. Actual January 15, not January 1; approve/deny placeholders are not decisions."
+    },
+    {
+      "id": 3113,
+      "body_name": "Spring Grove Boro Zoning Hearing Board",
+      "meeting_date": "2026-09-01",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://www.springgrovepa.gov/_files/ugd/97d308_d05c8425797e4d568aa14b665fa20814.pdf",
+      "raw_text_sha256": "4d7403bd5ac6d60c96f993c87d6c955ad04c6030454cda71df2ca679ecb7b5ca",
+      "classification": "investigate",
+      "assessment": "Museum use at 100 East College Avenue; pending variance agenda."
+    },
+    {
+      "id": 1577,
+      "body_name": "Hanover Borough Council",
+      "meeting_date": "2026-04-20",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://hanoverboroughpa.gov/AgendaCenter/ViewFile/Agenda/_04202026-915",
+      "raw_text_sha256": "b19c4dc4feafab951438dcf471de21273ba3dc578799f7df4ba68f25cdb904ec",
+      "classification": "minor_case",
+      "assessment": "751 George, 258 Baltimore and 300/300-half Third Street hearings; use scope incomplete. Third Street links to prior PC agenda by address, not name alone."
+    },
+    {
+      "id": 2837,
+      "body_name": "Paradise Twp Zoning Hearing Board",
+      "meeting_date": "2026-01-15",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://paradisetownship.org/wp-content/uploads/2025/02/ZHB-Notice-01152026.pdf",
+      "raw_text_sha256": "b9a7e0a30ba620338f9b3d29b4ca3edb2f1f22ec502982f2f874144e149ae963",
+      "classification": "wrong_county",
+      "assessment": "Notice explicitly identifies Paradise Township Lancaster County, not York."
+    }
+  ]
+}

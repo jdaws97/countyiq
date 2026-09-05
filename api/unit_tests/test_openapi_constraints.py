@@ -53,6 +53,8 @@ def test_watchlist_query_has_a_request_size_bound():
     assert parameters["pidns"]["maxLength"] == 2000
 
 
-def test_retired_scout_routes_are_not_registered():
+def test_retired_routes_are_not_registered():
+    """Scout, the PLCB license browser, and the PennDOT project list are gone."""
     paths = app.openapi()["paths"]
-    assert not {path for path in paths if path.startswith("/api/scout")}
+    retired_prefixes = ("/api/scout", "/api/licenses", "/api/projects")
+    assert not {path for path in paths if path.startswith(retired_prefixes)}

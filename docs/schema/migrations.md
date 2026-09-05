@@ -40,7 +40,9 @@ Contract tests create their own `countyiq_test` database and apply the full
 migration chain. The exact command is maintained in
 `docs/operations/testing.md`.
 
-The current head is revision 050. Revision 031 adds executable source-rights
+Use Alembic heads to inspect the current repository head and Alembic current
+to inspect the connected database; the historical notes below are not a deployed
+revision assertion. Revision 031 adds executable source-rights
 policy and audit tables, four site-readiness staging families, and the serving
 score column; it also expires the two paused York project-service layers and
 clears rebuildable score rows. Revision 032 adds per-municipal-body rights,
@@ -81,7 +83,8 @@ Revision 042 records explicit product-owner risk acceptance for the three
 official municipal listings that deliver documents through GoDaddy. It enables
 Franklintown Borough, Newberry Township, and Washington Township collection,
 allowlists only the exact `https://img1.wsimg.com` document origin, retains raw
-archives privately, and keeps person-level display and raw export disabled.
+archives privately, and at that revision kept person-level display and raw
+export disabled. Revision 054 later removes the person-display switch.
 
 Revision 043 records a source-row-scoped exception for the nonresponsive robots
 endpoints on those same three official listing origins. It does not allow an
@@ -100,6 +103,13 @@ configuration fingerprints. Revision 049 distinguishes refused automatic
 resolutions in the review queue. Revision 050 closes the TRUNCATE path on the
 new audit ledgers and provides a forward-safe downgrade bridge for revision
 049's outcome normalization.
+Revisions 051 and 052 refresh municipal proceedings listing URLs (including
+the York Township Board of Commissioners source). Revision 053 adds
+`public.normalize_parcel_reference`, the single rule every proceeding-to-parcel
+linker uses: York PIDNs are alphanumeric, so the earlier digit-only comparison
+could never link a minute that cited such a parcel by PIDN. Revision 054 drops
+`person_level_display_allowed` from both source-rights tables: owner names are
+public record and are served under `derived_product_allowed`.
 
 ## Production
 
@@ -129,3 +139,61 @@ cd pipelines
 
 Use the next repository naming convention, set `down_revision` to the current
 head, and add a focused migration or contract test when behavior can regress.
+
+## Proceedings metadata review (058)
+
+Revision 058 adds staging.public_proceedings.metadata_quality and an append-only
+meta.proceeding_metadata_reviews ledger, and pauses the additional wrong-jurisdiction
+Jackson/Windsor source policies. The separately invoked review_proceeding_metadata
+command performs reviewed SCD2 repairs; schema migration alone does not repair or
+release historical records. See the [cleanup report](../research/municipal-source-cleanup-2026-09-04.md)
+for the dry-run/apply workflow and local verification.
+
+
+Revision 059 adds caller-permission SQL functions for parcel brief source context
+and its SHA-256 fingerprint. Generation and API serving use the same database
+definition for property/entity facts, resolved owner names, portfolio membership
+and totals. Upgrade changes no source data; downgrade removes only these
+functions and must be paired with compatible application code.
+
+
+Revision 061 adds extraction_details to proceeding extractions, a shared
+proceeding_parcel_matches resolver for explicit IDs and unique municipality-scoped
+addresses, and persistent proceeding_project_aliases. Street-only, ranged and
+ambiguous addresses abstain. Source text and historical inference payloads are
+unchanged. Runtime and human-resolution projection writers preserve the new
+contract; deploy the migration before the matching application code. Downgrade
+removes the new contract projection and alias table and must be paired with
+compatible code; existing project watches must be reviewed before discarding aliases.
+
+
+### 062 — parcel geography proximity index
+
+Adds idx_parcels_current_geography, a partial GiST expression index on
+staging.parcels (geom::geography), restricted to current rows with geometry.
+Supports meter-based nearby parcel and event searches after removing the
+inaccurate degree envelope. The transactional index build can block writes;
+measure it on a representative restore and schedule deployment accordingly.
+Downgrade removes only this index.
+
+
+### Schema-test isolation
+
+Run pipelines/tests/test_schema_integration.py against a clean migrated
+countyiq_test database. API integration fixtures add a synthetic municipality
+policy and change Hanover's jurisdiction for synthetic parcel matching, so a
+database already seeded by api/tests is not migration seed state. Use a separate
+Compose project/port for schema checks; do not reset a populated local database
+or relax exact migration assertions to accommodate API fixtures. Set
+DATABASE_PORT and DATABASE_NAME=countyiq_test explicitly for the schema suite.
+The 2026-09-04 review verified a fresh 001 -> 062 chain and all 23 schema checks
+on a separate localhost:5435 instance.
+
+
+### 063 — scoped municipal event types
+
+Expands chk_intelligence_events_type to accept policy_action, recommendation,
+withdrawn, removed and scoped_decision, matching current event builders and API
+filters. Apply before publishing events from the new extraction contract.
+Existing events are not rewritten. Downgrade validates the older type set and
+refuses while any newer types remain; it does not delete or relabel events.

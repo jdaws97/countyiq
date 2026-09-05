@@ -1,19 +1,14 @@
 """Tests for Pass 2 signal validation.
 
-Tests cover only pure-Python parts (templates, prompt builder, output parser).
+Tests cover the shared output parser used by batched validation.
 No actual LLM calls are made and no database is required.
 """
-
-import json
-from pathlib import Path
 
 import pytest
 
 from countyiq.lib.pass2_signal_validation import (
-    SIGNAL_TEMPLATES,
     VALID_STATUSES,
     VALID_SIGNIFICANCE,
-    build_signal_validation_prompt,
     parse_signal_validation_output,
 )
 
@@ -21,13 +16,6 @@ from countyiq.lib.pass2_signal_validation import (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-@pytest.fixture
-def sample_context():
-    """Load the signal_context_sample.json fixture."""
-    fixture_path = Path(__file__).parent / "fixtures" / "signal_context_sample.json"
-    with open(fixture_path) as f:
-        return json.load(f)
 
 
 @pytest.fixture
@@ -50,213 +38,6 @@ def valid_llm_output():
             }
         ],
     }
-
-
-# ---------------------------------------------------------------------------
-# TestSignalTemplates
-# ---------------------------------------------------------------------------
-
-class TestSignalTemplates:
-    """Tests for the SIGNAL_TEMPLATES dict."""
-
-    EXPECTED_SIGNAL_TYPES = [
-        "active_subdivision",
-        "tax_distress",
-        "ownership_change",
-        "zoning_mismatch",
-        "vacancy",
-        "assemblage",
-        "economic_development_park",
-        "penndot_project",
-        "growth_area",
-        "flood_zone",
-        "conservation_easement",
-        "ag_security",
-    ]
-
-    def test_all_12_signal_types_have_templates(self):
-        for signal_type in self.EXPECTED_SIGNAL_TYPES:
-            assert signal_type in SIGNAL_TEMPLATES, f"Missing template for {signal_type}"
-
-    def test_exactly_14_templates(self):
-        # 12 original signal types plus municipal_action and entity_assemblage.
-        assert len(SIGNAL_TEMPLATES) == 14
-
-    def test_each_has_base_questions(self):
-        for signal_type, template in SIGNAL_TEMPLATES.items():
-            assert "base_questions" in template, f"{signal_type} missing base_questions"
-            assert len(template["base_questions"]) > 0, f"{signal_type} has empty base_questions"
-
-    def test_each_has_conditional_questions_key(self):
-        for signal_type, template in SIGNAL_TEMPLATES.items():
-            assert "conditional_questions" in template, (
-                f"{signal_type} missing conditional_questions"
-            )
-
-    def test_base_questions_are_strings(self):
-        for signal_type, template in SIGNAL_TEMPLATES.items():
-            for q in template["base_questions"]:
-                assert isinstance(q, str), f"{signal_type} base question is not a string: {q}"
-
-    def test_conditional_questions_structure(self):
-        """Conditional questions should map condition keys to lists of strings."""
-        for signal_type, template in SIGNAL_TEMPLATES.items():
-            cond = template["conditional_questions"]
-            assert isinstance(cond, dict), f"{signal_type} conditional_questions is not a dict"
-            for key, questions in cond.items():
-                assert isinstance(questions, list), (
-                    f"{signal_type} conditional_questions[{key}] is not a list"
-                )
-                for q in questions:
-                    assert isinstance(q, str), (
-                        f"{signal_type} conditional_questions[{key}] contains non-string: {q}"
-                    )
-
-    def test_active_subdivision_has_conditionals(self):
-        cond = SIGNAL_TEMPLATES["active_subdivision"]["conditional_questions"]
-        assert "has_proceedings" in cond
-        assert "has_corporate" in cond
-
-    def test_economic_park_has_no_conditionals(self):
-        cond = SIGNAL_TEMPLATES["economic_development_park"]["conditional_questions"]
-        assert len(cond) == 0
-
-    def test_penndot_has_no_conditionals(self):
-        cond = SIGNAL_TEMPLATES["penndot_project"]["conditional_questions"]
-        assert len(cond) == 0
-
-    def test_growth_area_has_no_conditionals(self):
-        cond = SIGNAL_TEMPLATES["growth_area"]["conditional_questions"]
-        assert len(cond) == 0
-
-    def test_flood_zone_has_no_conditionals(self):
-        cond = SIGNAL_TEMPLATES["flood_zone"]["conditional_questions"]
-        assert len(cond) == 0
-
-
-# ---------------------------------------------------------------------------
-# TestBuildSignalValidationPrompt
-# ---------------------------------------------------------------------------
-
-class TestBuildSignalValidationPrompt:
-    """Tests for build_signal_validation_prompt(context) -> str."""
-
-    def test_returns_string(self, sample_context):
-        result = build_signal_validation_prompt(sample_context)
-        assert isinstance(result, str)
-        assert len(result) > 100
-
-    def test_includes_signal_key(self, sample_context):
-        result = build_signal_validation_prompt(sample_context)
-        assert "active_subdivision" in result
-
-    def test_includes_parcel_context(self, sample_context):
-        result = build_signal_validation_prompt(sample_context)
-        assert "6700112233445" in result
-        assert "KEYSTONE DEVELOPMENT GROUP LLC" in result
-        assert "Manchester Township" in result
-
-    def test_includes_evidence(self, sample_context):
-        result = build_signal_validation_prompt(sample_context)
-        assert "HERITAGE HILLS PHASE III" in result
-
-    def test_includes_conditional_questions_when_data_present(self, sample_context):
-        """Proceedings are present in sample, so conditional questions should appear."""
-        result = build_signal_validation_prompt(sample_context)
-        # Proceedings are present; has_proceedings conditional should be included
-        assert "PROCEEDINGS" in result
-
-    def test_excludes_sections_without_data(self, sample_context):
-        """Tax claims and neighbors are empty; their sections should be omitted."""
-        result = build_signal_validation_prompt(sample_context)
-        assert "TAX CLAIMS" not in result
-        assert "ADJACENT PARCELS" not in result
-
-    def test_includes_entity_context(self, sample_context):
-        result = build_signal_validation_prompt(sample_context)
-        assert "ENTITY" in result
-        assert "verified" in result
-
-    def test_includes_output_format(self, sample_context):
-        result = build_signal_validation_prompt(sample_context)
-        assert "validation_status" in result
-        assert "adjusted_significance" in result
-
-    def test_minimal_context(self):
-        """Prompt builder should handle minimal context without error."""
-        minimal = {
-            "pidn": "6700000000001",
-            "signal": {
-                "signal_key": "growth_area",
-                "signal_weight": 0.02,
-                "source_table": "staging.growth_areas",
-                "source_id": "GA-001",
-                "distance_m": None,
-                "evidence": {"ga_type": "PGA", "ga_status": "Designated"},
-            },
-            "parcel": {
-                "pidn": "6700000000001",
-                "owner": "DOE JANE",
-                "address": "100 OAK ST",
-                "assessed_value": 100000,
-                "acres": 0.5,
-                "property_class": "R",
-                "sale_date": "",
-                "sale_price": 0,
-                "previous_owner": "",
-                "municipality": "York City",
-                "school_district": "York City",
-                "source_url": "",
-            },
-            "entity": {"found": False},
-            "tax_claims": [],
-            "proceedings": [],
-            "neighbors": [],
-            "corporate": [],
-            "portfolio": [],
-        }
-        result = build_signal_validation_prompt(minimal)
-        assert isinstance(result, str)
-        assert "growth_area" in result
-
-    def test_all_optional_sections_included_when_populated(self):
-        """When all optional sections have data, they should all appear."""
-        context = {
-            "pidn": "6700000000001",
-            "signal": {
-                "signal_key": "tax_distress",
-                "signal_weight": 0.10,
-                "source_table": "staging.tax_claims",
-                "source_id": "6700000000001",
-                "distance_m": None,
-                "evidence": {"total_owed": 5000, "years_delinquent": 3, "oldest_year": 2022},
-            },
-            "parcel": {
-                "pidn": "6700000000001",
-                "owner": "DOE JOHN",
-                "address": "200 ELM ST",
-                "assessed_value": 150000,
-                "acres": 1.0,
-                "property_class": "R",
-                "sale_date": "",
-                "sale_price": 0,
-                "previous_owner": "",
-                "municipality": "York City",
-                "school_district": "York City",
-                "source_url": "",
-            },
-            "entity": {"found": True, "canonical_name": "DOE JOHN", "entity_type": "individual"},
-            "tax_claims": [{"year": 2022, "authority": "COUNTY", "amount": 1500, "owner": "DOE JOHN"}],
-            "proceedings": [{"type": "variance", "applicant": "DOE JOHN", "parcel": "6700000000001", "decision": "approved", "meeting_date": "2025-01-15", "body": "York City ZHB", "source_url": "", "supporting_text": ""}],
-            "neighbors": [{"pidn": "6700000000002", "owner": "SMITH", "assessed_value": 100000, "acres": 0.5, "property_class": "R", "total_owed": 0, "years_delinquent": 0}],
-            "corporate": [{"entity_name": "DOE HOLDINGS LLC", "entity_number": "123", "status": "ACTIVE", "formation_date": "2020-01-01", "office_address": "200 ELM ST", "source_url": ""}],
-            "portfolio": [{"pidn": "6700000000001", "address": "200 ELM ST", "assessed_value": 150000, "sale_date": "", "sale_price": 0}],
-        }
-        result = build_signal_validation_prompt(context)
-        assert "TAX CLAIMS" in result
-        assert "PROCEEDINGS" in result
-        assert "ADJACENT PARCELS" in result
-        assert "CORPORATE RECORDS" in result
 
 
 # ---------------------------------------------------------------------------

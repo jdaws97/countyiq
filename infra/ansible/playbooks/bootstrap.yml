@@ -1,0 +1,250 @@
+---
+- name: Bootstrap the CountyIQ production VPS
+  hosts: countyiq_vps
+  become: true
+  gather_facts: true
+
+  vars:
+    countyiq_deploy_user: ubuntu
+    countyiq_swap_file: /swapfile
+    countyiq_swap_size_mb: 2048
+    countyiq_packages:
+      - ca-certificates
+      - curl
+      - docker-compose-v2
+      - docker.io
+      - git
+      - openssh-client
+      - postgresql-client
+      - rclone
+      - unattended-upgrades
+      - ufw
+      - util-linux
+
+  pre_tasks:
+    - name: Require Ubuntu 24.04
+      ansible.builtin.assert:
+        that:
+          - ansible_facts["distribution"] == "Ubuntu"
+          - ansible_facts["distribution_version"] is version("24.04", ">=")
+          - ansible_facts["distribution_version"] is version("24.10", "<")
+        fail_msg: >-
+          This playbook is reviewed only for Ubuntu 24.04 LTS; found
+          {{ ansible_facts["distribution"] }}
+          {{ ansible_facts["distribution_version"] }}.
+
+    - name: Require the deploy user to have an authorized key
+      ansible.builtin.stat:
+        path: "/home/{{ countyiq_deploy_user }}/.ssh/authorized_keys"
+      register: countyiq_authorized_keys
+
+    - name: Refuse to disable passwords without an authorized key
+      ansible.builtin.assert:
+        that:
+          - countyiq_authorized_keys.stat.exists
+          - countyiq_authorized_keys.stat.size | int > 0
+        fail_msg: "Install and test the deploy user's SSH key before bootstrap."
+
+  tasks:
+    - name: Install security, container, and backup packages
+      ansible.builtin.apt:
+        name: "{{ countyiq_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Apply available safe package upgrades
+      ansible.builtin.apt:
+        upgrade: safe
+        update_cache: true
+
+    - name: Enable Docker
+      ansible.builtin.systemd_service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Enable unattended security upgrades
+      ansible.builtin.systemd_service:
+        name: unattended-upgrades
+        enabled: true
+        state: started
+
+    - name: Check whether the swapfile exists
+      ansible.builtin.stat:
+        path: "{{ countyiq_swap_file }}"
+      register: countyiq_swap
+
+    - name: Allocate the swapfile
+      ansible.builtin.command:
+        argv:
+          - fallocate
+          - -l
+          - "{{ countyiq_swap_size_mb }}M"
+          - "{{ countyiq_swap_file }}"
+      when: not countyiq_swap.stat.exists
+      changed_when: true
+
+    - name: Protect the swapfile
+      ansible.builtin.file:
+        path: "{{ countyiq_swap_file }}"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Inspect the swapfile signature
+      ansible.builtin.command:
+        argv:
+          - blkid
+          - -s
+          - TYPE
+          - -o
+          - value
+          - "{{ countyiq_swap_file }}"
+      register: countyiq_swap_type
+      changed_when: false
+      failed_when: false
+
+    - name: Format the swapfile
+      ansible.builtin.command:
+        argv:
+          - mkswap
+          - "{{ countyiq_swap_file }}"
+      when: countyiq_swap_type.stdout != "swap"
+      changed_when: true
+
+    - name: Persist the swapfile mount
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: '^/swapfile\s+'
+        line: "/swapfile none swap sw 0 0"
+        state: present
+
+    - name: Read active swap devices
+      ansible.builtin.command:
+        argv:
+          - swapon
+          - --show=NAME
+          - --noheadings
+      register: countyiq_active_swap
+      changed_when: false
+
+    - name: Enable the swapfile
+      ansible.builtin.command:
+        argv:
+          - swapon
+          - "{{ countyiq_swap_file }}"
+      when: countyiq_swap_file not in countyiq_active_swap.stdout_lines
+      changed_when: true
+
+    - name: Install CountyIQ SSH hardening
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/00-countyiq-hardening.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PubkeyAuthentication yes
+          PermitRootLogin no
+          X11Forwarding no
+          AllowUsers {{ countyiq_deploy_user }}
+          MaxAuthTries 4
+          LoginGraceTime 30
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Reload SSH
+
+    # OpenSSH uses the first obtained value. Load before cloud-init/vendor
+    # defaults and inspect the complete effective configuration before reload.
+    - name: Remove the superseded late SSH hardening include
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/99-countyiq-hardening.conf
+        state: absent
+      notify: Reload SSH
+
+    - name: Inspect effective SSH settings for the deploy user
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - "user={{ countyiq_deploy_user }},host=localhost,addr=127.0.0.1"
+      register: countyiq_effective_sshd
+      changed_when: false
+
+    - name: Require effective SSH hardening before reload
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication no' in countyiq_effective_sshd.stdout_lines"
+          - "'kbdinteractiveauthentication no' in countyiq_effective_sshd.stdout_lines"
+          - "'pubkeyauthentication yes' in countyiq_effective_sshd.stdout_lines"
+          - "'permitrootlogin no' in countyiq_effective_sshd.stdout_lines"
+        fail_msg: "An earlier SSH setting overrides CountyIQ hardening; resolve it before reload."
+
+    - name: Read firewall state
+      ansible.builtin.command:
+        argv: [ufw, status, verbose]
+      register: countyiq_ufw_status
+      changed_when: false
+
+    - name: Set the inbound firewall policy
+      ansible.builtin.command:
+        argv: [ufw, default, deny, incoming]
+      when: "'Default: deny (incoming)' not in countyiq_ufw_status.stdout"
+      changed_when: true
+
+    - name: Set the outbound firewall policy
+      ansible.builtin.command:
+        argv: [ufw, default, allow, outgoing]
+      when: "'allow (outgoing)' not in countyiq_ufw_status.stdout"
+      changed_when: true
+
+    - name: Rate-limit inbound SSH
+      ansible.builtin.command:
+        argv: [ufw, limit, 22/tcp, comment, CountyIQ-key-only-SSH]
+      register: countyiq_ufw_ssh
+      changed_when: >-
+        'Rule added' in countyiq_ufw_ssh.stdout or
+        'Rules updated' in countyiq_ufw_ssh.stdout
+
+    - name: Enable the firewall
+      ansible.builtin.command:
+        argv: [ufw, --force, enable]
+      when: "'Status: inactive' in countyiq_ufw_status.stdout"
+      changed_when: true
+
+    - name: Create CountyIQ runtime directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /opt/countyiq, owner: root, group: root, mode: "0700" }
+        - { path: /opt/countyiq/archives, owner: "10001", group: "10001", mode: "0700" }
+        # Allow the runtime UID to reach its read-only cost-stop mount without
+        # exposing directory listings or private release/restore receipts.
+        - { path: /var/lib/countyiq, owner: root, group: root, mode: "0711" }
+        - { path: /var/lib/countyiq/releases, owner: root, group: root, mode: "0700" }
+        - { path: /var/lib/countyiq/restore-drills, owner: root, group: root, mode: "0700" }
+        - { path: /var/lib/countyiq/cost-guard, owner: root, group: root, mode: "0755" }
+
+    - name: Check whether a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: countyiq_reboot_required
+
+    - name: Report reboot requirement
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'A controlled reboot is required before deployment.'
+             if countyiq_reboot_required.stat.exists
+             else 'No reboot is currently required.' }}
+
+  handlers:
+    - name: Reload SSH
+      ansible.builtin.systemd_service:
+        name: ssh
+        state: reloaded

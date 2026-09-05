@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 
 import Badge from '../components/Badge'
+import ServerWatches from '../components/ServerWatches'
+import { watchSyncState } from '../lib/watchSync'
 import IntelligenceEventCard from '../components/IntelligenceEventCard'
 import PageShell from '../components/PageShell'
 import Section from '../components/Section'
@@ -14,7 +16,8 @@ import {
   getLastWatchVisit,
   getSavedSearches,
   removeSavedSearch,
-  replaceInvestigationState,
+  parseWorkspace,
+  replaceWorkspace,
   setLastWatchVisit,
   toCsv,
   type PortableWorkspace,
@@ -23,10 +26,11 @@ import { getPropertyClassLabel } from '../lib/propertyLabels'
 import { useFetchJson } from '../lib/useFetchJson'
 import {
   getEntityWatchlist,
+  getMunicipalityWatchlist,
   getProjectWatchlist,
   getWatchlist,
-  replaceWatchlists,
   toggleEntityWatch,
+  toggleMunicipalityWatch,
   toggleProjectWatch,
   toggleWatch,
   WATCHLIST_CAP,
@@ -37,21 +41,28 @@ export default function Watchlist() {
   const [watched, setWatched] = useState<string[]>(() => getWatchlist())
   const [watchedProjects, setWatchedProjects] = useState(() => getProjectWatchlist())
   const [watchedEntities, setWatchedEntities] = useState(() => getEntityWatchlist())
+  const [watchedMunicipalities, setWatchedMunicipalities] = useState(() => getMunicipalityWatchlist())
   const [savedSearches, setSavedSearches] = useState(() => getSavedSearches())
-  const [previousVisit] = useState(() => getLastWatchVisit())
+  const [lastVisit] = useState(() => getLastWatchVisit())
+  const [serverConnected, setServerConnected] = useState(() => watchSyncState().connected)
+  const previousVisit = serverConnected ? null : lastVisit
   const [workspaceMessage, setWorkspaceMessage] = useState<string | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    const refreshSync = () => setServerConnected(watchSyncState().connected)
+    window.addEventListener('countyiq-watch-sync-changed', refreshSync)
     const refresh = () => {
       setWatched(getWatchlist())
       setWatchedProjects(getProjectWatchlist())
       setWatchedEntities(getEntityWatchlist())
+      setWatchedMunicipalities(getMunicipalityWatchlist())
       setSavedSearches(getSavedSearches())
     }
     window.addEventListener('countyiq-watchlist-changed', refresh)
     window.addEventListener('countyiq-investigation-changed', refresh)
     return () => {
+      window.removeEventListener('countyiq-watch-sync-changed', refreshSync)
       setLastWatchVisit()
       window.removeEventListener('countyiq-watchlist-changed', refresh)
       window.removeEventListener('countyiq-investigation-changed', refresh)
@@ -63,10 +74,16 @@ export default function Watchlist() {
   const parcelEvents = useFetchJson<IntelligenceFeedResponse>(watched.length > 0 ? `/api/feed?since_days=3650&limit=30&pidns=${encodeURIComponent(watched.join(','))}` : null)
   const projectEvents = useFetchJson<IntelligenceFeedResponse>(watchedProjects.length > 0 ? `/api/feed?since_days=3650&limit=30&project_keys=${encodeURIComponent(watchedProjects.map((project) => project.key).join(','))}` : null)
   const entityEvents = useFetchJson<IntelligenceFeedResponse>(watchedEntities.length > 0 ? `/api/feed?since_days=3650&limit=30&sort=latest&entity_ids=${watchedEntities.map((entity) => entity.id).join(',')}` : null)
+  // A municipality generates far more events than one subject, so its watch
+  // window is the recent quarter rather than all history.
+  const municipalityEvents = useFetchJson<IntelligenceFeedResponse>(watchedMunicipalities.length > 0 ? `/api/feed?since_days=90&limit=30&sort=latest&municipality=${encodeURIComponent(watchedMunicipalities.map((municipality) => municipality.name).join(','))}` : null)
+  // "Something happened next door": events on other parcels within 400 m of
+  // a watched parcel, over the last quarter.
+  const nearbyEvents = useFetchJson<IntelligenceFeedResponse>(watched.length > 0 ? `/api/feed?since_days=90&limit=30&sort=latest&near_radius_m=400&near_pidns=${encodeURIComponent(watched.join(','))}` : null)
   const parcels = data?.parcels ?? []
   const missing = data?.missing ?? []
   const changedCount = parcels.filter((parcel) => parcel.changed_recently).length
-  const allEvents = uniqueEvents([...(parcelEvents.data?.events ?? []), ...(projectEvents.data?.events ?? []), ...(entityEvents.data?.events ?? [])])
+  const allEvents = uniqueEvents([...(parcelEvents.data?.events ?? []), ...(projectEvents.data?.events ?? []), ...(entityEvents.data?.events ?? []), ...(municipalityEvents.data?.events ?? []), ...(nearbyEvents.data?.events ?? [])])
   const newEvents = previousVisit ? allEvents.filter((event) => new Date(event.detected_at) > new Date(previousVisit)) : []
 
   const exportWorkspace = () => {
@@ -76,6 +93,7 @@ export default function Watchlist() {
       parcels: getWatchlist(),
       projects: getProjectWatchlist(),
       entities: getEntityWatchlist(),
+      municipalities: getMunicipalityWatchlist(),
       savedSearches: getSavedSearches(),
       comparison: getComparison(),
       triage: getEventTriage(),
@@ -87,17 +105,18 @@ export default function Watchlist() {
   const importWorkspace = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+    if (file.size > 2_000_000) {
+      setWorkspaceMessage('Workspace import failed: file exceeds 2 MB.')
+      event.target.value = ''
+      return
+    }
     file.text().then((text) => {
-      const workspace = JSON.parse(text) as PortableWorkspace
-      if (workspace.version !== 1 || !Array.isArray(workspace.parcels) || !Array.isArray(workspace.projects) || !Array.isArray(workspace.entities)) {
-        throw new Error('Not a CountyIQ workspace file')
-      }
+      const workspace = parseWorkspace(text)
       if (!window.confirm('Importing this workspace will replace the current browser workspace. Continue?')) {
         setWorkspaceMessage('Workspace import canceled; current browser data was kept.')
         return
       }
-      replaceWatchlists({ parcels: workspace.parcels, projects: workspace.projects, entities: workspace.entities })
-      replaceInvestigationState(workspace)
+      replaceWorkspace(workspace)
       setWorkspaceMessage('Workspace imported into this browser.')
     }).catch((reason: unknown) => setWorkspaceMessage(reason instanceof Error ? reason.message : 'Workspace import failed'))
     event.target.value = ''
@@ -109,22 +128,19 @@ export default function Watchlist() {
     downloadText(`countyiq-watched-parcels-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows), 'text/csv')
   }
 
-  const nothingWatched = watched.length === 0 && watchedProjects.length === 0 && watchedEntities.length === 0
+  const nothingWatched = watched.length === 0 && watchedProjects.length === 0 && watchedEntities.length === 0 && watchedMunicipalities.length === 0
 
   return (
     <PageShell maxWidth={1040}>
       <PageHeader
         eyebrow="Retained intelligence"
         title="Watched Intelligence"
-        description="Return to the parcels, projects, entities, saved searches, and new evidence that matter to your current investigation."
-        meta={<><Badge color="var(--accent-blue)">{watched.length}/{WATCHLIST_CAP} parcels</Badge><Badge color="var(--accent-cyan)">{watchedProjects.length} projects</Badge><Badge color="var(--accent-green)">{watchedEntities.length} entities</Badge>{changedCount > 0 && <Badge color="var(--accent-gold)">{changedCount} parcels changed</Badge>}</>}
+        description="Return to the parcels, projects, entities, municipalities, saved searches, and new evidence that matter to your current investigation."
+        meta={<><Badge color="var(--accent-blue)">{watched.length}/{WATCHLIST_CAP} parcels</Badge><Badge color="var(--accent-cyan)">{watchedProjects.length} projects</Badge><Badge color="var(--accent-green)">{watchedEntities.length} entities</Badge><Badge color="var(--accent-purple)">{watchedMunicipalities.length} municipalities</Badge>{changedCount > 0 && <Badge color="var(--accent-gold)">{changedCount} parcels changed</Badge>}</>}
         actions={<><Button tone="quiet" onClick={exportWorkspace}>Export workspace</Button><Button tone="quiet" onClick={() => importRef.current?.click()}>Import workspace</Button><input ref={importRef} className="sr-only" type="file" accept="application/json,.json" onChange={importWorkspace} /></>}
       />
 
-      <div className="workspace-boundary">
-        <strong>Browser workspace</strong>
-        <span>CountyIQ has no customer accounts yet. Export/import gives you an explicit, portable file without creating insecure anonymous server data.</span>
-      </div>
+      <ServerWatches />
       {workspaceMessage && <StatusMessage tone={workspaceMessage.includes('failed') || workspaceMessage.startsWith('Not') ? 'error' : 'success'}>{workspaceMessage}</StatusMessage>}
 
       {newEvents.length > 0 && (
@@ -133,7 +149,7 @@ export default function Watchlist() {
 
       {nothingWatched && savedSearches.length === 0 && (
         <EmptyState title="Start an investigation" actions={<><ButtonLink to="/feed" tone="primary">Browse intelligence feed</ButtonLink><ButtonLink to="/radar">Explore Radar</ButtonLink><ButtonLink to="/map">Open map</ButtonLink></>}>
-          Watch a parcel, project, or entity from any case file. CountyIQ will collect its source-backed events here and flag what changed since your last visit.
+          Watch a parcel, project, entity, or municipality from any case file. CountyIQ will collect its source-backed events here and flag what changed since your last visit.
         </EmptyState>
       )}
 
@@ -146,6 +162,12 @@ export default function Watchlist() {
       {watchedEntities.length > 0 && (
         <WatchSection title={`Watched entities (${watchedEntities.length})`} events={entityEvents} previousVisit={previousVisit}>
           {watchedEntities.map((entity) => <WatchChip key={entity.id} to={`/entity/${entity.id}`} label={entity.name} onRemove={() => toggleEntityWatch(entity)} />)}
+        </WatchSection>
+      )}
+
+      {watchedMunicipalities.length > 0 && (
+        <WatchSection title={`Watched municipalities (${watchedMunicipalities.length}) · last 90 days`} events={municipalityEvents} previousVisit={previousVisit}>
+          {watchedMunicipalities.map((municipality) => <WatchChip key={municipality.name} to={`/municipalities/${encodeURIComponent(municipality.name)}`} label={municipality.name} onRemove={() => toggleMunicipalityWatch(municipality)} />)}
         </WatchSection>
       )}
 
@@ -177,6 +199,8 @@ export default function Watchlist() {
       {missing.length > 0 && <Section title={`No longer found (${missing.length})`}><div className="missing-watch-list">{missing.map((pidn) => <span key={pidn}>{pidn}<button onClick={() => toggleWatch(pidn)}>remove</button></span>)}</div></Section>}
 
       {watched.length > 0 && <WatchSection title="Recent intelligence for watched parcels" events={parcelEvents} previousVisit={previousVisit} />}
+
+      {watched.length > 0 && <WatchSection title="Activity next door · within 400 m of watched parcels, last 90 days" events={nearbyEvents} previousVisit={previousVisit} />}
     </PageShell>
   )
 }

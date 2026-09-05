@@ -1,23 +1,16 @@
 # Infrastructure
 
-## Current Direction
-
-CountyIQ's current infrastructure direction is:
-
-- Cloudflare in front for DNS, CDN, TLS, and WAF
-- Cloudflare R2 for raw archives and object storage
-- a single Ubuntu VPS running Docker Compose
-- Caddy for reverse proxy
-- FastAPI, Dagster, and PostgreSQL/PostGIS as containers
-
-Provider: **Hetzner, confirmed 2026-08-02** (CX23 now; CX33 at 3-county scale; Netcup is the fallback if Hetzner raises prices again). Hostinger was evaluated and rejected — see `docs/cost.md` for the verified comparison.
+This page describes repository configuration. See
+[Account workspaces](operations/account-workspaces.md#guarded-hostname-rollout)
+for hostname rollout status and steps, and [Infrastructure cost](cost.md) for
+provider and sizing decisions.
 
 ## Runtime Topology
 
-| Layer | Current expectation |
+| Layer | Repository configuration |
 |---|---|
-| Front door | Cloudflare |
-| Frontend | Cloudflare Pages preferred |
+| Front door | Cloudflare TLS/WAF, Access for app testers, and Tunnel |
+| Frontend | Separate marketing and app HTML entries served by Caddy on the VPS |
 | API | FastAPI behind Caddy on the VPS |
 | Pipelines | Dagster on the VPS |
 | Database | PostgreSQL 16 + PostGIS on the VPS |
@@ -34,65 +27,31 @@ The production Compose stack in `docker/docker-compose.yml` is the current deplo
 | `api` | FastAPI/Uvicorn |
 | `dagster-webserver` | Dagster UI and GraphQL API |
 | `dagster-daemon` | Schedule/sensor evaluation and run execution |
-| `caddy` | reverse proxy and TLS termination |
+| `caddy` | frontend files and API proxy on private port 8080 |
+| `cloudflared` | outbound Tunnel connector; public TLS terminates at Cloudflare |
 
 ## Required Environment
 
-Production expects a root `.env` file with:
+Production reads the root-owned /etc/countyiq/production.env (or
+COUNTYIQ_ENV_FILE), published by docker/publish-production-env.sh.
 
-```bash
-DATABASE_HOST=postgres
-DATABASE_PORT=5432
-DATABASE_NAME=countyiq
-DATABASE_USER=dagster_admin
-DATABASE_PASSWORD=...
-DATABASE_URL=postgresql://dagster_admin:...@postgres:5432/countyiq
-DATABASE_PIPELINE_USER=countyiq_pipeline
-DATABASE_PIPELINE_PASSWORD=...
-DATABASE_API_USER=countyiq_api
-DATABASE_API_PASSWORD=...
+- [Production secrets](../infra/secrets/README.md) owns environment creation,
+  editing, and publication.
+- [Production preflight](../docker/lib/operations.sh) defines required settings;
+  [Compose](../docker/docker-compose.yml) defines each service's environment.
+- [Account configuration](operations/account-workspaces.md#runtime-configuration)
+  owns app-host identity settings and their rollout order.
+- [LLM configuration](../pipelines/countyiq/lib/pass_llm_config.py) owns model
+  defaults and overrides.
 
-OPENROUTER_API_KEY=...
-# Optional public search uses a separate, restricted provider key.
-COUNTYIQ_SEARCH_API_KEY=
-# Optional overrides; leave unset to use the evaluated defaults in
-# pipelines/countyiq/lib/pass_llm_config.py.
-COUNTYIQ_PASS0_MODEL=
-COUNTYIQ_PASS1_MODEL=
-COUNTYIQ_PASS2_MODEL=
-COUNTYIQ_PASS3_MODEL=
-COUNTYIQ_PASS4_MODEL=
-COUNTYIQ_OPENROUTER_MODEL=
-COUNTYIQ_SEARCH_MODEL=
-COUNTYIQ_THINKING=true
-COUNTYIQ_ARCHIVE_DIR=/opt/countyiq/archives
-COUNTYIQ_ARCHIVE_STRICT=true
-COUNTYIQ_TRUSTED_HOSTS=api.example.com
-COUNTYIQ_EXPOSE_API_DOCS=false
+Credential boundaries:
 
-R2_ACCESS_KEY_ID=...
-R2_SECRET_ACCESS_KEY=...
-R2_ENDPOINT_URL=https://ACCOUNT_ID.r2.cloudflarestorage.com
-S3_RAW_BUCKET=countyiq-raw
-COUNTYIQ_BACKUP_R2_ACCESS_KEY_ID=...
-COUNTYIQ_BACKUP_R2_SECRET_ACCESS_KEY=...
-COUNTYIQ_BACKUP_R2_BUCKET=countyiq-backups
-COUNTYIQ_BACKUP_BUCKET_LOCK_CONFIRMED=true
-COUNTYIQ_RESTORE_DRILL_MAX_AGE_DAYS=120
-```
-
-Notes:
-
-- Passes 0-4 prefer `COUNTYIQ_PASS{N}_MODEL`, then the evaluated code
-  default, then `COUNTYIQ_OPENROUTER_MODEL`.
-- Search can use `COUNTYIQ_SEARCH_MODEL`, then its dedicated low-cost model
-  pool. It does not inherit the offline pipeline model.
-- `COUNTYIQ_THINKING` is only the global fallback; pass-specific overrides are supported.
 - The API container receives neither the administrator database credential nor
   pipeline/R2/Slack credentials. `03-api-role.sh` creates and refreshes its
-  read-only grants after migrations.
+  source-data read grants and scoped account/workspace write grants after
+  migrations.
 - Scheduled Dagster containers receive an allowlist of pipeline settings—not
-  the complete `.env`—and use a non-superuser writer created by
+  the complete environment file—and use a non-superuser writer created by
   `02-runtime-role.sh`. Only the short-lived `migrate` service and host backup
   job use the database administrator credential.
 - Dagster's R2 credential is scoped to raw archives. The separate host-only
@@ -101,16 +60,17 @@ Notes:
 
 ## Access Model
 
-- Public traffic should only reach Cloudflare and Caddy.
-- Postgres and Dagster should stay private to the host and SSH tunnels.
+- Public traffic reaches Cloudflare; its outbound Tunnel connector reaches
+  Caddy over the internal edge network. No origin HTTP(S) port is published.
+- Cloudflare Access covers the whole app host. The API also verifies customer
+  identity; production preflight rejects disabled authentication. Marketing
+  cannot proxy API requests.
+- Postgres and Dagster stay private; use SSH tunnels for operator access.
 - SSH key auth only.
-- Restrict origin HTTP(S) firewall rules to Cloudflare's published networks;
-  direct origin access bypasses edge WAF controls even though Caddy still
-  rejects spoofed proxy headers.
 - API and pipeline containers run as UID 10001 with dropped capabilities;
   Postgres is isolated on an internal network and Caddy cannot reach it.
-- API, pipeline, and Caddy internet egress use separate bridge networks, so
-  outbound access does not also create a shared lateral-movement network.
+- API, pipeline, and Tunnel internet egress use separate bridge networks.
+  Caddy joins only the internal proxy and edge networks.
 - External runtime images and Dockerfile bases are pinned by digest; Dependabot
   proposes reviewed digest updates rather than silently changing a deployment.
 - Container JSON logs rotate at 10 MiB with five files per service. Commit-tagged
@@ -145,7 +105,6 @@ fail-closed. The operator checks out an exact reviewed SHA and runs
 requires a remotely verified pre-deploy backup, applies Alembic, refreshes
 runtime grants, checks readiness, persists the active image tag, and writes an
 immutable release receipt.
-This is operationally repeatable, but it is not bit-for-bit artifact promotion:
-a future registry/signing boundary becomes worthwhile if multiple hosts or
-frequent releases make on-host builds inadequate. Cloudflare Pages deployment
-remains separate and is not automated by this repository.
+Both frontend entries ship in the same web image. Cloudflare DNS, Tunnel, and
+Access changes are managed separately in `infra/cloudflare/`; building the web
+image does not apply them.

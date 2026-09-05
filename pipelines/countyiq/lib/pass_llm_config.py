@@ -590,6 +590,12 @@ def resolve_pass_harness(
             f"invalid cumulative paid-pass authorization: {exc}"
         ) from exc
 
+    if pass_number in range(4):
+        from countyiq.lib.quality_release import check_quality_release
+        quality = check_quality_release(pass_number)
+        if not quality["ok"]:
+            raise PassHarnessUnavailable(quality["reason"])
+
     spend_budget = PassSpendBudget(
         pass_number,
         max_cost_usd,

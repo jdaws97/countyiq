@@ -23,6 +23,10 @@ class CountyConfig:
     # Identity
     name: str                       # e.g. "York County"
     state: str = "PA"
+    # Wrong-jurisdiction hosts must never enter this county's corpus.
+    rejected_proceeding_domains: tuple[str, ...] = ()
+    # Identity-verified replacements pending source-policy and collection checks.
+    proceeding_source_replacements: tuple[tuple[str, str, str], ...] = ()
     open_data_source_key: str = ""  # key in meta.source_rights for county GIS
 
     # PLCB liquor licenses (statewide CSV, filtered by county name)
@@ -150,6 +154,17 @@ class CountyConfig:
 COUNTY_CONFIGS: dict[str, CountyConfig] = {
     "york": CountyConfig(
         name="York County",
+        rejected_proceeding_domains=("penntownship.org", "paradisetownship.org", "windsortownship.com", "jackson-township.org"),
+        proceeding_source_replacements=(
+            ('Penn Township Board of Commissioners', 'https://penntwp.com/directory/committees/board-of-commissioners-meeting-minutes/', 'board_of_commissioners'),
+            ('Penn Township Planning Commission', 'https://penntwp.com/commissions/planning-commission/', 'planning_commission'),
+            ('Penn Township Zoning Hearing Board', 'https://penntwp.com/directory/boards/zoning-hearing-board/', 'zoning_hearing'),
+            ('Paradise Township Board of Supervisors', 'https://paradisetwpyorkco.com/board-of-supervisors-meeting-agendas-and-minutes/', 'board_of_supervisors'),
+            ('Paradise Township Planning Commission', 'https://paradisetwpyorkco.com/planning-commission-meeting-agendas-and-minutes/', 'planning_commission'),
+            ('Jackson Township Board of Supervisors', 'https://jacksontwpyork.org/township-calendar-meetings/township-meetings-minutes/board-of-supervisors-meetings-minutes', 'board_of_supervisors'),
+            ('Windsor Township Board of Supervisors', 'https://windsortwp.com/board-of-supervisors-meeting-minutes-agenda/', 'board_of_supervisors'),
+            ('Windsor Township Planning Commission', 'https://windsortwp.com/planning-commission-meeting-minutes-agenda/', 'planning_commission'),
+        ),
         open_data_source_key="york_open_data",
         plcb_filter="York County",
         plcb_min_records=500,
@@ -265,15 +280,13 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
                 "board_of_supervisors",
             ),
             ("Hopewell Twp Board of Supervisors", "https://www.hopewelltownship.com/public-meetings/board-of-supervisors/", "board_of_supervisors"),
-            ("Jackson Twp Board of Supervisors", "https://jackson-township.org/meeting-agendas/", "board_of_supervisors"),
             ("Manchester Twp Board of Supervisors", "https://www.mantwp.com/meetings-agendas/", "board_of_supervisors"),
             ("Manheim Twp Board of Supervisors", "https://www.manheimtwpyorkpa.org/index.php/government/minutes-agendas", "board_of_supervisors"),
             ("North Codorus Twp Board of Supervisors", "https://northcodorustwp.org/board-of-supervisors-3/", "board_of_supervisors"),
             ("North York Borough Council", "https://northyorkborough.com/borough-council-meeting-minutes/", "borough_council"),
-            ("Paradise Twp Board of Supervisors", "https://paradisetownship.org/documents/board-of-supervisor-agenda-notices/", "board_of_supervisors"),
+            # Penn/Paradise sources paused: configured domains were in Butler/Lancaster
+            # counties, not York. See migration 057; replacements require source review.
             ("Peach Bottom Twp Board of Supervisors", "https://www.peachbottomtownship.org/meeting-minutes", "board_of_supervisors"),
-            # Penn Twp /meeting-minutes/ page is empty; all 238 PDFs live at /documents/
-            ("Penn Twp Board of Supervisors", "https://penntownship.org/documents/", "board_of_supervisors"),
             ("Red Lion Borough Council", "https://redlionpa.org/government/agendas-minutes/borough-council-agendas-minutes/", "borough_council"),
             ("Seven Valleys Borough Council", "https://sevenvalleysborough.com/minutes/", "borough_council"),
             ("Shrewsbury Borough Council", "https://shrewsburyborough.org/minutes/", "borough_council"),
@@ -291,7 +304,6 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ("West Manchester Twp Board of Supervisors", "https://www.westmanchestertownship.com/boards-committees/board-of-supervisors/", "board_of_supervisors"),
             # West Manheim BOS/PC/ZHB paths are paused: the official robots.txt
             # explicitly disallowed them in the 2026-08-27 retained audit.
-            ("Windsor Twp Board of Supervisors", "https://windsortownship.com/events-minutes/board-of-trustees/", "board_of_supervisors"),
             ("Wrightsville Borough Council", "https://wrightsvilleborough.com/meeting-minutes/", "borough_council"),
             ("Yoe Borough Council", "https://yoeborough.org/information/minutes/", "borough_council"),
             # Yorkana site is dead as of 2026-08-02 (TLS cert expired; HTTP serves
@@ -366,9 +378,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),
             ("Hopewell Twp Zoning Hearing Board", "https://www.hopewelltownship.com/public-meetings/zoning-hearing-board/", "zoning_hearing"),
             ("North Codorus Twp Zoning Hearing Board", "https://northcodorustwp.org/zoning-hearing-board-2/", "zoning_hearing"),
-            ("Paradise Twp Zoning Hearing Board", "https://paradisetownship.org/documents/zoning-hearing-board-notices/", "zoning_hearing"),
             ("Peach Bottom Twp Zoning Hearing Board", "https://www.peachbottomtownship.org/zoning-hearing-board", "zoning_hearing"),
-            ("Penn Twp Zoning Hearing Board", "https://penntownship.org/zoning-hearing-board/", "zoning_hearing"),
             ("Red Lion Boro Zoning Hearing Board", "https://redlionpa.org/government/agendas-minutes/zoning-hearing-board-agendas/", "zoning_hearing"),
             # Site restructured 2026 (old /government/zoning-hearing-board/ is 404);
             # hearing notices page — ZHB minutes live only in eCode360, which is
@@ -407,9 +417,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),
             ("Hopewell Twp Planning Commission", "https://www.hopewelltownship.com/public-meetings/planning-commission-board/", "planning_commission"),
             ("North Codorus Twp Planning Commission", "https://northcodorustwp.org/planning-commission-2/", "planning_commission"),
-            ("Paradise Twp Planning Commission", "https://paradisetownship.org/documents/planning-commission-agendas-minutes/", "planning_commission"),
             # Penn Twp's /documents/ page holds both BOS and PC documents; classifier routes by filename
-            ("Penn Twp Planning Commission", "https://penntownship.org/documents/", "planning_commission"),
             ("Red Lion Boro Planning Commission", "https://redlionpa.org/government/agendas-minutes/2023-planning-commission-agendas-minutes/", "planning_commission"),
             # Shrewsbury Twp PC minutes live only in eCode360, which is not
             # collected (scrape-free policy — see the BOS-section note).
@@ -422,7 +430,6 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ("Warrington Twp Planning Commission", "https://warringtontwp.org/index.php/planning-commission-minutes-2026/", "planning_commission"),
             ("West Manchester Twp Planning Commission", "https://www.westmanchestertownship.com/boards-committees/planning-commission/", "planning_commission"),
             # West Manheim PC is part of the robots-paused group above.
-            ("Windsor Twp Planning Commission", "https://windsortownship.com/events-minutes/planning-commission/", "planning_commission"),
             ("York City Planning Commission", "https://www.yorkcity.org/government/authorities-boards-and-commissions/planning-commission-board/", "planning_commission"),
             ("York Twp Planning Commission", "https://yorktownshippa.gov/PC", "planning_commission"),
             ("Lower Windsor Twp Planning Commission", "https://www.lowerwindsor.com/planning-commission/", "planning_commission"),

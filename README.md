@@ -3,7 +3,7 @@
 CountyIQ is a York County real-estate intelligence platform for investors and
 developers, built around three active surfaces:
 
-- `frontend/`: React app for search, map, radar, owners, parcels, and operations views
+- `frontend/`: React app for the feed, radar, map, municipality, search, property/entity/project case files, watch workspace, and operations views
 - `api/`: FastAPI service serving `/api/*`
 - `pipelines/`: Dagster pipelines for source ingestion plus the LLM-backed intelligence passes
 

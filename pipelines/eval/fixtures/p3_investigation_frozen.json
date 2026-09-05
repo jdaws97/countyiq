@@ -1,0 +1,441 @@
+{
+  "version": 2,
+  "reviewed_at": "2026-09-04",
+  "derivation": "Original frozen source contexts retained; recommendation rubric migrated to investigation actions without inferred commercial urgency. No paid model evaluation is implied.",
+  "cases": [
+    {
+      "id": "p3-001",
+      "source_pass2_case": "p2-003",
+      "case_type": "owner_matched_plan_opportunity",
+      "context": {
+        "pidn": "P2003",
+        "parcel": {
+          "pidn": "P2003",
+          "owner": "Taylor Brooks",
+          "address": "103 Cedar Road",
+          "assessed_value": 760.0,
+          "acres": 1.22,
+          "property_class": "F",
+          "sale_date": "",
+          "sale_price": 0.0,
+          "previous_owner": "",
+          "municipality": "SHREWSBURY TWP",
+          "school_district": "022",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": {},
+        "validated_signals": [
+          {
+            "signal_key": "active_subdivision",
+            "validation_status": "confirmed",
+            "adjusted_significance": "high",
+            "reasoning": "The owner-matched plan proposes four lots and three units on 45.5 acres, 74m from this vacant component; approval is not shown.",
+            "key_facts": [
+              "4 lots",
+              "3 units",
+              "45.5 acres",
+              "74m"
+            ],
+            "cross_references": [
+              "vacancy"
+            ],
+            "source_url": "",
+            "internal_url": ""
+          },
+          {
+            "signal_key": "vacancy",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "reasoning": "The parcel component has no mapped structure and a $760 assessment, consistent with undeveloped land in the owner-matched plan.",
+            "key_facts": [
+              "0 structures",
+              "$760 assessed value"
+            ],
+            "cross_references": [
+              "active_subdivision"
+            ],
+            "source_url": "",
+            "internal_url": ""
+          }
+        ]
+      },
+      "context_sha256": "a59fecbd673161f5c025befa675df4681b6afe2b37752ef8cf1a1738f5880eb0",
+      "labels": {
+        "accepted_fields": {
+          "recommendation": [
+            "investigate",
+            "watch"
+          ],
+          "urgency": [
+            "none"
+          ],
+          "evidence_strength": [
+            "strong",
+            "moderate"
+          ],
+          "assessment": [
+            "strong_opportunity",
+            "emerging"
+          ]
+        },
+        "required_citations": [
+          "active_subdivision",
+          "vacancy"
+        ],
+        "allowed_citations": [
+          "active_subdivision",
+          "vacancy"
+        ],
+        "required_fact_groups": [
+          [
+            "4 lots",
+            "four lots"
+          ],
+          [
+            "45.5 acres"
+          ],
+          [
+            "0 structures",
+            "no mapped structure"
+          ]
+        ],
+        "forbidden_claims": [
+          "approved plan",
+          "guaranteed",
+          "entitled"
+        ]
+      },
+      "review": "Material owner-matched plan plus undeveloped component; action is research/outreach, not an approval claim.",
+      "contract_migration": "Investigation actions; source facts and context hashes unchanged."
+    },
+    {
+      "id": "p3-002",
+      "source_pass2_case": "p2-005",
+      "case_type": "large_farm_transfer_without_assemblage_intent",
+      "context": {
+        "pidn": "P2005",
+        "parcel": {
+          "pidn": "P2005",
+          "owner": "Riley Turner",
+          "address": "105 Cedar Road",
+          "assessed_value": 426270.0,
+          "acres": 101.13,
+          "property_class": "F",
+          "sale_date": "03-FEB-2026",
+          "sale_price": 1160000.0,
+          "previous_owner": "Cameron Reed",
+          "municipality": "WASHINGTON TWP",
+          "school_district": "014",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": {},
+        "validated_signals": [
+          {
+            "signal_key": "ownership_change",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "reasoning": "A recent $1.16m transfer of a 101.13-acre farm is material, but the buyer is not an LLC and development intent is not established.",
+            "key_facts": [
+              "$1.16m sale",
+              "101.13 acres",
+              "buyer is not an LLC"
+            ],
+            "cross_references": [
+              "assemblage"
+            ],
+            "source_url": "",
+            "internal_url": ""
+          },
+          {
+            "signal_key": "assemblage",
+            "validation_status": "downgraded",
+            "adjusted_significance": "low",
+            "reasoning": "Ten differently owned neighbors provide scale context, but no coordinated purchase or neighboring distress is shown.",
+            "key_facts": [
+              "10 differently owned neighbors",
+              "no neighboring delinquency"
+            ],
+            "cross_references": [
+              "ownership_change"
+            ],
+            "source_url": "",
+            "internal_url": ""
+          }
+        ]
+      },
+      "context_sha256": "3f2ef608246e71f194cd2a52dd856a429c0befa4914387d4796f5ac0a1945148",
+      "labels": {
+        "accepted_fields": {
+          "recommendation": [
+            "watch"
+          ],
+          "urgency": [
+            "none"
+          ],
+          "evidence_strength": [
+            "moderate",
+            "weak"
+          ],
+          "assessment": [
+            "emerging",
+            "speculative",
+            "constrained"
+          ]
+        },
+        "required_citations": [
+          "ownership_change",
+          "assemblage"
+        ],
+        "allowed_citations": [
+          "ownership_change",
+          "assemblage"
+        ],
+        "required_fact_groups": [
+          [
+            "1.16m",
+            "1,160,000"
+          ],
+          [
+            "101.13 acres",
+            "101 acres"
+          ],
+          [
+            "10 differently owned",
+            "ten differently owned"
+          ]
+        ],
+        "forbidden_claims": [
+          "coordinated acquisition",
+          "development approved",
+          "distressed seller"
+        ]
+      },
+      "review": "A substantial transfer merits monitoring, while the weak assemblage heuristic must not become a developer-intent narrative.",
+      "contract_migration": "Investigation actions; source facts and context hashes unchanged."
+    },
+    {
+      "id": "p3-003",
+      "source_pass2_case": "p2-009",
+      "case_type": "institutional_purchase_without_rezoning_evidence",
+      "context": {
+        "pidn": "P2009",
+        "parcel": {
+          "pidn": "P2009",
+          "owner": "Blue Heron School Authority",
+          "address": "109 Cedar Road",
+          "assessed_value": 110000.0,
+          "acres": 0.943,
+          "property_class": "C",
+          "sale_date": "09-MAR-2026",
+          "sale_price": 1500000.0,
+          "previous_owner": "Fox Run Holdings LLC",
+          "municipality": "YORK TWP",
+          "school_district": "004",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": {},
+        "validated_signals": [
+          {
+            "signal_key": "ownership_change",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "reasoning": "A school authority acquired the parcel for $1.5m in March 2026, a material institutional ownership event.",
+            "key_facts": [
+              "$1.5m",
+              "school authority",
+              "March 2026"
+            ],
+            "cross_references": [
+              "zoning_mismatch"
+            ],
+            "source_url": "",
+            "internal_url": ""
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "validation_status": "downgraded",
+            "adjusted_significance": "low",
+            "reasoning": "Commercial Office zoning differs modestly from mixed commercial/industrial future use; no rezoning application or plan authority is present.",
+            "key_facts": [
+              "Commercial Office",
+              "mixed commercial/industrial"
+            ],
+            "cross_references": [
+              "ownership_change"
+            ],
+            "source_url": "",
+            "internal_url": ""
+          }
+        ]
+      },
+      "context_sha256": "c39d1c3fffe01ead241efa7e99a26fd13cb282b70036fe3894a4cbeb0e68fe68",
+      "labels": {
+        "accepted_fields": {
+          "recommendation": [
+            "watch",
+            "insufficient_evidence"
+          ],
+          "urgency": [
+            "none"
+          ],
+          "evidence_strength": [
+            "moderate",
+            "weak"
+          ],
+          "assessment": [
+            "emerging",
+            "speculative",
+            "not_actionable"
+          ]
+        },
+        "required_citations": [
+          "ownership_change",
+          "zoning_mismatch"
+        ],
+        "allowed_citations": [
+          "ownership_change",
+          "zoning_mismatch"
+        ],
+        "required_fact_groups": [
+          [
+            "1.5m",
+            "1,500,000"
+          ],
+          [
+            "school authority"
+          ],
+          [
+            "commercial office"
+          ],
+          [
+            "mixed commercial",
+            "mixed use"
+          ]
+        ],
+        "forbidden_claims": [
+          "rezoning filed",
+          "rezoning approved",
+          "development approved"
+        ]
+      },
+      "review": "The institutional transaction is notable, but there is no evidence that the modest land-use distinction has triggered an application.",
+      "contract_migration": "Investigation actions; source facts and context hashes unchanged."
+    },
+    {
+      "id": "p3-004",
+      "source_pass2_case": "p2-007",
+      "case_type": "rural_scale_with_conservation_constraint",
+      "context": {
+        "pidn": "P2007",
+        "parcel": {
+          "pidn": "P2007",
+          "owner": "Quinn Foster",
+          "address": "107 Cedar Road",
+          "assessed_value": 217380.0,
+          "acres": 15.13,
+          "property_class": "F",
+          "sale_date": "23-FEB-2021",
+          "sale_price": 560000.0,
+          "previous_owner": "Drew Parker",
+          "municipality": "FAIRVIEW TWP",
+          "school_district": "17F",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": {},
+        "validated_signals": [
+          {
+            "signal_key": "assemblage",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "reasoning": "The 15.13-acre parcel touches 13 neighbors representing 12 different owners, but no coordinated acquisition or distress is shown.",
+            "key_facts": [
+              "15.13 acres",
+              "13 neighbors",
+              "12 different owners"
+            ],
+            "cross_references": [
+              "zoning_mismatch"
+            ],
+            "source_url": "",
+            "internal_url": ""
+          },
+          {
+            "signal_key": "zoning_mismatch",
+            "validation_status": "downgraded",
+            "adjusted_significance": "low",
+            "reasoning": "Current Rural Living and future Rural Conservation point toward constraint rather than higher-density development; plan authority and timing are absent.",
+            "key_facts": [
+              "Rural Living",
+              "Rural Conservation"
+            ],
+            "cross_references": [
+              "assemblage"
+            ],
+            "source_url": "",
+            "internal_url": ""
+          }
+        ]
+      },
+      "context_sha256": "be5148dc1a6cd7bde081675a863a611fc3a880f1c5b95632e7004c77afa3e7d3",
+      "labels": {
+        "accepted_fields": {
+          "recommendation": [
+            "insufficient_evidence"
+          ],
+          "urgency": [
+            "none"
+          ],
+          "evidence_strength": [
+            "moderate",
+            "weak"
+          ],
+          "assessment": [
+            "speculative",
+            "constrained",
+            "not_actionable"
+          ]
+        },
+        "required_citations": [
+          "assemblage",
+          "zoning_mismatch"
+        ],
+        "allowed_citations": [
+          "assemblage",
+          "zoning_mismatch"
+        ],
+        "required_fact_groups": [
+          [
+            "15.13 acres",
+            "15 acres"
+          ],
+          [
+            "12 different owners",
+            "twelve different owners"
+          ],
+          [
+            "rural conservation"
+          ]
+        ],
+        "forbidden_claims": [
+          "higher density",
+          "rezoning approved",
+          "coordinated acquisition"
+        ]
+      },
+      "review": "Scale is real, but the land-use evidence is constraint-oriented and ownership remains fragmented.",
+      "contract_migration": "Investigation actions; source facts and context hashes unchanged."
+    }
+  ]
+}

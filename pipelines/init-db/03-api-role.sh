@@ -64,4 +64,11 @@ SELECT format(
     :'database_owner',
     :'api_user'
 ) \gexec
+-- Write access is confined to private workspace state. Normal requests retain
+-- the role's read-only transaction default; the authenticated routes explicitly
+-- open a writable transaction.
+SELECT format('GRANT INSERT, UPDATE, DELETE ON TABLE public.%I TO %I', tablename, :'api_user')
+FROM pg_tables WHERE schemaname='public' AND tablename IN ('watchspaces','watch_items','app_users','app_identities','workspace_members') \gexec
+SELECT format('GRANT UPDATE, DELETE ON TABLE public.watch_notifications TO %I', :'api_user')
+WHERE to_regclass('public.watch_notifications') IS NOT NULL \gexec
 SQL

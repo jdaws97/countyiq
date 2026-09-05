@@ -24,6 +24,7 @@ from countyiq.lib.intelligence_integrity import (
     inference_input_hash,
     parcel_brief_semantic_decision,
     record_inference_decision,
+    signal_version_refs,
     record_validation_rejection,
     validate_parcel_brief_citations,
 )
@@ -233,7 +234,7 @@ def brief_generation(
         input_hash: str | None = None
 
         try:
-            with database.dict_cursor() as cur:
+            with database.read_snapshot() as cur:
                 ctx = gather_brief_context(cur, pidn)
 
             validated_signals = ctx.get("validated_signals", [])
@@ -242,6 +243,7 @@ def brief_generation(
                 skipped += 1
                 continue
 
+            signal_dependencies = signal_version_refs(validated_signals, pidn=pidn)
             source_hash = compute_input_hash(ctx)
             input_hash = inference_input_hash(
                 source_hash,
@@ -329,7 +331,7 @@ def brief_generation(
                 citations=parsed.get("citations", []),
                 evidence_refs=[
                     f"signal:{key}" for key in parsed.get("citations", [])
-                ],
+                ] + signal_dependencies + ["parcel-context:v1:" + ctx["source_fingerprint"]],
             )
             if not gate.accepted:
                 auto = auto_resolve_contradiction(database, gate.contradiction_id, log)

@@ -87,7 +87,7 @@ Their value is the combined parcel-level Radar score and evidence trail.
 | Asset | Use and product consumer | Importance and disposition |
 |---|---|---|
 | `fema_flood_zones` | Property flood context, search filters, scores, and Radar constraints. | **Important — keep weekly.** |
-| `plcb_licenses` | License page, municipality counts, owner/entity corroboration. | **Important — keep monthly** under the recorded source policy. |
+| `plcb_licenses` | Licensed-premises search results, municipality profile counts, owner/entity corroboration. | **Important — keep monthly** under the recorded source policy. |
 | `tax_claims` | Delinquency events, municipality aggregates, owner/entity context, and gated distress scoring. | **Conditional — keep monthly.** Privacy and restricted-distress gates are part of the data contract. |
 | `pa_open_data` | Manual generic compatibility table; only ops row counts read it and no alpha surface depends on it. | **Retire candidate.** Keep manual until a migration confirms it has no external operator use, then remove asset/table/ops entry together. |
 

@@ -1,0 +1,22 @@
+[Unit]
+Description=Enforce the CountyIQ Cloudflare R2 hard cost stop
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+Environment=COUNTYIQ_ENV_FILE=/etc/countyiq/production.env
+ExecStart=/opt/countyiq/docker/cost-guard.sh --enforce
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/countyiq/cost-guard /var/lock
+TimeoutStartSec=15m
+
+[Install]
+WantedBy=multi-user.target

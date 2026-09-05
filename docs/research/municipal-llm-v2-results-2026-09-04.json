@@ -1,0 +1,368 @@
+{
+  "decision": "do_not_backfill",
+  "reviewer": "Codex qualitative source review, not independent human adjudication or a formal precision/recall gold set",
+  "total_cost_usd": 0.14069727,
+  "approved_cap_usd": 2,
+  "model": "openai/gpt-5.6-luna",
+  "publication": "none",
+  "real_database": {
+    "version": "061",
+    "published_extractions": 0,
+    "current_parcels": 175928,
+    "project_aliases": 0
+  },
+  "limitations": [
+    "Original sample deliberately enriched; held-out sample stratified across municipal bodies, only ten documents.",
+    "Evidence membership does not prove semantic entailment; relevance labels need customer adjudication.",
+    "Counterfactual project identities include rejected records and were never persisted.",
+    "Offline date replay is a different code identity; no new paid model evaluation or release receipt was issued."
+  ],
+  "batches": [
+    {
+      "artifact_directory": "output/municipal-pilot-v2-2026-09-04",
+      "status": "completed",
+      "format_results": {
+        "documents": 30,
+        "gate_documents": 4,
+        "nonempty_documents": 26,
+        "schema_valid_documents": 30,
+        "extracted_matters": 111,
+        "document_gate_matters": 0,
+        "individual_gate_matters": 8,
+        "evidence_spans": 233,
+        "invalid_spans": 15,
+        "matching_matters": 44,
+        "gated_matching_matters": 0,
+        "categories": {
+          "minor_property": 18,
+          "development": 61,
+          "landuse_policy": 17,
+          "public_works": 15
+        },
+        "gate_categories": {},
+        "candidate_project_groups": 83,
+        "gate_project_groups": 0
+      },
+      "date_only_replay": {
+        "documents": 30,
+        "gate_before": 4,
+        "gate_after": 5,
+        "matters_after": 2,
+        "newly_passing": [
+          "6302"
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 158214,
+        "completion_tokens": 76253,
+        "reasoning_tokens": 19045,
+        "cached_tokens": 102776,
+        "cost": 0.10741412
+      },
+      "providers": {
+        "OpenAI": 30
+      },
+      "sha256": {
+        "results.json": "516a3079af121afcc75a1c605e4a93c337c110e644f5116a7a5b8284112d49eb",
+        "sources.json": "212c50ec4658843d890202c6147efadad6df0b3a8997cb28f3e68d669e07f1cb",
+        "protocol.json": "94d0e2676d178fbaa16f9e4d12676c72e18d714d1fe2186c93a609b204798bc7"
+      },
+      "review": [
+        {
+          "source_id": "9599",
+          "notes": [
+            "Core six returned matters match reviewed source topics; zoning-ordinance rewrite still omitted. Sprich changes category between meetings (minor_property here, development elsewhere). Date/field coverage and altered address formatting block document. Full-date deadline embedded in wording is falsely rejected by our exact-only parser."
+          ]
+        },
+        {
+          "source_id": "9597",
+          "notes": [
+            "Core five matters retained. Recommendation versus final authority distinguished. Address strings insert semicolon/map annotations absent verbatim; contract rejects. Learning Experience remains a useful 10,000 sf daycare / 6,000 sf office lead."
+          ]
+        },
+        {
+          "source_id": "5153",
+          "notes": [
+            "Agenda language is now scheduled rather than completed consideration. Same eleven matters retained; several evidence quotes still omit or alter text and supporting_text does not exactly equal assigned spans. No final decisions claimed."
+          ]
+        },
+        {
+          "source_id": "8113",
+          "notes": [
+            "Historical July 20 approval/denial correctly dated July 20 instead of August 5. Useful Moul Ave, Fairfield Inn and Walmart matters retained. Proposed subdivision of existing duplex is still overclassified development. Generic project_reference Preliminary and Final/Preliminary Subdivision Plan could merge unrelated plans. Several dates include weekday/meeting text rejected by our parser."
+          ]
+        },
+        {
+          "source_id": "5145",
+          "notes": [
+            "Seven useful/minor agenda matters retained. All labeled recommendation despite unselected approve/deny templates; prose says agenda, but structured stage falsely suggests a recommendation occurred. Sign-only case categorized development. Quotes still altered."
+          ]
+        },
+        {
+          "source_id": "8124",
+          "notes": [
+            "Useful motel, gas station, dispensary, eating-establishment/multifamily matters retained. No approvals fabricated. Valid deadline embedded in text fails exact-only date parser. Existing duplex subdivision is correctly minor here but development in later Hanover agenda, showing inconsistent categories."
+          ]
+        },
+        {
+          "source_id": "5845",
+          "notes": [
+            "Policy amendments correctly remain recommendations; historical moratorium assigned March 11 instead of July meeting. Source writes 3/11/26; output expands century despite strict four-digit-year contract, so that historical date still needs explicit anchoring or unresolved display. Current meeting-date wrapper has valid four-digit year but our parser rejects it."
+          ]
+        },
+        {
+          "source_id": "8082",
+          "notes": [
+            "Six relevant matters retained, including 73-unit Prosper and Carvana new building. Submitted two-lot Butter Road subdivision remains development without confirmed new-build scope. Source concatenation SD-03-202695 becomes application_id rather than separating case identifier from 95 Butter Road: source-layout identity defect. Several quotes still edited."
+          ]
+        },
+        {
+          "source_id": "8949",
+          "notes": [
+            "Messiah ten dimensional variances correctly denied; not construction approval. January 22 hearing date distinct from written decision mailing/appeal deadline. Relative 30-day appeal wording preserved without invented absolute deadline. Two quotes and summary evidence still fail membership."
+          ]
+        },
+        {
+          "source_id": "3335",
+          "notes": [
+            "Cardinal Lane lot-line adjustment correctly minor and scheduled; both explicit IDs available but combined reference punctuation differs from source, causing rejection. Complete hearing date within weekday/time wording is rejected by parser."
+          ]
+        },
+        {
+          "source_id": "4659",
+          "notes": [
+            "Home occupation and dimensional relief correctly scheduled, no decisions invented. TRC scope uncertain; minor_property label does not establish whether development will follow. Meeting-date wrapper and missing date evidence block both."
+          ]
+        },
+        {
+          "source_id": "8079",
+          "notes": [
+            "Kuhar and Prosper match PC matters across boards by explicit case/applicant/location aliases. Chicken relief remains minor and 73-unit proposal development. No final action invented. Missing why_it_matters span labels and weekday/time date parsing block document."
+          ]
+        },
+        {
+          "source_id": "4660",
+          "notes": [
+            "Restaurant expansion extension and 52-to-59-unit multifamily modification retained. Heartland related applications correctly combined as one matter; no street/intersection parcel match should occur. All scheduled with no completed decision."
+          ]
+        },
+        {
+          "source_id": "6302",
+          "notes": [
+            "Two variance cases retained and full multiple IDs separated. August 24 deadline explicitly appears within EACH case, so it is case-specific and legitimate. Current rejection is entirely parser false positives for dates embedded in complete source wording."
+          ]
+        },
+        {
+          "source_id": "2652",
+          "notes": [
+            "Continued pool variance is minor property context, not a construction lead. Source address and application preserved; document rejected solely for missing parcel-reference span assignment."
+          ]
+        },
+        {
+          "source_id": "10274",
+          "notes": [
+            "Accessory-building variance remains scheduled; scripted agenda testimony/deliberation not treated as completed proceedings. Two source passages altered and required reference evidence assignment omitted."
+          ]
+        },
+        {
+          "source_id": "2225",
+          "notes": [
+            "Previously missed North Sherman Street bidding is recovered. Truck-parking final-plan approval correctly conditional. Street-only Steamboat/Willow Springs remain unlinked. Data-center draft action has completed revisions in prose but scheduled structured status, still inconsistent. Prose adds 2026 to Casella February 24 next date although structured source wording preserves February 24 only. Source letter-date conflict needs checking in conditions before release.",
+            "Conditions copy November 6, 2026 without flagging the source conflict with November 6, 2025; this is a future-dated letter in February minutes and needs explicit conflict treatment."
+          ]
+        },
+        {
+          "source_id": "7630",
+          "notes": [
+            "Previously omitted 2026 road paving bids recovered. Agricultural lot-line adjustment with no development correctly minor. Adopted venue/winery amendments and bridge project retained. Advertising dates and opening date combined into one upcoming_date/ISO field, which cannot represent separate milestones safely; parser must not pick one silently. Dry hydrant easement is low-information public-works context."
+          ]
+        },
+        {
+          "source_id": "9042",
+          "notes": [
+            "Sawmill and public substation/parking-lot work are useful leads. Routine pond repairs and generic material/equipment supply awards add noise; parking-rule ordinance is not clearly development policy. All meeting dates lack assigned evidence. April 14 prose expands 4/14/26 source century."
+          ]
+        },
+        {
+          "source_id": "4645",
+          "notes": [
+            "Previously missed $350,000 Goodwill social-hall remodel recovered. Historical June 29 garage date retained, but source only says ZHB moved to grant, without explicit vote outcome; approved is too definitive under our contract. Ordinary replacement of $1,484.68 drainage grates and cattle-business code investigation should not become development opportunities. Meadow construction start/completion are distinct dates collapsed into one milestone field."
+          ]
+        },
+        {
+          "source_id": "9224",
+          "notes": [
+            "Previously missed conditional-use permit fee amendment recovered. Impala driveway modification concerns an already-permitted home under construction, useful property history but low discovery value and better minor_property categorization. Two evidence-label errors reject otherwise well-supported source facts."
+          ]
+        },
+        {
+          "source_id": "10481",
+          "notes": [
+            "Eight items retained. SolAmerica remains project-level with no street-only parcel attachment. Rural subdivision and Act 537 compliance-rate update still overstate development/policy relevance without a substantive change. Brian Daniel, solar overlay and BESS ordinance are useful follow-up/context."
+          ]
+        },
+        {
+          "source_id": "1174",
+          "notes": [
+            "False CUH 2026-10 next-case-footer project is gone. Young and Greenview time-extension items retained with no approval or generic deadline. Both blocked only by missing why_it_matters field assignment."
+          ]
+        },
+        {
+          "source_id": "1171",
+          "notes": [
+            "Boxx/Joseph Machine/Sturbridge and two conditional-use items retained. Incorrect generic August 3 submission deadline is no longer assigned to CUH 2026-8/9. Generic titles Steep Slope and Accessory Use over 1000sq ft should not supply municipality-wide named project aliases across unrelated cases. Full-date meeting wrapper still fails parser."
+          ]
+        },
+        {
+          "source_id": "9469",
+          "notes": [
+            "Empty is appropriate: source has commercial liquor-license transfer alone, without separately supported construction."
+          ]
+        },
+        {
+          "source_id": "6480",
+          "notes": [
+            "Generic 2026 Fee Schedule Resolution has no development-related fee detail; extracting it as land-use policy is unsupported scope and should be excluded. Prefilter would skip it."
+          ]
+        },
+        {
+          "source_id": "2224",
+          "notes": [
+            "Empty is appropriate for unlocated fill-permit administration and no substantive development event."
+          ]
+        },
+        {
+          "source_id": "6584",
+          "notes": [
+            "Empty control remains appropriate; no substantive property or land-use matter found in source."
+          ]
+        },
+        {
+          "source_id": "6472",
+          "notes": [
+            "Specific park pavement/sign proposal retained as public_works; limited contracting milestone rather than new development. Prefilter now recognizes park project. Relevance is borderline and should be separate from development discovery."
+          ]
+        },
+        {
+          "source_id": "300",
+          "notes": [
+            "Empty control remains appropriate; no substantive property or land-use matter found in source."
+          ]
+        }
+      ]
+    },
+    {
+      "artifact_directory": "output/municipal-heldout-v2-2026-09-04",
+      "status": "completed",
+      "format_results": {
+        "documents": 10,
+        "gate_documents": 1,
+        "nonempty_documents": 10,
+        "schema_valid_documents": 10,
+        "extracted_matters": 33,
+        "document_gate_matters": 3,
+        "individual_gate_matters": 8,
+        "evidence_spans": 59,
+        "invalid_spans": 0,
+        "matching_matters": 13,
+        "gated_matching_matters": 3,
+        "categories": {
+          "development": 16,
+          "minor_property": 6,
+          "landuse_policy": 8,
+          "public_works": 3
+        },
+        "gate_categories": {
+          "landuse_policy": 1,
+          "development": 2
+        },
+        "candidate_project_groups": 30,
+        "gate_project_groups": 2
+      },
+      "date_only_replay": {
+        "documents": 10,
+        "gate_before": 1,
+        "gate_after": 1,
+        "matters_after": 3,
+        "newly_passing": []
+      },
+      "usage": {
+        "prompt_tokens": 45801,
+        "completion_tokens": 24988,
+        "reasoning_tokens": 8184,
+        "cached_tokens": 35440,
+        "cost": 0.03328315
+      },
+      "providers": {
+        "OpenAI": 10
+      },
+      "sha256": {
+        "results.json": "2ac1b400f6bc75f956a1ac366b61b70974bef6ea423c7523f02540e47139216c",
+        "sources.json": "f5e915ca4a8da0427611f6ab113a70b76d80d26dd00a1fdcdab49efcbd075362",
+        "protocol.json": "7575298b9d917daaa2e2f408550b61c14a43063460f224fa2f0c23252f8d24f7"
+      },
+      "review": [
+        {
+          "source_id": "6316",
+          "notes": [
+            "Misses substantive zoning ordinance rewrite covering data centers/warehouses/decommissioning requirements. Daugherty lot consolidation categorized development although minor_property is more appropriate absent new development scope. PC vote approving plans is described with deciding-authority status despite a subsequent BOS review: authority scope needs explicit handling. Carport and boathouse recommendations correctly remain nonfinal. Project title absent from supplied spans rejects whole document; one malformed source PIDN preserved in structured refs, so it should remain unresolved."
+          ]
+        },
+        {
+          "source_id": "9600",
+          "notes": [
+            "Six agenda matters preserved; T-908 redevelopment and T-909 BAE office are useful leads. No approval invented. Sprich continuation and other minor-use category choices need consistency. Source type correctly scheduled."
+          ]
+        },
+        {
+          "source_id": "1229",
+          "notes": [
+            "Boxx Modular site plan review is a useful lead of unknown scope. No generic May 18 plan-submission deadline attached. YCPC amendment item is vague, should be low-information policy context rather than substantive alert. Missing rationale span labels cause whole-document failure."
+          ]
+        },
+        {
+          "source_id": "10281",
+          "notes": [
+            "All three matters supported, runtime gate passes. Agricultural Security Area is a parcel-specific designation; minor subdivision of an existing tower parcel is miscategorized development, risking radar noise. Trone final plan has an address and plan ID but no build scope stated."
+          ]
+        },
+        {
+          "source_id": "5133",
+          "notes": [
+            "Two agenda matters and explicit withdrawn matter preserved without approvals. 1-27-2026 is a complete source date our parser incorrectly rejects; weekday prefix also unsupported. Quotation coverage missing on current agenda dates."
+          ]
+        },
+        {
+          "source_id": "296",
+          "notes": [
+            "Correctly recognizes three land-use/fee policy matters and a street project. Horn Farm discussion alone has unspecified scope and should not become a substantive development alert. Standing comprehensive-plan update and maintenance excluded reasonably. Project-title evidence mapping is incomplete; reordered title not exact."
+          ]
+        },
+        {
+          "source_id": "7600",
+          "notes": [
+            "Roof public bidding milestone retained; generic ordinance number without subject correctly not interpreted as zoning. Colonial Heights update has no stated change; omission reasonable. Missing meeting-date evidence blocks record."
+          ]
+        },
+        {
+          "source_id": "3178",
+          "notes": [
+            "Messiah, Seneca Heights, Mavis and Green Lane bond reduction are useful project history. The adjacent 120 Spanglers Mill property is explicitly excluded by source and correctly not included among project parcel references. Park naming alone is administrative, not a development approval. Removed Baker item incorrectly labeled continued: source says removed from future agendas, opposite of postponement. Conflicting Resolution 2026-18/19 is flagged in prose but both IDs enter alias candidates, risking incorrect cross-project identity. Generic approved needs decision scope (bond release, sidewalk modification, name approval), not project-wide approval."
+          ]
+        },
+        {
+          "source_id": "671",
+          "notes": [
+            "Phase 2B and zoning amendment correctly scheduled with decision null, so agenda approval wording does not become completed approval. Tar/chip bidding omitted as ordinary maintenance; reasonable. Generic next-meeting footer not assigned as case deadline."
+          ]
+        },
+        {
+          "source_id": "9939",
+          "notes": [
+            "Specific traffic-signal pay application retained as public capital milestone with decision null. Routine property violations and ordinary maintenance excluded. Traffic-signal backup generator omission is borderline public-works recall, not proven development omission."
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -7,11 +7,10 @@ Pass 2 decisions is hundreds of manual adjudications.
 
 Policy (see ``docs/operations/intelligence-rollout.md``):
 
-* **Consequential flips always wait for a person.** A natural person being
-  merged into or out of an organization, a proceeding decision flipping
+* **Consequential flips always wait for a person.** Any entity membership merge or split, a proceeding decision flipping
   between approved and denied, a signal crossing the medium-or-high brief
-  eligibility boundary, a parcel brief moving between pursue and pass, or an
-  owner brief moving between pursue and none.
+  eligibility boundary, or a brief moving between investigate and insufficient
+  evidence (including historical pursue/pass/none labels).
 * **Version upgrades default to the challenger.** When the challenger came
   from a different model or prompt version than the incumbent, the newer
   reviewed code is presumed better.
@@ -111,9 +110,7 @@ def _assess_entities(prior: dict, challenger: dict) -> list[str]:
     changed = _grouped_pairs(_entity_groups(prior)) ^ _grouped_pairs(_entity_groups(challenger))
     reasons = []
     for a, b in sorted(changed):
-        kinds = {_entity_kind(a), _entity_kind(b)}
-        if kinds == {"person", "organization"}:
-            reasons.append(f"person/organization membership changed: {a!r} <> {b!r}")
+        reasons.append(f"identity membership changed: {a!r} <> {b!r}")
     return reasons
 
 
@@ -155,10 +152,14 @@ def _assess_signals(prior: dict, challenger: dict) -> list[str]:
     return reasons
 
 
-def _assess_field_flip(prior: dict, challenger: dict, field_name: str, extremes: set[str]) -> list[str]:
+def _assess_field_flip(
+    prior: dict, challenger: dict, field_name: str,
+    actionable: set[str], insufficient: set[str],
+) -> list[str]:
     before = str(prior.get(field_name) or "").strip()
     after = str(challenger.get(field_name) or "").strip()
-    if before != after and {before, after} == extremes:
+    if ((before in actionable and after in insufficient)
+            or (after in actionable and before in insufficient)):
         return [f"{field_name} flipped {before} -> {after}"]
     return []
 
@@ -182,9 +183,9 @@ def classify_flip(
     elif output_kind == "signal_validation":
         reasons = _assess_signals(prior, challenger)
     elif output_kind == "parcel_brief":
-        reasons = _assess_field_flip(prior, challenger, "recommendation", {"pursue_now", "pass"})
+        reasons = _assess_field_flip(prior, challenger, "recommendation", {"pursue_now", "investigate"}, {"pass", "insufficient_evidence"})
     elif output_kind == "owner_brief":
-        reasons = _assess_field_flip(prior, challenger, "recommendation", {"pursue_acquisition", "none"})
+        reasons = _assess_field_flip(prior, challenger, "recommendation", {"pursue_acquisition", "investigate"}, {"none", "insufficient_evidence"})
     else:
         reasons = [f"unknown output kind {output_kind}"]
     version_upgrade = bool(

@@ -1,10 +1,12 @@
 import type { RadarViewMode } from '../types/api'
+import { commitBrowserStorage, workspaceStorageKey } from './browserStorage'
+import { watchlistStorageEntries } from './watchlist'
 
 const TRIAGE_KEY = 'countyiq_event_triage_v1'
 const LAST_FEED_KEY = 'countyiq_last_feed_visit_v1'
 const LAST_WATCH_KEY = 'countyiq_last_watch_visit_v1'
 const SAVED_SEARCH_KEY = 'countyiq_saved_searches_v1'
-const COMPARE_KEY = 'countyiq_compare_v1'
+const COMPARE_KEY = 'countyiq_compare_v1' // gitleaks:allow -- public localStorage name
 
 export type TriageStatus = 'reviewed' | 'dismissed'
 
@@ -18,23 +20,28 @@ export interface SavedSearch {
 
 function getStoredValue(key: string): string | null {
   try {
-    return localStorage.getItem(key)
+    return localStorage.getItem(workspaceStorageKey(key))
   } catch {
     return null
   }
 }
 
-function setStoredValue(key: string, value: string): void {
+function setStoredValue(key: string, value: string): boolean {
   try {
-    localStorage.setItem(key, value)
+    commitBrowserStorage({ [key]: value })
+    return true
   } catch {
-    // Investigation tools remain usable for the current page without persistence.
+    return false
   }
+}
+
+function notifyStorageFailure(): void {
+  window.alert('Could not save this change. Browser storage is full or unavailable.')
 }
 
 function removeStoredValue(key: string): void {
   try {
-    localStorage.removeItem(key)
+    localStorage.removeItem(workspaceStorageKey(key))
   } catch {
     // Storage can be unavailable in hardened/private browser contexts.
   }
@@ -56,14 +63,16 @@ function emit(): void {
 }
 
 export function getEventTriage(): Record<string, TriageStatus> {
-  return parseJson<Record<string, TriageStatus>>(TRIAGE_KEY, {})
+  const value = parseJson<unknown>(TRIAGE_KEY, {})
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return Object.fromEntries(Object.entries(value).filter(([, status]) => status === 'reviewed' || status === 'dismissed'))
 }
 
 export function setEventTriage(eventKey: string, status: TriageStatus | null): void {
   const current = getEventTriage()
   if (status) current[eventKey] = status
   else delete current[eventKey]
-  setStoredValue(TRIAGE_KEY, JSON.stringify(current))
+  if (!setStoredValue(TRIAGE_KEY, JSON.stringify(current))) return notifyStorageFailure()
   emit()
 }
 
@@ -83,11 +92,21 @@ export function setLastWatchVisit(value = new Date().toISOString()): void {
   setStoredValue(LAST_WATCH_KEY, value)
 }
 
-export function getSavedSearches(): SavedSearch[] {
-  return parseJson<SavedSearch[]>(SAVED_SEARCH_KEY, []).filter((item) => item && typeof item.path === 'string')
+function isSavedSearch(value: unknown): value is SavedSearch {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<SavedSearch>
+  return typeof item.id === 'string' && typeof item.name === 'string'
+    && (item.kind === 'feed' || item.kind === 'radar')
+    && typeof item.path === 'string' && /^\/(feed|radar)(\?[^#\\]*)?$/.test(item.path)
+    && typeof item.createdAt === 'string' && Number.isFinite(Date.parse(item.createdAt))
 }
 
-export function saveSearch(name: string, kind: SavedSearch['kind'], path: string): SavedSearch {
+export function getSavedSearches(): SavedSearch[] {
+  const value = parseJson<unknown>(SAVED_SEARCH_KEY, [])
+  return Array.isArray(value) ? value.filter(isSavedSearch).slice(0, 20) : []
+}
+
+export function saveSearch(name: string, kind: SavedSearch['kind'], path: string): SavedSearch | null {
   const saved: SavedSearch = {
     id: `${kind}-${Date.now()}`,
     name,
@@ -95,18 +114,22 @@ export function saveSearch(name: string, kind: SavedSearch['kind'], path: string
     path,
     createdAt: new Date().toISOString(),
   }
-  setStoredValue(SAVED_SEARCH_KEY, JSON.stringify([saved, ...getSavedSearches()].slice(0, 20)))
+  if (!setStoredValue(SAVED_SEARCH_KEY, JSON.stringify([saved, ...getSavedSearches()].slice(0, 20)))) {
+    notifyStorageFailure()
+    return null
+  }
   emit()
   return saved
 }
 
 export function removeSavedSearch(id: string): void {
-  setStoredValue(SAVED_SEARCH_KEY, JSON.stringify(getSavedSearches().filter((item) => item.id !== id)))
+  if (!setStoredValue(SAVED_SEARCH_KEY, JSON.stringify(getSavedSearches().filter((item) => item.id !== id)))) return notifyStorageFailure()
   emit()
 }
 
 export function getComparison(): string[] {
-  return parseJson<string[]>(COMPARE_KEY, []).filter((pidn) => typeof pidn === 'string').slice(0, 4)
+  const value = parseJson<unknown>(COMPARE_KEY, [])
+  return Array.isArray(value) ? [...new Set(value.filter((pidn): pidn is string => typeof pidn === 'string' && pidn.length > 0))].slice(0, 4) : []
 }
 
 export function isCompared(pidn: string): boolean {
@@ -116,12 +139,18 @@ export function isCompared(pidn: string): boolean {
 export function toggleComparison(pidn: string): { selected: boolean; full: boolean } {
   const current = getComparison()
   if (current.includes(pidn)) {
-    setStoredValue(COMPARE_KEY, JSON.stringify(current.filter((item) => item !== pidn)))
+    if (!setStoredValue(COMPARE_KEY, JSON.stringify(current.filter((item) => item !== pidn)))) {
+      notifyStorageFailure()
+      return { selected: true, full: false }
+    }
     emit()
     return { selected: false, full: false }
   }
   if (current.length >= 4) return { selected: false, full: true }
-  setStoredValue(COMPARE_KEY, JSON.stringify([...current, pidn]))
+  if (!setStoredValue(COMPARE_KEY, JSON.stringify([...current, pidn]))) {
+    notifyStorageFailure()
+    return { selected: false, full: false }
+  }
   emit()
   return { selected: true, full: false }
 }
@@ -137,15 +166,42 @@ export interface PortableWorkspace {
   parcels: string[]
   projects: Array<{ key: string; name: string }>
   entities: Array<{ id: number; name: string }>
+  /** Added after the first export format; older files simply omit it. */
+  municipalities?: Array<{ name: string }>
   savedSearches: SavedSearch[]
   comparison: string[]
   triage: Record<string, TriageStatus>
 }
 
-export function replaceInvestigationState(workspace: PortableWorkspace): void {
-  setStoredValue(SAVED_SEARCH_KEY, JSON.stringify((workspace.savedSearches ?? []).slice(0, 20)))
-  setStoredValue(COMPARE_KEY, JSON.stringify((workspace.comparison ?? []).slice(0, 4)))
-  setStoredValue(TRIAGE_KEY, JSON.stringify(workspace.triage ?? {}))
+/** Validate the entire portable format before any browser state changes. */
+export function parseWorkspace(text: string): PortableWorkspace {
+  const value: unknown = JSON.parse(text)
+  if (!value || typeof value !== 'object') throw new Error('Not a CountyIQ workspace file')
+  const w = value as PortableWorkspace
+  const strings = (items: unknown): items is string[] => Array.isArray(items) && items.every((item) => typeof item === 'string' && item.length > 0)
+  if (w.version !== 1 || !strings(w.parcels) || !Array.isArray(w.projects)
+    || !w.projects.every((p) => p && typeof p.key === 'string' && p.key.length > 0 && typeof p.name === 'string')
+    || !Array.isArray(w.entities) || !w.entities.every((e) => e && Number.isSafeInteger(e.id) && e.id > 0 && typeof e.name === 'string')
+    || (w.municipalities !== undefined && (!Array.isArray(w.municipalities) || !w.municipalities.every((m) => m && typeof m.name === 'string' && m.name.trim().length > 0)))
+    || !Array.isArray(w.savedSearches) || w.savedSearches.length > 20 || !w.savedSearches.every(isSavedSearch)
+    || !strings(w.comparison) || w.comparison.length > 4
+    || !w.triage || typeof w.triage !== 'object' || Array.isArray(w.triage)
+    || !Object.values(w.triage).every((status) => status === 'reviewed' || status === 'dismissed')) {
+    throw new Error('Not a valid CountyIQ workspace file. Current browser data was kept.')
+  }
+  watchlistStorageEntries(w) // also enforce the per-watchlist caps
+  return w
+}
+
+export function replaceWorkspace(workspace: PortableWorkspace): void {
+  const valid = parseWorkspace(JSON.stringify(workspace))
+  commitBrowserStorage({
+    ...watchlistStorageEntries(valid),
+    [SAVED_SEARCH_KEY]: JSON.stringify(valid.savedSearches),
+    [COMPARE_KEY]: JSON.stringify([...new Set(valid.comparison)]),
+    [TRIAGE_KEY]: JSON.stringify(valid.triage),
+  })
+  window.dispatchEvent(new Event('countyiq-watchlist-changed'))
   emit()
 }
 
@@ -160,8 +216,10 @@ export function downloadText(filename: string, text: string, type = 'text/plain'
 
 export function toCsv(rows: Array<Array<string | number | boolean | null | undefined>>): string {
   return rows.map((row) => row.map((value) => {
-    const text = value == null ? '' : String(value)
-    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+    let text = value == null ? '' : String(value)
+    // Source names/addresses are untrusted text when opened in a spreadsheet.
+    if (typeof value === 'string' && /^[\s]*[=+@-]|^[\t\r\n]/.test(text)) text = `'${text}`
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
   }).join(',')).join('\n')
 }
 
@@ -169,4 +227,20 @@ export function radarSearchName(view: RadarViewMode | 'movers', municipality: st
   const location = municipality || 'All municipalities'
   if (view === 'movers') return `${location} · movers ${minScore}+ points`
   return `${location} · ${view === 'readiness' ? 'site screening' : view} ${minScore}+`
+}
+
+
+export interface RecentInvestigation { path: string; label: string; visitedAt: string }
+export function getRecentInvestigations(): RecentInvestigation[] {
+  const value = parseJson<unknown>('countyiq_recent_investigations_v1', [])
+  return Array.isArray(value) ? value.filter((item): item is RecentInvestigation =>
+    Boolean(item && typeof item.path === 'string' && /^\/(property|project|entity|owner|municipalities)\/[A-Za-z0-9%:_.-]+$/.test(item.path)
+      && typeof item.label === 'string' && typeof item.visitedAt === 'string')).slice(0, 20) : []
+}
+export function recordInvestigation(path: string, label: string) {
+  if (!/^\/(property|project|entity|owner|municipalities)\/[A-Za-z0-9%:_.-]+$/.test(path)) return
+  const recent = getRecentInvestigations()
+  if (recent[0]?.path === path) return
+  const next = [{path, label: label.slice(0,200), visitedAt:new Date().toISOString()}, ...recent.filter(item=>item.path!==path)].slice(0,20)
+  if (setStoredValue('countyiq_recent_investigations_v1',JSON.stringify(next))) emit()
 }

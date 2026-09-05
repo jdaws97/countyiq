@@ -62,6 +62,7 @@ function displayValue(value: unknown): string {
       return `${displayValue(record.old)} → ${displayValue(record.new)}`
     }
     return Object.entries(record)
+      .filter(([key]) => !['passage_ids', 'source_sha256', 'start', 'end'].includes(key))
       .map(([key, item]) => `${formatLabel(key)}: ${displayValue(item)}`)
       .join(' · ')
   }
@@ -89,6 +90,10 @@ export default function EvidencePanel({
       <div className="evidence-list">
         {items.map((item, index) => {
           const originalHref = item.document_url ?? item.url
+          const facts = Object.entries(item.details ?? {}).filter(([key]) => ![
+            'contract_version', 'evidence_spans', 'supports', 'source_sha256',
+            'passage_ids', 'identity_status', 'discovery_eligible', 'location_status',
+          ].includes(key))
           const confidenceLabel = /proceeding|extraction/.test(item.source_kind)
             ? 'extraction confidence'
             : item.source_kind === 'validated_signal'
@@ -110,9 +115,9 @@ export default function EvidencePanel({
               </summary>
               <div className="evidence-receipt-body">
                 {item.excerpt && <blockquote className="evidence-excerpt">{item.excerpt}</blockquote>}
-                {Object.keys(item.details ?? {}).length > 0 && (
+                {facts.length > 0 && (
                   <div className="evidence-facts">
-                    {Object.entries(item.details).map(([key, value]) => (
+                    {facts.map(([key, value]) => (
                       <div key={key} className="evidence-fact">
                         <div className="field-label">{formatLabel(key)}</div>
                         <div className="evidence-fact-value">{displayValue(value)}</div>

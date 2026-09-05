@@ -15,29 +15,21 @@ export default function SearchBar() {
   return (
     <div className="search-block">
       <div className="search-prompt">
-        What are you looking for?
+        Find a property, organization or project
       </div>
       <form onSubmit={handleSubmit} className="search-form" role="search">
-        <span aria-hidden="true">&#x2315;</span>
-        <label className="sr-only" htmlFor="primary-search">Search by address, PIDN, municipality, or public organization</label>
+        <svg className="search-icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+        <label className="sr-only" htmlFor="primary-search">Search properties, organizations, projects or places</label>
         <input
           id="primary-search"
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Address, PIDN, municipality, or public organization..."
+          placeholder="Address, organization, project or place..."
         />
+        <button className="home-search-submit" type="submit">Search</button>
       </form>
-      <div className="search-examples">
-        Try:{' '}
-        <kbd>York Township</kbd>{' '}
-        or{' '}
-        <kbd>1 main st</kbd>{' '}
-        or{' '}
-        <kbd>0000000000001</kbd>
-        {' '}or{' '}
-        <kbd>Acme Holdings LLC</kbd>
-      </div>
+      <div className="search-examples">Search by street address, parcel ID, organization, project name or municipality.</div>
     </div>
   )
 }

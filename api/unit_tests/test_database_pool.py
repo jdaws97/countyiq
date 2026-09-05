@@ -55,3 +55,32 @@ def test_pool_saturation_is_a_generic_http_503(monkeypatch):
     assert response.status_code == 503
     assert response.json() == {"detail": "database unavailable"}
     assert "internal pool detail" not in response.text
+
+
+def test_pool_return_failure_does_not_leak_capacity(monkeypatch):
+    class Connection:
+        closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @contextmanager
+        def cursor(self, **_kwargs):
+            yield object()
+
+    class Pool:
+        def getconn(self):
+            return Connection()
+
+        def putconn(self, *_args, **_kwargs):
+            raise RuntimeError("pool closed during cleanup")
+
+    gate = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(database, "_get_pool_resources", lambda: (Pool(), gate))
+    with pytest.raises(RuntimeError, match="pool closed"):
+        with database.get_cursor():
+            pass
+    assert gate.acquire(blocking=False), "cleanup leaked the only pool permit"

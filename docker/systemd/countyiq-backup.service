@@ -8,13 +8,14 @@ Type=oneshot
 User=root
 Group=root
 UMask=0077
+Environment=COUNTYIQ_ENV_FILE=/etc/countyiq/production.env
 WorkingDirectory=/opt/countyiq/docker
 ExecStart=/opt/countyiq/docker/backup.sh --reason scheduled
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/opt/countyiq/archives /var/lock
+ReadWritePaths=/opt/countyiq/archives /var/lib/countyiq/cost-guard /var/lock
 TimeoutStartSec=2h
 Nice=10
 IOSchedulingClass=best-effort

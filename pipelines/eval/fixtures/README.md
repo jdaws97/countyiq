@@ -26,14 +26,20 @@ that can support a model-promotion regression gate.
   not replace them with visibly patterned placeholders that can bias entity
   reasoning.
 - **Pass 2 expanded diagnostic:** `p2_expanded_frozen.json` contains 100
-  deterministic, de-identified contexts from the 7,214 currently eligible
-  parcels: 54 two-signal, 29 three-signal, and all 17 observed four-signal
-  cases, covering all 24 observed interaction shapes. Its accepted outcomes,
-  required facts, and prohibited claims are generated from explicit evidence
-  rules and carry `rubric_generated_requires_human_confirmation`; they are
-  diagnostic labels, not human-reviewed promotion gold. The companion
-  `p2_expanded_stability20.json` is the deterministic 20-case disagreement
-  subset used for repeatability testing and inherits the same limitation.
+  deterministic, de-identified current-evidence contexts: 42 two-signal, 38
+  three-signal, and 20 four-signal cases covering 46 observed interaction
+  shapes across all six production interpretive signals. Selection takes up to
+  two cases per observed shape, then fills deterministically to 100. The
+  builder fails if selected, gathered, and labeled signal keys differ. Its
+  accepted outcomes, required facts, and prohibited claims come from explicit
+  evidence rules (`build_expanded_pass2.py`, rubric `pass2_expanded_v5`). The
+  companion `p2_expanded_stability20.json` is a deterministic,
+  cardinality-balanced 20-case release-review subset. All 20 were reviewed
+  case-by-case on 2026-09-04
+  (`docs/research/pass2-rubric-review-2026-09-04.md`) and carry
+  `rubric_reviewed`; `--relabel` rewrites labels from stored contexts without
+  touching contexts or their hashes. The other 80 cases remain
+  `rubric_generated_requires_human_confirmation`.
 - **Pass 3:** `p3_frozen.json` contains four reviewed contexts derived from the
   Pass 2 evidence and covers pursue, watchlist, and pass decisions plus strict
   signal citations.
@@ -59,3 +65,12 @@ mismatch is a hard failure. Regenerating the frozen files is a reviewed corpus
 change, not routine drift maintenance. Keep widening the corpus when a real
 failure reveals a missing class, and refresh the separate live shadow after the
 York backfill so drift/cost measurements represent the eventual workload.
+
+## Investigation contract and feature coverage (2026-09-04)
+
+p3_investigation_frozen.json retains the original Pass 3 source contexts and
+updates recommendation/urgency labels for investigation briefs. The original
+p3_frozen.json remains unchanged for historical comparisons. feature_cases.json
+adds four municipal-action and three owner-summary supplemental cases. These
+synthetic cases have not yet been run against a paid model. See
+docs/operations/llm-product-release.md for scoring and release requirements.

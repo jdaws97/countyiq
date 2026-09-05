@@ -27,7 +27,8 @@ from dagster import (
 from countyiq.lib.error_budget import check_error_budget
 from countyiq.lib.intelligence_autoresolve import auto_resolve_contradiction
 from countyiq.lib.intelligence_common import (
-    compute_input_hash,
+    VOLATILE_EVIDENCE_KEYS,
+    RETRACT_STALE_EVIDENCE_QUERY,
     fetch_prior_pass_attempts,
     fetch_reusable_pass_hashes,
     pass_attempt_priority,
@@ -41,11 +42,14 @@ from countyiq.lib.intelligence_integrity import (
 )
 from countyiq.lib.pass2_batched_validation import (
     BATCHED_VALIDATION_SYSTEM_PROMPT,
+    assert_current_validation_context,
     PROMPT_VERSION,
     build_batched_signal_prompt,
     gather_parcel_batch_context,
     merge_trial_validations,
     parse_batched_signal_output,
+    pass2_source_fingerprint,
+    proceeding_context_refs,
 )
 from countyiq.lib.pass_llm_config import (
     PassHarnessUnavailable,
@@ -87,17 +91,6 @@ _FULL_SCAN_BRANCH = """
         FROM public.development_signals ds
 """
 
-RETRACT_STALE_EVIDENCE_QUERY = """
-    DELETE FROM public.evidence e
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM public.development_signals ds
-        WHERE ds.pidn = e.pidn
-          AND ds.signal_key = e.signal_key
-          AND ds.evidence IS NOT DISTINCT FROM e.evidence_data
-    )
-    RETURNING e.pidn, e.signal_key
-"""
 
 _CANDIDATE_QUERY_TEMPLATE = r"""
     -- Selects parcels eligible for validation. The Python source/model/prompt
@@ -182,25 +175,7 @@ _CANDIDATE_QUERY_TEMPLATE = r"""
                   WHERE LEFT(pe.extraction_type, 1) <> '_'
                     AND pp.valid_to IS NULL
                     AND pe.extracted_at > ip.last_run_at
-                    AND (
-                        REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g') = ip.pidn
-                        OR EXISTS (
-                            SELECT 1
-                            FROM staging.parcels parcel
-                            WHERE parcel.pidn = ip.pidn
-                              AND parcel.valid_to IS NULL
-                              AND parcel.propadr IS NOT NULL
-                              AND public.normalize_street_address(parcel.propadr)
-                                  = public.normalize_street_address(pe.parcel_reference)
-                              AND EXISTS (
-                                  SELECT 1
-                                  FROM meta.municipality_source_rights msr
-                                  WHERE msr.body_name = pp.body_name
-                                    AND msr.municipality_name = parcel.municipality
-                                    AND msr.derived_product_allowed = TRUE
-                              )
-                        )
-                    )
+                    AND ip.pidn IN (SELECT matched.pidn FROM public.proceeding_parcel_matches(COALESCE(pe.extraction_details->'parcel_references', jsonb_build_array(pe.parcel_reference)), pp.body_name) matched)
               )
           )
 
@@ -418,12 +393,9 @@ def signal_validation_batched(
     item_cap_hit = False
     for pidn in pidns:
         try:
-            # Gather all context + signals for this parcel using the public
-            # dict_cursor context manager (no private _get_conn() access).
-            # The DatabaseResource connection runs in autocommit mode, so
-            # transaction boundaries are per-statement — the cursor is purely
-            # for dict-row access.
-            with database.dict_cursor() as cur:
+            # Gather related context and signal versions from one snapshot.
+            # Release it before queueing any model work.
+            with database.read_snapshot() as cur:
                 ctx = gather_parcel_batch_context(cur, pidn)
         except Exception as exc:
             log.warning(f"Error gathering context for {pidn}: {exc}")
@@ -437,7 +409,7 @@ def signal_validation_batched(
         if not ctx["signals"]:
             continue
 
-        source_hash = compute_input_hash(ctx)
+        source_hash = pass2_source_fingerprint(ctx)
         input_hash = inference_input_hash(
             source_hash,
             requested_model=f"{config.model_path}|trials={n_trials}",
@@ -624,7 +596,7 @@ def signal_validation_batched(
                 ref
                 for validation in all_validations
                 for ref in validation.get("cross_references", [])
-            })
+            } | proceeding_context_refs(ctx))
             history_payload = {
                 "validations": all_validations,
                 "cross_signal_insight": parsed.get("cross_signal_insight") or "",
@@ -676,7 +648,8 @@ def signal_validation_batched(
             source_by_key = {
                 signal["signal_key"]: signal for signal in ctx["signals"]
             }
-            with database.transaction() as cur:
+            with database.transaction(dict_rows=True) as cur:
+                assert_current_validation_context(cur, pidn, source_hash)
                 current_keys = [
                     validation["signal_key"] for validation in all_validations
                 ]
@@ -838,7 +811,9 @@ def signal_validation_batched(
 # ---------------------------------------------------------------------------
 
 def _retract_stale_evidence(database: DatabaseResource) -> int:
-    rows = database.execute(RETRACT_STALE_EVIDENCE_QUERY) or []
+    rows = database.execute(
+        RETRACT_STALE_EVIDENCE_QUERY, {"volatile": list(VOLATILE_EVIDENCE_KEYS)}
+    ) or []
     return len(rows)
 
 

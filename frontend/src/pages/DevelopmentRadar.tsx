@@ -93,39 +93,52 @@ function isTab(value: string | null): value is RadarTab {
 
 export default function DevelopmentRadar() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const requestedView = searchParams.get('view')
-  const initialView: RadarTab = isTab(requestedView) ? requestedView : 'opportunity'
-  const requestedScore = searchParams.get('min_score')
+  const view: RadarTab = isTab(requestedView) ? requestedView : 'opportunity'
   const [parcels, setParcels] = useState<RadarParcel[]>([])
   const [resolvedKey, setResolvedKey] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [muniFilter, setMuniFilter] = useState(() => searchParams.get('municipality') ?? '')
-  const [minAcres, setMinAcres] = useState(() => searchParams.get('min_acres') ?? '')
-  const [parcelClass, setParcelClass] = useState(() => searchParams.get('class') ?? '')
-  const [moversDirection, setMoversDirection] = useState<RadarMoversDirection>(() => {
-    const direction = searchParams.get('direction')
-    return direction === 'down' || direction === 'new' ? direction : 'up'
-  })
-  const [moversBasis, setMoversBasis] = useState<'opportunity' | 'momentum'>(() => (searchParams.get('basis') === 'momentum' ? 'momentum' : 'opportunity'))
-  const [minScoreByView, setMinScoreByView] = useState<Record<RadarTab, string>>(() => ({
-    ...DEFAULT_SCORE,
-    ...(requestedScore ? { [initialView]: requestedScore } : {}),
-  }))
+  const muniFilter = searchParams.get('municipality') ?? ''
+  const minAcres = searchParams.get('min_acres') ?? ''
+  const parcelClass = searchParams.get('class') ?? ''
+  const direction = searchParams.get('direction')
+  const moversDirection: RadarMoversDirection = direction === 'down' || direction === 'new' ? direction : 'up'
+  const moversBasis = searchParams.get('basis') === 'momentum' ? 'momentum' : 'opportunity'
   const [page, setPage] = useState(0)
-  const [view, setView] = useState<RadarTab>(initialView)
+  const updateFilters = (values: Record<string, string | null>) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      for (const [key, value] of Object.entries(values)) {
+        if (value) next.set(key, value)
+        else next.delete(key)
+      }
+      return next
+    }, { replace: true })
+  }
+  const setView = (nextView: RadarTab) => updateFilters({
+    view: nextView, min_score: null,
+    ...(nextView === 'movers' ? { min_acres: null, class: null } : { direction: null, basis: null }),
+  })
+  const setMuniFilter = (value: string) => updateFilters({ municipality: value })
+  const setMinAcres = (value: string) => updateFilters({ min_acres: value })
+  const setParcelClass = (value: string) => updateFilters({ class: value })
+  const setMoversDirection = (value: RadarMoversDirection) => updateFilters({ direction: value })
+  const setMoversBasis = (value: 'opportunity' | 'momentum') => updateFilters({ basis: value })
   const [comparison, setComparison] = useState(() => getComparison())
   const [saved, setSaved] = useState(false)
   const [previousComputedAt, setPreviousComputedAt] = useState<string | null>(null)
   const requestGeneration = useRef(0)
+  const loadMoreController = useRef<AbortController | null>(null)
 
   const [municipalities, setMunicipalities] = useState<string[]>([])
   const [screeningCoverage, setScreeningCoverage] = useState<RadarParcelListResponse['coverage']>()
-  const minScore = minScoreByView[view]
+  const minScore = searchParams.get('min_score') || DEFAULT_SCORE[view]
   const requestKey = `${view}|${minScore}|${muniFilter}|${minAcres}|${parcelClass}|${moversDirection}|${moversBasis}`
   const loading = resolvedKey !== requestKey
-  const setMinScore = (value: string) => setMinScoreByView(prev => ({ ...prev, [view]: value }))
+  const setMinScore = (value: string) => updateFilters({ min_score: value })
   const scoreOptions = scoreOptionsFor(view)
 
   const buildParams = (pageNum: number) => {
@@ -163,12 +176,13 @@ export default function DevelopmentRadar() {
       if (!append && view === 'readiness') setScreeningCoverage((data as RadarParcelListResponse).coverage)
       if (!append && view === 'movers') setPreviousComputedAt((data as RadarMoversResponse).previous_computed_at)
       if (append) {
-        setParcels(prev => [...prev, ...items])
+        setParcels(prev => Array.from(new Map([...prev, ...items].map(item => [item.pidn, item])).values()))
       } else {
         setParcels(items)
-        setPage(0)
         setResolvedKey(key)
       }
+      setPage(pageNum)
+      setHasMore(items.length === PAGE_SIZE)
       setError(null)
     } catch (caught) {
       if (signal?.aborted || generation !== requestGeneration.current) return
@@ -177,6 +191,7 @@ export default function DevelopmentRadar() {
       setError(message)
       if (!append) {
         setParcels([])
+        setHasMore(false)
         setScreeningCoverage(undefined)
         setPreviousComputedAt(null)
         setResolvedKey(key)
@@ -190,7 +205,10 @@ export default function DevelopmentRadar() {
     const controller = new AbortController()
     const generation = ++requestGeneration.current
     void fetchPage(0, false, generation, controller.signal)
-    return () => controller.abort()
+    return () => {
+      controller.abort()
+      loadMoreController.current?.abort()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey])
 
@@ -204,16 +222,16 @@ export default function DevelopmentRadar() {
         return r.json()
       })
       .then((d: RadarMunicipalitiesResponse) => {
+        if (controller.signal.aborted) return
         const munis = (d.municipalities || []) as string[]
         setMunicipalities(munis)
-        if (muniFilter && !munis.includes(muniFilter)) setMuniFilter('')
       })
       .catch((err) => {
         if (controller.signal.aborted) return
         console.error('Failed to load radar municipalities', err)
       })
     return () => controller.abort()
-  }, [view, minScore, muniFilter, moversBasis])
+  }, [view, minScore, moversBasis])
 
   useEffect(() => {
     const refresh = () => setComparison(getComparison())
@@ -234,8 +252,7 @@ export default function DevelopmentRadar() {
   }
 
   const saveCurrentSearch = () => {
-    saveSearch(radarSearchName(view, muniFilter, minScore), 'radar', currentPath())
-    setSaved(true)
+    setSaved(Boolean(saveSearch(radarSearchName(view, muniFilter, minScore), 'radar', currentPath())))
     window.setTimeout(() => setSaved(false), 1800)
   }
 
@@ -250,11 +267,11 @@ export default function DevelopmentRadar() {
       <BackButton onClick={() => navigate(-1)} />
 
       <div style={{ marginBottom: 28 }}>
-        <div className="record-eyebrow">Deterministic screening · score version 7</div>
+        <div className="record-eyebrow">Property development signals</div>
         <h1 className="page-title">Development Radar</h1>
         <p style={{ maxWidth: '72ch', fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
           {view === 'opportunity'
-            ? 'Parcels with the fundamentals that historically preceded a plan filing, but no plan or municipal matter of their own yet. Weights are calibrated against past York County plan filings.'
+            ? 'Build a shortlist from site characteristics, nearby plans and recorded ownership changes. Higher scores mean more matching signals; open a property to check the evidence.'
             : view === 'momentum'
               ? 'Where development activity is already happening: plans on or beside the parcel, municipal matters, park designations, recent sales, and owners assembling sites.'
               : view === 'movers'
@@ -287,10 +304,12 @@ export default function DevelopmentRadar() {
         <label className="sr-only" htmlFor="radar-municipality">Municipality</label>
         <select id="radar-municipality" value={muniFilter} onChange={e => setMuniFilter(e.target.value)}>
           <option value="">All Municipalities</option>
+          {muniFilter && !municipalities.includes(muniFilter) && <option value={muniFilter}>{muniFilter}</option>}
           {municipalities.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
         <label className="sr-only" htmlFor="radar-min-score">{view === 'movers' ? 'Minimum change' : 'Minimum score'}</label>
         <select id="radar-min-score" value={minScore} onChange={e => setMinScore(e.target.value)}>
+          {!scoreOptions.some(option => option.value === minScore) && <option value={minScore}>{minScore}+</option>}
           {scoreOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
         {view === 'movers' ? (
@@ -311,16 +330,18 @@ export default function DevelopmentRadar() {
           <>
             <label className="sr-only" htmlFor="radar-min-acres">Minimum acres</label>
             <select id="radar-min-acres" value={minAcres} onChange={e => setMinAcres(e.target.value)}>
+              {!ACRE_OPTIONS.some(option => option.value === minAcres) && <option value={minAcres}>{minAcres}+ acres</option>}
               {ACRE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
             <label className="sr-only" htmlFor="radar-class">Property class</label>
             <select id="radar-class" value={parcelClass} onChange={e => setParcelClass(e.target.value)}>
+              {!PARCEL_CLASSES.some(option => option.value === parcelClass) && <option value={parcelClass}>{parcelClass}</option>}
               {PARCEL_CLASSES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </>
         )}
         <div className="filter-count">
-          {loading ? 'Loading…' : `${parcels.length} ${countLabel}`}
+          {loading ? 'Loading…' : `${parcels.length}${hasMore ? '+' : ''} ${countLabel}`}
         </div>
         <Button tone="quiet" onClick={saveCurrentSearch}>{saved ? 'Search saved' : 'Save search'}</Button>
         {view !== 'readiness' && <ButtonLink to={`/map?layer=radar&radar=${mapLayer}`} tone="quiet">Map view</ButtonLink>}
@@ -329,10 +350,10 @@ export default function DevelopmentRadar() {
 
       {error && <div className="error-box" role="alert">Failed to load data: {error}</div>}
 
-      {!loading && !error && parcels.length > 0 && (
+      {!loading && parcels.length > 0 && (
         <div className="radar-results data-table">
           <div className="radar-results-header data-table-head" style={{ minWidth: 960, gridTemplateColumns: '64px 72px 1fr 130px 70px 100px minmax(240px, 1.4fr) 92px' }}>
-            <div>Score</div><div>Change</div><div>Address</div><div>Municipality</div><div className="cell-right">Acres</div><div className="cell-right" style={{ paddingRight: 12 }}>Value</div><div style={{ paddingLeft: 12 }}>Why It Ranked</div><div className="cell-right">Compare</div>
+            <div>Score</div><div>Change</div><div>Address</div><div>Municipality</div><div className="cell-right">Acres</div><div className="cell-right" style={{ paddingRight: 12 }}>Assessed value</div><div style={{ paddingLeft: 12 }}>Why It Ranked</div><div className="cell-right">Compare</div>
           </div>
 
           {parcels.map((p) => (
@@ -375,13 +396,15 @@ export default function DevelopmentRadar() {
         </div>
       )}
 
-      {!loading && !error && parcels.length > 0 && parcels.length % PAGE_SIZE === 0 && (
+      {!loading && hasMore && (
         <div style={{ textAlign: 'center', marginTop: 24 }}>
           <button
             onClick={() => {
-              const next = page + 1
-              setPage(next)
-              void fetchPage(next, true, requestGeneration.current)
+              if (loadingMore) return
+              const controller = new AbortController()
+              loadMoreController.current?.abort()
+              loadMoreController.current = controller
+              void fetchPage(page + 1, true, requestGeneration.current, controller.signal)
             }}
             disabled={loadingMore}
             style={{

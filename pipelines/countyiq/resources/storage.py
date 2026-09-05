@@ -5,6 +5,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Union
+from uuid import uuid4
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -35,6 +36,7 @@ class S3StorageResource(ConfigurableResource):
     secret_access_key: str = ""
     strict: bool = False
     local_archive_dir: str = ""
+    cost_guard_file: str = ""
 
     def _client(self):
         kwargs: dict = {"region_name": self.region}
@@ -94,6 +96,17 @@ class S3StorageResource(ConfigurableResource):
             temporary_path.unlink(missing_ok=True)
             raise
 
+    def _r2_write_allowed(self, log) -> bool:
+        if not self.cost_guard_file or not Path(self.cost_guard_file).exists():
+            return True
+        message = (
+            "Cloudflare R2 write blocked because the CountyIQ cost guard is tripped"
+        )
+        if self.strict:
+            raise RuntimeError(message)
+        log.warning(message)
+        return False
+
     def archive(
         self,
         source_path: str,
@@ -108,8 +121,10 @@ class S3StorageResource(ConfigurableResource):
             filename: file name within the date folder
         """
         log = get_dagster_logger()
+        # Each attempt gets an immutable object key: R2 locks reject even an
+        # identical overwrite when an asset is rerun on the same day.
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        key = f"{source_path}/{date_str}/{filename}"
+        key = f"{source_path}/{date_str}/{uuid4().hex}/{filename}"
 
         if isinstance(data, (dict, list)):
             body = json.dumps(data, default=str).encode("utf-8")
@@ -123,6 +138,8 @@ class S3StorageResource(ConfigurableResource):
                 destination = self._local_destination(source_path, filename)
                 self._write_local_bytes(destination, body)
                 log.info(f"Archived locally to {destination} ({len(body)} bytes)")
+                return
+            if not self._r2_write_allowed(log):
                 return
             self._client().put_object(Bucket=self.bucket, Key=key, Body=body)
             log.info(
@@ -142,7 +159,7 @@ class S3StorageResource(ConfigurableResource):
         log = get_dagster_logger()
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         resolved_name = filename or Path(local_path).name
-        key = f"{source_path}/{date_str}/{resolved_name}"
+        key = f"{source_path}/{date_str}/{uuid4().hex}/{resolved_name}"
 
         try:
             if self.local_archive_dir:
@@ -150,6 +167,8 @@ class S3StorageResource(ConfigurableResource):
                 self._copy_local_file(destination, local_path)
                 size = destination.stat().st_size
                 log.info(f"Archived locally to {destination} ({size} bytes)")
+                return
+            if not self._r2_write_allowed(log):
                 return
             self._client().upload_file(local_path, self.bucket, key)
             size = os.path.getsize(local_path)
@@ -171,4 +190,5 @@ def make_s3_resource() -> S3StorageResource:
         secret_access_key=os.environ.get("R2_SECRET_ACCESS_KEY", ""),
         strict=strict_env in {"1", "true", "yes", "on"},
         local_archive_dir=os.environ.get("COUNTYIQ_LOCAL_RAW_ARCHIVE_DIR", ""),
+        cost_guard_file=os.environ.get("COUNTYIQ_COST_GUARD_FILE", ""),
     )

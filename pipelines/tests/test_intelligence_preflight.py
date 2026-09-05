@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import pytest
 
 from countyiq.lib.backfill_authorization import create_backfill_authorization
 from scripts.verify_intelligence_preflight import (
@@ -195,3 +196,29 @@ def test_gate_pass_rate_applies_only_after_twenty_outputs(monkeypatch):
 
     monkeypatch.setenv("COUNTYIQ_PASS2_MIN_GATE_PASS_RATE", "0.6")
     assert _gate_pass_rate(Database(14, 6), 2)["ok"] is True
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_preflight_rejects_additional_database_head_in_either_order(monkeypatch, reverse):
+    expected, = _repository_schema_heads()
+    rows = [(expected,), ("unexpected-branch",)]
+    if reverse:
+        rows.reverse()
+
+    class Database:
+        def execute(self, sql, params=None):
+            if "SELECT version_num FROM alembic_version" in sql:
+                return rows
+            raise AssertionError("Schema mismatch must stop integrity/history queries")
+
+    monkeypatch.setattr("scripts.verify_intelligence_preflight.estimate_backfill",
+                        lambda database, sample_size: {"read_only": True})
+    monkeypatch.setattr("scripts.verify_intelligence_preflight.probe_llm_archive_destination",
+                        lambda: {"ok": True, "path": "/tmp/archive", "reason": "fixture"})
+    result = build_report(Database(), target_pass=0, sample_size=1,
+                          max_canary_items=1, receipt_path=None)
+    assert result["ready"] is False
+    assert result["checks"]["schema_at_repository_head"] is False
+    assert result["revision"] is None
+    assert result["database_revisions"] == sorted([expected, "unexpected-branch"])
+    assert result["integrity"] is None

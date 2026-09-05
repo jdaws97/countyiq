@@ -17,9 +17,10 @@ NOW = datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc)
 
 
 def test_development_event_address_match_is_scoped_to_municipality():
-    assert "FROM meta.municipality_source_rights msr" in _DEVELOPMENT_EVENTS_SQL
-    assert "msr.body_name = pp.body_name" in _DEVELOPMENT_EVENTS_SQL
-    assert "msr.municipality_name = p.municipality" in _DEVELOPMENT_EVENTS_SQL
+    # The shared SQL function is behavior-tested against synthetic parcels.
+    sql = _DEVELOPMENT_EVENTS_SQL
+    assert "public.proceeding_parcel_matches(" in sql
+    assert "pp.body_name) matched" in sql
 
 
 def test_development_tags_combine_model_and_source_facts():
@@ -40,6 +41,20 @@ def test_development_tags_combine_model_and_source_facts():
         "upcoming_decision",
     }
     assert primary_development_event_type(tags) == "continuance"
+
+
+def test_ordinance_actions_carry_a_policy_tag_and_no_application():
+    tags = normalize_development_tags(
+        extraction_type="ordinance_action",
+        decision="approved",
+        conditions=[],
+        proposed_tags=["hearing"],
+        what_happens_next=None,
+        upcoming_date=None,
+    )
+    assert "policy_action" in tags
+    assert "application" not in tags
+    assert primary_development_event_type(tags) == "approval"
 
 
 def test_recorded_decision_overrides_contradictory_model_tag():
@@ -74,6 +89,7 @@ def test_municipality_is_derived_from_public_body_name():
     assert municipality_from_body_name("Spring Garden Township Planning Commission") == "Spring Garden Township"
     assert municipality_from_body_name("York City Council") == "York City"
     assert municipality_from_body_name("Monaghan Twp Board of Supervisors") == "Monaghan Twp"
+    assert municipality_from_body_name("York Twp Board of Commissioners") == "York Twp"
 
 
 def test_parcel_event_copy_separates_fact_from_interpretation():

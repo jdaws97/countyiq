@@ -1,0 +1,518 @@
+{
+  "as_of": "2026-09-04",
+  "status": "prepared_not_run",
+  "metadata_review_version": "proceeding-metadata-3",
+  "paid_calls": 0,
+  "purpose": "24 property candidates plus six no-vocabulary controls. This deliberately enriched sample does not estimate corpus yield.",
+  "records": [
+    {
+      "id": 9599,
+      "body_name": "West Manchester Twp Planning Commission",
+      "municipality": "WEST MANCHESTER TWP",
+      "meeting_date": "2026-03-10",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://westmanchestertownship.com/wp-content/uploads/Minutes-3-10-2026.pdf",
+      "content_hash": "ccb5911892e049c8237e737fe8f8ea1f17019da68c6b7607bceb1d78eff77d84",
+      "raw_text_sha256": "987f1202f0c253223413c086e56fa52eadd597cbea25ab691664df97bd626a10",
+      "raw_text_characters": 25976,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "special exception",
+        "variance",
+        "preliminary plan",
+        "final plan",
+        "lot line"
+      ]
+    },
+    {
+      "id": 9597,
+      "body_name": "West Manchester Twp Planning Commission",
+      "municipality": "WEST MANCHESTER TWP",
+      "meeting_date": "2026-02-10",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://westmanchestertownship.com/wp-content/uploads/Minutes-2-10-2026.pdf",
+      "content_hash": "f3c06771e015891c9e1f9c6a9bef6f47d80ae2062a3c4596ef502fe6128492b5",
+      "raw_text_sha256": "d0086656ffba52f87cc7a01d9f11a2c5c933fc2afd63480e3cd0b77d8b08432b",
+      "raw_text_characters": 24206,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "site plan",
+        "special exception",
+        "variance",
+        "preliminary plan",
+        "final plan"
+      ]
+    },
+    {
+      "id": 5153,
+      "body_name": "York City Planning Commission",
+      "municipality": "YORK CITY",
+      "meeting_date": "2026-08-10",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://www.yorkcity.org/wp-content/uploads/2026/08/8-August-10-2026-Agenda-with-motions-for-Board.pdf",
+      "content_hash": "ecb11be40b7dbcb3aa6c435a5a7ada7bdd0b38a1cc5da0170ccd9defc9f9d288",
+      "raw_text_sha256": "0842fc1168848eec566bcb23d9abd4d686db5d76ac6ab15fddd0193c24294421",
+      "raw_text_characters": 6976,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "special exception",
+        "variance",
+        "preliminary plan",
+        "final plan"
+      ]
+    },
+    {
+      "id": 8113,
+      "body_name": "Hanover Boro Planning Commission",
+      "municipality": "HANOVER BORO",
+      "meeting_date": "2026-08-05",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://hanoverboroughpa.gov/AgendaCenter/ViewFile/Agenda/_08052026-980",
+      "content_hash": "852559c9f3673458f0dfe92cd80b85fd4239c86c944fe5f1142b150a9264fa42",
+      "raw_text_sha256": "d6039279c52939ad9b8176e7d44f2b802427f451075e898fc406f9f80ec64d1d",
+      "raw_text_characters": 2934,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "special exception",
+        "variance",
+        "preliminary plan",
+        "sketch plan"
+      ]
+    },
+    {
+      "id": 5145,
+      "body_name": "York City Planning Commission",
+      "municipality": "YORK CITY",
+      "meeting_date": "2026-05-11",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://www.yorkcity.org/wp-content/uploads/2026/05/5-May-11-2026-Agenda-with-motions-for-Board.pdf",
+      "content_hash": "54de3d8f1a4187c5fbb1d82daa8ff2751f4e741e74ed351b495b192018fcbde6",
+      "raw_text_sha256": "a63c094b92b2e6161c1878ace0b08715f2938bcc1960da3ca95088da62b0e01d",
+      "raw_text_characters": 4704,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "special exception",
+        "variance",
+        "preliminary plan",
+        "final plan"
+      ]
+    },
+    {
+      "id": 8124,
+      "body_name": "Hanover Boro Planning Commission",
+      "municipality": "HANOVER BORO",
+      "meeting_date": "2026-01-07",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://hanoverboroughpa.gov/AgendaCenter/ViewFile/Agenda/_01072026-814",
+      "content_hash": "03995bafba361addd23346e228d3c25e87a253f3912f055d5e3f4fc55e8c38b4",
+      "raw_text_sha256": "86e3968169b7b6f7cd33948049c4ca05aff967e817947db5b473c8e6f487ce9b",
+      "raw_text_characters": 2581,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "special exception",
+        "variance",
+        "preliminary plan",
+        "sketch plan"
+      ]
+    },
+    {
+      "id": 5845,
+      "body_name": "Warrington Twp Planning Commission",
+      "municipality": "WARRINGTON TWP",
+      "meeting_date": "2026-07-15",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://warringtontwp.org/wp-content/uploads/2026/08/07-15-2026.pdf",
+      "content_hash": "b9c346d7bdaa028338490d6077d1d062582a385f195e6371740508e64685d743",
+      "raw_text_sha256": "3a11361f3ec1eeb9cf03c62251715657b8b341f1b15001eceeb39ff5d073cdcd",
+      "raw_text_characters": 3759,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "conditional use",
+        "special exception",
+        "sketch plan"
+      ]
+    },
+    {
+      "id": 8082,
+      "body_name": "Conewago Twp Planning Commission",
+      "municipality": "CONEWAGO TWP",
+      "meeting_date": "2026-06-22",
+      "proceeding_type": "planning_commission",
+      "document_url": "https://www.conewagotwp.com/wp-content/uploads/Planning-Agenda-June-22-2026.pdf",
+      "content_hash": "545514abb829dc9ead213cef41b150fff7627ed1d6bea95f585882a12cfa74fe",
+      "raw_text_sha256": "36999fd944e912b10882b9c5bf9039da1d07ccfc8398ce69c757b9384438c339",
+      "raw_text_characters": 2494,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "special exception",
+        "variance",
+        "final plan"
+      ]
+    },
+    {
+      "id": 8949,
+      "body_name": "Fairview Twp Zoning Hearing Board",
+      "municipality": "FAIRVIEW TWP",
+      "meeting_date": "2026-01-22",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://twp.fairview.pa.us/wp-content/uploads/2026/04/2026-01-DECISION-WEBPACKET.pdf",
+      "content_hash": "64da0e9a21236b28af28b44ab86d7e3395378a93e1a28bed4940879fc10bbcc4",
+      "raw_text_sha256": "fa016ecc08b27531abd646d313c2dfc06f47f7674657a5e04f2a95477e8dcf41",
+      "raw_text_characters": 15558,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "site plan",
+        "variance"
+      ]
+    },
+    {
+      "id": 3335,
+      "body_name": "Fairview Twp Zoning Hearing Board",
+      "municipality": "FAIRVIEW TWP",
+      "meeting_date": "2026-08-20",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://twp.fairview.pa.us/wp-content/uploads/2026/07/2026-03-Webpacket-3-8.20.26.pdf",
+      "content_hash": "2e5f292af52890a2fa01fe896fdedd25028b3be4546d315812ff56624892cb56",
+      "raw_text_sha256": "643ca7ed825d12ccc7f38fd38e96b6a4e55b76ac5b66f7fde1f7176beb7dd792",
+      "raw_text_characters": 661,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "variance",
+        "lot line"
+      ]
+    },
+    {
+      "id": 4659,
+      "body_name": "York Twp Zoning Hearing Board",
+      "municipality": "YORK TWP",
+      "meeting_date": "2026-07-28",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://yorktownshippa.gov/wp-content/uploads/ZHB_2026-07-28-Agenda.pdf",
+      "content_hash": "8a2bf48778682f4d486ac9be65e5ae21f218a7a5b6a39c8b2d52f15be8a3ca05",
+      "raw_text_sha256": "db049c4b0db8b743c46b8314ab96f9cd9bddbc1695343ff9d0b531b96215a842",
+      "raw_text_characters": 1040,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "special exception",
+        "variance"
+      ]
+    },
+    {
+      "id": 8079,
+      "body_name": "Conewago Twp Zoning Hearing Board",
+      "municipality": "CONEWAGO TWP",
+      "meeting_date": "2026-07-13",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://www.conewagotwp.com/wp-content/uploads/ZHB-Agenda-July-13-2026.pdf",
+      "content_hash": "35657b542a320c8e8465c24f2037773b0d205695b1c1c4ade23aa276f405dfb9",
+      "raw_text_sha256": "b66f64598f72c013234bcc990ade8c2ab3f71f8289d958dcd3d6865cdd349d4e",
+      "raw_text_characters": 971,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "special exception",
+        "variance"
+      ]
+    },
+    {
+      "id": 4660,
+      "body_name": "York Twp Zoning Hearing Board",
+      "municipality": "YORK TWP",
+      "meeting_date": "2026-06-23",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://yorktownshippa.gov/wp-content/uploads/ZHB_2026-06-23-Agenda.pdf",
+      "content_hash": "0f70ce8a0bd12503a446574649fdc5203d54f32b6057582765be19d0a7db5961",
+      "raw_text_sha256": "1b115c03582d78e288498a7596eafe20c6825d000731c3cf227323e99e9e68ab",
+      "raw_text_characters": 1628,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "special exception",
+        "variance"
+      ]
+    },
+    {
+      "id": 6302,
+      "body_name": "Lower Windsor Twp Zoning Hearing Board",
+      "municipality": "LOWER WINDSOR TWP",
+      "meeting_date": "2026-07-16",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://lowerwindsor.com/wp-content/uploads/ZHB-agenda-7.16.26.pdf",
+      "content_hash": "8b115c8a12286bb6ca8a090f6c22bf1c9072574f8ad0a984d5a4fb181e2b0a96",
+      "raw_text_sha256": "a0d7e63691362a6d3ede94e896017ffe02e4ad2ca8fb802f8af7f262e466e2df",
+      "raw_text_characters": 782,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "variance"
+      ]
+    },
+    {
+      "id": 2652,
+      "body_name": "East Manchester Twp Zoning Hearing Board",
+      "municipality": "EAST MANCHESTER TWP",
+      "meeting_date": "2026-06-25",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://emanchestertwp.com/wp-content/uploads/2026/06/11-ZHB-AGENDA.pdf",
+      "content_hash": "63df29612d0707dce6f0ccaaa50e9501500ebfa0f9aeb569bbac1b15631707a6",
+      "raw_text_sha256": "8fa7af0ea63e2a80b842c80a7188dcab2876af7dc7a5cacf3cbc9496f4465323",
+      "raw_text_characters": 1648,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "variance"
+      ]
+    },
+    {
+      "id": 10274,
+      "body_name": "Heidelberg Twp Zoning Hearing Board",
+      "municipality": "HEIDELBERG TWP",
+      "meeting_date": "2026-06-24",
+      "proceeding_type": "zoning_hearing",
+      "document_url": "https://heidelbergtwpmunicipal.com/wp-content/uploads/Corrected-Agenda.pdf",
+      "content_hash": "3ce8497e95acd5debae9330546f2723fd41dea7dde9a1485b4553bd60fa179c9",
+      "raw_text_sha256": "36ea859ec087d65b06e814d2e879e56d1efa6f6e6cdfd281da3f8e8a85d1b6b8",
+      "raw_text_characters": 2330,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "variance"
+      ]
+    },
+    {
+      "id": 2225,
+      "body_name": "East Manchester Twp Board of Supervisors",
+      "municipality": "EAST MANCHESTER TWP",
+      "meeting_date": "2026-02-10",
+      "proceeding_type": "supervisors",
+      "document_url": "https://emanchestertwp.com/wp-content/uploads/2026/03/2026_2_10_EMT-BOS-AGENDA-MINUTES.pdf",
+      "content_hash": "708164cf1a8e5cf2b14698ec8eaed3d1ea1414575af6a66b0b3a372a20a115c3",
+      "raw_text_sha256": "a31e0a8f87bc2a38f1b7dd5970353456381acbd783d794ab507850b49df530d3",
+      "raw_text_characters": 18842,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "special exception",
+        "variance",
+        "rezoning",
+        "preliminary plan"
+      ]
+    },
+    {
+      "id": 7630,
+      "body_name": "East Hopewell Twp Board of Supervisors",
+      "municipality": "EAST HOPEWELL TWP",
+      "meeting_date": "2026-07-01",
+      "proceeding_type": "supervisors",
+      "document_url": "https://www.easthopewelltownshippa.gov/_files/ugd/44da26_d65b79dc0dbe4eac84f45788caff2862.pdf",
+      "content_hash": "29f1775d7bbdfd2c1700112a68d2149adc60365f404afea2e54ada77f304f40e",
+      "raw_text_sha256": "2d72c1332df051a0d65e8b18e732ff8689b2e78601057e80131fe8efdd904090",
+      "raw_text_characters": 15513,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "subdivision",
+        "special exception",
+        "variance",
+        "final plan",
+        "lot line"
+      ]
+    },
+    {
+      "id": 9042,
+      "body_name": "Chanceford Twp Board of Supervisors",
+      "municipality": "CHANCEFORD TWP",
+      "meeting_date": "2026-04-13",
+      "proceeding_type": "supervisors",
+      "document_url": "https://www.chancefordtwp.com/minutes/bos/2026/April132026Minutes.pdf",
+      "content_hash": "f28ef0e9c19c4fb9062b3d9760555becced4d4100147b8b2bd14d5b830a13deb",
+      "raw_text_sha256": "68870e1cd059eca23725941d873054281d210116f5d086a9a310f9944f6f66c4",
+      "raw_text_characters": 8580,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "site plan",
+        "special exception",
+        "variance"
+      ]
+    },
+    {
+      "id": 4645,
+      "body_name": "Jacobus Borough Council",
+      "municipality": "JACOBUS BORO",
+      "meeting_date": "2026-07-01",
+      "proceeding_type": "council",
+      "document_url": "https://jacobuspa.com/__static/jdj5jdewjgg2ljhltzcyddludnzavwnd/July-1st-council-mtg-minutes.pdf",
+      "content_hash": "9c8904e04d17db76cfdb68d0c660b0fd4f5ad7ffdf4420db68d92bcd66d82576",
+      "raw_text_sha256": "397e4b76ed61ff5f4399078c0bd95839632941ef4b5e8b7e4e5a0cff1d31bd4d",
+      "raw_text_characters": 21408,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "subdivision",
+        "special exception",
+        "variance",
+        "lot line"
+      ]
+    },
+    {
+      "id": 9224,
+      "body_name": "Dillsburg Borough Council",
+      "municipality": "DILLSBURG BORO",
+      "meeting_date": "2026-04-14",
+      "proceeding_type": "council",
+      "document_url": "https://dillsburg.com/wp-content/uploads/2026/06/April-14-2026.docx",
+      "content_hash": "e5426cefb114dfeff38a64b4549897b1ef5e48446d244c5e5d89c2e2d200ee62",
+      "raw_text_sha256": "b6b36118a7a864c4f272400daad5a2a932d2783d925a489e4a6a1c561bd042f1",
+      "raw_text_characters": 26887,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "site plan",
+        "conditional use"
+      ]
+    },
+    {
+      "id": 10481,
+      "body_name": "Hopewell Twp Board of Supervisors",
+      "municipality": "HOPEWELL TWP",
+      "meeting_date": "2026-09-03",
+      "proceeding_type": "supervisors",
+      "document_url": "https://www.hopewelltownship.com/wp-content/uploads/2026/09/9.3.2026-BOS-Agenda.pdf",
+      "content_hash": "2d831e1c5a20b1881f15f0dda602827e6dae1e213b52e4668dc0a4c851b5cec0",
+      "raw_text_sha256": "f9ded2d1c4cd491fd01b81b100b5a3501554fb9eb5982f78f7c082ea47263e2c",
+      "raw_text_characters": 2508,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "sketch plan"
+      ]
+    },
+    {
+      "id": 1174,
+      "body_name": "Franklin Twp Board of Supervisors",
+      "municipality": "FRANKLIN TWP",
+      "meeting_date": "2026-08-12",
+      "proceeding_type": "supervisors",
+      "document_url": "https://franklintownship.org/wp-content/uploads/8.12.26-BOS-Mtg-Tentative-Agenda.pdf",
+      "content_hash": "28833b1692bc7ba6b85a356eaf217dc36cb0b7cdb35d877ff9a29b392226203b",
+      "raw_text_sha256": "22c9b4705618e8af95e2c02489f39b71549647950ed195f242aaa96479945fc2",
+      "raw_text_characters": 1611,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "conditional use"
+      ]
+    },
+    {
+      "id": 1171,
+      "body_name": "Franklin Twp Board of Supervisors",
+      "municipality": "FRANKLIN TWP",
+      "meeting_date": "2026-07-08",
+      "proceeding_type": "supervisors",
+      "document_url": "https://franklintownship.org/wp-content/uploads/7.8.26-BOS-Mtg-Tentative-Agenda.pdf",
+      "content_hash": "debf1090bbd9fe810704aa2707a56141996dd63441e74d79a119289cf60c3156",
+      "raw_text_sha256": "255247c50d662016c0cd29644710e79f98a8252b49206d222d121a0cf1b331b5",
+      "raw_text_characters": 1758,
+      "selection": "property_candidate",
+      "matched_terms": [
+        "land development",
+        "subdivision",
+        "conditional use"
+      ]
+    },
+    {
+      "id": 9469,
+      "body_name": "West Manchester Twp Board of Supervisors",
+      "municipality": "WEST MANCHESTER TWP",
+      "meeting_date": "2026-04-23",
+      "proceeding_type": "supervisors",
+      "document_url": "https://westmanchestertownship.com/wp-content/uploads/Public-Hearing-Agenda-April-23-2026.pdf",
+      "content_hash": "ebf23f1ea3b7f69442be01d751d80eeb3bcf66073cedc1d455be781a3f8c912d",
+      "raw_text_sha256": "cb3173ffbb91617278dd9929e61c2fa08c256d023dcb77c3f6e16e0561d4e323",
+      "raw_text_characters": 807,
+      "selection": "prefilter_control",
+      "matched_terms": []
+    },
+    {
+      "id": 6480,
+      "body_name": "Franklintown Borough Council",
+      "municipality": "FRANKLINTOWN BORO",
+      "meeting_date": "2026-01-05",
+      "proceeding_type": "council",
+      "document_url": "https://img1.wsimg.com/blobby/go/80334748-3fbb-4b91-bb6a-240f43c66095/downloads/02634e1d-674e-474e-9c92-7b477414d8f2/01.05%20Boro%20Reorganziation%20Meeting%20Agenda%20Jan%202.pdf?ver=1786025264998",
+      "content_hash": "c0d41640ab515405e8c915f7e14e1e1046c6e79aa9b4230dacdc05cacadd6e61",
+      "raw_text_sha256": "86ef49d563339cf5d0c84ff2111e127dd9ceb472e843a365750ff877c377c9ed",
+      "raw_text_characters": 1002,
+      "selection": "prefilter_control",
+      "matched_terms": []
+    },
+    {
+      "id": 2224,
+      "body_name": "East Manchester Twp Board of Supervisors",
+      "municipality": "EAST MANCHESTER TWP",
+      "meeting_date": "2026-02-19",
+      "proceeding_type": "supervisors",
+      "document_url": "https://emanchestertwp.com/wp-content/uploads/2026/03/2026_2_19_EMT-BOS-AGENDA-MINUTES.pdf",
+      "content_hash": "403e31569d861d1aa419d331565adb788b58fef09c6110164ffa87fe6bed2cf1",
+      "raw_text_sha256": "cfdec379139380350d60fb45b0e0f496ed9b8ffec436a57790b80c1a54d745c3",
+      "raw_text_characters": 5788,
+      "selection": "prefilter_control",
+      "matched_terms": []
+    },
+    {
+      "id": 6584,
+      "body_name": "Mount Wolf Borough Council",
+      "municipality": "MOUNT WOLF BORO",
+      "meeting_date": "2026-01-05",
+      "proceeding_type": "council",
+      "document_url": "https://mtwolfpa.gov/document/council-minutes-january-5th-2026/",
+      "content_hash": "25502c1406096f918d1e92a8f68c4f58303097771a8046faeec4b0e8525af936",
+      "raw_text_sha256": "189e23424cace5ccd2eb13027be4c5cf4b1e5343e698fb847b4a8422d7b442b9",
+      "raw_text_characters": 1004,
+      "selection": "prefilter_control",
+      "matched_terms": []
+    },
+    {
+      "id": 6472,
+      "body_name": "Franklintown Borough Council",
+      "municipality": "FRANKLINTOWN BORO",
+      "meeting_date": "2026-04-01",
+      "proceeding_type": "council",
+      "document_url": "https://img1.wsimg.com/blobby/go/80334748-3fbb-4b91-bb6a-240f43c66095/downloads/b8988a03-db25-4765-926a-5aa2865fa5be/05.06%20Boro%20Meeting%20Mins%20April%201%2C2026.pdf?ver=1786025265134",
+      "content_hash": "9a97ca0740ff2fcfa932119fa4324bda352f0fced46f5ea1b37c06a28e56a11f",
+      "raw_text_sha256": "63ed91ad6e3d7a2b41bc7ffe5c0a6c223e66cdff2efa3863850b7a624184e1d7",
+      "raw_text_characters": 3095,
+      "selection": "prefilter_control",
+      "matched_terms": []
+    },
+    {
+      "id": 300,
+      "body_name": "Hallam Borough Council",
+      "municipality": "HALLAM BORO",
+      "meeting_date": "2026-01-22",
+      "proceeding_type": "council",
+      "document_url": "https://hallamborough.com/document/council-agenda-january-22nd-2026",
+      "content_hash": "deb44feb05a1018c7d3a6ecc6e24a5a7ff750c691cd856682baea1ebf46bafa0",
+      "raw_text_sha256": "6af4bac92b260ec441dfc9234eee644c39d14326c0c28e81f8a38485be43d4da",
+      "raw_text_characters": 1166,
+      "selection": "prefilter_control",
+      "matched_terms": []
+    }
+  ]
+}

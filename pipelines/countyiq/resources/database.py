@@ -87,6 +87,17 @@ class DatabaseResource(ConfigurableResource):
             cur.close()
             conn.autocommit = prior_autocommit
 
+    @contextmanager
+    def read_snapshot(self):
+        """Gather related inputs from one snapshot, without permitting writes.
+
+        Keep this scope around database reads only; end it before network/model
+        calls so long-running inference does not retain an MVCC snapshot.
+        """
+        with self.transaction(dict_rows=True) as cur:
+            cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            yield cur
+
     def teardown_after_execution(self, context: InitResourceContext) -> None:
         if self._conn and not self._conn.closed:
             self._conn.close()

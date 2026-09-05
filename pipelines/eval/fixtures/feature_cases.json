@@ -1,0 +1,528 @@
+{
+  "version": 1,
+  "purpose": "Supplemental synthetic cases; not measured model quality or replacements for historical gold",
+  "cases": [
+    {
+      "id": "municipal-approved",
+      "pass": "2",
+      "context": {
+        "pidn": "TEST-PARCEL",
+        "parcel": {
+          "pidn": "TEST-PARCEL",
+          "owner": "Morgan Ellis Family Trust",
+          "address": "101 Cedar Road",
+          "assessed_value": 123780.0,
+          "acres": 0.276,
+          "property_class": "R",
+          "sale_date": "02-NOV-2007",
+          "sale_price": 1.0,
+          "previous_owner": "Jordan Patel",
+          "municipality": "PENN TWP",
+          "school_district": "020",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "municipal_action",
+            "signal_weight": 0.1,
+            "source_table": "staging.proceeding_extractions",
+            "source_id": "municipal-approved",
+            "distance_m": null,
+            "evidence": {
+              "decision": "approved",
+              "match_method": "exact_pidn",
+              "what_happened": "Approval is conditional; it does not establish construction start.",
+              "conditions": [
+                "Submit drainage plan"
+              ],
+              "upcoming_date": "next month"
+            }
+          },
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "TEST-PARCEL",
+            "distance_m": null,
+            "evidence": {
+              "structure_count": 0,
+              "aprbldg": 50000
+            }
+          }
+        ],
+        "context_signals": []
+      },
+      "context_sha256": "9657ffda474d7a7d2c57daa6b3366c15207f187b563bfa7d29d0126d6d88ba24",
+      "review": {
+        "kind": "synthetic_source_review",
+        "reviewer": "Codex",
+        "rationale": "Approval is conditional; it does not establish construction start."
+      },
+      "expectations": {
+        "required_fact_groups": [
+          [
+            "conditional",
+            "conditions",
+            "drainage"
+          ]
+        ],
+        "forbidden_claims": [
+          "construction has started",
+          "owner intends to sell",
+          "guaranteed approval",
+          "ready to build"
+        ]
+      }
+    },
+    {
+      "id": "municipal-continued",
+      "pass": "2",
+      "context": {
+        "pidn": "TEST-PARCEL",
+        "parcel": {
+          "pidn": "TEST-PARCEL",
+          "owner": "Morgan Ellis Family Trust",
+          "address": "101 Cedar Road",
+          "assessed_value": 123780.0,
+          "acres": 0.276,
+          "property_class": "R",
+          "sale_date": "02-NOV-2007",
+          "sale_price": 1.0,
+          "previous_owner": "Jordan Patel",
+          "municipality": "PENN TWP",
+          "school_district": "020",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "municipal_action",
+            "signal_weight": 0.1,
+            "source_table": "staging.proceeding_extractions",
+            "source_id": "municipal-continued",
+            "distance_m": null,
+            "evidence": {
+              "decision": "continued",
+              "match_method": "exact_pidn",
+              "what_happened": "Continuance is not approval; the next meeting is not a guaranteed decision.",
+              "conditions": [],
+              "upcoming_date": "next month"
+            }
+          },
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "TEST-PARCEL",
+            "distance_m": null,
+            "evidence": {
+              "structure_count": 0,
+              "aprbldg": 50000
+            }
+          }
+        ],
+        "context_signals": []
+      },
+      "context_sha256": "e5f2f5850bb0e9e1fe9751bd3b9c96fb48b8e59679b2d2eb09cb3e3903a17208",
+      "review": {
+        "kind": "synthetic_source_review",
+        "reviewer": "Codex",
+        "rationale": "Continuance is not approval; the next meeting is not a guaranteed decision."
+      },
+      "expectations": {
+        "required_fact_groups": [
+          [
+            "continued",
+            "continuance"
+          ]
+        ],
+        "forbidden_claims": [
+          "construction has started",
+          "owner intends to sell",
+          "guaranteed approval",
+          "ready to build"
+        ]
+      }
+    },
+    {
+      "id": "municipal-ambiguous",
+      "pass": "2",
+      "context": {
+        "pidn": "TEST-PARCEL",
+        "parcel": {
+          "pidn": "TEST-PARCEL",
+          "owner": "Morgan Ellis Family Trust",
+          "address": "101 Cedar Road",
+          "assessed_value": 123780.0,
+          "acres": 0.276,
+          "property_class": "R",
+          "sale_date": "02-NOV-2007",
+          "sale_price": 1.0,
+          "previous_owner": "Jordan Patel",
+          "municipality": "PENN TWP",
+          "school_district": "020",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "municipal_action",
+            "signal_weight": 0.1,
+            "source_table": "staging.proceeding_extractions",
+            "source_id": "municipal-ambiguous",
+            "distance_m": null,
+            "evidence": {
+              "decision": "denied",
+              "match_method": "normalized_address",
+              "what_happened": "Ambiguous address linkage and denial do not establish a final restriction on this PIDN.",
+              "conditions": [],
+              "upcoming_date": "next month"
+            }
+          },
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "TEST-PARCEL",
+            "distance_m": null,
+            "evidence": {
+              "structure_count": 0,
+              "aprbldg": 50000
+            }
+          }
+        ],
+        "context_signals": []
+      },
+      "context_sha256": "615858c0113457be2771a8fcbfbd42948bb0a11544da885835c4bdf84e67d5ec",
+      "review": {
+        "kind": "synthetic_source_review",
+        "reviewer": "Codex",
+        "rationale": "Ambiguous address linkage and denial do not establish a final restriction on this PIDN."
+      },
+      "expectations": {
+        "required_fact_groups": [
+          [
+            "ambiguous",
+            "uncertain",
+            "address"
+          ]
+        ],
+        "forbidden_claims": [
+          "construction has started",
+          "owner intends to sell",
+          "guaranteed approval",
+          "ready to build"
+        ]
+      }
+    },
+    {
+      "id": "municipal-policy",
+      "pass": "2",
+      "context": {
+        "pidn": "TEST-PARCEL",
+        "parcel": {
+          "pidn": "TEST-PARCEL",
+          "owner": "Morgan Ellis Family Trust",
+          "address": "101 Cedar Road",
+          "assessed_value": 123780.0,
+          "acres": 0.276,
+          "property_class": "R",
+          "sale_date": "02-NOV-2007",
+          "sale_price": 1.0,
+          "previous_owner": "Jordan Patel",
+          "municipality": "PENN TWP",
+          "school_district": "020",
+          "source_url": ""
+        },
+        "entity": {
+          "found": false
+        },
+        "portfolio": [],
+        "tax_claims": [],
+        "neighbors": [],
+        "corporate": [],
+        "proceedings": [],
+        "signals": [
+          {
+            "signal_key": "municipal_action",
+            "signal_weight": 0.1,
+            "source_table": "staging.proceeding_extractions",
+            "source_id": "municipal-policy",
+            "distance_m": null,
+            "evidence": {
+              "decision": null,
+              "match_method": "municipality",
+              "what_happened": "Municipality-wide policy is context, not parcel-specific permission.",
+              "conditions": [],
+              "upcoming_date": "next month"
+            }
+          },
+          {
+            "signal_key": "vacancy",
+            "signal_weight": 0.1,
+            "source_table": "staging.parcels",
+            "source_id": "TEST-PARCEL",
+            "distance_m": null,
+            "evidence": {
+              "structure_count": 0,
+              "aprbldg": 50000
+            }
+          }
+        ],
+        "context_signals": []
+      },
+      "context_sha256": "9d3e941bfe75e549f119a547170162dfa2881132b8f49c88022203d7d5f2b13c",
+      "review": {
+        "kind": "synthetic_source_review",
+        "reviewer": "Codex",
+        "rationale": "Municipality-wide policy is context, not parcel-specific permission."
+      },
+      "expectations": {
+        "required_fact_groups": [
+          [
+            "municipality",
+            "policy"
+          ]
+        ],
+        "forbidden_claims": [
+          "construction has started",
+          "owner intends to sell",
+          "guaranteed approval",
+          "ready to build"
+        ]
+      }
+    },
+    {
+      "id": "owner-concentration",
+      "pass": "3b",
+      "context": {
+        "owner": {
+          "canonical_name": "Example Holdings LLC",
+          "entity_type": "business",
+          "n_parcels": 3,
+          "pidns": [
+            "T1",
+            "T2",
+            "T3"
+          ]
+        },
+        "evidence": [
+          {
+            "pidn": "T1",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "Three parcels in one municipality; no time series supplied.",
+            "evidence_data": {
+              "documented_fact": "Three parcels in one municipality; no time series supplied."
+            },
+            "municipality": "Example Township"
+          },
+          {
+            "pidn": "T2",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "Three parcels in one municipality; no time series supplied.",
+            "evidence_data": {
+              "documented_fact": "Three parcels in one municipality; no time series supplied."
+            },
+            "municipality": "Example Township"
+          },
+          {
+            "pidn": "T3",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "Three parcels in one municipality; no time series supplied.",
+            "evidence_data": {
+              "documented_fact": "Three parcels in one municipality; no time series supplied."
+            },
+            "municipality": "Example Township"
+          }
+        ]
+      },
+      "context_sha256": "88ab9d7c4ba03b8e94d8880aff32b2ee2fdc44b29eb3e985b71e574afd94df71",
+      "review": {
+        "kind": "synthetic_source_review",
+        "reviewer": "Codex",
+        "rationale": "Three parcels in one municipality; no time series supplied."
+      },
+      "expectations": {
+        "allowed_strategies": [
+          "unclear",
+          "unclear"
+        ],
+        "forbidden_claims": [
+          "deleveraging",
+          "motivated seller",
+          "willing to sell",
+          "buy them out",
+          "pursue acquisition"
+        ]
+      }
+    },
+    {
+      "id": "owner-tax",
+      "pass": "3b",
+      "context": {
+        "owner": {
+          "canonical_name": "Example Holdings LLC",
+          "entity_type": "business",
+          "n_parcels": 3,
+          "pidns": [
+            "T1",
+            "T2",
+            "T3"
+          ]
+        },
+        "evidence": [
+          {
+            "pidn": "T1",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "One recorded tax claim; seller motivation unknown.",
+            "evidence_data": {
+              "documented_fact": "One recorded tax claim; seller motivation unknown."
+            },
+            "municipality": "Example Township"
+          },
+          {
+            "pidn": "T2",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "One recorded tax claim; seller motivation unknown.",
+            "evidence_data": {
+              "documented_fact": "One recorded tax claim; seller motivation unknown."
+            },
+            "municipality": "Example Township"
+          },
+          {
+            "pidn": "T3",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "One recorded tax claim; seller motivation unknown.",
+            "evidence_data": {
+              "documented_fact": "One recorded tax claim; seller motivation unknown."
+            },
+            "municipality": "Example Township"
+          }
+        ]
+      },
+      "context_sha256": "25dce55764993f777893f909a42adbf362db79e108391f2caa3398f392251449",
+      "review": {
+        "kind": "synthetic_source_review",
+        "reviewer": "Codex",
+        "rationale": "One recorded tax claim; seller motivation unknown."
+      },
+      "expectations": {
+        "allowed_strategies": [
+          "unclear",
+          "unclear"
+        ],
+        "forbidden_claims": [
+          "deleveraging",
+          "motivated seller",
+          "willing to sell",
+          "buy them out",
+          "pursue acquisition"
+        ]
+      }
+    },
+    {
+      "id": "owner-institution",
+      "pass": "3b",
+      "context": {
+        "owner": {
+          "canonical_name": "Example Water Authority",
+          "entity_type": "government",
+          "n_parcels": 3,
+          "pidns": [
+            "T1",
+            "T2",
+            "T3"
+          ]
+        },
+        "evidence": [
+          {
+            "pidn": "T1",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "Public utility portfolio; no market disposition evidence.",
+            "evidence_data": {
+              "documented_fact": "Public utility portfolio; no market disposition evidence."
+            },
+            "municipality": "Example Township"
+          },
+          {
+            "pidn": "T2",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "Public utility portfolio; no market disposition evidence.",
+            "evidence_data": {
+              "documented_fact": "Public utility portfolio; no market disposition evidence."
+            },
+            "municipality": "Example Township"
+          },
+          {
+            "pidn": "T3",
+            "signal_key": "municipal_action",
+            "validation_status": "confirmed",
+            "adjusted_significance": "medium",
+            "validation_reasoning": "Public utility portfolio; no market disposition evidence.",
+            "evidence_data": {
+              "documented_fact": "Public utility portfolio; no market disposition evidence."
+            },
+            "municipality": "Example Township"
+          }
+        ]
+      },
+      "context_sha256": "10be18bf73babeaf1c5c79dddfc7849e54aee8e6097622369c57d4ccd282b829",
+      "review": {
+        "kind": "synthetic_source_review",
+        "reviewer": "Codex",
+        "rationale": "Public utility portfolio; no market disposition evidence."
+      },
+      "expectations": {
+        "allowed_strategies": [
+          "institutional",
+          "unclear"
+        ],
+        "forbidden_claims": [
+          "deleveraging",
+          "motivated seller",
+          "willing to sell",
+          "buy them out",
+          "pursue acquisition"
+        ]
+      }
+    }
+  ]
+}

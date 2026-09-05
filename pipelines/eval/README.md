@@ -72,7 +72,6 @@ cd pipelines
   --passes 1,2 \
   --live \
   --quantizations fp8 \
-  --reasoning-effort low \
   --max-cost-usd 0.50
 ```
 

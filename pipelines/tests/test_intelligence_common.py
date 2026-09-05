@@ -22,9 +22,10 @@ from countyiq.lib.intelligence_common import (
 
 
 def test_parcel_proceeding_address_match_is_normalized_and_municipality_scoped():
-    assert "public.normalize_street_address" in PROCEEDINGS_FOR_PARCEL_QUERY
-    assert "FROM meta.municipality_source_rights msr" in PROCEEDINGS_FOR_PARCEL_QUERY
-    assert "msr.municipality_name = parcel.municipality" in PROCEEDINGS_FOR_PARCEL_QUERY
+    # The shared SQL function is behavior-tested against synthetic parcels.
+    sql = PROCEEDINGS_FOR_PARCEL_QUERY
+    assert "public.proceeding_parcel_matches(" in sql
+    assert "pp.body_name) matched" in sql
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +298,7 @@ class TestFormatProceedingsContext:
         assert set(result[0].keys()) == {
             "type", "applicant", "parcel", "decision",
             "meeting_date", "body", "source_url", "supporting_text",
+            "proceeding_id", "extraction_id", "active_inference_id",
         }
 
     def test_maps_fields_correctly(self):

@@ -5,8 +5,13 @@ services:
       POSTGRES_DB: countyiq
       POSTGRES_USER: dagster_admin
       POSTGRES_PASSWORD: localtest
+      # Required by the same role bootstrap scripts used in production.
+      DATABASE_PIPELINE_USER: countyiq_pipeline_test
+      DATABASE_PIPELINE_PASSWORD: test-pipeline-role-password-000000000000000000000
+      DATABASE_API_USER: countyiq_api_test
+      DATABASE_API_PASSWORD: test-api-role-password-000000000000000000000000
     ports:
-      - "5433:5432"
+      - "127.0.0.1:${COUNTYIQ_TEST_DATABASE_PORT:-5433}:5432"
     volumes:
       - pgdata-test:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d

@@ -94,4 +94,6 @@ def test_prompt_supplies_deterministic_arithmetic_instead_of_asking_model():
     assert "tax_claim_total: 30.0" in prompt
     assert "target_assessed_share_pct: 25.0" in prompt
     assert "adjacent_delinquency_rate_pct: 50.0" in prompt
-    assert _PROMPT_FORMAT_VERSION == "precomputed-metrics-v1"
+    # Bumped when the deterministic rendering changes so stored input hashes
+    # invalidate: contract v7 renders every decision-relevant evidence key.
+    assert _PROMPT_FORMAT_VERSION == "evidence-contract-v7"

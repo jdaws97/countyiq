@@ -471,3 +471,52 @@ def test_missing_key_not_retried():
 
     assert not result.success
     assert len(calls) == 1
+
+
+def test_http_error_preserves_provider_body_when_post_raises():
+    response = requests.Response()
+    response.status_code = 400
+    response._content = b'{"error":{"message":"Unsupported schema keyword: uniqueItems"}}'
+    error = requests.exceptions.HTTPError(response=response)
+    with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}), \
+         mock.patch.object(llm_harness, "_post_with_backoff", side_effect=error):
+        _, detail, metadata = llm_harness._invoke_openrouter(HarnessConfig(model_path="x/y"), "p")
+    assert "Unsupported schema keyword: uniqueItems" in detail
+    assert metadata == {}
+
+
+@pytest.mark.parametrize('effort, expected', [(None, 'low'), ('high', 'high'), ('max', 'max')])
+def test_glm_flash_bounds_mandatory_reasoning_without_generic_sampling(effort, expected):
+    from countyiq.lib.llm_harness import get_preset_for_model
+    model = 'z-ai/glm-5.3-flash'
+    payload = build_openrouter_payload(HarnessConfig(
+        model_path=model, thinking=False, reasoning_effort=effort,
+        json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
+        provider_quantizations=('fp8',), **get_preset_for_model(model),
+    ), 'prompt')
+    assert payload['reasoning'] == {'effort': expected}
+    assert payload['temperature'] == 1.0
+    assert payload['top_p'] == 0.95
+    assert 'top_k' not in payload
+    assert payload['provider']['quantizations'] == ['fp8']
+    assert payload['provider']['require_parameters'] is True
+
+
+@pytest.mark.parametrize('thinking, effort, expected', [
+    (False, None, {'enabled': False}),
+    (True, None, {'enabled': True}),
+    (False, 'low', {'effort': 'low'}),
+    (True, 'high', {'effort': 'high'}),
+])
+def test_deepseek_v4_uses_portable_reasoning_controls(thinking, effort, expected):
+    payload = build_openrouter_payload(HarnessConfig(
+        model_path='deepseek/deepseek-v4-flash-0731', thinking=thinking,
+        reasoning_effort=effort, json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
+    ), 'prompt')
+    assert payload['reasoning'] == expected
+    assert 'chat_template_kwargs' not in payload
+    if thinking or effort:
+        assert 'temperature' not in payload
+        assert 'top_p' not in payload
+        assert 'top_k' not in payload
+    assert payload['response_format']['type'] == 'json_schema'

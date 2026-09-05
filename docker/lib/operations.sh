@@ -88,6 +88,66 @@ countyiq_validate_r2_backup_environment() {
     export COUNTYIQ_BACKUP_REMOTE
 }
 
+countyiq_configure_r2_raw_remote() {
+    : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID must be set for raw archives}"
+    : "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY must be set for raw archives}"
+    : "${R2_ENDPOINT_URL:?R2_ENDPOINT_URL must be set for raw archives}"
+    : "${S3_RAW_BUCKET:?S3_RAW_BUCKET must be set}"
+
+    if ! [[ "$R2_ENDPOINT_URL" =~ ^https://[0-9a-f]{32}(\.(eu|us|fedramp))?\.r2\.cloudflarestorage\.com/?$ ]]; then
+        echo "R2_ENDPOINT_URL must be the reviewed Cloudflare R2 HTTPS account endpoint" >&2
+        return 1
+    fi
+    if ! [[ "$S3_RAW_BUCKET" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
+        echo "S3_RAW_BUCKET is not a valid bucket name" >&2
+        return 1
+    fi
+
+    export RCLONE_CONFIG_COUNTYIQRAW_TYPE=s3
+    export RCLONE_CONFIG_COUNTYIQRAW_PROVIDER=Cloudflare
+    export RCLONE_CONFIG_COUNTYIQRAW_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+    export RCLONE_CONFIG_COUNTYIQRAW_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+    export RCLONE_CONFIG_COUNTYIQRAW_ENDPOINT="$R2_ENDPOINT_URL"
+    export RCLONE_CONFIG_COUNTYIQRAW_ACL=private
+    export RCLONE_CONFIG_COUNTYIQRAW_NO_CHECK_BUCKET=true
+    COUNTYIQ_RAW_REMOTE="countyiqraw:${S3_RAW_BUCKET}"
+    export COUNTYIQ_RAW_REMOTE
+}
+
+# DOMAIN serves marketing only. All product UI/API traffic uses app.DOMAIN.
+countyiq_validate_account_environment() {
+    local provider="${COUNTYIQ_AUTH_PROVIDER:-disabled}"
+    local sync="${COUNTYIQ_WATCH_SYNC_ENABLED:-false}"
+    case "${sync,,}" in
+        true|1|yes|on) sync=true ;;
+        false|0|no|off) sync=false ;;
+        *) echo "COUNTYIQ_WATCH_SYNC_ENABLED must be a boolean" >&2; return 1 ;;
+    esac
+    case "$provider" in
+        disabled)
+            if [ "$sync" = true ]; then
+                echo "Saved account work requires a configured authentication provider" >&2
+                return 1
+            fi
+            return 0
+            ;;
+        cloudflare_access) ;;
+        *) echo "Unsupported COUNTYIQ_AUTH_PROVIDER" >&2; return 1 ;;
+    esac
+    if ! [[ "${COUNTYIQ_ACCESS_ISSUER:-}" =~ ^https://[a-z0-9-]+\.cloudflareaccess\.com$ ]]; then
+        echo "COUNTYIQ_ACCESS_ISSUER must identify the reviewed Cloudflare Access team" >&2
+        return 1
+    fi
+    if [ -z "${COUNTYIQ_ACCESS_AUD:-}" ] || [[ "$COUNTYIQ_ACCESS_AUD" == *[[:space:]]* ]]         || [[ "$COUNTYIQ_ACCESS_AUD" == *CHANGE_ME* ]] || [[ "$COUNTYIQ_ACCESS_AUD" == *'<'* ]]; then
+        echo "COUNTYIQ_ACCESS_AUD must be the non-placeholder application audience" >&2
+        return 1
+    fi
+    if [ "${COUNTYIQ_APP_URL:-}" != "https://app.${DOMAIN}" ]         || [ "${COUNTYIQ_WORKSPACE_ORIGINS:-}" != "https://app.${DOMAIN}" ]; then
+        echo "Account app URL and workspace origin must match https://app.DOMAIN" >&2
+        return 1
+    fi
+}
+
 countyiq_validate_production_environment() {
     local credential
     local pass_number
@@ -102,6 +162,7 @@ countyiq_validate_production_environment() {
     : "${DATABASE_API_PASSWORD:?DATABASE_API_PASSWORD must be set}"
     : "${DOMAIN:?DOMAIN must be set}"
     : "${COUNTYIQ_TRUSTED_HOSTS:?COUNTYIQ_TRUSTED_HOSTS must be set}"
+    : "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN must be set}"
     : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID must be set for raw archives}"
     : "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY must be set for raw archives}"
     : "${S3_RAW_BUCKET:?S3_RAW_BUCKET must be set}"
@@ -159,9 +220,9 @@ countyiq_validate_production_environment() {
         return 1
     fi
     case ",${COUNTYIQ_TRUSTED_HOSTS}," in
-        *",${DOMAIN},"*) ;;
+        *",app.${DOMAIN},"*) ;;
         *)
-            echo "COUNTYIQ_TRUSTED_HOSTS must contain DOMAIN exactly" >&2
+            echo "COUNTYIQ_TRUSTED_HOSTS must contain app.DOMAIN exactly" >&2
             return 1
             ;;
     esac
@@ -177,6 +238,108 @@ countyiq_validate_production_environment() {
         echo "Confirm the private R2 backup bucket lock before production deployment" >&2
         return 1
     fi
+    if [ "${#CLOUDFLARE_TUNNEL_TOKEN}" -lt 100 ]; then
+        echo "CLOUDFLARE_TUNNEL_TOKEN does not look like a remotely managed tunnel token" >&2
+        return 1
+    fi
 
+    countyiq_validate_account_environment || return 1
+    if [ "${COUNTYIQ_AUTH_PROVIDER:-disabled}" != "cloudflare_access" ]; then
+        echo "Production app access requires cloudflare_access during the private alpha" >&2
+        return 1
+    fi
     countyiq_validate_r2_backup_environment
+}
+
+# A redirect to Access or a 200 HTML error page is not application readiness.
+# Optional credentials belong in a root-owned curl config, never argv/logs.
+countyiq_check_public_readiness() {
+    local url="$1"
+    local response status body
+    local -a options=()
+    if [ -n "${COUNTYIQ_PUBLIC_READY_CURL_CONFIG:-}" ]; then
+        countyiq_validate_secret_file "$COUNTYIQ_PUBLIC_READY_CURL_CONFIG" || return 1
+        options+=(--config "$COUNTYIQ_PUBLIC_READY_CURL_CONFIG")
+    fi
+    response="$(curl "${options[@]}" --fail --silent --show-error --max-time 20 \
+        --write-out $'\n%{http_code}' "$url")" || return 1
+    status="${response##*$'\n'}"
+    body="${response%$'\n'*}"
+    body="${body//[[:space:]]/}"
+    if [ "$status" != "200" ] || [ "$body" != '{"status":"ok"}' ]; then
+        echo "Public readiness did not return HTTP 200 with the expected API health response; check Access authentication and the origin" >&2
+        return 1
+    fi
+}
+
+# Every live/temporary database must be distinct, including cross-pair names.
+countyiq_validate_restore_targets() {
+    local name
+    local -A seen=()
+    for name in "$@"; do
+        countyiq_require_identifier "$name" "restore database" || return 1
+        if [ -n "${seen[$name]:-}" ]; then
+            echo "Live and restore-drill database names must all be distinct" >&2
+            return 1
+        fi
+        seen[$name]=1
+    done
+}
+
+countyiq_require_cost_guard_clear() {
+    if [ -f "${COUNTYIQ_COST_GUARD_DIR:-/var/lib/countyiq/cost-guard}/tripped" ]; then
+        echo "CountyIQ cost stop is latched; refusing to start services" >&2
+        return 1
+    fi
+}
+
+# The caller passes its Compose argv and enables pipefail. A failed Alembic
+# invocation must never be converted into a successful 'base' revision.
+countyiq_read_schema_revision() {
+    local revision
+    revision="$("$@" run --rm migrate \
+        alembic -c /opt/pipelines/alembic.ini current 2>/dev/null \
+        | tail -n 1)" || return 1
+    printf '%s\n' "${revision:-base}"
+}
+
+# A deployment retains this lock through migration and receipt promotion. Its
+# pre-deploy backup inherits fd 9 and must reuse it, not reopen/self-deadlock.
+countyiq_lock_backup_operations() {
+    local lock_path="${1:-/var/lock/countyiq-backup.lock}"
+    local held_path expected_path
+    expected_path="$(readlink -f "$lock_path")" || return 1
+    held_path="$(readlink "/proc/$$/fd/9" 2>/dev/null || true)"
+    if [ "$held_path" != "$expected_path" ]; then
+        exec 9>"$lock_path"
+    fi
+    if ! flock -n 9; then
+        echo "Another CountyIQ backup or deployment is using the database snapshot boundary" >&2
+        return 1
+    fi
+}
+
+# Read-only checks of the actual host, separate from portable Compose validation.
+countyiq_validate_host() {
+    local effective setting guard_dir
+    guard_dir="${COUNTYIQ_COST_GUARD_DIR:-/var/lib/countyiq/cost-guard}"
+    countyiq_require_command sshd || return 1
+    countyiq_require_command setpriv || return 1
+    effective="$(sshd -T)" || return 1
+    for setting in 'passwordauthentication no' 'kbdinteractiveauthentication no' 'permitrootlogin no' 'pubkeyauthentication yes'; do
+        if ! grep -Fxq "$setting" <<< "$effective"; then
+            echo "Host SSH policy is not effective: expected $setting. Apply the reviewed Ansible bootstrap before deployment." >&2
+            return 1
+        fi
+    done
+    if [ ! -d "$guard_dir" ] || [ -L "$guard_dir" ] \
+        || [ "$(stat -c '%u:%a' "$guard_dir")" != '0:755' ]; then
+        echo "Cost-guard directory must be root-owned mode 755: $guard_dir" >&2
+        return 1
+    fi
+    if ! setpriv --reuid=10001 --regid=10001 --clear-groups \
+        sh -c 'test -x "$1" && ! test -w "$1"' host-guard "$guard_dir"; then
+        echo "Application UID 10001 must traverse, but not write, the cost-guard directory" >&2
+        return 1
+    fi
 }

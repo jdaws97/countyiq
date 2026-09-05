@@ -83,16 +83,18 @@ ENTITY_CANDIDATE_PAIRS_READY_QUERY = """
 # CLUSTER SELECTION
 # =============================================================================
 
+
 def include_person_clusters() -> bool:
     """Whether person-only clusters may be sent to the model.
 
-    Off by default: natural-person display is disabled by source policy and
-    the assemblage signal matches raw owner strings, so person merges reach
-    no customer surface today. 5,078 of 6,110 York clusters (83% of Pass 1
-    spend) were person-only on 2026-09-02.
+    On by default because owner identity is customer-visible and a reviewed
+    20-case audit found that deterministic normalization covered only 1.6% of
+    unresolved person clusters. The model recovered 8 of 10 positive pairs
+    with no false merge in the sample. Operators may set the flag false when
+    they intentionally accept lower identity recall to reduce backfill cost.
     """
     return os.environ.get(
-        "COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS", ""
+        "COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS", "true"
     ).strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -121,8 +123,12 @@ def select_pass1_clusters(
 
 def stable_cluster_key(cluster_names: list[str]) -> str:
     """Return a deterministic tracking key for a candidate entity cluster."""
-    canonical_names = sorted({name.strip() for name in cluster_names if name and name.strip()})
-    digest = hashlib.sha256("\x1f".join(canonical_names).encode("utf-8")).hexdigest()[:20]
+    canonical_names = sorted(
+        {name.strip() for name in cluster_names if name and name.strip()}
+    )
+    digest = hashlib.sha256("\x1f".join(canonical_names).encode("utf-8")).hexdigest()[
+        :20
+    ]
     return f"entity_cluster:{digest}"
 
 
@@ -263,11 +269,13 @@ def build_deterministic_entity_resolution(
         "resolution_tier": DETERMINISTIC_VARIANT_VERSION,
     }
 
+
 CLUSTER_RECORDS_QUERY_PARCELS = """
     SELECT
         pidn,
         owner_full,
         propadr,
+        mail_addr_full,
         aprtotal,
         acres,
         class,
@@ -459,16 +467,24 @@ ENTITY_VERIFICATION_SYSTEM_PROMPT = (
 )
 
 
+CONTEXT_FORMAT_VERSION = "parcel-mailing-address-v2"
+
+
 PROMPT_VERSION = hashlib.sha256(
-    (ENTITY_VERIFICATION_SYSTEM_PROMPT + "\n\n" + ENTITY_VERIFICATION_USER_TEMPLATE).encode(
-        "utf-8"
-    )
+    (
+        ENTITY_VERIFICATION_SYSTEM_PROMPT
+        + "\n\n"
+        + ENTITY_VERIFICATION_USER_TEMPLATE
+        + "\n\ncontext-format:"
+        + CONTEXT_FORMAT_VERSION
+    ).encode("utf-8")
 ).hexdigest()[:12]
 
 
 # =============================================================================
 # PRIVATE FORMATTING HELPERS
 # =============================================================================
+
 
 def _safe_str(val: object) -> str:
     """Return val as a string, or '' for None."""
@@ -489,10 +505,13 @@ def _format_parcel_records(parcels: list[dict]) -> str:
         pidn = _safe_str(p.get("pidn"))
         owner = _safe_str(p.get("owner_full"))
         addr = _safe_str(p.get("propadr"))
+        mail_addr = _safe_str(p.get("mail_addr_full"))
         sale_dt = _safe_str(p.get("saledt"))
         price = p.get("price") or 0
         prev = _safe_str(p.get("prev_owner"))
         line = f"- Evidence ref: parcels:{pidn} | PIDN {pidn} | Owner: {owner} | {addr}"
+        if mail_addr:
+            line += f" | Mailing address: {mail_addr}"
         if sale_dt:
             line += f" | Sold {sale_dt} for ${price:,.0f}"
         if prev:
@@ -589,6 +608,7 @@ def _format_proceedings(procs: list[dict]) -> str:
 # PUBLIC FUNCTIONS
 # =============================================================================
 
+
 def build_entity_cluster_prompt(records: dict) -> str:
     """Format cluster records into the entity verification template.
 
@@ -610,8 +630,7 @@ def build_entity_cluster_prompt(records: dict) -> str:
         sections.append(
             "CANDIDATE NAMES (account for every name):\n"
             + "\n".join(
-                f"- {name} | Evidence ref: candidate:{name}"
-                for name in candidate_names
+                f"- {name} | Evidence ref: candidate:{name}" for name in candidate_names
             )
         )
 
@@ -703,7 +722,9 @@ def parse_entity_verification_output(output: dict) -> dict:
                 name.strip()
                 for name in entity.get("member_names", [])
                 if isinstance(name, str) and name.strip()
-            ] if isinstance(entity.get("member_names", []), list) else [],
+            ]
+            if isinstance(entity.get("member_names", []), list)
+            else [],
             "entity_type": entity.get("entity_type", "unknown"),
             "confidence": confidence,
             "reasoning": entity.get("reasoning", ""),
@@ -724,7 +745,8 @@ def parse_entity_verification_output(output: dict) -> dict:
     if not isinstance(abstentions, list):
         abstentions = []
     abstentions = [
-        a for a in abstentions
+        a
+        for a in abstentions
         if isinstance(a, dict) and isinstance(a.get("names"), list)
     ]
 
@@ -752,6 +774,7 @@ _MAX_TAX_CLAIMS_DETAIL = 30
 # majority support are demoted to abstentions ("disagreement → abstain"),
 # never resolved by guessing.
 # =============================================================================
+
 
 def _entity_member_names(entity: dict, cluster_names: list[str]) -> set[str]:
     """Names from the candidate cluster that this entity claims."""
@@ -787,7 +810,7 @@ def _trial_pair_verdicts(
     same: dict[tuple[str, str], bool] = {}
     ordered = sorted(cluster_names)
     for i, a in enumerate(ordered):
-        for b in ordered[i + 1:]:
+        for b in ordered[i + 1 :]:
             same[(a, b)] = any(a in g and b in g for g in groups)
     return same
 
@@ -841,7 +864,9 @@ def merge_entity_trial_partitions(
     if n == 1:
         result = dict(trials_parsed[0])
         result["trial_stats"] = {
-            "n_trials": 1, "pair_agreement": 1.0, "demoted_entities": 0,
+            "n_trials": 1,
+            "pair_agreement": 1.0,
+            "demoted_entities": 0,
         }
         return result
 
@@ -857,7 +882,9 @@ def merge_entity_trial_partitions(
     def _agreement(v: dict) -> float:
         if not all_pairs:
             return 1.0
-        return sum(1 for p in all_pairs if v.get(p, False) == majority[p]) / len(all_pairs)
+        return sum(1 for p in all_pairs if v.get(p, False) == majority[p]) / len(
+            all_pairs
+        )
 
     agreements = [_agreement(v) for v in verdicts]
     rep_idx = max(range(n), key=lambda i: agreements[i])
@@ -870,18 +897,20 @@ def merge_entity_trial_partitions(
         unsupported = [
             (a, b)
             for i, a in enumerate(members)
-            for b in members[i + 1:]
+            for b in members[i + 1 :]
             if not majority.get((a, b), False)
         ]
         if unsupported:
-            demoted.append({
-                "names": members,
-                "reason": (
-                    f"cross-trial disagreement: {len(unsupported)} pair(s) in this "
-                    f"grouping lacked majority support across {n} trials "
-                    "[Evidence: trial:voting]"
-                ),
-            })
+            demoted.append(
+                {
+                    "names": members,
+                    "reason": (
+                        f"cross-trial disagreement: {len(unsupported)} pair(s) in this "
+                        f"grouping lacked majority support across {n} trials "
+                        "[Evidence: trial:voting]"
+                    ),
+                }
+            )
         else:
             kept_entities.append(entity)
 
@@ -902,6 +931,7 @@ def merge_entity_trial_partitions(
 # =============================================================================
 # CONTEXT GATHERING
 # =============================================================================
+
 
 def gather_cluster_records(cursor, names: list[str]) -> dict:
     """Gather all records for a list of candidate entity names.
@@ -931,10 +961,14 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
     all_tax = [dict(row) for row in cursor.fetchall()] if cursor.description else []
 
     cursor.execute(CLUSTER_RECORDS_QUERY_PLCB, params)
-    plcb_licenses = [dict(row) for row in cursor.fetchall()] if cursor.description else []
+    plcb_licenses = (
+        [dict(row) for row in cursor.fetchall()] if cursor.description else []
+    )
 
     cursor.execute(CLUSTER_RECORDS_QUERY_CORPORATE, params)
-    corporate_entities = [dict(row) for row in cursor.fetchall()] if cursor.description else []
+    corporate_entities = (
+        [dict(row) for row in cursor.fetchall()] if cursor.description else []
+    )
 
     cursor.execute(CLUSTER_RECORDS_QUERY_PROCEEDINGS, params)
     proceedings = [dict(row) for row in cursor.fetchall()] if cursor.description else []
@@ -957,9 +991,15 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
         class_counts = {}
         muni_counts = {}
         for p in all_parcels:
-            owner_counts[p.get("owner_full", "?")] = owner_counts.get(p.get("owner_full", "?"), 0) + 1
-            class_counts[p.get("class", "?")] = class_counts.get(p.get("class", "?"), 0) + 1
-            muni_counts[p.get("municipality", "?")] = muni_counts.get(p.get("municipality", "?"), 0) + 1
+            owner_counts[p.get("owner_full", "?")] = (
+                owner_counts.get(p.get("owner_full", "?"), 0) + 1
+            )
+            class_counts[p.get("class", "?")] = (
+                class_counts.get(p.get("class", "?"), 0) + 1
+            )
+            muni_counts[p.get("municipality", "?")] = (
+                muni_counts.get(p.get("municipality", "?"), 0) + 1
+            )
 
         result["portfolio_summary"] = {
             "total_parcels": len(all_parcels),
@@ -970,7 +1010,9 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
             "total_tax_owed": total_tax,
             "owners": dict(sorted(owner_counts.items(), key=lambda x: -x[1])[:10]),
             "classes": class_counts,
-            "municipalities": dict(sorted(muni_counts.items(), key=lambda x: -x[1])[:10]),
+            "municipalities": dict(
+                sorted(muni_counts.items(), key=lambda x: -x[1])[:10]
+            ),
         }
 
     return result

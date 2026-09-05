@@ -30,6 +30,10 @@ x-dagster-common: &dagster-common
     COUNTYIQ_ERROR_BUDGET: ${COUNTYIQ_ERROR_BUDGET:-0.3}
     OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     COUNTYIQ_OPENROUTER_MODEL: ${COUNTYIQ_OPENROUTER_MODEL:-}
+    COUNTYIQ_PASS0_QUALITY_RECEIPT: ${COUNTYIQ_PASS0_QUALITY_RECEIPT:-}
+    COUNTYIQ_PASS1_QUALITY_RECEIPT: ${COUNTYIQ_PASS1_QUALITY_RECEIPT:-}
+    COUNTYIQ_PASS2_QUALITY_RECEIPT: ${COUNTYIQ_PASS2_QUALITY_RECEIPT:-}
+    COUNTYIQ_PASS3_QUALITY_RECEIPT: ${COUNTYIQ_PASS3_QUALITY_RECEIPT:-}
     COUNTYIQ_PASS0_MODEL: ${COUNTYIQ_PASS0_MODEL:-}
     COUNTYIQ_PASS1_MODEL: ${COUNTYIQ_PASS1_MODEL:-}
     COUNTYIQ_PASS2_MODEL: ${COUNTYIQ_PASS2_MODEL:-}
@@ -102,6 +106,7 @@ x-dagster-common: &dagster-common
     R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
     S3_RAW_BUCKET: ${S3_RAW_BUCKET:-countyiq-raw}
     AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-auto}
+    COUNTYIQ_COST_GUARD_FILE: /run/countyiq-cost-guard/tripped
   depends_on:
     postgres:
       condition: service_healthy
@@ -117,6 +122,7 @@ x-dagster-common: &dagster-common
   volumes:
     - dagster-storage:/opt/dagster/storage
     - ../archives:/opt/countyiq/archives
+    - /var/lib/countyiq/cost-guard:/run/countyiq-cost-guard:ro
   networks:
     - database
     - pipeline-egress
@@ -181,6 +187,12 @@ services:
       COUNTYIQ_CONTRADICTION_MAX_AGE_HOURS: ${COUNTYIQ_CONTRADICTION_MAX_AGE_HOURS:-72}
       COUNTYIQ_SEARCH_API_KEY: ${COUNTYIQ_SEARCH_API_KEY:-}
       COUNTYIQ_SEARCH_LLM_ENABLED: ${COUNTYIQ_SEARCH_LLM_ENABLED:-false}
+      COUNTYIQ_AUTH_PROVIDER: ${COUNTYIQ_AUTH_PROVIDER:-disabled}
+      COUNTYIQ_ACCESS_ISSUER: ${COUNTYIQ_ACCESS_ISSUER:-}
+      COUNTYIQ_ACCESS_AUD: ${COUNTYIQ_ACCESS_AUD:-}
+      COUNTYIQ_WORKSPACE_ORIGINS: ${COUNTYIQ_WORKSPACE_ORIGINS:-}
+      COUNTYIQ_APP_URL: ${COUNTYIQ_APP_URL:-}
+      COUNTYIQ_WATCH_SYNC_ENABLED: ${COUNTYIQ_WATCH_SYNC_ENABLED:-false}
       COUNTYIQ_SEARCH_MODEL: ${COUNTYIQ_SEARCH_MODEL:-}
       COUNTYIQ_SEARCH_RATE_PER_MIN: ${COUNTYIQ_SEARCH_RATE_PER_MIN:-10}
       COUNTYIQ_SEARCH_BURST: ${COUNTYIQ_SEARCH_BURST:-5}
@@ -268,19 +280,25 @@ services:
       - database
 
   caddy:
-    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    image: countyiq-web:${COUNTYIQ_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: docker/Caddy.Dockerfile
     container_name: countyiq-caddy
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN must be set}
     restart: unless-stopped
     init: true
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     read_only: true
     tmpfs:
       - /tmp:size=32m,mode=1777
@@ -288,25 +306,56 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      - NET_BIND_SERVICE
     pids_limit: 128
     mem_limit: 256m
     mem_reservation: 64m
     logging: *default-logging
     networks:
       - proxy
-      - caddy-egress
+      - edge
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.8.3@sha256:51c9cefcb4569df44e1ad403ab1d3d8065aa8e84339bcfc6aee75502e1140339
+    container_name: countyiq-cloudflared
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --metrics
+      - 0.0.0.0:2000
+      - run
+      - --token-file
+      - /run/secrets/cloudflare_tunnel_token
+    secrets:
+      - cloudflare_tunnel_token
+    depends_on:
+      caddy:
+        condition: service_healthy
+    expose:
+      - "2000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 128m
+    mem_reservation: 32m
+    logging: *default-logging
+    networks:
+      - edge
+      - tunnel-egress
 
 volumes:
   postgres-data:
     name: countyiq-postgres-data
   dagster-storage:
     name: countyiq-dagster-storage
-  caddy-data:
-    name: countyiq-caddy-data
-  caddy-config:
-    name: countyiq-caddy-config
+
+secrets:
+  cloudflare_tunnel_token:
+    environment: CLOUDFLARE_TUNNEL_TOKEN
 
 networks:
   database:
@@ -316,6 +365,11 @@ networks:
     ipam:
       config:
         - subnet: 172.31.254.0/24
+  edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.253.0/24
   api-egress:
   pipeline-egress:
-  caddy-egress:
+  tunnel-egress:

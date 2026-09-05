@@ -30,7 +30,7 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-ENVIRONMENT_FILE="${COUNTYIQ_ENV_FILE:-/opt/countyiq/.env}"
+ENVIRONMENT_FILE="${COUNTYIQ_ENV_FILE:-/etc/countyiq/production.env}"
 countyiq_validate_secret_file "$ENVIRONMENT_FILE"
 countyiq_load_environment "$ENVIRONMENT_FILE"
 countyiq_require_command docker
@@ -49,7 +49,8 @@ RECEIPT_DIR="${COUNTYIQ_RESTORE_RECEIPT_DIR:-/var/lib/countyiq/restore-drills}"
 REMOTE_POSTGRES_PATH="${COUNTYIQ_BACKUP_REMOTE}/postgres"
 REMOTE_MANIFEST="${COUNTYIQ_BACKUP_REMOTE}/manifests/backup-${BACKUP_ID}.manifest"
 WORK_DIR=""
-CONTAINER_DUMP="/tmp/countyiq-restore-drill.dump"
+CONTAINER_DUMP="/tmp/countyiq-restore-drill-${BASHPID}.dump"
+CREATED_DRILL_DATABASE=""
 
 for identifier in \
     "$DATABASE_USER" \
@@ -59,9 +60,14 @@ for identifier in \
     "$DAGSTER_DRILL_DATABASE"; do
     countyiq_require_identifier "$identifier" "restore-drill database or user"
 done
-if [ "$PRIMARY_DRILL_DATABASE" = "$PRIMARY_DATABASE" ] \
-    || [ "$DAGSTER_DRILL_DATABASE" = "$DAGSTER_DATABASE" ]; then
-    echo "Restore drill target must never equal a live database" >&2
+countyiq_validate_restore_targets \
+    "$PRIMARY_DATABASE" "$DAGSTER_DATABASE" \
+    "$PRIMARY_DRILL_DATABASE" "$DAGSTER_DRILL_DATABASE"
+
+# Restore verification must not race a deployment's migration or host changes.
+exec 8>/var/lock/countyiq-deploy.lock
+if ! flock -n 8; then
+    echo "A CountyIQ deployment or restore operation is already running" >&2
     exit 1
 fi
 
@@ -75,12 +81,13 @@ WORK_DIR="$(mktemp -d)"
 cleanup() {
     local status=$?
     docker exec countyiq-postgres rm -f "$CONTAINER_DUMP" >/dev/null 2>&1 || true
-    docker exec countyiq-postgres dropdb \
-        -U "$DATABASE_USER" --if-exists --force "$PRIMARY_DRILL_DATABASE" \
-        >/dev/null 2>&1 || true
-    docker exec countyiq-postgres dropdb \
-        -U "$DATABASE_USER" --if-exists --force "$DAGSTER_DRILL_DATABASE" \
-        >/dev/null 2>&1 || true
+    # A failed download or a pre-existing target must never delete someone
+    # else's database. Ownership starts only after our createdb succeeds.
+    if [ -n "$CREATED_DRILL_DATABASE" ]; then
+        docker exec countyiq-postgres dropdb \
+            -U "$DATABASE_USER" --if-exists --force "$CREATED_DRILL_DATABASE" \
+            >/dev/null 2>&1 || echo "Could not clean up restore database $CREATED_DRILL_DATABASE" >&2
+    fi
     rm -rf -- "$WORK_DIR"
     return "$status"
 }
@@ -136,9 +143,9 @@ for database_name in "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"; do
     fi
     pg_restore --list "$dump_file" >/dev/null
 
-    docker exec countyiq-postgres dropdb \
-        -U "$DATABASE_USER" --if-exists --force "$drill_database"
+    # Refuse an occupied name. Never reset a pre-existing database implicitly.
     docker exec countyiq-postgres createdb -U "$DATABASE_USER" "$drill_database"
+    CREATED_DRILL_DATABASE="$drill_database"
     docker cp "$dump_file" "countyiq-postgres:$CONTAINER_DUMP" >/dev/null
     docker exec countyiq-postgres pg_restore \
         -U "$DATABASE_USER" --exit-on-error --no-owner \
@@ -162,6 +169,7 @@ for database_name in "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"; do
     docker exec countyiq-postgres rm -f "$CONTAINER_DUMP"
     docker exec countyiq-postgres dropdb \
         -U "$DATABASE_USER" --if-exists --force "$drill_database"
+    CREATED_DRILL_DATABASE=""
     echo "Restored and verified $database_name in disposable database $drill_database"
 done
 

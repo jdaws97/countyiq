@@ -101,10 +101,10 @@ def test_york_proceeding_coverage_counts_sources_not_municipalities():
         }
     }
 
-    assert len(entries) == 113
-    assert len({url for _, url, _ in entries}) == 110
-    assert len(municipalities_with_any_source) == 68
-    assert len(governing_body_municipalities) == 66
+    assert len(entries) == 104
+    assert len({url for _, url, _ in entries}) == 102
+    assert len(municipalities_with_any_source) == 64
+    assert len(governing_body_municipalities) == 62
 
 
 def test_all_configs_have_required_fields():
@@ -175,3 +175,9 @@ def test_county_identity_helpers_are_not_york_specific():
     assert municipality_name_from_body(
         "Gettysburg Borough Council", county=adams
     ) == "GETTYSBURG BORO"
+
+
+def test_york_sources_exclude_verified_other_counties():
+    from urllib.parse import urlsplit
+    hosts = {urlsplit(url).hostname for _, url, _ in get_county_config("york").municipality_websites}
+    assert not hosts.intersection({"penntownship.org", "paradisetownship.org", "windsortownship.com", "jackson-township.org"})

@@ -170,8 +170,8 @@ def test_source_governance_and_site_readiness_schema() -> None:
                 """
             )
             assert dict(cursor.fetchall()) == {
-                "conditional": 113,
-                "paused": 9,
+                "conditional": 104,
+                "paused": 18,
             }
 
             cursor.execute(
@@ -205,6 +205,15 @@ def test_source_governance_and_site_readiness_schema() -> None:
                 "dover_twp_board_of_supervisors": "DOVER TWP",
                 "dover_twp_zoning_hearing_board": "DOVER TWP",
                 "railroad_borough_council": "RAILROAD BORO",
+                "paradise_twp_board_of_supervisors": "PARADISE TWP",
+                "paradise_twp_planning_commission": "PARADISE TWP",
+                "paradise_twp_zoning_hearing_board": "PARADISE TWP",
+                "penn_twp_board_of_supervisors": "PENN TWP",
+                "penn_twp_planning_commission": "PENN TWP",
+                "penn_twp_zoning_hearing_board": "PENN TWP",
+                "windsor_twp_board_of_supervisors": "WINDSOR TWP",
+                "windsor_twp_planning_commission": "WINDSOR TWP",
+                "jackson_twp_board_of_supervisors": "JACKSON TWP",
                 "shrewsbury_twp_board_of_supervisors": "SHREWSBURY TWP",
                 "west_manheim_twp_board_of_supervisors": "WEST MANHEIM TWP",
                 "west_manheim_twp_planning_commission": "WEST MANHEIM TWP",
@@ -225,7 +234,6 @@ def test_source_governance_and_site_readiness_schema() -> None:
                   AND acquisition_allowed
                   AND raw_retention_allowed
                   AND derived_product_allowed
-                  AND NOT person_level_display_allowed
                   AND NOT raw_export_allowed
                   AND terms_review_status = 'reviewed_risk_accepted'
                   AND evidence->>'robots_unavailable_risk_accepted' = 'true'
@@ -368,6 +376,8 @@ def test_municipality_authorization_executes_against_migrated_schema() -> None:
 
         assert authorizations["hanover_borough_council"].listing_url == entry[1]
         with connection.cursor() as cursor:
+            cursor.execute("SELECT policy_version FROM meta.municipality_source_rights WHERE source_key='hanover_borough_council'")
+            current_policy_version = cursor.fetchone()[0]
             cursor.execute(
                 """
                 SELECT allowed, reason, policy_version,
@@ -382,7 +392,7 @@ def test_municipality_authorization_executes_against_migrated_schema() -> None:
             assert cursor.fetchone() == (
                 True,
                 "authorized",
-                1,
+                current_policy_version,
                 64,
                 "hanover_borough_council",
             )
@@ -422,7 +432,6 @@ def test_godaddy_municipality_sources_authorize_with_bounded_origin() -> None:
         for authorization in authorizations.values():
             assert authorization.raw_retention_allowed
             assert authorization.derived_product_allowed
-            assert not authorization.person_level_display_allowed
             assert not authorization.raw_export_allowed
             assert authorization.robots_unavailable_risk_accepted
             assert "https://img1.wsimg.com" in authorization.allowed_origins
@@ -533,6 +542,350 @@ def test_not_modified_health_preserves_last_document_count() -> None:
                 (source_key,),
             )
             assert cursor.fetchone() == ("not_modified", 7)
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
+def test_wrong_county_sources_cannot_be_acquired_or_used_in_products():
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT rights_status, acquisition_allowed, derived_product_allowed,
+                       raw_export_allowed, cardinality(allowed_methods)
+                FROM meta.municipality_source_rights
+                WHERE source_key IN (
+                    'penn_twp_board_of_supervisors', 'penn_twp_planning_commission',
+                    'penn_twp_zoning_hearing_board', 'paradise_twp_board_of_supervisors',
+                    'paradise_twp_planning_commission', 'paradise_twp_zoning_hearing_board'
+                )
+            """)
+            rows = cursor.fetchall()
+            assert len(rows) == 6
+            assert all(row == ("paused", False, False, False, 0) for row in rows)
+    finally:
+        connection.close()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("policy", ["allowed", "paused", "expired", "denied", "unknown", "global_paused", "unreviewed", "review_required", "quarantined"])
+def test_retained_proceedings_context_obeys_current_policy(policy):
+    from countyiq.lib.intelligence_common import PROCEEDINGS_FOR_PARCEL_QUERY, PROCEEDINGS_FOR_ENTITY_QUERY
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            body = "Hanover Borough Council" if policy != "unknown" else "Unknown review body"
+            # Attribution now requires a current parcel in the source jurisdiction.
+            cursor.execute("""
+                INSERT INTO staging.parcels (pidn, propadr, municipality)
+                SELECT '999999999999', '123 FIXTURE ST', municipality_name
+                FROM meta.municipality_source_rights
+                WHERE source_key='hanover_borough_council'
+            """)
+            cursor.execute("""
+                UPDATE meta.source_rights SET rights_status=%s, derived_product_allowed=TRUE,
+                    review_due_on=CURRENT_DATE+30 WHERE source_key='public_proceedings'
+            """, ("paused" if policy == "global_paused" else "conditional",))
+            cursor.execute("""
+                UPDATE meta.municipality_source_rights SET rights_status=%s,
+                    derived_product_allowed=%s, review_due_on=CURRENT_DATE+%s
+                WHERE source_key='hanover_borough_council'
+            """, ("paused" if policy == "paused" else "conditional", policy != "denied", -1 if policy == "expired" else 30))
+            cursor.execute("""
+                INSERT INTO staging.public_proceedings
+                    (body_name,meeting_date,proceeding_type,raw_text,source_url,document_url,content_hash)
+                VALUES (%s,CURRENT_DATE,'borough_council','Review fixture','https://example.test/review',
+                    'https://example.test/review.pdf','context-policy-fixture') RETURNING id
+            """, (body,))
+            proceeding_id = cursor.fetchone()[0]
+            cursor.execute("UPDATE staging.public_proceedings SET metadata_quality=%s::jsonb WHERE id=%s",
+                           ('{"status":"' + (policy if policy in {"unreviewed", "review_required", "quarantined"} else "ready") + '"}', proceeding_id))
+            cursor.execute("""
+                INSERT INTO staging.proceeding_extractions
+                    (proceeding_id,extraction_type,applicant_name,parcel_reference,decision,
+                     supporting_text,extraction_confidence,model_used,source_url)
+                VALUES (%s,'variance_request','Policy Fixture LLC','999999999999',
+                    'pending','Fixture only',0.9,'fixture','https://example.test/review')
+                RETURNING id
+            """, (proceeding_id,))
+            extraction_id = cursor.fetchone()[0]
+            for query, params in (
+                (PROCEEDINGS_FOR_PARCEL_QUERY, {"pidn": "999999999999"}),
+                (PROCEEDINGS_FOR_ENTITY_QUERY, {"names": ["Policy Fixture LLC"]}),
+            ):
+                cursor.execute(query, params)
+                ids = {row[0] for row in cursor.fetchall()}
+                assert (extraction_id in ids) is (policy == "allowed")
+            from countyiq.assets.enrichment.proceeding_extraction import PENDING_PROCEEDINGS_QUERY
+            from countyiq.assets.enrichment.intelligence_events import _DEVELOPMENT_EVENTS_SQL
+            cursor.execute(PENDING_PROCEEDINGS_QUERY)
+            assert (proceeding_id in {row[0] for row in cursor.fetchall()}) is (policy == "allowed")
+            cursor.execute(_DEVELOPMENT_EVENTS_SQL)
+            assert (extraction_id in {row[0] for row in cursor.fetchall()}) is (policy == "allowed")
+
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
+def test_model_context_snapshot_is_consistent_read_only_and_released():
+    import uuid
+    from psycopg2 import sql
+    from countyiq.resources.database import DatabaseResource
+
+    writer = _connect()  # Enforces the dedicated test database guard.
+    writer.autocommit = True
+    resource = DatabaseResource(
+        host=writer.info.host, port=writer.info.port, dbname=writer.info.dbname,
+        user=writer.info.user, password=os.environ.get("DATABASE_PASSWORD", "localtest"),
+    )
+    resource.setup_for_execution(None)
+    table = sql.Identifier("public", "review_snapshot_" + uuid.uuid4().hex)
+    created = False
+    try:
+        with writer.cursor() as cursor:
+            cursor.execute(sql.SQL("CREATE TABLE {} (value integer NOT NULL)").format(table))
+            created = True
+            cursor.execute(sql.SQL("INSERT INTO {} VALUES (1)").format(table))
+        with resource.read_snapshot() as cursor:
+            cursor.execute(sql.SQL("SELECT value FROM {}").format(table))
+            assert cursor.fetchone()["value"] == 1
+            with writer.cursor() as concurrent:
+                concurrent.execute(sql.SQL("UPDATE {} SET value=2").format(table))
+            cursor.execute(sql.SQL("SELECT value FROM {}").format(table))
+            assert cursor.fetchone()["value"] == 1
+            cursor.execute("SHOW transaction_read_only")
+            assert next(iter(cursor.fetchone().values())) == "on"
+        assert resource._get_conn().autocommit is True
+        with resource.read_snapshot() as cursor:
+            cursor.execute(sql.SQL("SELECT value FROM {}").format(table))
+            assert cursor.fetchone()["value"] == 2
+        with pytest.raises(psycopg2.errors.ReadOnlySqlTransaction):
+            with resource.read_snapshot() as cursor:
+                cursor.execute(sql.SQL("UPDATE {} SET value=3").format(table))
+        assert resource._get_conn().autocommit is True
+        with resource.read_snapshot() as cursor:
+            cursor.execute(sql.SQL("SELECT value FROM {}").format(table))
+            assert cursor.fetchone()["value"] == 2
+    finally:
+        resource.teardown_after_execution(None)
+        if created:
+            with writer.cursor() as cursor:
+                cursor.execute(sql.SQL("DROP TABLE {}").format(table))
+        writer.close()
+
+
+@pytest.mark.integration
+def test_parcel_brief_context_matches_database_fingerprint():
+    import uuid
+    from psycopg2.extras import RealDictCursor
+    from countyiq.lib.pass3_brief_generation import gather_brief_context
+
+    pidn = str(uuid.uuid4().int % 10**12).zfill(13)
+    owner = "Review context " + uuid.uuid4().hex
+    connection = _connect()
+    try:
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                INSERT INTO staging.parcels
+                  (pidn,owner_full,propadr,aprtotal,acres,price,municipality)
+                VALUES (%s,%s,'Review address',123456,2.5,100000,'Review municipality')
+            """, (pidn,owner))
+            context = gather_brief_context(cursor, pidn)
+            assert context["parcel"]["owner"] == owner
+            assert context["parcel"]["assessed_value"] == 123456
+            assert context["portfolio"]["portfolio_count"] == 1
+            assert context["portfolio"]["portfolio_value"] == 123456
+            assert context["portfolio"]["portfolio_delinquency"] == 0
+            assert context["entity"] == {"found": False}
+            cursor.execute("SELECT meta.parcel_brief_source_fingerprint(%s) AS fingerprint", (pidn,))
+            assert context["source_fingerprint"] == cursor.fetchone()["fingerprint"]
+            cursor.execute("UPDATE staging.parcels SET aprtotal=123457 WHERE pidn=%s", (pidn,))
+            updated = gather_brief_context(cursor, pidn)
+            assert updated["source_fingerprint"] != context["source_fingerprint"]
+            assert updated["portfolio"]["portfolio_value"] == 123457
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
+def test_shared_retraction_removes_changed_and_missing_but_retains_aged_evidence():
+    from psycopg2.extras import Json
+    from countyiq.lib.intelligence_common import RETRACT_STALE_EVIDENCE_QUERY, VOLATILE_EVIDENCE_KEYS
+    connection = _connect()
+    pidn = "9090000000009"
+    try:
+        with connection.cursor() as cursor:
+            for key in ("missing", "changed", "aged"):
+                cursor.execute("""
+                    INSERT INTO public.evidence (pidn,signal_key,claim,evidence_data,validation_status,adjusted_significance)
+                    VALUES (%s,%s,'fixture',%s,'confirmed','high')
+                """, (pidn,key,Json({"fact":1,"months_since_sale":1})))
+            for key, fact in (("changed",2),("aged",1)):
+                cursor.execute("""
+                    INSERT INTO public.development_signals (pidn,signal_key,signal_weight,source_table,evidence)
+                    VALUES (%s,%s,1,'fixture',%s)
+                """, (pidn,key,Json({"fact":fact,"months_since_sale":2})))
+            cursor.execute(RETRACT_STALE_EVIDENCE_QUERY, {"volatile":list(VOLATILE_EVIDENCE_KEYS)})
+            removed = {key for parcel,key in cursor.fetchall() if parcel==pidn}
+            assert removed == {"missing","changed"}
+            cursor.execute("SELECT signal_key FROM public.evidence WHERE pidn=%s",(pidn,))
+            assert cursor.fetchall() == [("aged",)]
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
+def test_validation_publication_rejects_stale_context_and_locks_signal_replacement():
+    from psycopg2.extras import Json
+    from countyiq.resources.database import DatabaseResource
+    from countyiq.lib.pass2_batched_validation import (
+        gather_parcel_batch_context, pass2_source_fingerprint,
+        assert_current_validation_context, StaleValidationContext,
+    )
+
+    writer = _connect()
+    writer.autocommit = True
+    resource = DatabaseResource(
+        host=writer.info.host, port=writer.info.port, dbname=writer.info.dbname,
+        user=writer.info.user, password=os.environ.get("DATABASE_PASSWORD", "localtest"),
+    )
+    resource.setup_for_execution(None)
+    pidn = "9090000000010"
+    created = False
+    try:
+        with writer.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO public.development_signals
+                  (pidn,signal_key,signal_weight,source_table,evidence)
+                VALUES (%s,'growth_area',1,'fixture',%s)
+            """, (pidn,Json({"fact":1})))
+            created = True
+        with resource.read_snapshot() as cursor:
+            original_hash = pass2_source_fingerprint(gather_parcel_batch_context(cursor,pidn))
+        with writer.cursor() as cursor:
+            cursor.execute("UPDATE public.development_signals SET evidence=%s WHERE pidn=%s", (Json({"fact":2}),pidn))
+        with pytest.raises(StaleValidationContext, match="publication deferred"):
+            with resource.transaction(dict_rows=True) as cursor:
+                assert_current_validation_context(cursor,pidn,original_hash)
+        with resource.read_snapshot() as cursor:
+            current_hash = pass2_source_fingerprint(gather_parcel_batch_context(cursor,pidn))
+        with resource.transaction(dict_rows=True) as cursor:
+            assert_current_validation_context(cursor,pidn,current_hash)
+            writer.autocommit = False
+            try:
+                with writer.cursor() as concurrent:
+                    # TRUNCATE uses this lock: replacement cannot interleave
+                    # between the publication check and evidence writes.
+                    with pytest.raises(psycopg2.errors.LockNotAvailable):
+                        concurrent.execute("LOCK TABLE public.development_signals IN ACCESS EXCLUSIVE MODE NOWAIT")
+            finally:
+                writer.rollback()
+                writer.autocommit = True
+        writer.autocommit = False
+        try:
+            with writer.cursor() as cursor:
+                cursor.execute("LOCK TABLE public.development_signals IN ACCESS EXCLUSIVE MODE NOWAIT")
+        finally:
+            writer.rollback()
+            writer.autocommit = True
+        assert resource._get_conn().autocommit is True
+    finally:
+        resource.teardown_after_execution(None)
+        if created:
+            with writer.cursor() as cursor:
+                cursor.execute("DELETE FROM public.development_signals WHERE pidn=%s", (pidn,))
+        writer.close()
+
+
+@pytest.mark.integration
+def test_proceeding_address_match_requires_number_and_unique_parcel():
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            municipality = "Review address specificity"
+            for pidn, address in (
+                ("9090000000021","ORWIG RD"),
+                ("9090000000022","123 N MAIN ST"),
+                ("9090000000023","127 N WEST ST"),
+                ("9090000000024","127 N WEST ST"),
+            ):
+                cursor.execute("INSERT INTO staging.parcels (pidn,propadr,municipality) VALUES (%s,%s,%s)", (pidn,address,municipality))
+            for reference, expected in (
+                ("Orwig Road",None),
+                ("Intersection of Orwig Road and Main Street",None),
+                ("123 North Main Street, Suite 2","9090000000022"),
+                ("127 North West Street",None),
+                ("0 Orwig Road",None),
+            ):
+                cursor.execute("SELECT public.proceeding_address_pidn(%s,%s)",(reference,municipality))
+                assert cursor.fetchone()[0] == expected
+            cursor.execute("SELECT public.proceeding_address_pidn('123 N Main St','Other municipality')")
+            assert cursor.fetchone()[0] is None
+            # Exercise the actual event query too: a broad location remains a
+            # project-level record, without assigning parcels to it.
+            cursor.execute("""
+                UPDATE meta.municipality_source_rights SET municipality_name=%s,
+                    rights_status='conditional',derived_product_allowed=TRUE,
+                    review_due_on=CURRENT_DATE+30 WHERE source_key='hanover_borough_council'
+            """,(municipality,))
+            cursor.execute("""
+                INSERT INTO staging.public_proceedings
+                  (body_name,meeting_date,proceeding_type,raw_text,source_url,
+                   document_url,content_hash,metadata_quality)
+                VALUES ('Hanover Borough Council',CURRENT_DATE,'borough_council',
+                        'Fixture only','https://example.test','https://example.test/fixture.pdf',
+                        'specific-address-fixture','{"status":"ready"}') RETURNING id
+            """)
+            proceeding_id = cursor.fetchone()[0]
+            cursor.execute("""
+                INSERT INTO staging.proceeding_extractions
+                  (proceeding_id,extraction_type,applicant_name,parcel_reference,
+                   supporting_text,extraction_confidence,model_used,source_url)
+                VALUES (%s,'variance_request','Specific Address LLC','Orwig Road',
+                        'Fixture only',0.9,'fixture','https://example.test') RETURNING id
+            """,(proceeding_id,))
+            extraction_id = cursor.fetchone()[0]
+            from countyiq.assets.enrichment.intelligence_events import _DEVELOPMENT_EVENTS_SQL
+            from countyiq.lib.intelligence_common import PROCEEDINGS_FOR_PARCEL_QUERY
+            for reference, expected_pidns in (
+                ("Orwig Road",[]),("123 North Main Street",["9090000000022"]),
+                ("127 North West Street",[]),
+            ):
+                cursor.execute("UPDATE staging.proceeding_extractions SET parcel_reference=%s WHERE id=%s",(reference,extraction_id))
+                cursor.execute(_DEVELOPMENT_EVENTS_SQL)
+                columns = [column.name for column in cursor.description]
+                event = next(dict(zip(columns,row)) for row in cursor.fetchall() if row[0]==extraction_id)
+                assert event["related_pidns"] == expected_pidns
+                for pidn in ("9090000000021","9090000000022","9090000000023"):
+                    cursor.execute(PROCEEDINGS_FOR_PARCEL_QUERY,{"pidn":pidn})
+                    assert (extraction_id in {row[0] for row in cursor.fetchall()}) == (pidn in expected_pidns)
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("event_type", ["policy_action", "recommendation", "update", "withdrawn", "removed", "scoped_decision"])
+def test_current_municipal_event_types_can_be_persisted(event_type):
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO public.intelligence_events
+                    (event_key,source_kind,source_record_id,category,event_type,title,
+                     what_happened,why_it_matters,what_happens_next,detected_at,interpretation_kind)
+                VALUES (%s,'proceeding_extraction','schema-fixture','development',%s,
+                        'Schema fixture','Source records an action','Verify scope',
+                        'Check the source',NOW(),'llm')
+                RETURNING event_type
+            """, ('schema-contract:' + event_type, event_type))
+            assert cursor.fetchone()[0] == event_type
     finally:
         connection.rollback()
         connection.close()

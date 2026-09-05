@@ -129,6 +129,12 @@ MODEL_PRESETS = {
         "temperature": 1.0, "top_p": 0.95, "top_k": -1,
         "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
     },
+    # GLM-5.3-Flash publisher/OpenRouter defaults, verified 2026-09-05.
+    # Do not impose the generic family's unvalidated top-k/temperature.
+    "glm_flash": {
+        "temperature": 1.0, "top_p": 0.95, "top_k": -1,
+        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+    },
     "mimo": {
         "temperature": 0.8, "top_p": 0.95, "top_k": -1,
         "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
@@ -196,6 +202,8 @@ def validate_inline_pdf_size(pdf_bytes: bytes | None) -> None:
 def detect_model_family(model_path: str) -> str:
     """Detect the model family from an OpenRouter model slug."""
     name = model_path.lower()
+    if name.startswith("z-ai/glm-5.3-flash"):
+        return "glm_flash"
     if "mercury" in name:
         return "mercury"
     if "gpt-oss" in name or "gpt_oss" in name:
@@ -238,6 +246,8 @@ def get_preset_for_model(
         return MODEL_PRESETS["ministral_instruct"]
     if family == "deepseek":
         return MODEL_PRESETS["deepseek"]
+    if family == "glm_flash":
+        return MODEL_PRESETS["glm_flash"]
     if family == "mimo":
         return MODEL_PRESETS["mimo"]
     if family == "grok":
@@ -620,6 +630,14 @@ def build_openrouter_payload(
 
     if family == "mimo":
         payload["chat_template_kwargs"] = {"enable_thinking": config.thinking}
+    elif family == "glm_flash":
+        # This model has mandatory reasoning and defaults to max if omitted.
+        # Keep extraction/brief calls bounded even when thinking=False.
+        payload["reasoning"] = {"effort": "low"}
+    elif family == "deepseek" and "deepseek-v4" in config.model_path.lower():
+        # OpenRouter's unified control is translated by the selected provider;
+        # a serving-engine chat_template_kwargs flag is not portable.
+        payload["reasoning"] = {"enabled": config.thinking}
     elif family == "deepseek" and config.thinking:
         payload["chat_template_kwargs"] = {"thinking_mode": "thinking"}
     elif family == "grok":
@@ -637,6 +655,15 @@ def build_openrouter_payload(
     if config.reasoning_effort:
         payload.pop("reasoning_effort", None)
         payload["reasoning"] = {"effort": config.reasoning_effort}
+
+    if family == "deepseek" and "deepseek-v4" in config.model_path.lower() and (
+        config.thinking or config.reasoning_effort not in (None, "", "none")
+    ):
+        # DeepSeek thinking ignores sampling controls. Omitting them also
+        # avoids excluding otherwise compatible strict-schema providers.
+        for key in ("temperature", "top_p", "top_k", "min_p",
+                    "presence_penalty", "frequency_penalty"):
+            payload.pop(key, None)
 
     return payload
 
@@ -716,7 +743,8 @@ def _invoke_openrouter(
             )
             meta["schema_fallback"] = True
             return raw_output, error, meta
-        body = resp.text[:500] if resp is not None else ""
+        error_response = exc.response if exc.response is not None else resp
+        body = error_response.text[:2000] if error_response is not None else ""
         return "", f"HTTP error: {exc} | body: {body}", meta
     except requests.exceptions.Timeout:
         return "", "Request timeout (180s)", meta

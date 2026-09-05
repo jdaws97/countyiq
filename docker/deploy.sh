@@ -42,13 +42,17 @@ if [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=all)" ]; the
     exit 1
 fi
 
-ENVIRONMENT_FILE="${COUNTYIQ_ENV_FILE:-$REPO_ROOT/.env}"
+ENVIRONMENT_FILE="${COUNTYIQ_ENV_FILE:-/etc/countyiq/production.env}"
 if [ "$CHECK_ONLY" = false ]; then
     if [ "$EUID" -ne 0 ]; then
         echo "Production deployment must run as root" >&2
         exit 1
     fi
     countyiq_validate_secret_file "$ENVIRONMENT_FILE"
+    if [ -f "${COUNTYIQ_COST_GUARD_DIR:-/var/lib/countyiq/cost-guard}/tripped" ]; then
+        echo "CountyIQ is hard-stopped by the cost guard; review and reset it before deploying" >&2
+        exit 1
+    fi
 fi
 countyiq_load_environment "$ENVIRONMENT_FILE"
 countyiq_validate_production_environment
@@ -61,11 +65,15 @@ COMPOSE=(docker compose --env-file "$ENVIRONMENT_FILE" -f "$SCRIPT_DIR/docker-co
 "${COMPOSE[@]}" config --quiet
 
 if [ "$CHECK_ONLY" = true ]; then
-    echo "Deployment preflight is valid for $DEPLOY_REF"
+    echo "Deployment configuration preflight is valid for $DEPLOY_REF"
+    echo "Actual deployment also requires the root-only docker/check-host.sh host gate"
     echo "API image: countyiq-api:$COUNTYIQ_IMAGE_TAG"
     echo "Dagster image: countyiq-dagster:$COUNTYIQ_IMAGE_TAG"
+    echo "Web image: countyiq-web:$COUNTYIQ_IMAGE_TAG"
     exit 0
 fi
+
+countyiq_validate_host
 
 countyiq_require_command curl
 countyiq_require_command flock
@@ -97,10 +105,15 @@ else
         echo "A successful off-host restore-drill receipt is required before deploy" >&2
         exit 1
     fi
-    if [ "${COUNTYIQ_PUBLIC_READY_URL:-}" != "https://${DOMAIN}/api/ready" ]; then
-        echo "Ordinary deploy requires COUNTYIQ_PUBLIC_READY_URL=https://${DOMAIN}/api/ready" >&2
+    if [ "${COUNTYIQ_PUBLIC_READY_URL:-}" != "https://app.${DOMAIN}/api/ready" ]; then
+        echo "Ordinary deploy requires COUNTYIQ_PUBLIC_READY_URL=https://app.${DOMAIN}/api/ready" >&2
         exit 1
     fi
+    if [ -z "${COUNTYIQ_PUBLIC_READY_CURL_CONFIG:-}" ]; then
+        echo "Configure authenticated public readiness for Cloudflare Access before deployment" >&2
+        exit 1
+    fi
+    countyiq_validate_secret_file "$COUNTYIQ_PUBLIC_READY_CURL_CONFIG"
     restore_age_seconds=$(( $(date +%s) - $(stat -c '%Y' "$CURRENT_RESTORE_RECEIPT") ))
     if [ "$restore_age_seconds" -lt 0 ]; then
         echo "The latest restore-drill receipt has a future timestamp" >&2
@@ -156,11 +169,7 @@ MIGRATION_COMPLETED=false
 RELEASE_RECORDED=false
 
 read_schema_revision() {
-    local revision
-    revision="$("${COMPOSE[@]}" run --rm migrate \
-        alembic -c /opt/pipelines/alembic.ini current 2>/dev/null \
-        | tail -n 1)"
-    printf '%s\n' "${revision:-base}"
+    countyiq_read_schema_revision "${COMPOSE[@]}"
 }
 
 persist_image_tag() {
@@ -200,7 +209,8 @@ on_exit() {
     if [ "$SERVICES_STOPPED" = true ]; then
         local current_schema="unknown"
         current_schema="$(read_schema_revision || true)"
-        if [ "$MIGRATION_STARTED" = false ] && [ "$current_schema" = "$SCHEMA_BEFORE" ]; then
+        if [ "$MIGRATION_STARTED" = false ] && [ "$current_schema" = "$SCHEMA_BEFORE" ] \
+            && countyiq_require_cost_guard_clear; then
             echo "Schema is unchanged; restarting the stopped prior containers." >&2
             "${COMPOSE[@]}" start api dagster-webserver dagster-daemon >/dev/null 2>&1 || true
         else
@@ -212,19 +222,28 @@ on_exit() {
 trap on_exit EXIT
 
 echo "[1/8] Building commit-addressed application images..."
-"${COMPOSE[@]}" build --pull api dagster-webserver
+"${COMPOSE[@]}" build --pull api dagster-webserver caddy
+"${COMPOSE[@]}" pull cloudflared
 "${COMPOSE[@]}" run --rm --no-deps api \
     /app/.venv/bin/python -c "from api.main import app; assert app"
 "${COMPOSE[@]}" run --rm --no-deps dagster-webserver \
     python -c "from countyiq.definitions import defs; assert defs"
+"${COMPOSE[@]}" run --rm --no-deps caddy \
+    caddy validate --config /etc/caddy/Caddyfile
+
+# Keep scheduled backups out of the migration/release interval. The nested
+# pre-deploy backup reuses this inherited lock instead of reacquiring it.
+countyiq_lock_backup_operations
 
 echo "[2/8] Starting only PostgreSQL and recording the current schema..."
+countyiq_require_cost_guard_clear
 "${COMPOSE[@]}" up -d --wait --wait-timeout 120 postgres
 SCHEMA_BEFORE="$(read_schema_revision)"
 
 echo "[3/8] Quiescing API and Dagster before the rollback backup..."
-"${COMPOSE[@]}" stop -t 60 api dagster-webserver dagster-daemon
+# A failed stop can still have stopped some containers; recovery must handle it.
 SERVICES_STOPPED=true
+"${COMPOSE[@]}" stop -t 60 api dagster-webserver dagster-daemon
 active_sessions="$(
     "${COMPOSE[@]}" exec -T postgres psql \
         -U "$DATABASE_USER" -d "$DATABASE_NAME" -At -v ON_ERROR_STOP=1 \
@@ -257,13 +276,14 @@ MIGRATION_COMPLETED=true
 SCHEMA_AFTER="$(read_schema_revision)"
 
 echo "[6/8] Replacing services with commit-addressed images..."
+countyiq_require_cost_guard_clear
 "${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 240 \
-    api dagster-webserver dagster-daemon caddy
+    api dagster-webserver dagster-daemon caddy cloudflared
+countyiq_require_cost_guard_clear
 "${COMPOSE[@]}" exec -T api \
     curl --fail --silent --show-error http://localhost:8000/api/ready >/dev/null
 if [ -n "${COUNTYIQ_PUBLIC_READY_URL:-}" ]; then
-    curl --fail --silent --show-error --max-time 20 \
-        "$COUNTYIQ_PUBLIC_READY_URL" >/dev/null
+    countyiq_check_public_readiness "$COUNTYIQ_PUBLIC_READY_URL"
 fi
 
 echo "[7/8] Writing the immutable release receipt..."
@@ -276,6 +296,8 @@ fi
 receipt_temp="$(mktemp "$RELEASE_DIR/.release.XXXXXX")"
 api_image_id="$(docker image inspect --format '{{.Id}}' "countyiq-api:$COUNTYIQ_IMAGE_TAG")"
 dagster_image_id="$(docker image inspect --format '{{.Id}}' "countyiq-dagster:$COUNTYIQ_IMAGE_TAG")"
+web_image_id="$(docker image inspect --format '{{.Id}}' "countyiq-web:$COUNTYIQ_IMAGE_TAG")"
+cloudflared_image_id="$(docker image inspect --format '{{.Id}}' 'cloudflare/cloudflared:2026.8.3@sha256:51c9cefcb4569df44e1ad403ab1d3d8065aa8e84339bcfc6aee75502e1140339')"
 {
     printf 'deploy_ref=%s\n' "$DEPLOY_REF"
     printf 'previous_ref=%s\n' "$PREVIOUS_REF"
@@ -285,6 +307,8 @@ dagster_image_id="$(docker image inspect --format '{{.Id}}' "countyiq-dagster:$C
     printf 'schema_after=%s\n' "$SCHEMA_AFTER"
     printf 'api_image=%s\n' "$api_image_id"
     printf 'dagster_image=%s\n' "$dagster_image_id"
+    printf 'web_image=%s\n' "$web_image_id"
+    printf 'cloudflared_image=%s\n' "$cloudflared_image_id"
 } > "$receipt_temp"
 chmod 400 "$receipt_temp"
 mv "$receipt_temp" "$receipt_file"

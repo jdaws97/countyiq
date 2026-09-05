@@ -4,6 +4,9 @@ CountyIQ is a containerized real-estate intelligence stack with Cloudflare in
 front, a React frontend, a FastAPI API, and Dagster pipelines feeding
 PostgreSQL/PostGIS.
 
+This page describes repository configuration. Deployment status and hostname
+rollout steps live in [Account workspaces](operations/account-workspaces.md#guarded-hostname-rollout).
+
 ## System Shape
 
 ```text
@@ -12,12 +15,14 @@ Users
   v
 Cloudflare
   - DNS / CDN / TLS / WAF
-  - Cloudflare Pages for the frontend (current preferred setup)
+  - Access for invited testers on the app host
+  - Tunnel to the private origin
   - Cloudflare R2 for selected raw-source and backup archives
   |
   v
 Ubuntu VPS (Hetzner)
-  - Caddy
+  - cloudflared (outbound Tunnel connector)
+  - Caddy (marketing/app static files and API proxy)
   - FastAPI
   - Dagster
   - PostgreSQL 16 + PostGIS
@@ -25,9 +30,14 @@ Ubuntu VPS (Hetzner)
 
 ## Request Flow
 
-- `/*`: frontend, ideally served from Cloudflare Pages
-- `/api/*`: proxied to FastAPI behind Caddy
-- selected source and backup archives: stored outside Postgres in Cloudflare R2
+- `countyiq.net`: public marketing HTML; Sign in opens `app.countyiq.net`.
+- `app.countyiq.net`: application HTML and all product routes, gated by
+  Cloudflare Access for testing.
+- App-host `/api/*`: proxied by Caddy to FastAPI, which verifies configured
+  customer identity. Marketing-host API requests return 404.
+- Cloudflare terminates public TLS; Tunnel reaches Caddy on private port 8080.
+  Both frontend entries are built and served with the VPS web image.
+- Selected source and backup archives: stored outside Postgres in Cloudflare R2
 
 ## Data Flow
 
@@ -41,8 +51,8 @@ Ubuntu VPS (Hetzner)
 CountyIQ remains one monorepo, but it is not one runtime:
 
 - `frontend/` depends on the documented HTTP contract, never Python internals.
-- `api/` is a read-only serving process. It must not import Dagster or pipeline
-  packages and receives only the API database role.
+- `api/` reads source data and performs scoped account/workspace writes using
+  only the API database role. It must not import Dagster or pipeline packages.
 - `pipelines/countyiq/` owns ingestion, enrichment, and serving-projection
   writes. It must not import the API package and uses a separate writer role.
 - `pipelines/alembic/` is the sole schema authority. Only the short-lived
@@ -57,8 +67,6 @@ pipeline packages are rejected.
 
 ## Intelligence Pipeline
 
-The current repo is no longer just an MVP property browser. It includes an LLM-backed intelligence pipeline:
-
 - Pass 0: proceeding extraction from PDFs
 - Pass 1: entity verification
 - Pass 2: batched signal validation
@@ -71,12 +79,9 @@ configuration.
 
 ## Deployment Reality
 
-- The current deployment story is containerized VPS plus Cloudflare, not AWS Lambda.
-- Hetzner is the selected VPS provider; Netcup is the fallback.
 - The Compose project and persistent-volume names are fixed, while application
   images are tagged with the exact reviewed Git SHA.
 - `docker/deploy.sh` is the only production release path. It validates the
   environment, quiesces API and pipeline writers, verifies an off-host backup,
   applies migrations, checks readiness, and writes a release receipt.
-- AWS/Lambda/Terraform deployment material is historical and is not kept in the
-  working tree.
+- `infra/cloudflare/` manages Cloudflare DNS, Tunnel, and Access using OpenTofu.

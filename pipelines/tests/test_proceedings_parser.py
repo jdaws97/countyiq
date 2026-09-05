@@ -274,19 +274,19 @@ class TestParseMeetingDateFromFilename:
     def test_mdy_underscore_format(self):
         assert parse_meeting_date_from_filename("PC_01_15_2026.pdf") == "2026-01-15"
 
-    # MonthName_YYYY → day defaults to 01
+    # MonthName_YYYY cannot establish an exact meeting day
     def test_month_year_format(self):
-        assert parse_meeting_date_from_filename("ZHB_Minutes_March_2025.pdf") == "2025-03-01"
+        assert parse_meeting_date_from_filename("ZHB_Minutes_March_2025.pdf") is None
 
     def test_month_year_format_november(self):
-        assert parse_meeting_date_from_filename("Planning_Commission_Minutes_November_2024.pdf") == "2024-11-01"
+        assert parse_meeting_date_from_filename("Planning_Commission_Minutes_November_2024.pdf") is None
 
     def test_month_year_case_insensitive(self):
-        assert parse_meeting_date_from_filename("MARCH_2025_minutes.pdf") == "2025-03-01"
+        assert parse_meeting_date_from_filename("MARCH_2025_minutes.pdf") is None
 
     # Spelled-out month used in fixture
     def test_month_year_format_planning(self):
-        assert parse_meeting_date_from_filename("Planning_Commission_Minutes_March_2025.pdf") == "2025-03-01"
+        assert parse_meeting_date_from_filename("Planning_Commission_Minutes_March_2025.pdf") is None
 
     # No recognisable date
     def test_compact_mmddyyyy(self):
@@ -418,3 +418,9 @@ class TestParseMeetingDateNewPatterns:
 
     def test_month_day_year_february(self):
         assert parse_meeting_date_from_filename("February 24th, 2026") == "2026-02-24"
+
+
+def test_spelled_meeting_dates_survive_extracted_text_whitespace():
+    for separator in ("\n", "\r\n", "\u00a0"):
+        text = f"Council minutes January{separator}6,{separator}2026"
+        assert parse_meeting_date_from_filename(text) == "2026-01-06"

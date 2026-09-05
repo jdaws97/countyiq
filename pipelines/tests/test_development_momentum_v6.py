@@ -67,7 +67,7 @@ def test_signal_definitions_include_new_deterministic_signals():
     for key in ("nearby_subdivision", "penndot_project", "local_traffic_activity", "environmental_diligence"):
         assert "ST_Expand(" in sql[key], key
     # Extraction linking uses the normalized address function from migration 048.
-    assert "public.normalize_street_address" in sql["municipal_action"]
+    assert "public.proceeding_parcel_matches" in sql["municipal_action"]
     # Ownership change decays with age and no longer substring-matches "LP".
     assert "months_since_sale <= 3" in sql["ownership_change"]
     assert "ILIKE '%%LP%%'" not in sql["ownership_change"]

@@ -293,7 +293,7 @@ def _compact_text(value: str) -> str:
     return "".join(_normalized_source_text(value).split())
 
 
-def validate_pass0_extractions(extractions: Any, source_text: str) -> list[str]:
+def validate_pass0_extractions(extractions: Any, source_text: str, *, meeting_date=None, require_contract=False) -> list[str]:
     errors: list[str] = []
     if not isinstance(extractions, list):
         return ["extractions must be a list"]
@@ -307,6 +307,11 @@ def validate_pass0_extractions(extractions: Any, source_text: str) -> list[str]:
         if not isinstance(extraction, dict):
             errors.append(f"extraction {index} is not an object")
             continue
+        if require_contract and "evidence_spans" not in extraction:
+            errors.append(f"extraction {index} is missing the current evidence contract")
+        if "evidence_spans" in extraction:
+            from countyiq.lib.proceeding_contract import contract_errors
+            errors.extend(f"extraction {index} {error}" for error in contract_errors(extraction, source_text, meeting_date))
         quote = extraction.get("supporting_text")
         if not isinstance(quote, str) or not quote.strip():
             errors.append(f"extraction {index} has no supporting_text")
@@ -345,6 +350,11 @@ def pass0_semantic_decision(extractions: Iterable[dict]) -> list[dict]:
                 "parcel_reference",
                 "project_name",
                 "decision",
+                "record_status", "event_date", "event_date_text", "upcoming_date",
+                "upcoming_date_iso", "application_ids", "project_reference",
+                "parcel_references", "matter_category", "conditions",
+                "decision_scope", "decision_authority", "decision_outcome", "milestones",
+                "identity_status", "identity_conflicts", "relevance_scope", "discovery_eligible",
             )
         }
         for extraction in extractions
@@ -663,6 +673,8 @@ def validate_parcel_brief_citations(parsed: dict, allowed_signal_keys: Iterable[
     if recommendation in allowed_assessments and assessment not in allowed_assessments[recommendation]:
         errors.append(f"recommendation {recommendation!r} contradicts assessment {assessment!r}")
     urgency = parsed.get("urgency")
+    if recommendation in {"investigate", "watch", "insufficient_evidence"} and urgency != "none":
+        errors.append("investigation briefs must not invent urgency")
     if recommendation == "pass" and urgency != "none":
         errors.append("pass recommendation must have urgency 'none'")
     if recommendation == "pursue_now" and urgency == "none":
@@ -716,8 +728,8 @@ def validate_owner_brief_citations(
     recommendation = parsed.get("recommendation")
     evidence_strength = parsed.get("evidence_strength")
     urgency = parsed.get("urgency")
-    if recommendation == "monitor" and evidence_strength != "weak":
-        errors.append("monitor recommendation requires weak evidence_strength")
+    if recommendation in {"investigate", "watch", "insufficient_evidence"} and urgency != "none":
+        errors.append("investigation briefs must not invent urgency")
     if recommendation == "none" and urgency != "none":
         errors.append("none recommendation must have urgency 'none'")
     return errors
@@ -746,3 +758,24 @@ def owner_brief_semantic_decision(parsed: dict) -> dict:
             "evidence_strength",
         )
     }
+
+
+def signal_version_refs(rows: Iterable[dict], *, pidn: str | None = None) -> list[str]:
+    """Bind all signal context to its parcel, key and accepted inference version.
+
+    Called before spending on a brief. Legacy evidence must first receive a
+    versioned validation; inventing a dependency after generation is unsafe.
+    """
+    refs = set()
+    for row in rows:
+        parcel = row.get("pidn") or pidn
+        key = row.get("signal_key")
+        version = row.get("active_inference_id")
+        if (
+            not isinstance(parcel, str) or not parcel or ":" in parcel
+            or not isinstance(key, str) or not key or ":" in key
+            or not isinstance(version, int) or isinstance(version, bool) or version <= 0
+        ):
+            raise ValueError("Brief signal context requires a parcel, signal key and inference version")
+        refs.add(f"signal-version:{parcel}:{key}:{version}")
+    return sorted(refs)

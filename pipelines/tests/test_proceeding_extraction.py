@@ -114,7 +114,12 @@ class TestExtractionPrompt:
         prompt = self._filled()
         assert "development_proposal" in prompt
 
-    def test_contains_all_five_extraction_types(self):
+    def test_contains_ordinance_action(self):
+        prompt = self._filled()
+        assert "ordinance_action" in prompt
+        assert "comprehensive plan" in prompt
+
+    def test_contains_all_seven_extraction_types(self):
         prompt = self._filled()
         for etype in [
             "rezoning_application",
@@ -123,13 +128,14 @@ class TestExtractionPrompt:
             "conditional_use",
             "subdivision_review",
             "development_proposal",
+            "ordinance_action",
         ]:
             assert etype in prompt, f"Missing extraction type '{etype}' in prompt"
 
     def test_requires_one_record_per_distinct_matter(self):
         prompt = self._filled()
-        assert "one extraction per distinct application or project matter" in prompt
-        assert "do not duplicate" in prompt
+        assert "one record per distinct matter" in prompt
+        assert "combining related relief for the same application" in prompt
 
     def test_contains_decision_values(self):
         prompt = self._filled()
@@ -144,13 +150,13 @@ class TestExtractionPrompt:
     def test_contains_intelligence_card_fields(self):
         prompt = self._filled()
         for field in (
-            "event_tags",
+            "record_status",
             "project_name",
             "related_entities",
             "what_happened",
             "why_it_matters",
             "what_happens_next",
-            "upcoming_date",
+            "milestones",
         ):
             assert field in prompt
 
@@ -166,7 +172,7 @@ class TestExtractionPrompt:
         prompt = self._filled()
         assert "extractions" in prompt.lower()
         # Should instruct the model to return empty list when nothing found
-        assert "[]" in prompt
+        assert "empty extractions array" in prompt
 
     def test_york_county_pa_present(self):
         prompt = self._filled()

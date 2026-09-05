@@ -44,6 +44,9 @@ from dagster import (
     asset,
 )
 from psycopg2.errors import UndefinedTable
+from psycopg2.extras import Json
+
+from countyiq.lib.proceeding_quality import review_metadata
 
 from countyiq.lib.county_config import (
     get_county_config,
@@ -170,29 +173,6 @@ def _sanitize_meeting_date(
     if parsed > cutoff:
         return None, True
     return value, False
-
-
-def _clear_implausible_future_dates(
-    database: DatabaseResource,
-    *,
-    max_future_days: int,
-) -> int:
-    """Repair parser false-positives already persisted by older scraper runs."""
-    cur = database.cursor()
-    try:
-        cur.execute(
-            """
-            UPDATE staging.public_proceedings
-            SET meeting_date = NULL
-            WHERE valid_to IS NULL
-              AND meeting_date > CURRENT_DATE + (%s * INTERVAL '1 day')
-            RETURNING id
-            """,
-            (max_future_days,),
-        )
-        return len(cur.fetchall())
-    finally:
-        cur.close()
 
 
 class _PlaywrightFetcher:
@@ -557,15 +537,8 @@ def public_proceedings_scrape(
         "COUNTYIQ_PROCEEDINGS_MAX_FUTURE_DAYS",
         _DEFAULT_MAX_FUTURE_DAYS,
     )
-    existing_future_dates_cleared = _clear_implausible_future_dates(
-        database,
-        max_future_days=max_future_days,
-    )
-    if existing_future_dates_cleared:
-        log.warning(
-            "Cleared %d previously stored implausible future meeting dates",
-            existing_future_dates_cleared,
-        )
+    # Historical corrections belong to the reviewed SCD2 cleanup command.
+    existing_future_dates_cleared = 0
     request_budget = _DocumentRequestBudget(
         max_document_requests,
         max_documents_per_body,
@@ -1151,16 +1124,25 @@ def _insert_proceeding(
     content_hash: str | None = None,
     raw_text: str | None = None,
 ) -> None:
-    """Insert a new public proceedings row with SCD2 valid_from."""
+    """Review metadata before inserting a new SCD2 source version."""
+    county = get_county_config()
+    quality = review_metadata(
+        dict(body_name=body_name, meeting_date=meeting_date,
+             proceeding_type=proceeding_type, source_url=source_url,
+             document_url=document_url, raw_text=raw_text),
+        county.municipality_websites, county.rejected_proceeding_domains,
+    )
+    if quality["status"] == "quarantined":
+        raise ValueError("Document belongs to a rejected county source")
     database.execute(
         """
         INSERT INTO staging.public_proceedings
             (body_name, meeting_date, proceeding_type, source_url, document_url,
-             content_hash, raw_text, valid_from)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+             content_hash, raw_text, metadata_quality, valid_from)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """,
-        (body_name, meeting_date, proceeding_type, source_url, document_url,
-         content_hash, raw_text),
+        (quality["body_name"], quality["meeting_date"], quality["proceeding_type"],
+         source_url, document_url, content_hash, raw_text, Json(quality)),
     )
 
 
@@ -1184,6 +1166,8 @@ _CLASSIFIED_TYPE_BY_CONFIG = {
     "board_of_supervisors": "supervisors",
     "borough_council": "council",
     "city_council": "council",
+    "board_of_commissioners": "commissioners",
+    "county_commissioners": "commissioners",
     "planning_commission": "planning_commission",
     "zoning_hearing": "zoning_hearing",
 }

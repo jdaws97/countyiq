@@ -16,7 +16,6 @@ import requests
 
 from countyiq.assets.scrapers.public_proceedings import (
     _DocumentRequestBudget,
-    _clear_implausible_future_dates,
     _document_priority,
     _extract_raw_text,
     _filter_allowed_document_links,
@@ -116,32 +115,6 @@ class TestMeetingDateSanitization:
         assert value == "2026-09-15"
         assert rejected is False
 
-    def test_existing_future_dates_are_repaired_with_same_cutoff(self):
-        class Cursor:
-            def __init__(self):
-                self.params = None
-                self.closed = False
-
-            def execute(self, _query, params):
-                self.params = params
-
-            def fetchall(self):
-                return [(1,), (2,)]
-
-            def close(self):
-                self.closed = True
-
-        cursor = Cursor()
-
-        class Database:
-            def cursor(self):
-                return cursor
-
-        assert _clear_implausible_future_dates(
-            Database(), max_future_days=90
-        ) == 2
-        assert cursor.params == (90,)
-        assert cursor.closed is True
 
 
 class _Log:

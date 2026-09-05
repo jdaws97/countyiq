@@ -13,6 +13,7 @@ Benefits:
 The per-signal version (pass2_signal_validation.py) is retained for A/B
 comparison and for cases where individual validation is specifically needed.
 """
+
 import hashlib as _hashlib
 import json
 from collections import Counter as _Counter
@@ -20,6 +21,8 @@ from collections import Counter as _Counter
 from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.intelligence_common import (
     CORPORATE_FOR_NAMES_QUERY,
+    compute_input_hash,
+    strip_volatile_evidence,
     ENTITY_GRAPH_QUERY,
     NEIGHBORS_QUERY,
     PARCEL_QUERY,
@@ -34,9 +37,10 @@ from countyiq.lib.intelligence_common import (
     format_portfolio_context,
     format_proceedings_context,
     format_tax_claims_context,
+    resolved_owner_names,
 )
 from countyiq.lib.pass2_signal_validation import (
-    SIGNAL_TEMPLATES,
+    SIGNAL_QUESTIONS,
     parse_signal_validation_output,
 )
 from countyiq.lib.pass_schemas import PASS2_BATCHED_VALIDATION_SCHEMA
@@ -53,7 +57,12 @@ SIGNAL_NEEDS_NEIGHBORS = {
     "ownership_change",
     "active_subdivision",
 }
-SIGNAL_NEEDS_PORTFOLIO = {"tax_distress", "ownership_change", "assemblage", "entity_assemblage"}
+SIGNAL_NEEDS_PORTFOLIO = {
+    "tax_distress",
+    "ownership_change",
+    "assemblage",
+    "entity_assemblage",
+}
 SIGNAL_NEEDS_PROCEEDINGS = {
     "active_subdivision",
     "municipal_action",
@@ -92,10 +101,23 @@ def _owner_is_business(name: str) -> bool:
     return any(
         pattern in upper
         for pattern in [
-            "LLC", "L.L.C", "INC", "CORP", "LP", "L.P",
-            "LTD", "HOLDINGS", "TRUST", "PARTNERS",
-            "ASSOCIATES", "ENTERPRISES", "PROPERTIES",
-            "GROUP", "VENTURES", "CAPITAL", "INVESTMENTS",
+            "LLC",
+            "L.L.C",
+            "INC",
+            "CORP",
+            "LP",
+            "L.P",
+            "LTD",
+            "HOLDINGS",
+            "TRUST",
+            "PARTNERS",
+            "ASSOCIATES",
+            "ENTERPRISES",
+            "PROPERTIES",
+            "GROUP",
+            "VENTURES",
+            "CAPITAL",
+            "INVESTMENTS",
         ]
     )
 
@@ -167,19 +189,24 @@ def gather_parcel_batch_context(cursor, pidn: str) -> dict:
     entity_row = cursor.fetchone()
     entity = format_entity_context(dict(entity_row) if entity_row else None)
 
+    # Owner name variants: the Pass 1 entity graph when it verified this
+    # owner, otherwise deterministic owner resolution. 87% of parcels belong
+    # to people with no entity-graph row; without this fallback the model saw
+    # no portfolio for them and reasoned about assemblage and sales blind.
+    owner_name_variants = resolved_owner_names(cursor, pidn, owner_name)
     linked_names = (
-        entity.get("linked_names") or [owner_name]
+        list(dict.fromkeys([*(entity.get("linked_names") or []), *owner_name_variants]))
         if entity.get("found")
-        else [owner_name]
-    )
+        else owner_name_variants
+    ) or [owner_name]
 
     # Tax claims — always gather (small query, widely used)
     cursor.execute(TAX_CLAIMS_QUERY, {"pidn": pidn})
     tax_claims = format_tax_claims_context([dict(r) for r in cursor.fetchall()])
 
-    # Portfolio — only if needed
+    # Portfolio — only if a signal needs it
     portfolio = []
-    if signal_keys & SIGNAL_NEEDS_PORTFOLIO and entity.get("found"):
+    if signal_keys & SIGNAL_NEEDS_PORTFOLIO:
         cursor.execute(PORTFOLIO_QUERY, {"names": linked_names})
         portfolio = format_portfolio_context([dict(r) for r in cursor.fetchall()])
 
@@ -231,6 +258,7 @@ def gather_parcel_batch_context(cursor, pidn: str) -> dict:
         "proceedings": proceedings,
         "signals": signals,
         "context_signals": context_signals,
+        "owner_name_variants": owner_name_variants,
     }
 
 
@@ -247,17 +275,39 @@ Your task: for EACH signal listed under "SIGNALS TO VALIDATE", determine if it i
 Rules:
 1. Use the PRECOMPUTED METRICS exactly as supplied. Do not recompute ratios,
    percentages, counts, totals, or distances.
-2. If a signal label doesn't match its evidence (e.g., active_subdivision for a plan with 0 lots), downgrade it.
-3. Consider portfolio and neighbor context — a solo delinquency differs from systemic distress.
-4. Never invent facts. If context is missing, note it in reasoning.
-5. Return exactly one validation per listed signal, in the same order.
-6. cross_references is a machine-readable evidence list. Copy only Evidence
+2. Judge the source semantics, not one field in isolation. A land-development
+   plan may legitimately report zero lots and zero dwelling units when
+   pt_land_dev=YES. Downgrade active_subdivision only when the evidence does
+   not establish a subdivision/land-development proposal for this parcel.
+3. Calibrate significance to decision relevance, not merely whether a record
+   exists. A one- or two-lot/unit proposal is normally medium or low; three or
+   more may be high. A zero-unit land-development proposal can be valid but is
+   not automatically high significance; use its acreage and context.
+4. When prop_lots and prop_du are both present, copy both values into
+   key_facts even when one of them is zero.
+5. Treat zero assessment, exempt classification, or institutional/public
+   ownership as a vacancy data-gap or non-market parcel. Downgrade the vacancy
+   signal unless direct cited evidence establishes genuine vacant land.
+6. A low sale price or organizational-looking buyer name does not establish
+   distress, foreclosure, a flip, developer identity, or development intent.
+   State that those explanations are unestablished unless cited context shows them.
+7. Consider portfolio and neighbor context — a solo delinquency differs from systemic distress.
+   Fragmented adjacency alone is low-significance screening context. Downgrade
+   an assemblage interpretation when there is no cited common ownership or
+   active consolidation, regardless of total acreage. A tax-claim neighbor
+   provides a follow-up question, not evidence of a development plan.
+   For assemblage, retain the supplied adjacent_acres_total and distinct-owner
+   count in key_facts. Tax claim years record claims even when no positive
+   amount is supplied; do not call those neighbors non-delinquent or paid off.
+8. Never invent facts. If context is missing, note it in reasoning.
+9. Return exactly one validation per listed signal, in the same order.
+10. cross_references is a machine-readable evidence list. Copy only Evidence
    ref values printed in the input, and always include the signal's own ref.
-7. Every reasoning field must cite the refs it relies on inline as
+11. Every reasoning field must cite the refs it relies on inline as
    [Evidence: signal:key] or [Evidence: context:key]; end each factual
    sentence with its marker. If cross_signal_insight is non-empty it must
    cite validated signals as [Signal: key].
-8. If validation_status is "stale" or "irrelevant", adjusted_significance
+12. If validation_status is "stale" or "irrelevant", adjusted_significance
    MUST be "none". Those statuses are not eligible for serving briefs.
 
 OUTPUT — return ONLY valid JSON with this exact structure:
@@ -268,7 +318,7 @@ OUTPUT — return ONLY valid JSON with this exact structure:
       "validation_status": "confirmed|upgraded|downgraded|stale|irrelevant",
       "adjusted_significance": "high|medium|low|none",
       "reasoning": "2-3 grounded sentences, each with [Evidence: ref]",
-      "key_facts": ["fact 1", "fact 2"],
+      "key_facts": ["every decision-determinative fact used for status or significance"],
       "cross_references": ["signal:own_key", "context:optional_key"]
     }}
   ],
@@ -306,7 +356,7 @@ BATCHED_VALIDATION_SYSTEM_PROMPT = (
 # trace a regression to a specific prompt change without diffing git history.
 # The formatter marker also invalidates prior inputs when deterministic context
 # rendering changes without modifying either template string.
-_PROMPT_FORMAT_VERSION = "precomputed-metrics-v1"
+_PROMPT_FORMAT_VERSION = "evidence-contract-v7"
 PROMPT_VERSION = _hashlib.sha256(
     (
         BATCHED_VALIDATION_SYSTEM_PROMPT
@@ -314,6 +364,8 @@ PROMPT_VERSION = _hashlib.sha256(
         + BATCHED_VALIDATION_USER_TEMPLATE
         + "\n"
         + _PROMPT_FORMAT_VERSION
+        + "\n"
+        + json.dumps(SIGNAL_QUESTIONS, sort_keys=True, separators=(",", ":"))
     ).encode("utf-8")
 ).hexdigest()[:12]
 
@@ -332,8 +384,18 @@ def _format_parcel_section(parcel: dict) -> str:
     )
 
 
-def _format_entity_section(entity: dict) -> str:
+def _format_entity_section(
+    entity: dict, owner_name_variants: list[str] | None = None
+) -> str:
+    variants = [name for name in (owner_name_variants or []) if name]
     if not entity.get("found"):
+        if len(variants) > 1:
+            return (
+                "No verified entity record for this owner. Deterministic owner "
+                f"resolution links {len(variants)} recorded name variants: "
+                + ", ".join(variants[:6])
+                + ("." if len(variants) <= 6 else ", ...")
+            )
         return "No verified entity record for this owner."
     lines = [
         f"Canonical name: {entity.get('canonical_name', '?')}",
@@ -386,9 +448,12 @@ def _format_neighbors(neighbors: list[dict]) -> str:
     lines = [f"ADJACENT PARCELS ({len(neighbors)} neighbors):"]
     # Cap to 15 to avoid huge prompts on dense blocks
     for n in neighbors[:15]:
-        owed = f" | Owed: ${n.get('total_owed', 0):,.0f}" if n.get("total_owed") else ""
+        amount = float(n.get('total_owed') or 0)
+        years = int(n.get('years_delinquent') or 0)
+        owed = f" | Positive recorded balance: ${amount:,.2f}" if amount > 0 else " | No positive balance supplied"
         lines.append(
-            f"- {n.get('pidn', '?')} | {n.get('owner', '?')} | {n.get('acres', 0)} ac{owed}"
+            f"- {n.get('pidn', '?')} | {n.get('owner', '?')} | {n.get('acres', 0)} ac"
+            f" | Tax claim years: {years}{owed}"
         )
     if len(neighbors) > 15:
         lines.append(f"... ({len(neighbors) - 15} more neighbors)")
@@ -429,9 +494,19 @@ def _format_precomputed_metrics(context: dict) -> str:
     tax_claims = context.get("tax_claims") or []
 
     portfolio_total = sum(float(row.get("assessed_value") or 0) for row in portfolio)
+    signal_keys = {signal.get("signal_key") for signal in context.get("signals") or []}
+    adjacent_ref = next(
+        (
+            f"signal:{key}"
+            for key in ("assemblage", "entity_assemblage")
+            if key in signal_keys
+        ),
+        None,
+    )
     target_value = float(parcel.get("assessed_value") or 0)
     delinquent_neighbors = sum(
-        float(row.get("total_owed") or 0) > 0 for row in neighbors
+        float(row.get("total_owed") or 0) > 0 or float(row.get("years_delinquent") or 0) > 0
+        for row in neighbors
     )
     metrics: list[tuple[str, int | float | None]] = [
         ("tax_claim_count", len(tax_claims)),
@@ -448,6 +523,10 @@ def _format_precomputed_metrics(context: dict) -> str:
             else None,
         ),
         ("adjacent_parcel_count", len(neighbors)),
+        (
+            "adjacent_acres_total",
+            round(sum(float(row.get("acres") or 0) for row in neighbors), 3),
+        ),
         ("adjacent_delinquent_count", delinquent_neighbors),
         (
             "adjacent_delinquency_rate_pct",
@@ -457,11 +536,89 @@ def _format_precomputed_metrics(context: dict) -> str:
         ),
     ]
     lines = ["PRECOMPUTED METRICS (deterministic; do not recompute):"]
-    lines.extend(
-        f"- {name}: {'not_applicable' if value is None else value}"
-        for name, value in metrics
-    )
+    for name, value in metrics:
+        suffix = (
+            f" [Evidence: {adjacent_ref}]"
+            if adjacent_ref and name.startswith("adjacent_")
+            else ""
+        )
+        rendered = "not_applicable" if value is None else value
+        lines.append(f"- {name}: {rendered}{suffix}")
     return "\n".join(lines)
+
+
+# Machine references the model must not reason from; they are served through
+# the evidence receipts instead.
+_EVIDENCE_NOISE_KEYS = {
+    "source_url",
+    "source_records",
+    "source_record_ids",
+    "detail_url",
+}
+
+
+def _flatten_evidence(evidence: dict, *, limit: int, value_chars: int = 80) -> str:
+    """Render evidence as compact key=value pairs.
+
+    Postgres returns jsonb keys ordered by length, so a fixed prefix of the
+    key list used to drop the decision-relevant fields (``pt_land_dev``,
+    ``plan_location``, ``buyer_name_looks_organizational``) while keeping
+    short ones. Skip reference noise instead and show every remaining key up
+    to ``limit``.
+    """
+    parts = []
+    for key, value in evidence.items():
+        if value is None or key in _EVIDENCE_NOISE_KEYS:
+            continue
+        rendered = str(value)
+        if len(rendered) > value_chars:
+            rendered = rendered[: value_chars - 3] + "..."
+        parts.append(f"{key}={rendered}")
+        if len(parts) >= limit:
+            break
+    return ", ".join(parts)
+
+
+def proceeding_context_refs(context: dict) -> set[str]:
+    """Record source identities gathered by code, independent of model citations.
+
+    These references describe the proceeding context supplied to validation,
+    not a claim that every record was cited. Missing legacy identities are
+    omitted rather than fabricated; their presence is not a freshness check.
+    """
+    refs: set[str] = set()
+    for proceeding in context.get("proceedings") or []:
+        for field, prefix in (
+            ("proceeding_id", "proceeding"),
+            ("extraction_id", "extraction"),
+            ("active_inference_id", "inference"),
+        ):
+            value = proceeding.get(field)
+            if value is not None:
+                refs.add(f"{prefix}:{value}")
+    return refs
+
+
+def pass2_source_fingerprint(context: dict) -> str:
+    """Hash the gathered context without rebuild-only churn.
+
+    Signal weights decay with age and the ``months_since_*`` counters tick
+    monthly; neither is a new source fact, so they are excluded from the hash
+    that decides whether a parcel is re-validated.
+    """
+    stable = dict(context)
+    for section in ("signals", "context_signals"):
+        stable[section] = [
+            {
+                field: (
+                    strip_volatile_evidence(value) if field == "evidence" else value
+                )
+                for field, value in signal.items()
+                if field != "signal_weight"
+            }
+            for signal in context.get(section) or []
+        ]
+    return compute_input_hash(stable)
 
 
 def _format_signals_list(signals: list[dict]) -> str:
@@ -473,16 +630,7 @@ def _format_signals_list(signals: list[dict]) -> str:
         distance = sig.get("distance_m")
         evidence = sig.get("evidence") or {}
 
-        # Flatten evidence into compact key=value pairs
-        ev_parts = []
-        for k, v in list(evidence.items())[:6]:
-            if v is None:
-                continue
-            v_str = str(v)
-            if len(v_str) > 60:
-                v_str = v_str[:57] + "..."
-            ev_parts.append(f"{k}={v_str}")
-        ev_str = ", ".join(ev_parts) if ev_parts else "(no evidence)"
+        ev_str = _flatten_evidence(evidence, limit=12) or "(no evidence)"
 
         dist_str = f" | distance: {distance:.0f}m" if distance is not None else ""
         lines.append(
@@ -491,8 +639,7 @@ def _format_signals_list(signals: list[dict]) -> str:
         )
 
         # Include base questions for this signal type (if we have them)
-        template = SIGNAL_TEMPLATES.get(key, {})
-        base_questions = template.get("base_questions", [])
+        base_questions = SIGNAL_QUESTIONS.get(key, [])
         if base_questions:
             lines.append("  Questions:")
             for q in base_questions[:3]:  # Top 3 to keep prompt tight
@@ -508,13 +655,15 @@ def _format_context_signals(context_signals: list[dict]) -> str:
     lines = ["AREA CONTEXT (background only — do NOT validate these):"]
     for s in context_signals:
         evidence = s.get("evidence") or {}
-        detail = ", ".join(f"{k}={v}" for k, v in list(evidence.items())[:4])
+        detail = _flatten_evidence(evidence, limit=6)
         prefix = f"- Evidence ref: context:{s['signal_key']}"
         lines.append(f"{prefix} | {detail}" if detail else prefix)
     return "\n".join(lines)
 
 
-def build_batched_signal_prompt(context: dict, signals_override: list[dict] | None = None) -> str:
+def build_batched_signal_prompt(
+    context: dict, signals_override: list[dict] | None = None
+) -> str:
     """Build the batched validation prompt for signals on a parcel.
 
     Args:
@@ -526,7 +675,9 @@ def build_batched_signal_prompt(context: dict, signals_override: list[dict] | No
     Returns:
         Formatted prompt string ready for LLM invocation.
     """
-    signals = signals_override if signals_override is not None else context.get("signals", [])
+    signals = (
+        signals_override if signals_override is not None else context.get("signals", [])
+    )
     parcel = context.get("parcel", {})
     entity = context.get("entity", {})
 
@@ -542,7 +693,9 @@ def build_batched_signal_prompt(context: dict, signals_override: list[dict] | No
         if section:
             optional_parts.append(section)
 
-    context_signal_section = _format_context_signals(context.get("context_signals") or [])
+    context_signal_section = _format_context_signals(
+        context.get("context_signals") or []
+    )
     if context_signal_section:
         optional_parts.append(context_signal_section)
 
@@ -550,7 +703,9 @@ def build_batched_signal_prompt(context: dict, signals_override: list[dict] | No
     # as BATCHED_VALIDATION_SYSTEM_PROMPT via the harness system_prompt.
     return BATCHED_VALIDATION_USER_TEMPLATE.format(
         parcel_section=_format_parcel_section(parcel),
-        entity_section=_format_entity_section(entity),
+        entity_section=_format_entity_section(
+            entity, context.get("owner_name_variants")
+        ),
         optional_sections="\n\n".join(optional_parts) if optional_parts else "",
         signals_list=_format_signals_list(signals),
         n_signals=len(signals),
@@ -562,9 +717,8 @@ def build_batched_signal_prompt(context: dict, signals_override: list[dict] | No
 # Output parser
 # ---------------------------------------------------------------------------
 
-def parse_batched_signal_output(
-    output: object, expected_signals: list[dict]
-) -> dict:
+
+def parse_batched_signal_output(output: object, expected_signals: list[dict]) -> dict:
     """Parse and normalize the batched validation response.
 
     Args:
@@ -657,10 +811,10 @@ def parse_batched_signal_output(
 # ---------------------------------------------------------------------------
 
 SIGNIFICANCE_WEIGHT = {
-    "high":   1.00,
+    "high": 1.00,
     "medium": 0.85,
-    "low":    0.65,
-    "none":   0.50,
+    "low": 0.65,
+    "none": 0.50,
 }
 
 
@@ -717,8 +871,11 @@ def merge_trial_validations(
 
         # Pick reasoning from any trial that returned the modal status.
         reasoning = next(
-            (v.get("reasoning", "") for v in entries
-             if v.get("validation_status") == modal_status and v.get("reasoning")),
+            (
+                v.get("reasoning", "")
+                for v in entries
+                if v.get("validation_status") == modal_status and v.get("reasoning")
+            ),
             entries[0].get("reasoning", ""),
         )
         # Union of all unique key_facts / cross_references across trials.
@@ -740,17 +897,19 @@ def merge_trial_validations(
         sig_weight = SIGNIFICANCE_WEIGHT.get(modal_sig, 0.5)
         confidence = round(agreement * sig_weight, 2)
 
-        merged.append({
-            "signal_key": key,
-            "validation_status": modal_status,
-            "adjusted_significance": modal_sig,
-            "reasoning": reasoning,
-            "key_facts": key_facts,
-            "cross_references": cross_refs,
-            "n_trials": n_called,
-            "trial_agreement": agreement,
-            "confidence": confidence,
-        })
+        merged.append(
+            {
+                "signal_key": key,
+                "validation_status": modal_status,
+                "adjusted_significance": modal_sig,
+                "reasoning": reasoning,
+                "key_facts": key_facts,
+                "cross_references": cross_refs,
+                "n_trials": n_called,
+                "trial_agreement": agreement,
+                "confidence": confidence,
+            }
+        )
 
     # Modal cross_signal_insight (pick the most commonly emitted non-empty one).
     insights = _Counter(
@@ -766,3 +925,24 @@ def merge_trial_validations(
         "missing": missing,
         "n_trials": n_trials,
     }
+
+
+class StaleValidationContext(RuntimeError):
+    """The completed inference no longer describes current source context."""
+
+
+def assert_current_validation_context(cursor, pidn: str, expected_source_hash: str) -> None:
+    """First operation in the publication transaction; never hold through inference.
+
+    The shared lock conflicts with signal replacement/updates until publication
+    commits. Gather after acquiring it so a rebuild completed while waiting is
+    visible. Other supplied inputs are read from one repeatable-read snapshot.
+    """
+    cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+    cursor.execute("SET LOCAL lock_timeout = '5s'")
+    cursor.execute("LOCK TABLE public.development_signals IN SHARE MODE")
+    current = gather_parcel_batch_context(cursor, pidn)
+    if pass2_source_fingerprint(current) != expected_source_hash:
+        raise StaleValidationContext(
+            f"{pidn}: source context changed during validation; publication deferred"
+        )

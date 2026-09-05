@@ -12,6 +12,7 @@ dependencies = [
     # Database
     "psycopg2-binary",
     "sqlalchemy>=2.0",
+    "jsonschema>=4.26.0",
     "alembic",
 
     # Scraping
@@ -42,4 +43,9 @@ include = ["countyiq*"]
 addopts = "-m 'not integration'"
 markers = [
     "integration: requires local Postgres/PostGIS or live infrastructure",
+]
+
+[dependency-groups]
+dev = [
+    "jsonschema>=4.26.0",
 ]

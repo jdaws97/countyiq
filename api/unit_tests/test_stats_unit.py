@@ -49,5 +49,6 @@ def test_stats_exposes_the_latest_tax_claim_report_date(monkeypatch):
 
     response = stats.get_stats()
 
+    assert response["total_records"] == 87
     assert response["tax_claim_report_date"] == date(2026, 4, 19)
     assert "valid_to IS NULL AND total > 0) AS delinquent_parcels" in queries[0]

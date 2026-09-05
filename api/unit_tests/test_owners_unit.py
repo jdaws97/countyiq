@@ -58,7 +58,6 @@ def test_relationship_mapping_is_normalized_without_forced_resolution():
     relationships = _linked_relationships(
         cursor,
         {"affiliate": ["Unresolved Holdings", "Related Partner"]},
-        allow_people=True,
     )
 
     assert relationships == [
@@ -121,7 +120,6 @@ def test_owner_brief_citations_resolve_to_signal_and_parcel_receipts():
     items = _fetch_owner_brief_evidence(
         cursor,
         {"citations": ["growth_area"], "parcel_citations": ["123"]},
-        allow_people=True,
     )
 
     assert [item["citation_key"] for item in items] == [

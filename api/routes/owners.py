@@ -7,20 +7,18 @@ resolved owner row, and owner_id is stable across rebuilds.
 
 from __future__ import annotations
 
+import hashlib
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.lib.inference_provenance import BRIEF_SIGNAL_VERSIONS_CURRENT_SQL, SUPPORTING_PROCEEDINGS_CURRENT_SQL, owner_context_is_current
 from api.lib.database import get_cursor
 from api.lib.development_radar import sanitize_signals_for_public
 from api.lib.evidence import evidence_item
 from api.lib.rate_limit import enforce_sensitive_read_limit
 from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import open_data_source_key, restricted_distress_enabled
-from api.lib.source_policy import (
-    PUBLIC_ORGANIZATION_TYPES,
-    is_public_organization,
-    require_source_use,
-    source_use_allowed,
-)
+from api.lib.source_policy import require_source_use, source_use_allowed
 
 router = APIRouter(
     tags=["owners"],
@@ -28,51 +26,59 @@ router = APIRouter(
 )
 
 
-def _fetch_owner_brief(
-    cur,
-    canonical_name: str,
-    *,
-    allow_people: bool,
-) -> dict | None:
+def _fetch_owner_brief(cur, canonical_name: str) -> dict | None:
     """Portfolio-level LLM brief for this owner, if one has been generated."""
     cur.execute(
-        """
+        f"""
         SELECT
             brief_text, portfolio_strategy, concentration_notes, key_pattern,
             recommendation, urgency, top_risk, evidence_strength,
             citations, parcel_citations,
             n_parcels, confidence, n_trials, trial_agreement,
-            model_version, prompt_version, brief_version, generated_at
-        FROM public.owner_briefs
+            model_version, prompt_version, brief_version, generated_at,
+            (SELECT evidence_refs FROM meta.intelligence_inference_history
+             WHERE inference_id=brief.active_inference_id) AS dependency_refs
+        FROM public.owner_briefs brief
         WHERE canonical_name = %(name)s
+          AND {BRIEF_SIGNAL_VERSIONS_CURRENT_SQL}
+          AND NOT EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(COALESCE(brief.citations, '[]'::jsonb)) citation(signal_key)
+              WHERE NOT EXISTS (
+                  SELECT 1 FROM public.evidence supporting
+                  WHERE supporting.signal_key = citation.signal_key
+                    AND supporting.pidn IN (
+                        SELECT jsonb_array_elements_text(COALESCE(brief.parcel_citations, '[]'::jsonb))
+                    )
+                    AND supporting.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+                    AND {SUPPORTING_PROCEEDINGS_CURRENT_SQL}
+              )
+          )
         """,
-        {"name": canonical_name},
+        {
+            "name": canonical_name,
+            "brief_kind": "owner_brief",
+            "brief_subject": "owner_brief:" + hashlib.sha256(canonical_name.encode("utf-8")).hexdigest()[:20],
+        },
     )
     row = cur.fetchone()
     if not row:
         return None
     brief = dict(row)
+    dependency_refs = brief.pop("dependency_refs") or []
+    if not owner_context_is_current(cur, canonical_name, dependency_refs):
+        return None
     if brief.get("confidence") is not None:
         brief["confidence"] = float(brief["confidence"])
     if brief.get("trial_agreement") is not None:
         brief["trial_agreement"] = float(brief["trial_agreement"])
     brief["citations"] = list(brief.get("citations") or [])
     brief["parcel_citations"] = list(brief.get("parcel_citations") or [])
-    brief["citation_evidence"] = _fetch_owner_brief_evidence(
-        cur,
-        brief,
-        allow_people=allow_people,
-    )
+    brief["citation_evidence"] = _fetch_owner_brief_evidence(cur, brief)
     serialize_temporal_fields(brief, "generated_at")
     return brief
 
 
-def _fetch_owner_brief_evidence(
-    cur,
-    brief: dict,
-    *,
-    allow_people: bool,
-) -> list[dict]:
+def _fetch_owner_brief_evidence(cur, brief: dict) -> list[dict]:
     """Resolve stored signal/PIDN citations into customer-facing receipts."""
 
     signal_keys = [str(value) for value in brief.get("citations") or [] if str(value)]
@@ -103,7 +109,6 @@ def _fetch_owner_brief_evidence(
                         "evidence": record.get("evidence_data") or {},
                     }
                 },
-                allow_people=allow_people,
             ) or {}
             signal = safe_signal.get("signal")
             if not isinstance(signal, dict):
@@ -306,8 +311,6 @@ def _fetch_entity_verification_evidence(
 def _linked_relationships(
     cur,
     raw_relationships: object,
-    *,
-    allow_people: bool = False,
 ) -> list[dict]:
     """Normalize relationship JSON and attach stable entity IDs when known."""
     relationships: list[dict] = []
@@ -360,13 +363,7 @@ def _linked_relationships(
                 "verification_status"
             )
             relationship["related_entity_type"] = related_owner.get("entity_type")
-    if allow_people:
-        return relationships
-    return [
-        relationship
-        for relationship in relationships
-        if is_public_organization(relationship.get("related_entity_type"))
-    ]
+    return relationships
 
 
 @router.get("/top")
@@ -377,7 +374,6 @@ def top_owners(
     with get_cursor() as cur:
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
-        show_people = source_use_allowed(cur, parcel_source, "person_level_display")
         cur.execute(
             """
             SELECT
@@ -389,16 +385,10 @@ def top_owners(
                 aliases,
                 verification_status
             FROM public.owners
-            WHERE %(show_people)s
-               OR lower(COALESCE(entity_type, '')) = ANY(%(organization_types)s)
             ORDER BY parcel_count DESC, canonical_name
             LIMIT %(limit)s
             """,
-            {
-                "limit": limit,
-                "show_people": show_people,
-                "organization_types": list(PUBLIC_ORGANIZATION_TYPES),
-            },
+            {"limit": limit},
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -406,10 +396,9 @@ def top_owners(
 @router.get("/{owner_id}")
 def owner_profile(owner_id: int) -> dict:
     """Full owner profile: portfolio, delinquency, licenses, brief."""
-    with get_cursor() as cur:
+    with get_cursor(snapshot=True) as cur:
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
-        show_people = source_use_allowed(cur, parcel_source, "person_level_display")
         allow_corporate_evidence = source_use_allowed(
             cur, "data_pa_businesses", "derived_product"
         )
@@ -428,10 +417,6 @@ def owner_profile(owner_id: int) -> dict:
         if not owner:
             raise HTTPException(status_code=404, detail=f"Owner not found: {owner_id}")
         owner = dict(owner)
-        if not show_people and not is_public_organization(owner.get("entity_type")):
-            raise HTTPException(status_code=404, detail=f"Owner not found: {owner_id}")
-        if not show_people:
-            owner["verification_reasoning"] = None
 
         cur.execute(
             """
@@ -447,9 +432,13 @@ def owner_profile(owner_id: int) -> dict:
         parcels = [dict(row) for row in cur.fetchall()]
 
         tax_claims = []
-        if restricted_distress_enabled() and source_use_allowed(
+        # Exact claim rows are a restricted, separately gated surface. The
+        # response says so explicitly so the UI never renders "$0 owed" as a
+        # fact when the rows were merely withheld.
+        delinquency_detail_available = restricted_distress_enabled() and source_use_allowed(
             cur, "tax_claims", "derived_product"
-        ):
+        )
+        if delinquency_detail_available:
             cur.execute(
                 """
                 SELECT tc.pidn, tc.tax_year, tc.authority_name, tc.total,
@@ -482,24 +471,14 @@ def owner_profile(owner_id: int) -> dict:
         delinquent_pidns = len({claim["pidn"] for claim in tax_claims})
 
         relationships = _linked_relationships(
-            cur,
-            owner.pop("relationships", None) or [],
-            allow_people=show_people,
+            cur, owner.pop("relationships", None) or []
         )
         verification_evidence = _fetch_entity_verification_evidence(
             cur,
             owner["canonical_name"],
             allow_corporate_evidence=allow_corporate_evidence,
         )
-        brief = (
-            _fetch_owner_brief(
-                cur,
-                owner["canonical_name"],
-                allow_people=show_people,
-            )
-            if show_people
-            else None
-        )
+        brief = _fetch_owner_brief(cur, owner["canonical_name"])
 
         return {
             "owner": {
@@ -508,8 +487,6 @@ def owner_profile(owner_id: int) -> dict:
             },
             "relationships": relationships,
             "verification_evidence": verification_evidence,
-            # Existing LLM prose was generated before the person-redaction
-            # contract and may mention people beyond this legal organization.
             "brief": brief,
             "portfolio": {
                 "parcel_count": len(parcels),
@@ -517,6 +494,7 @@ def owner_profile(owner_id: int) -> dict:
                 "parcels": parcels,
             },
             "delinquency": {
+                "detail_available": delinquency_detail_available,
                 "total_owed": total_delinquent,
                 "delinquent_parcels": delinquent_pidns,
                 "records": tax_claims,

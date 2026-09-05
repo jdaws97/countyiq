@@ -21,7 +21,7 @@ def top_delinquent_owners(
         params["muni"] = municipality
 
     with get_cursor() as cur:
-        require_source_use(cur, "tax_claims", "person_level_display")
+        require_source_use(cur, "tax_claims", "derived_product")
         cur.execute(f"""
             SELECT
                 tc.owner_name,
@@ -65,7 +65,7 @@ def delinquent_parcels(
         params["min_owed"] = min_owed
 
     with get_cursor() as cur:
-        require_source_use(cur, "tax_claims", "person_level_display")
+        require_source_use(cur, "tax_claims", "derived_product")
         cur.execute(f"""
             SELECT
                 tc.pidn,

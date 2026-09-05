@@ -1,8 +1,9 @@
 import { lazy } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
-import HomePage from './pages/HomePage'
 import RouteFrame, { RouteError } from './components/RouteFrame'
 
+const Organizations = lazy(() => import('./pages/Organizations'))
+const WorkspaceHome = lazy(() => import('./pages/WorkspaceHome'))
 const MapView = lazy(() => import('./pages/MapView'))
 const PropertyDetail = lazy(() => import('./pages/PropertyDetail'))
 const OwnerProfile = lazy(() => import('./pages/OwnerProfile'))
@@ -17,7 +18,9 @@ const MunicipalityList = lazy(() => import('./pages/MunicipalityList'))
 const MunicipalityDetail = lazy(() => import('./pages/MunicipalityDetail'))
 
 const children = [
-  { index: true, element: <HomePage /> },
+  { index: true, element: <WorkspaceHome /> },
+  { path: 'organizations', element: <Organizations /> },
+  { path: 'app', element: <WorkspaceHome /> },
   { path: 'map', element: <MapView /> },
   { path: 'municipalities', element: <MunicipalityList /> },
   { path: 'municipalities/:name', element: <MunicipalityDetail /> },

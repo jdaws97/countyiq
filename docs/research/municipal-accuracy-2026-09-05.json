@@ -1,0 +1,1089 @@
+{
+  "reference_sha256": "24f7bde7d823c4785429f63a78ee3bd6f75e14a9d33789e3d3b7769205d309f1",
+  "results_sha256": "7f33871433e147a2a5d705b3e0e3738d874d5e5587318b80854c4066b16b2380",
+  "production_identity": {
+    "pass_number": 0,
+    "source_hashes": {
+      "pass0_templates.py": "3ada925016fbb18e746f8f2a382aa533533e11f4bb8c3141899fe4c696704d1a",
+      "pass_schemas.py": "679532e7b5473041bfb5df31f70adabba977990e8a19954e2d7380d40d16b1e5",
+      "prompt_prefix.py": "a3989b1f2d1e0b9a1f9709703ace8c7a01a2d91d4b6a70cc66c0df0fef84f159",
+      "proceeding_contract.py": "5d2c3c83ab25be40e2252d5713d1ecac665bb95d97de463d730eeaa6b2f5d65a",
+      "intelligence_integrity.py": "10c17e1642092e1428ebd9506656a3f09102474aaf9f7f2aa8be481db62301bc",
+      "proceeding_claims.py": "85df69e4ddbc172165f246d2774e1e159356d7efce627c35eb899b60db682305",
+      "proceeding_semantics.py": "4865a5ebba124d127f3914d01195d7d3158442b816e3f04a6351fd5bcd7aa294",
+      "proceeding_coverage.py": "0471d81b7fffcde50f36bec8fb8c0652060f5f0d259d68cd05491c986a53cdaa",
+      "source_passages.py": "e65f4a9a7d553ecf3ef8b5604faaf5353d9959b0e26c9e3863d505539d8bffcb",
+      "proceeding_extraction.py": "f349559da6c63022714d34fc4f9183066163b75529e842fc1b2ecc507e518382",
+      "061_proceeding_evidence_contract.py": "04740ce2e4ad3f0002afd93e7db2e720b291a86379a6243a702195f7cf573522",
+      "063_intelligence_event_types.py": "b4e8b48d3c524cfc6a4b0904b8eaf0b04428d714a0c50fb67f7b342ea8cedfdd",
+      "064_proceeding_updates.py": "23186ad3ab61a421d97d12deea7f66ad1d6ce10b413ce102cbdf7591242f4206"
+    },
+    "settings": {
+      "COUNTYIQ_PASS0_THINKING": "",
+      "COUNTYIQ_PASS0_MAX_TOKENS": "",
+      "COUNTYIQ_PASS0_ESCALATION_MODEL": "",
+      "COUNTYIQ_PASS0_ESCALATION_REASONING_EFFORT": "",
+      "COUNTYIQ_THINKING": "",
+      "COUNTYIQ_STRICT_SCHEMA": "",
+      "COUNTYIQ_PASS1_ADAPTIVE_VOTING": ""
+    },
+    "model": "openai/gpt-5.6-luna",
+    "prompt_versions": [
+      "65b6a0e91a64"
+    ],
+    "reasoning_effort": null,
+    "trials": "1",
+    "fixtures": {
+      "p0_expected.json": "be1490c3101d2b18cb4cfb48a60f38241d4b835fc7b747e12118c7e2cbc74487",
+      "p0_pdfs/carroll_zhb.pdf": "6a974dc2a8498401d52a9242bf5f33dbaee437cbd48c39619babf4d9fa716e50",
+      "p0_pdfs/conewago_zoning.pdf": "d93584ff5e52aa8b90188f36be77ddbcf190cfbfc4ef3a13bc7eb0ca1d17bcef",
+      "p0_pdfs/westman_zhb.pdf": "dba595fb71e14ad48e4c3df4dc53b48c35ff2a3243ba1d9b416849558caecbb7",
+      "p0_pdfs/dillsburg.pdf": "635e3b9393efa1216dee53a0bce7cfa5f743b98fbacb6181d4c779cf7b35fe2a",
+      "p0_pdfs/jackson_twp.pdf": "eb4b8fd3abe1feb12a9b9b7115d93d143830f14bc7e86b299b3dc150cc072602",
+      "p0_pdfs/springetts.pdf": "218c26ee1a47fb488f28a14927d3c5b72879513c56b226bfecc1409ca305e1be",
+      "municipal_pilot_regressions.json": "b78845f2235011c97eb643f257e9aaee44f24bb7043aa3c51bad38a562006331",
+      "p0_claims_contract.json": "37abb2f0c642c4c8c45d3b5ecbc2a885ef66e2fbe03c0f3c21e5894ea8dbf1b2"
+    }
+  },
+  "code_changed_after_generation": false,
+  "reviewer": "Primary agent source review with manually adjudicated item/reference mapping; not independent human gold.",
+  "metrics": {
+    "documents": 12,
+    "raw_matters": 41,
+    "validation_survivors": 33,
+    "runtime_prefilter_survivors": 32,
+    "quarantined_items": 8,
+    "expected_matters": 42,
+    "reference_matters_covered_after_runtime": 33,
+    "expected_useful_matters": 22,
+    "useful_topics_mentioned_by_model": 22,
+    "useful_matters_retained": 18,
+    "useful_retention_recall": 0.8181818181818182,
+    "useful_matters_in_discovery": 16,
+    "discovery_recall": 0.7272727272727273,
+    "discovery_candidates_after_prefilter": 18,
+    "reference_supported_discovery_candidates": 16,
+    "discovery_precision": 0.8888888888888888,
+    "new_cost_usd": "0.03945302",
+    "cumulative_conservative_usd": "0.28520645",
+    "verified_evidence_spans": 73,
+    "unsupported_approvals_observed": 0,
+    "wrong_property_claims_observed": 0,
+    "misleading_future_case_removal_statuses": 1
+  },
+  "records": [
+    {
+      "source_id": "8112",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "walmart"
+          ],
+          "project_name": "Walmart land development plan",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "fairfield"
+          ],
+          "project_name": "Fairfield Inn update",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 2,
+          "reference_keys": [
+            "comprehensive"
+          ],
+          "project_name": "2026 Comprehensive Plan",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "scheduled",
+          "decision_scope": null
+        }
+      ],
+      "raw_mapping": [
+        [
+          "walmart"
+        ],
+        [
+          "fairfield"
+        ],
+        [
+          "comprehensive"
+        ]
+      ],
+      "missing_after_runtime": [],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [],
+      "rejected_items": [],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "33faf2803db59bcdb33cdf290609fdbf63a4a729e7b375ef1cdea0c89398d58d",
+        "candidate_count": 3,
+        "matched_count": 2,
+        "unmatched_count": 1,
+        "needs_review": true,
+        "unmatched_anchors": [
+          {
+            "kind": "named_heading",
+            "text": "Council is November 10, 2026). Note",
+            "start": 799,
+            "end": 834,
+            "context": "Council is November 10, 2026). Note: Plan required to go to October Zoning Hearing Board"
+          }
+        ],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "7603",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "roof"
+          ],
+          "project_name": "Roof Bids for 118 E. Main St",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "kirsta"
+          ],
+          "project_name": "266 Kirsta Ln Sewer Connection Agreement",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        }
+      ],
+      "raw_mapping": [
+        [
+          "roof"
+        ],
+        [
+          "kirsta"
+        ]
+      ],
+      "missing_after_runtime": [
+        "colonial"
+      ],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [],
+      "rejected_items": [],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "6b361f0af52d963961257d9960e8647ace14d2464ea97803c1f043b4177af134",
+        "candidate_count": 2,
+        "matched_count": 2,
+        "unmatched_count": 0,
+        "needs_review": false,
+        "unmatched_anchors": [],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "10264",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "tower"
+          ],
+          "project_name": "Mark Shearer and Dee Guinn Subdivision",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "ruhlman"
+          ],
+          "project_name": "Ruhlman Final Subdivision Plan",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        }
+      ],
+      "raw_mapping": [
+        [
+          "tower"
+        ],
+        [
+          "ruhlman"
+        ]
+      ],
+      "missing_after_runtime": [],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [],
+      "rejected_items": [],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "4aa834398e829de1c81a4fe749ed8e7ea4e673cc862689ffa71488263c475130",
+        "candidate_count": 2,
+        "matched_count": 2,
+        "unmatched_count": 0,
+        "needs_review": false,
+        "unmatched_anchors": [],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "10482",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "ag_policy",
+            "validity"
+          ],
+          "project_name": "Agriculture subdivision zoning amendment",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "decision",
+          "decision_scope": "ordinance"
+        },
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "bess"
+          ],
+          "project_name": "Battery energy storage ordinance",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        }
+      ],
+      "raw_mapping": [
+        [
+          "ag_policy",
+          "validity"
+        ],
+        [
+          "bess"
+        ]
+      ],
+      "missing_after_runtime": [],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [],
+      "rejected_items": [],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "ba3f14f23ba9de3480c28c32ca8fa62fad717e746d50d002ae8ccb79e1d19920",
+        "candidate_count": 0,
+        "matched_count": 0,
+        "unmatched_count": 0,
+        "needs_review": false,
+        "unmatched_anchors": [],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "2206",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "data"
+          ],
+          "project_name": "Data Center Ordinance",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 4,
+          "reference_keys": [
+            "lay"
+          ],
+          "project_name": "Lay Road Culvert Replacement",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "scheduled",
+          "decision_scope": null
+        }
+      ],
+      "raw_mapping": [
+        [
+          "merger"
+        ],
+        [
+          "data"
+        ],
+        [],
+        [
+          "transource"
+        ],
+        [
+          "lay"
+        ]
+      ],
+      "missing_after_runtime": [
+        "merger",
+        "transource"
+      ],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [],
+      "rejected_items": [
+        {
+          "index": 0,
+          "errors": [
+            "A motion without a recorded outcome does not establish approval; Decision excerpt does not establish the claimed completed outcome"
+          ]
+        },
+        {
+          "index": 2,
+          "errors": [
+            "A motion without a recorded outcome does not establish approval; Decision excerpt does not establish the claimed completed outcome"
+          ]
+        },
+        {
+          "index": 3,
+          "errors": [
+            "A motion without a recorded outcome does not establish approval; Decision excerpt does not establish the claimed completed outcome"
+          ]
+        }
+      ],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "1a07102da96e9bc4869748dd042866dc0d0e088db7ecfbed5fa417fadb82c952",
+        "candidate_count": 2,
+        "matched_count": 0,
+        "unmatched_count": 2,
+        "needs_review": true,
+        "unmatched_anchors": [
+          {
+            "kind": "address",
+            "text": "169 Sycamore Tr",
+            "start": 1141,
+            "end": 1156,
+            "context": "Frances A Lewis & Jeremy T Ammon- 169 Sycamore Tr, Map 1 Parcels 189 & 190 -"
+          },
+          {
+            "kind": "address",
+            "text": "239 Sycamore Trail",
+            "start": 1522,
+            "end": 1540,
+            "context": "Judgment, 239 Sycamore Trail -the judgments filed against the former owner of 239"
+          }
+        ],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "5844",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "comprehensive"
+          ],
+          "project_name": "Agricultural component of the Comprehensive Plan",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "don_el"
+          ],
+          "project_name": "Don-El Partnership subdivision",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 5,
+          "reference_keys": [
+            "stormwater"
+          ],
+          "project_name": "Stormwater Management Ordinance revisions",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "decision",
+          "decision_scope": "ordinance"
+        }
+      ],
+      "raw_mapping": [
+        [
+          "comprehensive"
+        ],
+        [
+          "don_el"
+        ],
+        [
+          "wireless"
+        ],
+        [
+          "ag_animals"
+        ],
+        [
+          "data"
+        ],
+        [
+          "stormwater"
+        ]
+      ],
+      "missing_after_runtime": [
+        "ag_animals",
+        "data",
+        "wireless"
+      ],
+      "missing_useful_after_runtime": [
+        "ag_animals",
+        "data",
+        "wireless"
+      ],
+      "missing_useful_from_discovery": [
+        "ag_animals",
+        "data",
+        "wireless"
+      ],
+      "rejected_items": [
+        {
+          "index": 2,
+          "errors": [
+            "Decision authority must occur in its source evidence"
+          ]
+        },
+        {
+          "index": 3,
+          "errors": [
+            "Decision authority must occur in its source evidence"
+          ]
+        },
+        {
+          "index": 4,
+          "errors": [
+            "related_entities must preserve wording from its selected source passages"
+          ]
+        }
+      ],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "d8f9ec1d233c2b75d02a22b93f2396c75ff3c159538efea2af85a22d4dd14539",
+        "candidate_count": 1,
+        "matched_count": 0,
+        "unmatched_count": 1,
+        "needs_review": true,
+        "unmatched_anchors": [
+          {
+            "kind": "named_heading",
+            "text": "PC then discussed YCPC Comments",
+            "start": 5655,
+            "end": 5686,
+            "context": "2. PC then discussed YCPC Comments: Planning 1 & 2 (found in YCPC #26-029"
+          }
+        ],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "1",
+      "prefilter": false,
+      "items": [],
+      "raw_mapping": [],
+      "missing_after_runtime": [],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [],
+      "rejected_items": [],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "e74b7d15d0e5da200aea89e4534df1ab1c85da946b487f08f178293b9c7abdbb",
+        "candidate_count": 0,
+        "matched_count": 0,
+        "unmatched_count": 0,
+        "needs_review": false,
+        "unmatched_anchors": [],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "10480",
+      "prefilter": false,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "roads"
+          ],
+          "project_name": "2026 Streets and Roads Project",
+          "runtime_prefilter": false,
+          "discovery_eligible": true,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        }
+      ],
+      "raw_mapping": [
+        [
+          "roads"
+        ]
+      ],
+      "missing_after_runtime": [
+        "roads"
+      ],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [],
+      "rejected_items": [],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "a9c1fb371c35e340dae30f59afc930bb573167476546a53698fede072e1ad37b",
+        "candidate_count": 0,
+        "matched_count": 0,
+        "unmatched_count": 0,
+        "needs_review": false,
+        "unmatched_anchors": [],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "9709",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "springettsbury"
+          ],
+          "project_name": "101 E. Springettsbury Ave. zoning determination appeal",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "locust"
+          ],
+          "project_name": "903 W. Locust St. multifamily conversion",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 2,
+          "reference_keys": [
+            "pennsylvania"
+          ],
+          "project_name": "637 Pennsylvania Ave. group child care home",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 3,
+          "reference_keys": [
+            "rockdale"
+          ],
+          "project_name": "350 Rockdale Ave. business service establishment",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 4,
+          "reference_keys": [
+            "west"
+          ],
+          "project_name": "116 S. West St. child care facility",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 5,
+          "reference_keys": [
+            "franklin"
+          ],
+          "project_name": "519 N. Franklin St. parking variance",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "removed",
+          "decision_scope": null
+        }
+      ],
+      "raw_mapping": [
+        [
+          "springettsbury"
+        ],
+        [
+          "locust"
+        ],
+        [
+          "pennsylvania"
+        ],
+        [
+          "rockdale"
+        ],
+        [
+          "west"
+        ],
+        [
+          "franklin"
+        ],
+        [
+          "poplar"
+        ]
+      ],
+      "missing_after_runtime": [
+        "poplar"
+      ],
+      "missing_useful_after_runtime": [
+        "poplar"
+      ],
+      "missing_useful_from_discovery": [
+        "poplar"
+      ],
+      "rejected_items": [
+        {
+          "index": 6,
+          "errors": [
+            "extraction 0 scheduled item uses completed-action wording"
+          ]
+        }
+      ],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "fede21b189b77bfdb5652cdcc7408329992e3623fbdbe088853d1bcc89c9e0ae",
+        "candidate_count": 13,
+        "matched_count": 11,
+        "unmatched_count": 2,
+        "needs_review": true,
+        "unmatched_anchors": [
+          {
+            "kind": "address",
+            "text": "318 E. Poplar St.",
+            "start": 2639,
+            "end": 2656,
+            "context": "25-2026-Z-SE-V | 318 E. Poplar St."
+          },
+          {
+            "kind": "application",
+            "text": "25-2026-Z-SE-V",
+            "start": 2622,
+            "end": 2636,
+            "context": "25-2026-Z-SE-V | 318 E. Poplar St."
+          }
+        ],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "10300",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "country"
+          ],
+          "project_name": "Windsor Heights stormwater restoration project",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "crosswalk"
+          ],
+          "project_name": "Cool Creek Road crosswalk",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 2,
+          "reference_keys": [
+            "landfill"
+          ],
+          "project_name": "Landfill height increase",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 4,
+          "reference_keys": [
+            "rau"
+          ],
+          "project_name": "107 Calvary Church Road two-lot subdivision",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "decision",
+          "decision_scope": "plan"
+        },
+        {
+          "raw_index": 5,
+          "reference_keys": [
+            "mapheliah"
+          ],
+          "project_name": "99 Mapheliah Road lot consolidation",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "decision",
+          "decision_scope": "plan"
+        },
+        {
+          "raw_index": 6,
+          "reference_keys": [
+            "asa"
+          ],
+          "project_name": "Resolution 2026-12 Agricultural Security Area Review",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": true,
+          "record_status": "decision",
+          "decision_scope": "ordinance"
+        }
+      ],
+      "raw_mapping": [
+        [
+          "country"
+        ],
+        [
+          "crosswalk"
+        ],
+        [
+          "landfill"
+        ],
+        [
+          "river"
+        ],
+        [
+          "rau"
+        ],
+        [
+          "mapheliah"
+        ],
+        [
+          "asa"
+        ]
+      ],
+      "missing_after_runtime": [
+        "river"
+      ],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [
+        "asa"
+      ],
+      "rejected_items": [
+        {
+          "index": 3,
+          "errors": [
+            "Decision authority must occur in its source evidence"
+          ]
+        }
+      ],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "47eeb0f88930b974b27fb185a324ed4f331be49726e45969bdf4f1dcb903e4c5",
+        "candidate_count": 5,
+        "matched_count": 2,
+        "unmatched_count": 3,
+        "needs_review": true,
+        "unmatched_anchors": [
+          {
+            "kind": "named_heading",
+            "text": "COUNTRY LANE DISCUSSION",
+            "start": 613,
+            "end": 636,
+            "context": "COUNTRY LANE DISCUSSION: Mr. Affriol reported that the Township applied for a grant for the stormwater restoration project at Windsor Heights. If we obtain"
+          },
+          {
+            "kind": "address",
+            "text": "99 MAPHELIAH RD",
+            "start": 6317,
+            "end": 6332,
+            "context": "3. PLAN 363-26SLD- 99 MAPHELIAH RD, STEVEN & LISA DAUGHERTY OWNER & APPLICANT, 35-000-JK-0225.E0-00000 & 35-000-JK-"
+          },
+          {
+            "kind": "address",
+            "text": "97 & 99 Mapheliah Road.",
+            "start": 6547,
+            "end": 6570,
+            "context": "plan for 97 & 99 Mapheliah Road. This will combine the 2 lots and no new building lots are proposed. Motion by Chairman Yakubowksi,"
+          }
+        ],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "8115",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "comprehensive"
+          ],
+          "project_name": "2026 Comprehensive Plan update",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 1,
+          "reference_keys": [
+            "silo"
+          ],
+          "project_name": "370 Poplar St Dust Collection Storage Silo",
+          "runtime_prefilter": true,
+          "discovery_eligible": true,
+          "reference_discovery": true,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 2,
+          "reference_keys": [
+            "george"
+          ],
+          "project_name": null,
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "update",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 3,
+          "reference_keys": [
+            "wawa"
+          ],
+          "project_name": "301 Eisenhower Dr - Wawa",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "recommendation",
+          "decision_scope": null
+        },
+        {
+          "raw_index": 4,
+          "reference_keys": [
+            "hotel"
+          ],
+          "project_name": "319 Wilson Ave - Fairfield Inn",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": true,
+          "record_status": "decision",
+          "decision_scope": "procedural"
+        }
+      ],
+      "raw_mapping": [
+        [
+          "comprehensive"
+        ],
+        [
+          "silo"
+        ],
+        [
+          "george"
+        ],
+        [
+          "wawa"
+        ],
+        [
+          "hotel"
+        ]
+      ],
+      "missing_after_runtime": [],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [
+        "hotel"
+      ],
+      "rejected_items": [],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "08f489315e525b54418d9a81a1ff9859cff62f303848b5ba750734b15adabca0",
+        "candidate_count": 7,
+        "matched_count": 5,
+        "unmatched_count": 2,
+        "needs_review": true,
+        "unmatched_anchors": [
+          {
+            "kind": "named_heading",
+            "text": "Robert Holt",
+            "start": 1563,
+            "end": 1574,
+            "context": "Robert Holt: Mr. Holt stated changes to the Comprehensive Plan have been a long time coming and"
+          },
+          {
+            "kind": "address",
+            "text": "118 Frederick St",
+            "start": 9550,
+            "end": 9566,
+            "context": "project at 118 Frederick St plans changing after the project was started."
+          }
+        ],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    },
+    {
+      "source_id": "6512",
+      "prefilter": true,
+      "items": [
+        {
+          "raw_index": 0,
+          "reference_keys": [
+            "miller"
+          ],
+          "project_name": "Beth Miller Final Subdivision Plan",
+          "runtime_prefilter": true,
+          "discovery_eligible": false,
+          "reference_discovery": false,
+          "record_status": "scheduled",
+          "decision_scope": null
+        }
+      ],
+      "raw_mapping": [
+        [
+          "miller"
+        ]
+      ],
+      "missing_after_runtime": [],
+      "missing_useful_after_runtime": [],
+      "missing_useful_from_discovery": [],
+      "rejected_items": [],
+      "coverage": {
+        "version": 1,
+        "source_sha256": "f48517f05c96d3aa3a5353c634fef296e96ac6293ed075b5e067f72be669a4a5",
+        "candidate_count": 1,
+        "matched_count": 1,
+        "unmatched_count": 0,
+        "needs_review": false,
+        "unmatched_anchors": [],
+        "truncated": false,
+        "limitation": "Heuristic named-anchor check; not a completeness or accuracy score."
+      }
+    }
+  ],
+  "findings": [
+    {
+      "severity": "release blocker: coverage threshold",
+      "class": "validation rejects supported matters",
+      "sources": [
+        2206,
+        5844,
+        9709,
+        10300
+      ],
+      "detail": "Slash-form votes (2/0), recipient-body mentions in referrals, abbreviated authority and approved describing an existing use cause avoidable loss. Some other rejections correctly reject nonliteral source text. Four useful reference matters are withheld."
+    },
+    {
+      "severity": "release blocker: discovery threshold",
+      "class": "scope and lifecycle projection",
+      "sources": [
+        10264,
+        10300,
+        8115
+      ],
+      "detail": "Existing-tower split and scope-uncertain new lot reach discovery; municipality-wide ASA review and a tabled hotel do not. Ruhlman is a borderline scope judgment; counting it as useful would improve precision but would not resolve recall."
+    },
+    {
+      "severity": "consequential status error",
+      "class": "deferred agenda labeled removed",
+      "sources": [
+        9709
+      ],
+      "detail": "519 Franklin Street is deferred to August pending details; the output labels it removed. No approval is invented, but a customer could infer that the case is closed."
+    },
+    {
+      "severity": "backlog",
+      "class": "omitted context-only matter",
+      "sources": [
+        7603
+      ],
+      "detail": "Colonial Sewer Project Update is omitted. The source has no scope or details, so this does not lower the predeclared useful-matter recall."
+    },
+    {
+      "severity": "backlog",
+      "class": "display and field assignment",
+      "sources": [
+        10300,
+        5844,
+        2206
+      ],
+      "detail": "Rau's waiver requests appear in conditions without enumerated approval conditions; some narratives expand two-digit source years; Lay Road's scheduled status differs from the reference update label but accurately describes a future closure."
+    }
+  ],
+  "decision": "no_go_for_additional_review_backfill",
+  "reason": "Useful retention and discovery precision miss the frozen 90% thresholds; one misleading future-case status also remains.",
+  "quality_receipt_issued": false,
+  "production_publication": false,
+  "additional_canary_calls": 0
+}

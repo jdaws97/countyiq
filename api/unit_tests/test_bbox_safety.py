@@ -115,29 +115,5 @@ def test_radar_bbox_has_the_same_hard_limit_contract(monkeypatch):
     assert "ORDER BY dm.score DESC, dm.pidn" in cursor.sql
 
 
-def test_organization_exception_does_not_expose_prior_owner_or_mail_address():
-    parcel = {
-        "owner_full": "ACME HOLDINGS LLC",
-        "own_name1": "ACME HOLDINGS LLC",
-        "own_name2": "ATTN JANE DOE",
-        "prev_owner": "JOHN DOE",
-        "mail_addr_full": "1 PRIVATE LANE",
-    }
-
-    parcels._redact_parcel_owner_fields(
-        parcel,
-        show_people=False,
-        show_current_owner=True,
-    )
-
-    assert parcel == {
-        "owner_full": "ACME HOLDINGS LLC",
-        "own_name1": None,
-        "own_name2": None,
-        "prev_owner": None,
-        "mail_addr_full": None,
-    }
-
-
 def test_bbox_public_limit_is_explicit_and_finite():
     assert MAX_BBOX_RESULTS == 5_000

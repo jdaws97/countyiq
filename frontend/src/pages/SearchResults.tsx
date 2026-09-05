@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, type FormEvent } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
+import CaseSearchMatches from '../components/CaseSearchMatches'
 import PageShell from '../components/PageShell'
-import type { SearchMode, SearchResponse, SearchResult } from '../types/api'
+import { useFetchJson } from '../lib/useFetchJson'
+import type { SearchResponse } from '../types/api'
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   address: { label: 'Address', color: 'var(--accent-blue)' },
@@ -26,88 +28,30 @@ function matchStrength(score: number) {
   return 'Possible'
 }
 
-// Simple cache to avoid re-querying on back navigation
-type SearchCacheEntry = {
-  mode: SearchMode
-  description: string
-  results: SearchResult[]
-  label?: string
-  value?: string
-}
-
-const searchCache: Record<string, SearchCacheEntry> = {}
-
 export default function SearchResults() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const query = searchParams.get('q') || ''
-  const [results, setResults] = useState<SearchResult[]>([])
-  const [mode, setMode] = useState<SearchMode>('fuzzy')
-  const [description, setDescription] = useState<string>('')
-  const [aggLabel, setAggLabel] = useState<string>('')
-  const [aggValue, setAggValue] = useState<string>('')
-  const [error, setError] = useState<string>('')
-  // Loading is derived (resolved query vs current query) so the effect never
-  // sets state synchronously; cache hits resolve through a microtask.
-  const [resolvedQuery, setResolvedQuery] = useState<string | null>(null)
-  const loading = query.length >= 2 && resolvedQuery !== query
+  const { data, error: requestError, loading, reload } = useFetchJson<SearchResponse>(
+    query.length >= 2 ? '/api/search?q=' + encodeURIComponent(query) + '&limit=' + SEARCH_RESULT_LIMIT : null,
+  )
+  const results = data?.results ?? []
+  const mode = data?.mode ?? 'fuzzy'
+  const description = data?.description ?? ''
+  const aggLabel = data?.label ?? ''
+  const aggValue = data?.value ?? ''
+  const error = requestError ? 'Search is temporarily unavailable. Please try again.' : ''
 
   useEffect(() => {
-    if (query.length < 2) return
-    let cancelled = false
-
-    const cached = searchCache[query]
-    const load: Promise<SearchCacheEntry | null> = cached
-      ? Promise.resolve(cached)
-      : fetch(`/api/search?q=${encodeURIComponent(query)}&limit=${SEARCH_RESULT_LIMIT}`)
-          .then(r => {
-            if (!r.ok) throw new Error(`Search failed (${r.status})`)
-            return r.json()
-          })
-          .then((data: SearchResponse) => {
-            if (data.mode === 'redirect' && data.redirect_path) {
-              if (!cancelled) navigate(data.redirect_path)
-              return null
-            }
-            const entry: SearchCacheEntry = {
-              mode: data.mode,
-              description: data.description || '',
-              results: data.results || [],
-              label: data.label,
-              value: data.value,
-            }
-            searchCache[query] = entry
-            return entry
-          })
-
-    load
-      .then((entry) => {
-        if (cancelled || entry === null) return
-        setMode(entry.mode)
-        setDescription(entry.description)
-        setAggLabel(entry.label || '')
-        setAggValue(entry.value || '')
-        setResults(entry.results)
-        setError('')
-        setResolvedQuery(query)
-      })
-      .catch((error) => {
-        if (cancelled) return
-        console.error('Search request failed', error)
-        setResults([])
-        setError('Search is temporarily unavailable. Please try again.')
-        setResolvedQuery(query)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [query, navigate])
+    if (data?.mode === 'redirect' && data.redirect_path) navigate(data.redirect_path)
+  }, [data, navigate])
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const nextQuery = String(new FormData(event.currentTarget).get('q') || '').trim()
     if (nextQuery.length >= 2) {
-      navigate(`/search?q=${encodeURIComponent(nextQuery)}`)
+      if (nextQuery === query) reload()
+      else navigate(`/search?q=${encodeURIComponent(nextQuery)}`)
     }
   }
 
@@ -133,7 +77,7 @@ export default function SearchResults() {
             role="search"
             style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '18px 0 12px', maxWidth: 760 }}
           >
-            <label className="sr-only" htmlFor="results-search">Search parcels and places</label>
+            <label className="sr-only" htmlFor="results-search">Search properties, projects, organizations and places</label>
             <input
               key={query}
               id="results-search"
@@ -143,7 +87,7 @@ export default function SearchResults() {
               minLength={2}
               required
               autoFocus
-              placeholder="Owner, address, or parcel ID"
+              placeholder="Property, project, organization, or place"
               style={{
                 flex: '1 1 320px', minWidth: 0, minHeight: 42, padding: '10px 13px',
                 color: 'var(--text-primary)', background: 'var(--bg-panel)',
@@ -157,11 +101,13 @@ export default function SearchResults() {
           }} aria-live="polite">
             {loading
               ? 'Searching...'
+              : error ? 'Search unavailable'
+              : query.length < 2 ? 'Enter at least two characters to search.'
               : mode === 'aggregate'
                 ? ''
-                : `${results.length === SEARCH_RESULT_LIMIT ? 'Top ' : ''}${results.length} matches for "${query}"`}
+                : `${results.length === SEARCH_RESULT_LIMIT ? 'Top ' : ''}${results.length} property/place matches for "${query}"`}
           </p>
-          {(mode === 'smart' || mode === 'aggregate') && description && (
+          {!loading && (mode === 'smart' || mode === 'aggregate') && description && (
             <p style={{
               fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-gold)',
               background: 'rgba(212, 168, 67, 0.1)', border: '1px solid rgba(212, 168, 67, 0.2)',
@@ -170,10 +116,9 @@ export default function SearchResults() {
               AI: {description}
             </p>
           )}
-          <p style={{ display: 'none' }}>
-          </p>
         </div>
 
+        <CaseSearchMatches query={query} />
         {/* Results */}
         {/* Aggregate result */}
         {!loading && mode === 'aggregate' && aggValue && (
@@ -201,10 +146,11 @@ export default function SearchResults() {
             <div className="empty-state-mark" aria-hidden="true">!</div>
             <h2>Search could not be completed</h2>
             <p className="empty-state-copy">{error}</p>
+            <button type="button" className="ciq-button ciq-button-secondary" onClick={reload}>Try again</button>
           </div>
         )}
 
-        {!loading && !error && results.length === 0 && mode !== 'aggregate' && (
+        {query.length >= 2 && !loading && !error && results.length === 0 && mode !== 'aggregate' && (
           <div style={{
             color: 'var(--text-muted)', textAlign: 'center', padding: '60px 18px',
           }}>

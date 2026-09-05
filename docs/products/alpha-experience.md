@@ -139,11 +139,11 @@ All must be true before public trial traffic is invited:
   relationships when available, recent events, portfolio, and cached brief.
 - A related project opens one case file containing its evidence timeline,
   connected entities, linked parcels, municipality context, and watch action.
-- Entities, projects, and parcels can be watched and their later linked events
-  are visible after navigation/reload in the same browser.
+- Entities, projects, parcels, and municipalities can be watched and their
+  later linked events are visible after navigation/reload in the same browser.
 - Missing data and empty evidence are explicit.
-- Distress/person-linked features remain off unless their separate privacy and
-  counsel gates are intentionally enabled.
+- Exact debt-detail features remain off unless their separate privacy and
+  counsel gates are intentionally enabled; public-record owner identity is on.
 - API unit tests, database-backed contracts, pipeline tests, definitions import,
   frontend typecheck/lint/build, and the Playwright investigation flow pass on
   the release candidate.

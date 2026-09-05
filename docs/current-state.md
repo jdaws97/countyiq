@@ -6,7 +6,7 @@ This file is the fast answer to "where are we really with this repo?"
 
 CountyIQ is a real-estate intelligence platform for York County, PA. The repo contains:
 
-- a React frontend with home, map, municipalities, delinquent, licenses, projects, distressed, assemblage, search, property, owner, radar, feed, and ops-health views
+- a React frontend with home, feed, radar, map, municipality, search, property, entity/owner, project, watch, compare, and ops-health views; the legacy `/delinquent`, `/licenses`, `/projects`, `/distressed`, and `/assemblage` bookmarks redirect into Feed, Radar, or Search
 - a FastAPI API serving those surfaces under `/api/*`
 - a Dagster pipeline layer that handles both source ingestion and an LLM-backed intelligence workflow
 
@@ -36,12 +36,12 @@ data backfill and customer use before CountyIQ is sales-ready:
   original/internal links when available. Inline brief citations resolve to the
   same receipts; governed fields remain redacted when source policy disallows
   customer display.
-- **Investigation workspace** — browser-local entity, parcel, and development-project
-  watches now include in-app "new since last visit" alerts, reviewed/dismissed feed
+- **Investigation workspace** — browser-local entity, parcel, municipality, and
+  development-project watches now include in-app "new since last visit" alerts, reviewed/dismissed feed
   triage, saved Feed/Radar searches, 2–4 parcel comparison, CSV exports, and
   print/save-PDF evidence packets. A versioned JSON export/import moves the
   workspace between browsers without implying that CountyIQ has customer
-  accounts. Automatic multi-device sync and server notifications are not built.
+  accounts. Optional private watchspace synchronization and a durable unread inbox are now implemented behind COUNTYIQ_WATCH_SYNC_ENABLED; deployment and customer acceptance remain unverified.
 - ~~Weekly digest email~~ — dropped by decision (2026-08-02): no email features planned.
 - The radar (score version 7, 2026-09-02) is deterministic, includes
   proceedings-linked `municipal_action` and owner `entity_assemblage`
@@ -52,6 +52,10 @@ data backfill and customer use before CountyIQ is sales-ready:
   Agricultural Security Areas as neutral context rather than prohibitions,
   and documents all trigger/meaning/caveat pairs in
   `docs/research/development-signal-contract-v7.md`.
+- Owner names are public record and shown everywhere (2026-09-03,
+  `docs/decisions.md`): the per-source person-display switch is gone and
+  generated prose (Pass 2/3/3b) is served under the ordinary derived-product
+  permission.
 - Pass 2+ intelligence has run on ~75 of 176,060 parcels. The municipal
   proceedings registry covers all 72 municipalities explicitly: 66 currently
   have an authorized main governing-body source and 68 have at least one active
@@ -67,14 +71,14 @@ tools remain under `pipelines/eval/`.
 
 | Area | Current state |
 |---|---|
-| Frontend | React + Vite; Cloudflare Pages is the production hosting target, with deployment configured outside this repo |
+| Frontend | React + Vite; the production Compose web image serves the built frontend through Caddy and Cloudflare Tunnel |
 | API | FastAPI + Uvicorn |
 | Pipelines | Dagster |
 | Database | PostgreSQL 16 + PostGIS (self-managed) |
 | Object storage | Cloudflare R2 (via `R2_ENDPOINT_URL` — required, otherwise boto3 targets AWS) |
 | Front door | Cloudflare |
 | Inference backend | OpenRouter |
-| Deployment | Not deployed. Docker Compose on a Hetzner VPS behind Cloudflare is the target. The repo now has a fail-closed exact-SHA deploy path, versioned local images, stable volume names, verified R2 backup manifests, release/restore receipts, and a persistent systemd backup timer; the first live host, restore drill, firewall, and provider controls remain unverified. |
+| Deployment | Not deployed. Docker Compose on the configured VPS behind Cloudflare is the target. The repo now has a fail-closed exact-SHA deploy path, versioned local images, stable volume names, verified R2 backup manifests, release/restore receipts, and a persistent systemd backup timer; read-only checks on 2026-09-04 confirmed Ubuntu 24.04 and an SSH-only UFW firewall, but also found old SSH include ordering still enabling password authentication and root-only cost-guard directory permissions. Current repository hardening, a first application release, backup scheduling, off-host recovery and provider controls remain to be verified. |
 
 ## Current Model Lineup
 
@@ -167,11 +171,13 @@ policies.
   Collection uses allowlisted official methods; proceedings fail closed on
   robots/access uncertainty and sheriff collection no longer disguises a
   browser client.
-- Municipal proceedings contain 113 configured source entries (110 distinct
-  listing URLs) across 68 municipalities. All 72 municipalities remain in 122
-  policy rows: 113 are conditional and 9 are paused. Pauses cover two
+- Municipal proceedings contain 107 configured source entries (105 distinct
+  listing URLs) across 66 municipalities. All 72 municipalities remain in 122
+  policy rows: 107 are conditional and 15 are paused after migration 057. Pauses cover two
   no-web-presence bodies, eCode360, Rep'd, Google Drive, and three explicit
-  West Manheim robots disallows. Every
+  West Manheim robots disallows, plus six Penn/Paradise entries whose configured
+  domains belong to Butler/Lancaster counties rather than York. Migration 057
+  pauses acquisition and derived use while retaining evidence for repair. Every
   configured body must match its policy's municipality, URL, proceeding type,
   acquisition method, and allowed origin before any request is made;
   listing/document health, scheduled refresh freshness, and latest job failure
@@ -181,18 +187,17 @@ policies.
   Revision 042 records explicit product-owner risk acceptance for automated
   retrieval from that exact origin. Revision 043 narrowly accepts unavailable
   robots endpoints on those three first-party listing origins; the CDN document
-  origin remains live robots-gated. Raw archives remain private; person-level
-  display and raw-document export remain disabled.
+  origin remains live robots-gated. Raw archives remain private and
+  raw-document export remains disabled.
 - York `OPEN_DATA`, PennDOT open data, FEMA NFHL, and data.pa.gov business data
   are approved for derived analytics within the recorded delivery boundary.
 - PA DEP's public, non-sensitive GIS is approved for attributed derived
   screening. Active storage-tank facilities and land-recycling cleanup
   locations are deterministic proximity evidence, never contamination claims.
-- Tax-claim row queries and claimant-name search are disabled; person-linked
-  distress routes and frontend pages are default-off. Natural-person owner
-  names are suppressed while recognized legal organizations remain usable for
-  entity intelligence. Municipality aggregates, boolean parcel delinquency,
-  and backend scores preserve the useful signal without exposing exact debt.
+- Tax-claim row queries and claimant-name search are disabled; exact-debt
+  distress routes and frontend pages are default-off. Owner names are public
+  record and shown. Municipality aggregates, boolean parcel delinquency, and
+  backend scores preserve the useful signal without exposing exact debt.
 - Replacement scheduled inputs are York zoning overlays, business parks,
   industrial parks, soils, and local traffic counts. They power a separate
   site-screening score and buyer-facing Radar view. The 2026-08-28 local live

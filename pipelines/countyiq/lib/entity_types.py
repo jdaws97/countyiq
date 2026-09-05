@@ -1,10 +1,9 @@
 """Deterministic owner-name type classification.
 
 Shared by the owner-resolution asset and the Pass 1 cluster selector so both
-agree on what counts as an organization. Person-level display is disabled by
-source policy and the assemblage signal matches raw owner strings, so
-person-only clusters currently reach no customer surface; Pass 1 skips them
-by default and this module is the single definition of that boundary.
+agree on what counts as an organization. Owner identity is public and Pass 1
+includes person-only clusters by default; operators may explicitly trade recall
+for cost. This module is the single definition of that execution boundary.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ import re
 
 GOVERNMENT_INDICATORS = re.compile(
     r'\b(COUNTY OF|COMMONWEALTH|TOWNSHIP|BOROUGH|CITY OF|'
-    r'SCHOOL DIST\w*|AUTHORITY|STATE OF|UNITED STATES)\b',
+    r'SCHOOL DIST\w*|AUTH(?:ORITY|OR)?|STATE OF|UNITED STATES)\b',
     re.IGNORECASE,
 )
 
@@ -25,7 +24,7 @@ TRUST_INDICATORS = re.compile(
 BUSINESS_INDICATORS = re.compile(
     r'\b(LLC|INC|CORP|CORPORATION|LTD|LP|LLP|'
     r'ASSOCIATES|ASSOCIATION|FOUNDATION|PROPERTIES|REALTY|'
-    r'INVESTMENTS|HOLDINGS|PARTNERS|GROUP|ENTERPRISES|'
+    r'INVESTORS?|INVESTMENTS|HOLDINGS|PARTNERS|GROUP|ENTERPRISES|'
     r'CAPITAL|MANAGEMENT|DEVELOPMENT|VENTURES|BANK|'
     r'CHURCH|SYNAGOGUE|MOSQUE|SOCIETY|CLUB|LODGE|'
     r'SCHOOL|UNIVERSITY|COLLEGE|HOSPITAL)\b',

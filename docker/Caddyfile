@@ -7,38 +7,100 @@
 			idle 2m
 		}
 		max_header_size 32KB
-		# Cloudflare's published ranges, verified 2026-08-30. Requests from
-		# any other peer cannot supply a trusted client address.
-		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		# The origin is not publicly reachable. Only the dedicated cloudflared
+		# bridge may supply Cloudflare's authenticated client-address header.
+		trusted_proxies static 172.31.253.0/24
 		trusted_proxies_strict
-		client_ip_headers CF-Connecting-IP X-Forwarded-For
+		client_ip_headers CF-Connecting-IP
 	}
 }
 
-{$DOMAIN:localhost} {
+# Shared static files contain no customer data. Each host has its own HTML entry.
+(static_assets) {
+	# Missing chunks must be 404s, never a year-cached HTML fallback.
+	handle /assets/* {
+		root * /srv
+		@existing file {path}
+		handle @existing {
+			header Cache-Control "public, max-age=31536000, immutable"
+			file_server
+		}
+		handle {
+			header Cache-Control "no-store"
+			respond 404
+		}
+	}
+
+}
+
+:8080 {
+	encode zstd gzip
 	header {
 		-Server
-		Cache-Control "no-store"
-		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self' https:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none'; img-src 'self' data: blob: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; worker-src 'self' blob:"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		Referrer-Policy "no-referrer"
+		Referrer-Policy "strict-origin-when-cross-origin"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 	}
 
-	handle /api/* {
-		reverse_proxy api:8000 {
-			# Collapse the validated proxy chain to one value for Uvicorn and
-			# remove the vendor header so the app never has two authorities.
-			header_up X-Forwarded-For {client_ip}
-			header_up -CF-Connecting-IP
-		}
-	}
+    @health path /healthz
+    handle @health {
+        header Cache-Control "no-store"
+        respond "ok" 200
+    }
 
-	# Default: return 404 for non-API requests
-	# Frontend is served by Cloudflare Pages, not this VPS
-	handle {
-		respond 404
-	}
+    @marketing host {$DOMAIN:countyiq.net}
+    handle @marketing {
+        @api path /api /api/*
+        handle @api {
+            header Cache-Control "no-store"
+            respond 404
+        }
+        import static_assets
+        @public_page path / /index.html /favicon-ciq.svg /robots.txt
+        handle @public_page {
+            root * /srv
+            header Cache-Control "no-cache"
+            file_server
+        }
+        @entry path /app /app.html
+        handle @entry {
+            redir https://app.{$DOMAIN:countyiq.net}/ 302
+        }
+        handle {
+            # Preserve old product deep links; never proxy them on the public host.
+            redir https://app.{$DOMAIN:countyiq.net}{uri} 302
+        }
+    }
+
+    @product host app.{$DOMAIN:countyiq.net}
+    handle @product {
+        header X-Robots-Tag "noindex, nofollow"
+        @api path /api /api/*
+        handle @api {
+            header Cache-Control "no-store"
+            reverse_proxy api:8000 {
+                header_up X-Forwarded-For {client_ip}
+                header_up -CF-Connecting-IP
+            }
+        }
+        import static_assets
+        @favicon path /favicon-ciq.svg
+        handle @favicon {
+            root * /srv
+            file_server
+        }
+        handle {
+            header Cache-Control "no-cache"
+            root * /srv
+            rewrite * /app.html
+            file_server
+        }
+    }
+
+    handle {
+        respond 404
+    }
 }

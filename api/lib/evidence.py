@@ -261,7 +261,7 @@ def normalize_source_evidence(
         effective_at=effective_at,
         observed_at=observed_at,
         method=(
-            "CountyIQ extracted the event from the source and verified the displayed excerpt against its text."
+            "CountyIQ used a language model to extract this event from the cited source. Consult the source passage for its full context."
             if interpretation_kind == "llm"
             else "CountyIQ detected this change deterministically from versioned source records."
         ),

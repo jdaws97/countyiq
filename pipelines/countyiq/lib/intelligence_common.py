@@ -47,9 +47,30 @@ TAX_CLAIMS_QUERY = """
     ORDER BY tax_year, authority_name, total
 """
 
-PROCEEDINGS_FOR_PARCEL_QUERY = """
+# Retained evidence does not imply current permission to use it in a product.
+PROCEEDING_USE_ALLOWED_SQL = """
+    pp.metadata_quality->>'status' = 'ready'
+    AND EXISTS (
+        SELECT 1 FROM meta.source_rights sr
+        WHERE sr.source_key = 'public_proceedings'
+          AND sr.rights_status <> 'paused'
+          AND sr.derived_product_allowed = TRUE
+          AND sr.review_due_on >= CURRENT_DATE
+    )
+    AND EXISTS (
+        SELECT 1 FROM meta.municipality_source_rights governed
+        WHERE governed.body_name = pp.body_name
+          AND governed.rights_status <> 'paused'
+          AND governed.derived_product_allowed = TRUE
+          AND governed.review_due_on >= CURRENT_DATE
+    )
+"""
+
+PROCEEDINGS_FOR_PARCEL_QUERY = f"""
     SELECT
         pe.id AS extraction_id,
+        pp.id AS proceeding_id,
+        pe.active_inference_id,
         pe.extraction_type,
         pe.applicant_name,
         pe.parcel_reference,
@@ -57,38 +78,22 @@ PROCEEDINGS_FOR_PARCEL_QUERY = """
         pp.meeting_date,
         pp.body_name,
         pp.source_url,
-        pe.supporting_text
+        pe.supporting_text,
+        pe.extraction_details
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
     WHERE pp.valid_to IS NULL
+      AND {PROCEEDING_USE_ALLOWED_SQL}
       AND LEFT(pe.extraction_type, 1) <> '_'
-      AND (
-          -- Match by canonical PIDN even when the minutes contain punctuation.
-          REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g') = %(pidn)s
-          -- Address matches are valid only inside the proceeding municipality.
-          OR EXISTS (
-              SELECT 1
-              FROM staging.parcels parcel
-              WHERE parcel.pidn = %(pidn)s
-                AND parcel.valid_to IS NULL
-                AND parcel.propadr IS NOT NULL
-                AND public.normalize_street_address(parcel.propadr)
-                    = public.normalize_street_address(pe.parcel_reference)
-                AND EXISTS (
-                    SELECT 1
-                    FROM meta.municipality_source_rights msr
-                    WHERE msr.body_name = pp.body_name
-                      AND msr.municipality_name = parcel.municipality
-                      AND msr.derived_product_allowed = TRUE
-                )
-          )
-      )
+      AND %(pidn)s IN (SELECT matched.pidn FROM public.proceeding_parcel_matches(COALESCE(pe.extraction_details->'parcel_references', jsonb_build_array(pe.parcel_reference)), pp.body_name) matched)
     ORDER BY pp.meeting_date DESC, pe.id
 """
 
-PROCEEDINGS_FOR_ENTITY_QUERY = """
+PROCEEDINGS_FOR_ENTITY_QUERY = f"""
     SELECT
         pe.id AS extraction_id,
+        pp.id AS proceeding_id,
+        pe.active_inference_id,
         pe.extraction_type,
         pe.applicant_name,
         pe.parcel_reference,
@@ -96,11 +101,14 @@ PROCEEDINGS_FOR_ENTITY_QUERY = """
         pp.meeting_date,
         pp.body_name,
         pp.source_url,
-        pe.supporting_text
+        pe.supporting_text,
+        pe.extraction_details
     FROM staging.proceeding_extractions pe
     JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
     WHERE pe.applicant_name = ANY(%(names)s)
       AND pp.valid_to IS NULL
+      AND {PROCEEDING_USE_ALLOWED_SQL}
+      AND LEFT(pe.extraction_type, 1) <> '_'
     ORDER BY pp.meeting_date DESC, pe.id
 """
 
@@ -118,7 +126,12 @@ NEIGHBORS_QUERY = """
         ON n.valid_to IS NULL
        AND n.geom IS NOT NULL
        AND p.pidn <> n.pidn
-       AND ST_Touches(p.geom, n.geom)
+       -- ST_Intersects, not ST_Touches, to match development_signals: county
+       -- parcel polygons overlap slightly, so the strict touch test silently
+       -- drops real neighbors and the model would see a different neighbor
+       -- count than the assemblage evidence it is asked to validate.
+       AND p.geom && n.geom
+       AND ST_Intersects(p.geom, n.geom)
     LEFT JOIN (
         SELECT
             pidn,
@@ -164,6 +177,31 @@ ENTITY_GRAPH_QUERY = """
         entity_id
     LIMIT 1
 """
+
+# Deterministic owner resolution (public.owners via owner_source_links): the
+# recorded name variants one owner appears under, available for every parcel
+# whether or not Pass 1 verified an entity.
+RESOLVED_OWNER_NAMES_QUERY = """
+    SELECT o.canonical_name, o.aliases, o.entity_type
+    FROM public.owner_source_links osl
+    JOIN public.owners o ON o.owner_id = osl.owner_id
+    WHERE osl.source_type = 'parcel'
+      AND osl.source_id = %(pidn)s
+    LIMIT 1
+"""
+
+
+def resolved_owner_names(cursor, pidn: str, owner_name: str) -> list[str]:
+    """Return the owner's recorded name variants, always including ``owner_name``."""
+    names: list[str] = [owner_name] if owner_name else []
+    cursor.execute(RESOLVED_OWNER_NAMES_QUERY, {"pidn": pidn})
+    row = cursor.fetchone()
+    if row:
+        record = dict(row)
+        names.append(_str(record.get("canonical_name")))
+        names.extend(str(alias) for alias in (record.get("aliases") or []) if alias)
+    return list(dict.fromkeys(name for name in names if name))
+
 
 PORTFOLIO_QUERY = """
     SELECT
@@ -360,10 +398,16 @@ def format_proceedings_context(rows: list[dict]) -> list[dict]:
 
     Returns:
         List of dicts with keys: type, applicant, parcel, decision,
-        meeting_date, body, source_url, supporting_text.
+        meeting_date, body, source_url, supporting_text, proceeding_id,
+        extraction_id, active_inference_id.
     """
     return [
         {
+            # Preserve source versions for hashing and dependency receipts.
+            # Prompt renderers intentionally use the descriptive fields below.
+            "proceeding_id": row.get("proceeding_id"),
+            "extraction_id": row.get("extraction_id"),
+            "active_inference_id": row.get("active_inference_id"),
             "type": _str(row.get("extraction_type")),
             "applicant": _str(row.get("applicant_name")),
             "parcel": _str(row.get("parcel_reference")),
@@ -427,6 +471,26 @@ def format_corporate_context(rows: list[dict]) -> list[dict]:
 # =============================================================================
 # HASHING
 # =============================================================================
+
+# Evidence fields the weekly signal rebuild recomputes from NOW(). They tick
+# once a month and would otherwise change every Pass 2/3 input hash (and
+# retract every evidence row) monthly without any new source fact.
+VOLATILE_EVIDENCE_KEYS = (
+    "months_since_received",
+    "months_since_sale",
+    "months_since_meeting",
+    "months_since_latest_acquisition",
+)
+
+
+def strip_volatile_evidence(evidence: object) -> object:
+    """Return signal evidence without the age counters the rebuild recomputes."""
+    if not isinstance(evidence, dict):
+        return evidence
+    return {
+        key: value for key, value in evidence.items() if key not in VOLATILE_EVIDENCE_KEYS
+    }
+
 
 def compute_input_hash(data: dict) -> str:
     """Compute a stable SHA-256 hex digest of a dict.
@@ -610,3 +674,20 @@ def pass_attempt_priority(
         else str(last_attempt)
     )
     return (1, serialized, subject_key)
+
+
+# Shared by deterministic rebuilds and validation retries.
+RETRACT_STALE_EVIDENCE_QUERY = """
+    DELETE FROM public.evidence e
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM public.development_signals ds
+        WHERE ds.pidn = e.pidn
+          AND ds.signal_key = e.signal_key
+          -- Age counters are recomputed on every rebuild; only a real change
+          -- in the underlying source facts retracts a validation.
+          AND (ds.evidence - %(volatile)s::text[])
+              IS NOT DISTINCT FROM (e.evidence_data - %(volatile)s::text[])
+    )
+    RETURNING e.pidn, e.signal_key
+"""

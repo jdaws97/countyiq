@@ -1,0 +1,313 @@
+{
+  "date": "2026-09-05",
+  "mode": "implementation plus authorized frozen-source regression",
+  "decision": "do_not_backfill",
+  "quality_receipt_issued": false,
+  "production_data_writes": false,
+  "model": "openai/gpt-5.6-luna",
+  "gateway": "OpenRouter",
+  "served_provider": "OpenAI",
+  "evaluation_limit": "Previously reviewed ten-source regression with agent semantic spot review; not unseen accuracy evaluation, independent human gold, or precision/recall estimate.",
+  "metrics": {
+    "documents": 10,
+    "calls": 10,
+    "retries": 0,
+    "raw_matters": 52,
+    "surviving_at_generation": 44,
+    "surviving_final_replay": 46,
+    "quarantined_final_replay": 6,
+    "discovery_eligible_final_replay": 15,
+    "clean_documents": 6,
+    "partial_documents": 4,
+    "prior_same10_raw_matters": 51,
+    "prior_same10_surviving_matters": 23,
+    "new_cost_usd": "0.04428219",
+    "prior_same10_cost_usd": "0.03952565",
+    "new_run_cap_usd": "0.28",
+    "cost_change_percent": 12.034058895932136,
+    "cost_per_surviving_matter_change_percent": -43.98297055203393,
+    "prior_conservative_accounted_usd": "0.20147124",
+    "cumulative_conservative_accounted_usd": "0.24575343",
+    "original_total_cap_usd": "1.00",
+    "verified_exact_evidence_spans": 99,
+    "prompt_tokens": 71883,
+    "completion_tokens": 30963,
+    "cached_tokens": 47142
+  },
+  "source_reviews": [
+    {
+      "source_id": "5153",
+      "body_name": "York City Planning Commission",
+      "meeting_date": "2026-08-10",
+      "source_url": "https://www.yorkcity.org/government/authorities-boards-and-commissions/planning-commission-board/",
+      "document_url": "https://www.yorkcity.org/wp-content/uploads/2026/08/8-August-10-2026-Agenda-with-motions-for-Board.pdf",
+      "raw_matters": 11,
+      "surviving_matters": 10,
+      "discovery_eligible_matters": 1,
+      "rejected_items": [
+        {
+          "index": 2,
+          "errors": [
+            "relevance_source_text must preserve wording from its selected source passages"
+          ]
+        }
+      ],
+      "agent_review_note": "York Planning Commission: scheduled waiver recommendations remain scheduled. One relevance excerpt cites the wrong passage and is quarantined. Several multifamily conversions remain underclassified as minor because the model emphasizes no new construction; these useful case histories are still absent from discovery. Hartley subdivision and land-development requests remain separate extracted matters, not proven distinct projects."
+    },
+    {
+      "source_id": "5145",
+      "body_name": "York City Planning Commission",
+      "meeting_date": "2026-05-11",
+      "source_url": "https://www.yorkcity.org/government/authorities-boards-and-commissions/planning-commission-board/",
+      "document_url": "https://www.yorkcity.org/wp-content/uploads/2026/05/5-May-11-2026-Agenda-with-motions-for-Board.pdf",
+      "raw_matters": 7,
+      "surviving_matters": 6,
+      "discovery_eligible_matters": 2,
+      "rejected_items": [
+        {
+          "index": 3,
+          "errors": [
+            "relevance_source_text must preserve wording from its selected source passages"
+          ]
+        }
+      ],
+      "agent_review_note": "York Planning Commission: no false completed recommendations. The nine-unit East Market conversion and Fulton building are discovery eligible. The 701 Wallace conversion is withheld because its relevance excerpt points to the wrong passage."
+    },
+    {
+      "source_id": "10281",
+      "body_name": "Heidelberg Twp Planning Commission",
+      "meeting_date": "2026-05-13",
+      "source_url": "https://www.heidelbergtwpmunicipal.com/meeting-agendas-monthly-minutes/",
+      "document_url": "https://heidelbergtwpmunicipal.com/wp-content/uploads/May-2026-Planning-Commission-Agenda.pdf",
+      "raw_matters": 3,
+      "surviving_matters": 3,
+      "discovery_eligible_matters": 0,
+      "rejected_items": [],
+      "agent_review_note": "Heidelberg Planning Commission: Agricultural Security Area parcel matter and existing-tower split are minor property matters, not development opportunities. Trone remains context only."
+    },
+    {
+      "source_id": "10481",
+      "body_name": "Hopewell Twp Board of Supervisors",
+      "meeting_date": "2026-09-03",
+      "source_url": "https://www.hopewelltownship.com/public-meetings/board-of-supervisors/",
+      "document_url": "https://www.hopewelltownship.com/wp-content/uploads/2026/09/9.3.2026-BOS-Agenda.pdf",
+      "raw_matters": 7,
+      "surviving_matters": 6,
+      "discovery_eligible_matters": 3,
+      "rejected_items": [
+        {
+          "index": 6,
+          "errors": [
+            "extraction 0 scheduled item uses completed-action wording"
+          ]
+        }
+      ],
+      "agent_review_note": "Hopewell supervisors: BESS and OneEnergy overlay proposals remain discoverable and scheduled; neighboring compliance language does not suppress BESS. A scheduled traffic-signal/sidewalk item uses completed-action wording and is quarantined. SolAmerica Orwig Road is omitted in this generation, a remaining recall regression."
+    },
+    {
+      "source_id": "4645",
+      "body_name": "Jacobus Borough Council",
+      "meeting_date": "2026-07-01",
+      "source_url": "https://jacobuspa.com/council-meeting/council-meeting-minutes/",
+      "document_url": "https://jacobuspa.com/__static/jdj5jdewjgg2ljhltzcyddludnzavwnd/July-1st-council-mtg-minutes.pdf",
+      "raw_matters": 7,
+      "surviving_matters": 4,
+      "discovery_eligible_matters": 3,
+      "rejected_items": [
+        {
+          "index": 2,
+          "errors": [
+            "related_entities must preserve wording from its selected source passages"
+          ]
+        },
+        {
+          "index": 3,
+          "errors": [
+            "A motion without a recorded outcome does not establish approval; Decision excerpt does not establish the claimed completed outcome"
+          ]
+        },
+        {
+          "index": 4,
+          "errors": [
+            "Decision action_text must occur in its selected source passages"
+          ]
+        }
+      ],
+      "agent_review_note": "Jacobus: Meadow contract and bond actions survive separately; the $161,597 contract is supported. The $350,000 Goodwill social-hall remodeling and Farmington completion date survive. An unsupported garage approval is quarantined because the source records a motion without an outcome. Church subdivision and traffic-calming ordinance items fail literal evidence checks."
+    },
+    {
+      "source_id": "7600",
+      "body_name": "Dallastown Borough Council",
+      "meeting_date": "2026-05-11",
+      "source_url": "https://dallastownboro.com/meetings-agendas-minutes/",
+      "document_url": "https://dallastownboro.com/wp-content/uploads/coun.ag_.MAY_.2026.pdf",
+      "raw_matters": 2,
+      "surviving_matters": 2,
+      "discovery_eligible_matters": 1,
+      "rejected_items": [],
+      "agent_review_note": "Dallastown: roof public bidding is recovered as scheduled capital work without inventing an award or budget. A generic ordinance hearing survives as context only, with limited customer value."
+    },
+    {
+      "source_id": "1174",
+      "body_name": "Franklin Twp Board of Supervisors",
+      "meeting_date": "2026-08-12",
+      "source_url": "https://franklintownship.org/meeting-minutes-agendas/",
+      "document_url": "https://franklintownship.org/wp-content/uploads/8.12.26-BOS-Mtg-Tentative-Agenda.pdf",
+      "raw_matters": 2,
+      "surviving_matters": 2,
+      "discovery_eligible_matters": 0,
+      "rejected_items": [],
+      "agent_review_note": "Franklin: Young and Greenview extensions survive as context. The next-case-number footer no longer becomes an invented CUH 2026-10 application."
+    },
+    {
+      "source_id": "6302",
+      "body_name": "Lower Windsor Twp Zoning Hearing Board",
+      "meeting_date": "2026-07-16",
+      "source_url": "https://www.lowerwindsor.com/zoning-hearing-board/",
+      "document_url": "https://lowerwindsor.com/wp-content/uploads/ZHB-agenda-7.16.26.pdf",
+      "raw_matters": 2,
+      "surviving_matters": 2,
+      "discovery_eligible_matters": 0,
+      "rejected_items": [],
+      "agent_review_note": "Lower Windsor: both variance items survive as minor property matters with distinct August 24 deadlines and multiple explicit parcel references. No construction or approval is invented."
+    },
+    {
+      "source_id": "2225",
+      "body_name": "East Manchester Twp Board of Supervisors",
+      "meeting_date": "2026-02-10",
+      "source_url": "https://emanchestertwp.com/boards-and-committees/meetings-archive/",
+      "document_url": "https://emanchestertwp.com/wp-content/uploads/2026/03/2026_2_10_EMT-BOS-AGENDA-MINUTES.pdf",
+      "raw_matters": 6,
+      "surviving_matters": 6,
+      "discovery_eligible_matters": 5,
+      "rejected_items": [],
+      "agent_review_note": "East Manchester: truck-parking approval with conditions survives after action-specific header authority binding; its conflicting source letter date remains flagged. Data-center draft amendments are procedural but still discovery eligible. North Sherman bidding, Willow Springs repaving grant, Espresso Way permitting and Casella office addition survive. A hearing without a source year retains a null normalized date."
+    },
+    {
+      "source_id": "3178",
+      "body_name": "Fairview Twp Board of Supervisors",
+      "meeting_date": "2026-06-01",
+      "source_url": "https://twp.fairview.pa.us/board-of-supervisors/",
+      "document_url": "https://twp.fairview.pa.us/wp-content/uploads/2026/06/MIN-2026-06-01-1.pdf",
+      "raw_matters": 5,
+      "surviving_matters": 5,
+      "discovery_eligible_matters": 0,
+      "rejected_items": [],
+      "agent_review_note": "Fairview: Messiah and Mavis plan-modification approvals are procedural, not whole-plan approvals. Seneca is tabled. Summit View sewage revision is context/project milestone, with conflicting resolution identity flagged. Green Lane bond reduction remains a bond action. Baker removal is omitted, a remaining recall regression."
+    }
+  ],
+  "generation_protocol_sha256": "70b10f134a52c5198782a047677ebea2a4284f4d8cdf1651dec767dbd8c83171",
+  "generation_results_sha256": "86b6580d5970ee976c2103686b8dcc9e6aa769f324189cf159122f57a557200a",
+  "final_replay_sha256": "66c030774260c8c0b274392e2183ccbe10703ba7ef9248816e3ebbaf90f3c36e",
+  "source_file_sha256": "5204e70ac8f501bffc49653f0b1179cb381cfe149ba8f9f55eba7897177c10f7",
+  "generation_identity": {
+    "pass_number": 0,
+    "source_hashes": {
+      "pass0_templates.py": "b5d93caa095fd18caa47955f2802f9d099dc90c9c67d6ba570883120153f1eb7",
+      "pass_schemas.py": "679532e7b5473041bfb5df31f70adabba977990e8a19954e2d7380d40d16b1e5",
+      "prompt_prefix.py": "a3989b1f2d1e0b9a1f9709703ace8c7a01a2d91d4b6a70cc66c0df0fef84f159",
+      "proceeding_contract.py": "5d2c3c83ab25be40e2252d5713d1ecac665bb95d97de463d730eeaa6b2f5d65a",
+      "intelligence_integrity.py": "10c17e1642092e1428ebd9506656a3f09102474aaf9f7f2aa8be481db62301bc",
+      "proceeding_claims.py": "77fc940838b0ddca83cf459d7e58f2b4e5325f86f05b3a97948441771a59eb92",
+      "proceeding_semantics.py": "52ab08d0baaac6eff02834dd6cd77c68c75b46e6caa8fcf3b3698c1ef5453f79",
+      "source_passages.py": "e65f4a9a7d553ecf3ef8b5604faaf5353d9959b0e26c9e3863d505539d8bffcb",
+      "proceeding_extraction.py": "474d4de0960eee7aa5ab0e89726b70a070030e7720d86f9e016ebfbe21d14907",
+      "061_proceeding_evidence_contract.py": "04740ce2e4ad3f0002afd93e7db2e720b291a86379a6243a702195f7cf573522",
+      "063_intelligence_event_types.py": "b4e8b48d3c524cfc6a4b0904b8eaf0b04428d714a0c50fb67f7b342ea8cedfdd",
+      "064_proceeding_updates.py": "23186ad3ab61a421d97d12deea7f66ad1d6ce10b413ce102cbdf7591242f4206"
+    },
+    "settings": {
+      "COUNTYIQ_PASS0_THINKING": "",
+      "COUNTYIQ_PASS0_MAX_TOKENS": "",
+      "COUNTYIQ_PASS0_ESCALATION_MODEL": "",
+      "COUNTYIQ_PASS0_ESCALATION_REASONING_EFFORT": "",
+      "COUNTYIQ_THINKING": "",
+      "COUNTYIQ_STRICT_SCHEMA": "",
+      "COUNTYIQ_PASS1_ADAPTIVE_VOTING": ""
+    },
+    "model": "openai/gpt-5.6-luna",
+    "prompt_versions": [
+      "aa07f7f3ccb0"
+    ],
+    "reasoning_effort": null,
+    "trials": "1",
+    "fixtures": {
+      "p0_expected.json": "be1490c3101d2b18cb4cfb48a60f38241d4b835fc7b747e12118c7e2cbc74487",
+      "p0_pdfs/carroll_zhb.pdf": "6a974dc2a8498401d52a9242bf5f33dbaee437cbd48c39619babf4d9fa716e50",
+      "p0_pdfs/conewago_zoning.pdf": "d93584ff5e52aa8b90188f36be77ddbcf190cfbfc4ef3a13bc7eb0ca1d17bcef",
+      "p0_pdfs/westman_zhb.pdf": "dba595fb71e14ad48e4c3df4dc53b48c35ff2a3243ba1d9b416849558caecbb7",
+      "p0_pdfs/dillsburg.pdf": "635e3b9393efa1216dee53a0bce7cfa5f743b98fbacb6181d4c779cf7b35fe2a",
+      "p0_pdfs/jackson_twp.pdf": "eb4b8fd3abe1feb12a9b9b7115d93d143830f14bc7e86b299b3dc150cc072602",
+      "p0_pdfs/springetts.pdf": "218c26ee1a47fb488f28a14927d3c5b72879513c56b226bfecc1409ca305e1be",
+      "municipal_pilot_regressions.json": "b78845f2235011c97eb643f257e9aaee44f24bb7043aa3c51bad38a562006331",
+      "p0_claims_contract.json": "37abb2f0c642c4c8c45d3b5ecbc2a885ef66e2fbe03c0f3c21e5894ea8dbf1b2"
+    }
+  },
+  "final_replay_identity": {
+    "pass_number": 0,
+    "source_hashes": {
+      "pass0_templates.py": "b5d93caa095fd18caa47955f2802f9d099dc90c9c67d6ba570883120153f1eb7",
+      "pass_schemas.py": "679532e7b5473041bfb5df31f70adabba977990e8a19954e2d7380d40d16b1e5",
+      "prompt_prefix.py": "a3989b1f2d1e0b9a1f9709703ace8c7a01a2d91d4b6a70cc66c0df0fef84f159",
+      "proceeding_contract.py": "5d2c3c83ab25be40e2252d5713d1ecac665bb95d97de463d730eeaa6b2f5d65a",
+      "intelligence_integrity.py": "10c17e1642092e1428ebd9506656a3f09102474aaf9f7f2aa8be481db62301bc",
+      "proceeding_claims.py": "a2c73dc6eb06f6523335a6359cfa3530301e89145219551fbd827bda4f1e1f61",
+      "proceeding_semantics.py": "f8160ef98ca401afe647a4161982fe73b11aa4aaed4f097bb3c20dd4a446464f",
+      "source_passages.py": "e65f4a9a7d553ecf3ef8b5604faaf5353d9959b0e26c9e3863d505539d8bffcb",
+      "proceeding_extraction.py": "474d4de0960eee7aa5ab0e89726b70a070030e7720d86f9e016ebfbe21d14907",
+      "061_proceeding_evidence_contract.py": "04740ce2e4ad3f0002afd93e7db2e720b291a86379a6243a702195f7cf573522",
+      "063_intelligence_event_types.py": "b4e8b48d3c524cfc6a4b0904b8eaf0b04428d714a0c50fb67f7b342ea8cedfdd",
+      "064_proceeding_updates.py": "23186ad3ab61a421d97d12deea7f66ad1d6ce10b413ce102cbdf7591242f4206"
+    },
+    "settings": {
+      "COUNTYIQ_PASS0_THINKING": "",
+      "COUNTYIQ_PASS0_MAX_TOKENS": "",
+      "COUNTYIQ_PASS0_ESCALATION_MODEL": "",
+      "COUNTYIQ_PASS0_ESCALATION_REASONING_EFFORT": "",
+      "COUNTYIQ_THINKING": "",
+      "COUNTYIQ_STRICT_SCHEMA": "",
+      "COUNTYIQ_PASS1_ADAPTIVE_VOTING": ""
+    },
+    "model": "openai/gpt-5.6-luna",
+    "prompt_versions": [
+      "aa07f7f3ccb0"
+    ],
+    "reasoning_effort": null,
+    "trials": "1",
+    "fixtures": {
+      "p0_expected.json": "be1490c3101d2b18cb4cfb48a60f38241d4b835fc7b747e12118c7e2cbc74487",
+      "p0_pdfs/carroll_zhb.pdf": "6a974dc2a8498401d52a9242bf5f33dbaee437cbd48c39619babf4d9fa716e50",
+      "p0_pdfs/conewago_zoning.pdf": "d93584ff5e52aa8b90188f36be77ddbcf190cfbfc4ef3a13bc7eb0ca1d17bcef",
+      "p0_pdfs/westman_zhb.pdf": "dba595fb71e14ad48e4c3df4dc53b48c35ff2a3243ba1d9b416849558caecbb7",
+      "p0_pdfs/dillsburg.pdf": "635e3b9393efa1216dee53a0bce7cfa5f743b98fbacb6181d4c779cf7b35fe2a",
+      "p0_pdfs/jackson_twp.pdf": "eb4b8fd3abe1feb12a9b9b7115d93d143830f14bc7e86b299b3dc150cc072602",
+      "p0_pdfs/springetts.pdf": "218c26ee1a47fb488f28a14927d3c5b72879513c56b226bfecc1409ca305e1be",
+      "municipal_pilot_regressions.json": "b78845f2235011c97eb643f257e9aaee44f24bb7043aa3c51bad38a562006331",
+      "p0_claims_contract.json": "37abb2f0c642c4c8c45d3b5ecbc2a885ef66e2fbe03c0f3c21e5894ea8dbf1b2"
+    }
+  },
+  "post_generation_code_changes": [
+    "proceeding_claims.py",
+    "proceeding_semantics.py"
+  ],
+  "post_generation_prompt_changed": false,
+  "additional_model_calls_for_replay": 0,
+  "legacy_diagnostic": {
+    "documents": 40,
+    "before": 38,
+    "after": 100,
+    "quarantined": 36,
+    "discovery": 49,
+    "production_release_eligible": false,
+    "reason": "Old outputs lack required action and relevance excerpts; legacy_evaluation enabled only for offline diagnosis."
+  },
+  "verification": {
+    "pipeline_nonintegration": "1175 passed, 101 deselected",
+    "attribution_integration": "15 passed; countyiq_test with rollback",
+    "dagster_definitions": "import passed",
+    "diff_check": "passed",
+    "exact_evidence_offsets": "passed",
+    "source_identity": "same frozen approved sources",
+    "final_code_identity": "matches final replay"
+  }
+}

@@ -130,8 +130,14 @@ def test_production_environment_validation_fails_closed() -> None:
         "DATABASE_PIPELINE_PASSWORD": "b" * 40,
         "DATABASE_API_USER": "countyiq_api",
         "DATABASE_API_PASSWORD": "c" * 40,
-        "DOMAIN": "api.countyiq.test",
-        "COUNTYIQ_TRUSTED_HOSTS": "api.countyiq.test",
+        "DOMAIN": "countyiq.test",
+        "COUNTYIQ_TRUSTED_HOSTS": "app.countyiq.test",
+        "CLOUDFLARE_TUNNEL_TOKEN": "t" * 128,
+        "COUNTYIQ_AUTH_PROVIDER": "cloudflare_access",
+        "COUNTYIQ_ACCESS_ISSUER": "https://team.cloudflareaccess.com",
+        "COUNTYIQ_ACCESS_AUD": "reviewed-app-audience",
+        "COUNTYIQ_APP_URL": "https://app.countyiq.test",
+        "COUNTYIQ_WORKSPACE_ORIGINS": "https://app.countyiq.test",
         "COUNTYIQ_EXPOSE_API_DOCS": "false",
         "COUNTYIQ_ARCHIVE_STRICT": "true",
         "COUNTYIQ_ENABLE_RESTRICTED_DISTRESS": "false",
@@ -177,7 +183,10 @@ def test_restore_drill_targets_only_disposable_sibling_databases() -> None:
     restore = (REPO_ROOT / "docker/restore-drill.sh").read_text(encoding="utf-8")
     assert 'PRIMARY_DRILL_DATABASE="${PRIMARY_DATABASE}_restore_drill"' in restore
     assert 'DAGSTER_DRILL_DATABASE="${DAGSTER_DATABASE}_restore_drill"' in restore
-    assert 'if [ "$PRIMARY_DRILL_DATABASE" = "$PRIMARY_DATABASE" ]' in restore
+    assert 'countyiq_validate_restore_targets' in restore
+    create_position = restore.index('docker exec countyiq-postgres createdb')
+    assert restore.index('CREATED_DRILL_DATABASE="$drill_database"') > create_position
+    assert '"$CREATED_DRILL_DATABASE"' in restore
     assert "pg_restore --clean" not in restore
 
 

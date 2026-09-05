@@ -56,7 +56,8 @@ from countyiq.lib.llm_harness import (
     get_preset_for_model,
     strip_thinking,
 )
-from countyiq.lib.pass0_templates import EXTRACTION_USER_TEMPLATE
+from countyiq.lib.pass0_templates import document_prompt
+from countyiq.lib.proceeding_claims import hydrate_claims
 from countyiq.lib.pass1_entity_verification import (
     build_entity_cluster_prompt,
     gather_cluster_records,
@@ -189,12 +190,13 @@ def run_pass0(cfg, ledger, on_progress=None) -> list[dict]:
     for fixture in corpus["documents"]:
         fname = fixture["file"]
         pdf = (FIXTURES / "p0_pdfs" / fname).read_bytes()
-        prompt = EXTRACTION_USER_TEMPLATE.format(
+        source_text = extract_text_from_pdf_bytes(pdf)
+        prompt = document_prompt(source_text,
             body_name=fixture["body_name"],
             county_name="York County",
             state="PA",
             proceeding_type=fixture["proceeding_type"],
-            date_clause="",
+            meeting_date=fixture.get("meeting_date"),
         )
         t0 = time.time()
         res = invoke_tracked(
@@ -202,17 +204,15 @@ def run_pass0(cfg, ledger, on_progress=None) -> list[dict]:
             cfg,
             prompt,
             archive_key=f"chal_p0:{fname}",
-            pdf_bytes=pdf,
+            pdf_bytes=None,
         )
         parsed = res.parsed or _parse(res.raw_output)
-        source_text = extract_text_from_pdf_bytes(pdf)
-        score = enforce_production_gate(
-            score_pass0(parsed, fixture),
-            validate_pass0_extractions(
-                (parsed or {}).get("extractions", []),
-                source_text,
-            ),
-        )
+        try:
+            hydrated = hydrate_claims(parsed, source_text, meeting_date=fixture.get("meeting_date"))
+            errors = validate_pass0_extractions(hydrated, source_text, require_contract=True)
+        except ValueError as exc:
+            hydrated, errors = [], [str(exc)]
+        score = enforce_production_gate(score_pass0({"extractions": hydrated}, fixture), errors)
         rows.append(
             {
                 "doc": fname,
@@ -676,7 +676,7 @@ def summarize_pass2_gold(rows: list[dict]) -> dict:
 
 
 def run_pass3_frozen(cfg, ledger, on_progress=None) -> list[dict]:
-    cases = load_frozen_cases(FIXTURES / "p3_frozen.json")
+    cases = load_frozen_cases(FIXTURES / "p3_investigation_frozen.json")
     rows = []
     for case in cases:
         prompt = build_brief_generation_prompt(case["context"])

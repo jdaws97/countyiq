@@ -33,7 +33,6 @@ def _policy(*, status="green", acquisition=True, methods=None, due=None):
         True,
         True,
         False,
-        False,
         methods or ["arcgis_rest"],
         date.today(),
         due or date.today() + timedelta(days=30),
@@ -75,8 +74,8 @@ def test_downstream_use_is_enforced_separately():
     )
 
     require_source_use(authorization, "raw_retention")
-    with pytest.raises(RuntimeError, match="blocks person level display"):
-        require_source_use(authorization, "person_level_display")
+    with pytest.raises(RuntimeError, match="blocks raw export"):
+        require_source_use(authorization, "raw_export")
 
 
 @pytest.mark.parametrize(
@@ -213,7 +212,6 @@ def _municipality_policy(
         status != "paused",
         True,
         True,
-        False,
         False,
         ["official_document_direct"],
         ["https://example.gov"],

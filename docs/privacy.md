@@ -26,34 +26,30 @@ before the product is promoted broadly.
 - Source and model archives are operational artifacts, not API responses.
 - Raw-source proxy APIs, reconstructive bulk exports, and raw data resale are
   outside the product boundary.
-- Tax-claim rows are unavailable to natural-language row queries and
-  claimant-name fuzzy search is removed. Municipality-level aggregates remain.
-- Owner names can be supplied to ordinary search to locate matching parcels.
-  Fuzzy result cards return parcel identifiers, addresses, and municipalities
-  without repeating the matched owner name.
-- Distress, delinquent-owner, and assemblage route groups are not mounted unless
-  `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS=true`. The legacy standalone frontend
-  pages are no longer product routes; their bookmarks redirect to the
-  evidence-backed Feed or Radar. The API gate defaults to false and is a
-  deployment control, not a legal conclusion.
-- Ordinary parcel tax status omits claimant names and source-listed addresses;
-  owner-profile delinquency detail follows the same restricted gate.
-- Score APIs recursively remove prior-owner/applicant/claimant identity and
-  free-form validation prose from signal JSON whenever person-level display is
-  disabled. Numeric weights, safe physical/policy facts, and deterministic
-  reason labels remain available.
+- Owner names, prior owners, assessment mailing addresses, proceeding
+  applicants, and verified source excerpts are ordinary derived-product fields.
+  Migration 054 removes the former person-display switch; source distribution
+  still requires `derived_product_allowed`.
+- Exact tax-claim balances, years, claimant/source addresses, and owner-level
+  delinquency detail remain behind `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS=true`.
+  They are debt detail, not identity. Natural-language search cannot issue
+  tax-claim row queries or claimant-name fuzzy searches.
+- Public parcel and feed surfaces may show the presence or direction of a
+  delinquency change, but not exact balances or reconstructive counts. Routine
+  balance movement is suppressed unless it crosses the materiality threshold.
+- Legacy standalone distress pages are not product routes; their bookmarks
+  redirect to the evidence-backed Feed or Radar.
 
 ## Pre-Launch Access Gate
 
 Before broader customer distribution:
 
-1. Obtain an approved distribution/access decision before enabling the
-   default-off person-linked distress routes; do not use the flag as a
-   substitute for that decision.
+1. Keep exact debt detail default-off unless a separate distribution/access
+   decision approves it; public-record identity does not approve debt detail.
 2. Define export limits separately from ordinary page/API access.
 3. Configure and verify the final frontend origin if production is not
    same-origin.
-4. Review the final fields and derived rankings with qualified privacy and data
+4. Review final fields and derived rankings with qualified privacy and data
    counsel; public-record status alone is not the review standard.
 5. Define correction and source-attribution handling for challenged records.
 
@@ -80,7 +76,7 @@ in that typed plan and cannot be filtered by claimant name.
 
 - Keep only fields needed for an investor or developer job.
 - Do not add sensitive source classes merely because they are obtainable.
-- Prefer parcel- and project-level presentation over unnecessary person-level
-  dossiers.
+- Use person identity only where the ownership/contact job requires it; do not
+  turn public records into unrelated person dossiers.
 - Preserve source links and observed dates so derived claims can be audited.
 - Keep raw archives private and serve only normalized or derived product data.

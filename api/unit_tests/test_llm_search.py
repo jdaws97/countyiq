@@ -18,6 +18,8 @@ from api.routes import search as search_route
 def test_redirect_paths_match_the_frontend_watch_route():
     assert "/watch" in ALLOWED_REDIRECT_PATHS
     assert "/watchlist" not in ALLOWED_REDIRECT_PATHS
+    # Retired bookmarks must not be offered as intent targets.
+    assert not {"/licenses", "/projects", "/delinquent", "/distressed", "/assemblage"} & ALLOWED_REDIRECT_PATHS
     assert all(path in SYSTEM_PROMPT for path in ALLOWED_REDIRECT_PATHS)
 
 

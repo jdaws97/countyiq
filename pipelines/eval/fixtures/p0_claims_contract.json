@@ -1,0 +1,109 @@
+{
+  "label": "Synthetic passage-contract regression; never customer data",
+  "source_text": "SYNTHETIC TEST ONLY. Council approved a bond release for Willow Creek Meadows, SD-03-2026, at 123 North Main Street on July 20, 2026. This is a project milestone.\nAdministrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. \nBid opening: September 10, 2026. Condition: submit an inspection report.\nAdministrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. Administrative fixture padding. \nCompletion: November 30, 2026.\n",
+  "model_claims": {
+    "source_sha256": "67ebfaf1351b99f9ddd0274745a8f5e1d7c6bca7382d83c2dee0a21d5755f6b7",
+    "extractions": [
+      {
+        "extraction_type": "subdivision_review",
+        "project_name": "Willow Creek Meadows",
+        "what_happened": {
+          "text": "Council approved the project bond release.",
+          "passage_ids": [
+            "v1-1200-p0001"
+          ]
+        },
+        "applicant_name": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "conditions": [
+          {
+            "text": "Submit an inspection report.",
+            "passage_ids": [
+              "v1-1200-p0001"
+            ]
+          }
+        ],
+        "why_it_matters": null,
+        "what_happens_next": null,
+        "record_status": "decision",
+        "decision": {
+          "outcome": "approved",
+          "scope": "bond",
+          "authority": "Council",
+          "passage_ids": [
+            "v1-1200-p0001"
+          ],
+          "action_text": "SYNTHETIC TEST ONLY. Council approved a bond release for Willow Creek Meadows, SD-03-2026, at 123 North Main Street on July 20, 2026. This is a project milestone."
+        },
+        "event_date": {
+          "text": "July 20, 2026",
+          "passage_ids": [
+            "v1-1200-p0001"
+          ]
+        },
+        "milestones": [
+          {
+            "kind": "bid_opening",
+            "text": "September 10, 2026",
+            "passage_ids": [
+              "v1-1200-p0001"
+            ]
+          },
+          {
+            "kind": "completion",
+            "text": "November 30, 2026",
+            "passage_ids": [
+              "v1-1200-p0002"
+            ]
+          }
+        ],
+        "application_ids": [
+          {
+            "text": "SD-03-2026",
+            "passage_ids": [
+              "v1-1200-p0001"
+            ]
+          }
+        ],
+        "project_reference": {
+          "text": "Willow Creek Meadows",
+          "passage_ids": [
+            "v1-1200-p0001"
+          ]
+        },
+        "parcel_references": [
+          {
+            "text": "123 North Main Street",
+            "passage_ids": [
+              "v1-1200-p0001"
+            ]
+          }
+        ],
+        "related_entities": [],
+        "identity_conflicts": [],
+        "relevance": {
+          "category": "public_works",
+          "scope": "project_milestone",
+          "basis": {
+            "text": "A bond release for an existing project.",
+            "passage_ids": [
+              "v1-1200-p0001"
+            ]
+          },
+          "source_text": "SYNTHETIC TEST ONLY. Council approved a bond release for Willow Creek Meadows, SD-03-2026, at 123 North Main Street on July 20, 2026. This is a project milestone."
+        },
+        "confidence": "high"
+      }
+    ]
+  },
+  "expected": {
+    "decision_scope": "bond",
+    "discovery_eligible": false,
+    "event_date": "2026-07-20",
+    "milestone_dates": [
+      "2026-09-10",
+      "2026-11-30"
+    ]
+  }
+}

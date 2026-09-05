@@ -3,6 +3,10 @@
 from fastapi import APIRouter, HTTPException
 
 from api.lib.database import get_cursor
+from api.lib.municipality_names import (
+    muni_name_to_pattern,
+    municipality_event_patterns,
+)
 from api.lib.response_types import MunicipalityProfileResponse, MunicipalitySummary
 from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import open_data_source_key
@@ -11,22 +15,6 @@ from api.lib.source_policy import require_source_use, source_use_allowed
 PIPELINE_WINDOW_DAYS = 365
 
 router = APIRouter(tags=["municipalities"])
-
-
-def _muni_name_to_pattern(name: str) -> str:
-    """Convert municipality short name to a LIKE pattern matching tax districts.
-
-    'CARROLL TWP'  → 'CARROLL TOWNSHIP%'
-    'YORK CITY'    → 'YORK CITY%'
-    'DELTA BORO'   → 'DELTA BOROUGH%'
-    'YORKANA BORO' → 'YORKANA BOROUGH%'
-    """
-    upper = name.upper()
-    if upper.endswith(" TWP"):
-        return name[:-4] + " TOWNSHIP%"
-    if upper.endswith(" BORO"):
-        return name[:-5] + " BOROUGH%"
-    return name + "%"
 
 
 def _fetch_municipality_stats(cur, municipality_name: str) -> dict:
@@ -71,23 +59,6 @@ def _fetch_municipality_delinquency(cur, district_pattern: str) -> dict:
     }
 
 
-def _municipality_event_patterns(name: str) -> list[str]:
-    """LIKE patterns that match both the short county spelling and the long one.
-
-    Intelligence events carry the municipality derived from the public body's
-    name ("Carroll Twp", "Delta Borough"), while the parcel file says
-    "CARROLL TWP" / "DELTA BORO". Match either spelling.
-    """
-    base = name.strip()
-    patterns = {base + "%", _muni_name_to_pattern(base)}
-    upper = base.upper()
-    if upper.endswith(" TOWNSHIP"):
-        patterns.add(base[:-9] + " TWP%")
-    if upper.endswith(" BOROUGH"):
-        patterns.add(base[:-8] + " BORO%")
-    return sorted(patterns)
-
-
 def _fetch_development_pipeline(cur, municipality_name: str) -> dict | None:
     """Planning-pipeline summary from the deterministic event table.
 
@@ -96,7 +67,7 @@ def _fetch_development_pipeline(cur, municipality_name: str) -> dict | None:
     """
     if not source_use_allowed(cur, "public_proceedings", "derived_product"):
         return None
-    patterns = _municipality_event_patterns(municipality_name)
+    patterns = municipality_event_patterns(municipality_name)
     cur.execute(
         """
         SELECT event_type, COUNT(*) AS count
@@ -150,12 +121,22 @@ def _fetch_development_pipeline(cur, municipality_name: str) -> dict | None:
         "COALESCE(event_date, detected_at::date) DESC, detected_at DESC, event_key",
         12,
     )
+    # Municipality-wide decisions (ordinance amendments, comprehensive plan
+    # actions, sewer capacity, moratoria) answer "what is this township up
+    # to" more directly than any single applicant's matter.
+    policy = _matters(
+        "event_tags && ARRAY['policy_action']::text[] "
+        "AND COALESCE(event_date, detected_at::date) >= CURRENT_DATE - %(window)s",
+        "COALESCE(event_date, detected_at::date) DESC, detected_at DESC, event_key",
+        8,
+    )
     return {
         "window_days": PIPELINE_WINDOW_DAYS,
         "total_matters": sum(int(row["count"]) for row in by_type),
         "by_event_type": by_type,
         "upcoming": upcoming,
         "recent": recent,
+        "policy": policy,
     }
 
 
@@ -239,7 +220,7 @@ def list_municipalities() -> list[MunicipalitySummary]:
 
     results = []
     for muni in munis:
-        pattern = _muni_name_to_pattern(muni["name"])
+        pattern = muni_name_to_pattern(muni["name"])
         base = pattern.rstrip("%").upper()
         delinquent_parcels = 0
         total_delinquent = 0.0
@@ -277,7 +258,7 @@ def get_municipality(name: str) -> MunicipalityProfileResponse:
         if not muni:
             raise HTTPException(status_code=404, detail=f"Municipality not found: {name}")
 
-        pattern = _muni_name_to_pattern(muni["name"])
+        pattern = muni_name_to_pattern(muni["name"])
         stats = _fetch_municipality_stats(cur, muni["name"])
         delinquency = _fetch_municipality_delinquency(cur, pattern)
         licenses = _fetch_municipality_licenses(cur, muni["name"], limit=50)

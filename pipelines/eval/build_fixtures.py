@@ -23,7 +23,7 @@ import psycopg2
 import psycopg2.extras
 
 from countyiq.lib.pass2_batched_validation import gather_parcel_batch_context
-from eval.fixture_io import canonical_context_hash
+from eval.fixture_io import canonical_context_hash, load_frozen_cases
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -198,6 +198,10 @@ def _deidentify_context(raw: dict, case_id: str) -> dict:
     if entity.get("found"):
         entity["canonical_name"] = target_owner
         entity["linked_names"] = [target_owner]
+    if context.get("owner_name_variants"):
+        context["owner_name_variants"] = list(
+            dict.fromkeys(alias_owner(name) for name in context["owner_name_variants"])
+        )
 
     for index, neighbor in enumerate(context.get("neighbors") or [], 1):
         neighbor["pidn"] = f"{target_pidn}N{index:02d}"
@@ -308,7 +312,15 @@ def main() -> None:
         action="store_true",
         help="Validate that regenerated fixtures match committed files.",
     )
+    parser.add_argument("--refresh-live", action="store_true", help="Refresh live selectors only; never rewrite frozen gold")
     args = parser.parse_args()
+    if args.check:
+        for name in ("p1_frozen.json", "p2_frozen.json", "p3_frozen.json", "p3_investigation_frozen.json", "p2_expanded_frozen.json", "p2_expanded_stability20.json", "feature_cases.json"):
+            load_frozen_cases(FIXTURES / name)
+        print("Frozen context hashes valid; live drift is checked separately.")
+        return
+    if not args.refresh_live:
+        parser.error("Use --check or --refresh-live. Frozen gold changes require explicit source and label review.")
 
     labels = _load_labels()
     conn = _db()
@@ -345,54 +357,20 @@ def main() -> None:
     cur.close()
     conn.close()
 
-    pass2_payload = {
-        "version": 1,
-        "reviewed_at": "2026-08-30",
-        "selection": "one md5-stable parcel for every exact two-signal combination",
-        "deidentification": (
-            "Direct parcel, owner, address, neighbor, prior-owner, corporate, and "
-            "applicant identifiers replaced with realistic stable aliases; ownership "
-            "relationships and decision-relevant entity types, numeric facts, and "
-            "source evidence retained."
-        ),
-        "cases": pass2_cases,
-    }
+    from datetime import datetime, timezone
     shadow_payload = {
         "version": 1,
-        "refreshed_at": "2026-08-30",
+        "refreshed_at": datetime.now(timezone.utc).isoformat(),
         "selection": "one md5-stable live parcel for every exact two-signal combination",
         "cases": shadow_rows,
     }
-    pass3_payload = {
-        "version": 1,
-        "reviewed_at": "2026-08-30",
-        "derivation": "production Pass 3 contexts built from reviewed frozen Pass 2 cases",
-        "cases": _build_pass3_cases(pass2_cases),
-    }
-    pass1_payload = {
-        "version": 1,
-        "reviewed_at": "2026-08-30",
-        "derivation": "de-identified production-shaped entity-resolution contexts",
-        "cases": _build_pass1_cases(),
-    }
-
     outputs = {
-        FIXTURES / "p1_frozen.json": json.dumps(pass1_payload, indent=2) + "\n",
-        FIXTURES / "p2_frozen.json": json.dumps(pass2_payload, indent=2) + "\n",
         FIXTURES / "p2_live_shadow.json": json.dumps(shadow_payload, indent=2) + "\n",
         FIXTURES / "p2_pidns.txt": "".join(f"{row['pidn']}\n" for row in shadow_rows),
-        FIXTURES / "p3_frozen.json": json.dumps(pass3_payload, indent=2) + "\n",
     }
-    stale = []
     for path, content in outputs.items():
-        if args.check:
-            if not path.exists() or path.read_text() != content:
-                stale.append(str(path))
-        else:
-            path.write_text(content)
-            print(f"Wrote {path}")
-    if stale:
-        raise SystemExit("Stale generated fixtures: " + ", ".join(stale))
+        path.write_text(content)
+        print(f"Wrote {path}")
 
 
 if __name__ == "__main__":

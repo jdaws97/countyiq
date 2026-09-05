@@ -51,15 +51,15 @@ Malformed examples (rejected):
 
 
 PASS3_FIELD_CONTRACT = """FIELD CONTRACT (restates the enforced schema; every value must be one of the listed options):
-- recommendation: pursue_now | watchlist | pass
-- urgency: urgent_30d | near_term_90d | long_term_12mo | none; a pass recommendation requires none, and pursue_now cannot use none
+- recommendation: investigate | watch | insufficient_evidence
+- urgency: none; dated milestones are presented separately from this brief
 - top_signal_key: one validated signal_key from the input, or null; when present it must also appear in citations
 - top_risk: one cited sentence
 - evidence_strength: strong | moderate | weak
 - confidence: a number from 0.0 to 1.0
-- assessment: strong_opportunity | emerging | speculative | constrained | not_actionable; pursue_now pairs only with strong_opportunity or emerging, watchlist with emerging, speculative, or constrained, and pass with constrained or not_actionable
+- assessment: strong_opportunity | emerging | speculative | constrained | not_actionable; this describes evidence, not investment merit
 - assessment_reasoning: one to two cited sentences
-- brief: two to four cited paragraphs consistent with the structured fields
+- brief: one to two short cited paragraphs consistent with the structured fields
 - key_questions: a list of short strings
 - citations: the exact list of signal keys cited in the prose, without duplicates"""
 
@@ -68,12 +68,12 @@ PASS3B_FIELD_CONTRACT = """FIELD CONTRACT (restates the enforced schema; every v
 - portfolio_strategy: accumulator | flipper | holder | distressed | institutional | unclear
 - concentration_notes: one cited sentence
 - key_pattern: one to two cited sentences
-- recommendation: pursue_acquisition | monitor | compete | none; monitor is allowed only with weak evidence_strength, and none requires urgency none
-- urgency: urgent_30d | near_term_90d | long_term_12mo | none
+- recommendation: investigate | watch | insufficient_evidence; watching is valid at any evidence strength
+- urgency: none
 - top_risk: one cited sentence
 - evidence_strength: strong | moderate | weak
 - confidence: a number from 0.0 to 1.0
-- narrative: three to five cited paragraphs consistent with the structured fields
+- narrative: one to two short cited paragraphs consistent with the structured fields
 - citations: the exact list of signal keys cited in the prose, without duplicates
 - parcel_citations: the exact list of PIDNs cited in the prose, without duplicates"""
 
@@ -85,6 +85,7 @@ PASS0_DEFINITIONS = """EXTRACTION TYPE DEFINITIONS:
 - conditional_use: a use permitted with conditions by the governing body (supervisors, council, commissioners) after a hearing.
 - subdivision_review: review of a subdivision or land development plan (sketch, preliminary, or final) by a planning commission or governing body.
 - development_proposal: a project discussed or presented without a formal application matter on the agenda.
+- ordinance_action: a municipality-wide policy decision rather than one applicant's matter: a zoning ordinance text or map amendment, comprehensive plan adoption or update, official map change, Act 537 or sewer/water capacity decision, development moratorium, or a LERTA/KOZ/TIF designation.
 
 EVENT TAG DEFINITIONS (include every tag the document supports):
 - application: the matter was filed, submitted, or introduced.

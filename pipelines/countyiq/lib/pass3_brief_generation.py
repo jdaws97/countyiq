@@ -19,11 +19,9 @@ import json
 
 from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.intelligence_common import (
-    ENTITY_GRAPH_QUERY,
-    PARCEL_QUERY,
-    PORTFOLIO_QUERY,
     format_entity_context,
     format_parcel_context,
+    strip_volatile_evidence,
 )
 from countyiq.lib.pass2_signal_validation import SERVING_VALIDATION_STATUSES
 from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, PASS3_FIELD_CONTRACT
@@ -49,9 +47,10 @@ BRIEF_QUALIFYING_SIGNIFICANCE = {"high", "medium"}
 
 # Static instruction block. Sent as a byte-identical system message on every
 # brief call so providers with implicit prompt caching can reuse it.
-_P3_SYSTEM_TEMPLATE = """You are a county intelligence analyst writing a development brief for a parcel in {county_context}. A real-estate investor will read this brief and decide whether to pursue, watchlist, or pass on the parcel.
+_P3_SYSTEM_TEMPLATE = """You are a county intelligence analyst writing a development brief for a parcel in {county_context}. A customer will use this brief to investigate records, watch later changes, or identify insufficient evidence.
 
 CONSTRAINTS:
+0. Set urgency to none; the product presents sourced deadlines separately. Do not infer seller motivation, willingness to sell, beneficial ownership, financing, or development intent. Investigate means verify evidence, not acquire the property. State material evidence gaps.
 1. assessment_reasoning, top_risk, and brief MUST cite their source signals
    using the format [Signal: signal_key]; end each factual sentence with its
    marker. Copy only signal keys listed under VALIDATED SIGNALS, and list
@@ -59,20 +58,26 @@ CONSTRAINTS:
 2. Do not invent market values, price projections, cap rates, or any numbers not present in the data above.
 3. Do not provide legal or financial advice.
 4. If signals conflict (opportunity vs constraint), you MUST acknowledge the tension explicitly.
-5. The narrative MUST be consistent with the structured fields below — if recommendation="pass", the brief cannot read like an opportunity pitch.
+5. The narrative MUST be consistent with the structured fields below — no recommendation may read like an acquisition pitch.
+
+RECOMMENDATION:
+- investigate: a specific documented activity tied to this property warrants a concrete follow-up, such as checking the scope or decision of an owner-matched active plan. Name that record and the unresolved question. A generic suggestion to check deeds, zoning, or missing information does not qualify by itself.
+- watch: a documented change merits monitoring, but there is no corroborated project activity or other specific record requiring follow-up now. A sale's size, price-to-assessment ratio, or institutional buyer alone is not enough to recommend investigation.
+- insufficient_evidence: the case rests on static screening heuristics, proximity, fragmented neighboring ownership, or uncertain future land use without a documented activity. Evidence may be sufficient to describe the property but insufficient to identify a development lead.
+Choose the action from the evidence, not from the fact that a brief was requested. A medium or high signal label does not automatically justify investigation. Preserve the material amounts, dates, counts, and parcel relationships that explain the decision.
 
 OUTPUT FORMAT — return ONE valid JSON object. Emit fields in this exact order and commit to a single value for each:
 
 {{
-  "recommendation": "pursue_now" | "watchlist" | "pass",
-  "urgency": "urgent_30d" | "near_term_90d" | "long_term_12mo" | "none",
+  "recommendation": "investigate" | "watch" | "insufficient_evidence",
+  "urgency": "none",
   "top_signal_key": "<the single most load-bearing signal_key, or null>",
   "top_risk": "<one cited sentence describing the biggest risk>",
   "evidence_strength": "strong" | "moderate" | "weak",
   "confidence": <float in [0.0, 1.0] — how sure you are the recommendation is correct given only the signals>,
   "assessment": "strong_opportunity" | "emerging" | "speculative" | "constrained" | "not_actionable",
   "assessment_reasoning": "1-2 sentences, MUST cite at least one signal as [Signal: key]",
-  "brief": "2-4 paragraph narrative tying the structured fields together. MUST cite signals as [Signal: key] and MUST stay consistent with recommendation, urgency, and confidence.",
+  "brief": "1-2 short paragraph investigation summary tying the structured fields together. MUST cite signals as [Signal: key] and MUST stay consistent with recommendation, urgency, and confidence.",
   "key_questions": ["question 1", "question 2", "question 3"],
   "citations": ["signal_key_1", "signal_key_2"]
 }}
@@ -281,64 +286,28 @@ def gather_brief_context(cursor, pidn: str) -> dict:
     """
     params = {"pidn": pidn}
 
-    # Parcel context
-    cursor.execute(PARCEL_QUERY, params)
-    parcel_row = cursor.fetchone()
-    parcel = format_parcel_context(dict(parcel_row)) if parcel_row else {
-        "pidn": pidn, "owner": "", "address": "", "assessed_value": 0,
-        "acres": 0, "property_class": "", "sale_date": "", "sale_price": 0,
-        "previous_owner": "", "municipality": "", "school_district": "",
-        "source_url": "",
-    }
-
-    # Entity graph
-    owner_name = parcel.get("owner", "")
-    cursor.execute(ENTITY_GRAPH_QUERY, {"name": owner_name})
-    entity_row = cursor.fetchone()
-    entity = format_entity_context(dict(entity_row) if entity_row else None)
-
-    # Portfolio stats — all parcels owned by linked names
-    linked_names = [owner_name]
-    if entity.get("found"):
-        linked_names.extend(entity.get("linked_names", []))
-    linked_names = list(set(n for n in linked_names if n))
-
-    cursor.execute(PORTFOLIO_QUERY, {"names": linked_names})
-    portfolio_rows = cursor.fetchall()
-
-    portfolio_count = len(portfolio_rows)
-    portfolio_value = sum(
-        (dict(r).get("aprtotal") or 0) for r in portfolio_rows
-    )
-
-    # Portfolio delinquency — sum of tax claims across portfolio
-    portfolio_pidns = [dict(r).get("pidn") for r in portfolio_rows]
-    portfolio_delinquency = 0
-    if portfolio_pidns:
-        cursor.execute(
-            """
-            SELECT COALESCE(SUM(total), 0) AS total_owed
-            FROM staging.tax_claims
-            WHERE pidn = ANY(%(pidns)s)
-              AND valid_to IS NULL
-            """,
-            {"pidns": portfolio_pidns},
+    # One database-owned definition is used by generation and serving checks.
+    # The caller holds a read snapshot through this and the signal query.
+    cursor.execute("""
+        WITH source AS MATERIALIZED (
+            SELECT meta.parcel_brief_sources(%(pidn)s) AS facts
         )
-        delinquency_row = cursor.fetchone()
-        if delinquency_row:
-            portfolio_delinquency = dict(delinquency_row).get("total_owed", 0) or 0
-
-    portfolio = {
-        "portfolio_count": portfolio_count,
-        "portfolio_value": portfolio_value,
-        "portfolio_delinquency": portfolio_delinquency,
-    }
+        SELECT facts,
+               encode(sha256(convert_to(facts::text,'UTF8')),'hex') AS fingerprint
+        FROM source
+    """, params)
+    source = dict(cursor.fetchone())
+    facts = source["facts"]
+    parcel = format_parcel_context(facts.get("parcel") or {"pidn": pidn})
+    entity = format_entity_context(facts.get("entity"))
+    portfolio = facts["portfolio"]
 
     # Validated signals from public.evidence
     cursor.execute(
         """
         SELECT
             signal_key,
+            active_inference_id,
             validation_status,
             adjusted_significance,
             validation_reasoning,
@@ -374,7 +343,7 @@ def gather_brief_context(cursor, pidn: str) -> dict:
                 evidence_data = {}
         key_facts = [
             f"{key}={value}"
-            for key, value in sorted(evidence_data.items())
+            for key, value in sorted(strip_volatile_evidence(evidence_data).items())
             if value is not None
         ] if isinstance(evidence_data, dict) else []
 
@@ -390,6 +359,7 @@ def gather_brief_context(cursor, pidn: str) -> dict:
 
         validated_signals.append({
             "signal_key": r.get("signal_key", ""),
+            "active_inference_id": r.get("active_inference_id"),
             "validation_status": r.get("validation_status", ""),
             "adjusted_significance": r.get("adjusted_significance", ""),
             "reasoning": r.get("validation_reasoning", ""),
@@ -405,12 +375,13 @@ def gather_brief_context(cursor, pidn: str) -> dict:
         "entity": entity,
         "portfolio": portfolio,
         "validated_signals": validated_signals,
+        "source_fingerprint": source["fingerprint"],
     }
 
 
 # Structured-first contract — see the LLM decision in docs/decisions.md.
 # These sets clamp free-form LLM output to known vocabulary.
-VALID_RECOMMENDATIONS = {"pursue_now", "watchlist", "pass"}
+VALID_RECOMMENDATIONS = {"investigate", "watch", "insufficient_evidence"}
 VALID_URGENCY         = {"urgent_30d", "near_term_90d", "long_term_12mo", "none"}
 VALID_EVIDENCE        = {"strong", "moderate", "weak"}
 

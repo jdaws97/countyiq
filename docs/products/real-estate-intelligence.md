@@ -1,159 +1,121 @@
-# Real Estate Intelligence (Product Direction)
+# CountyIQ product direction
 
-This is the active product lane for CountyIQ. It names the buyer, the jobs the product does, what we will and won't build, and how existing assets map to revenue.
+Updated September 5, 2026. This is the launch hypothesis, not evidence of
+customer demand or willingness to pay.
 
-## Lane
+## The first customer and job
 
-CountyIQ is a **county-grade real-estate intelligence platform for private-market investors and developers operating in South-Central PA**, starting in York County. The code and deployment contract are county-configurable now; an adjacent county is activated only after its source rights, coverage, and a real user need are verified.
+Start with small land developers and acquisition teams working in York County,
+Pennsylvania. They need to follow proposals and municipal decisions across
+separate websites, understand which property a record concerns, and return when
+something changes. Local investors and brokers can use the same workflow;
+they do not need separate products or pricing tiers at launch.
 
-We are **not** building:
-- a consumer real-estate search portal (Zillow / Redfin),
-- a national parcel-data reseller (ATTOM / CoreLogic / Regrid),
-- a civic-journalism platform,
-- a government/planning-department licensed tool,
-- a title or legal workflow product.
+**Promise:** Follow local development. See the evidence.
 
-Those are adjacent and tempting. They are not this product. Adjacent opportunities surface in the roadmap only after the core lane is validated.
+The customer should be able to answer: What is happening here, what record
+supports it, and what should I keep watching? A search, an owner profile, a map,
+and an interpreted brief support that job. None is a separate product.
 
-## Target Buyers
+## The complete customer path
 
-Two primary personas, one secondary.
+1. The public landing page explains the York County scope and offers a pilot
+   inquiry. Invited customers sign in at `app.countyiq.net`.
+2. Start with a known address or municipality. A new workspace offers search
+   immediately; returning customers see saved work and recent investigations.
+3. Open a property. Lead with meaningful development signals, then assessment,
+   recorded transfers, ownership links and source evidence. Assessed value is
+   labeled explicitly; a recorded sale amount is not a market valuation.
+4. Use the map to understand the property and its surroundings. Fit the full
+   selected parcel, show a clear legend, and load optional reference layers on
+   demand. Missing footprints are a vacancy screen, not verified current use.
+5. Read the original record. Distinguish applications, recommendations,
+   procedural changes and completed decisions. Proximity does not prove that
+   a proposal includes a parcel; shared names do not prove common ownership.
+6. Watch the property, project, organization or municipality. Verified accounts
+   save work across devices. Newly matched events appear in the persistent
+   inbox after source refresh. Browser alerts require opt-in and an open app;
+   background push and email alerts are not offered.
 
-### P1 — Active local investor (primary)
-Buy-and-hold, flip, and small-portfolio landlords working within 60 miles of York. Typical profile: 5–200 parcels under management; spends an hour a day scanning tax-sale lists, Facebook investor groups, MLS alerts. Wants to be the first to know when a target property goes distressed, changes hands, or comes up for a zoning hearing.
+An empty activity feed must explain publication/coverage limits and offer a
+useful next step. It must not imply that no development occurred in the county.
+A customer must still find value through property search, source records and
+the deterministic radar while municipal publication is limited.
 
-**Willingness to pay:** $50–$150 / month for the signal. Much higher if it closes one deal.
+## What the scores and briefs mean
 
-**Jobs to be done:**
-- "Tell me when a parcel I care about changes — sale, delinquency, zoning, proceeding."
-- "Who really owns this LLC, and what else do they own in the county?"
-- "Find me off-market distressed property matching these criteria."
-- "Is this municipality trending toward or away from development approvals?"
+Radar ranks a shortlist using documented signals. It does not establish that a
+property is available, that an owner wants to sell, or that development is
+permitted. Opportunity, momentum and site scores remain distinct and their
+supporting facts stay accessible.
 
-### P2 — Small-to-mid local developer (primary)
-Builders, land developers, site-selection consultants doing 3–30 projects a year. Wants to track corridor activity, pending subdivisions, and zoning hearings across municipalities.
+Briefs give one of three actions: investigate a specific documented activity,
+watch a change that lacks corroborating project activity, or identify
+insufficient evidence for a development lead. Generic advice to look up deeds
+or zoning is not enough to recommend investigation. Briefs do not infer urgency;
+source-backed dates are displayed separately.
 
-**Willingness to pay:** $200–$500 / month for multi-seat team access.
+Generated interpretation is optional to the customer workflow. Reading the
+product makes no model calls. Pass 4 county narratives, unrestricted AI search,
+judges and escalation stay disabled until there is a demonstrated need and a
+separate evaluation.
 
-**Jobs to be done:**
-- "What's moving through the planning pipeline in Municipality X this quarter?"
-- "Show me every parcel in this growth corridor with an active plan, sale, or hearing."
-- "Who is the competing developer in this area — what's their portfolio?"
+## Pilot and sale
 
-### P3 — Commercial broker / analyst (secondary)
-Sourcing deals and pitches. Wants portfolio views of owners and corridor narratives for client memos. Secondary because they close fewer deals and price-compare against free/cheap national data.
+Offer one guided York County pilot. Ask each tester to bring a real property or
+municipality they currently research. Help them reach the original evidence
+and save their first watch in that session. Review the next source refresh with
+them to learn whether the saved work brings them back.
 
-## The Product Thesis
+The first price hypothesis is **$79 per month per customer**, including the
+existing York County workspace. Do not publish a price, build billing, or
+invent feature tiers before actual pilot conversations establish value. No
+interviews, paying customers or revenue are claimed by this plan.
 
-**The moat is not data — it's synthesis.** Parcels, assessments, tax claims, licenses, sheriff sales, deeds, and incorporations are all public. Regrid and ATTOM already sell the raw layers nationally. CountyIQ's defensible position is that it:
+Acceptance for a useful pilot:
 
-1. **Links entities across sources** — the same LLC in PA DOS, the same person as grantee on a deed and applicant in a variance hearing.
-2. **Extracts structured records from unstructured PDFs** — every ZHB, Planning Commission, and Board of Supervisors meeting minute in every York County municipality, converted into queryable proceeding records.
-3. **Builds evidence-backed case files** — changes, parcels, projects, entities, relationships, and a grounded next step in one investigation path.
-4. **Surfaces changes on watched records** — the investor's retention loop.
-   "A parcel on your watchlist changed in the latest weekly refresh."
+- The tester finds a relevant record and understands its property relationship.
+- They can distinguish a recorded fact from an interpretation and open its source.
+- They save an investigation and can find it again after signing in elsewhere.
+- A later matching change is useful enough to bring them back.
+- They can explain what CountyIQ replaces in their current workflow and whether
+  they would pay for it.
 
-None of this is easy to replicate at the county level. Everyone has the parcels. Nobody has the synthesis.
+Use direct, individually authorized conversations with local builders,
+land-development professionals and brokers. Prepare outreach and a short demo;
+do not send messages or represent fabricated customer results. Measure observed
+behavior and interview notes before adding analytics infrastructure.
 
-## Surfaces (What The Product Is, Concretely)
+`hello@countyiq.net` is the intended pilot contact. Publish it only after the
+mailbox is configured and delivery is verified. Cloudflare domain registration
+alone does not create that mailbox.
 
-Each surface maps to one or more pipeline outputs. These statuses describe the
-local alpha codebase; they do not imply that CountyIQ is deployed.
+## Scope discipline
 
-| Surface | Pipeline source | Status |
-|---|---|---|
-| Property page (`/property/:pidn`) | parcels, tax_claims, flood, structures, Pass 2 evidence, Pass 3 brief | Implemented locally, including cross-signal insight, linked proceedings, and numbered source receipts. |
-| Owner page (`/owner/:id`) | stable `public.owners` identity + licenses + portfolio | Compatibility route; uses the same identity and verification-receipt contract as entity case files. |
-| Entity case file (`/entity/:id`) | stable `public.owners` identity with Pass 1 aliases, relationships, verification, events, portfolio, and cached brief | Implemented with source-record verification receipts and resolvable inline citations. |
-| Project case file (`/project/:key`) | source-backed event timeline with connected entities, parcels, municipalities, and local watch action | Implemented alpha; notifications and server persistence remain later work. |
-| Development radar (`/radar`) | `public.development_momentum` + `public.development_momentum_history` | Implemented locally; score version 7 is deterministic, back-tested against historical plan filings, and keeps weekly history for the Movers view. |
-| Municipality page (`/municipalities/:name`) | `public.intelligence_events`, `public.development_momentum` | Implemented locally: planning pipeline, top opportunity parcels, recent feed, tax aggregates. Answers the P2 job "what is moving through planning in Municipality X". |
-| Distress changes | tax claims + sheriff sales composite | Served as evidence-backed Feed events; the legacy standalone `/distressed` browser redirects to `/feed`. |
-| Intelligence feed (`/feed`) | deterministic parcel/tax events + cached Pass 0 development extraction | Unified event cards with evidence receipts, original/internal links, relationships, event tags, and next actions are implemented. |
-| Watchlist (`/watch`) | browser-local entity, project, and parcel watches + `/api/feed` filters | MVP live; server-side persistence and notifications are not built. |
+Ship one county and one investigation workflow. Team administration, CRM
+integrations, public API plans, mobile apps, MLS listings, national expansion,
+lead lists and beneficial-owner identification are outside this launch.
+Use the existing workspace, watches, comparison and source receipts. Add a
+feature only when an observed customer task cannot be completed with those.
 
-## Entity Profile Contract
+## Release evidence
 
-The entity case file uses `public.owners` as the single stable identity space.
-Pass 1's `public.entity_graph` output is folded into these rows by owner
-resolution rather than exposed as a competing ID system:
+Implementation and production readiness are tracked separately in
+[the launch record](../operations/production-launch-2026-09-05.md).
+The [LLM release gate](../operations/llm-product-release.md) and
+[canary runbook](../operations/intelligence-rollout.md) govern publication.
+The user must approve the full backfill after the final reviewed canaries;
+this product direction does not authorize it.
 
-- `GET /api/entities/:id` and `GET /api/owners/:id` resolve the same stable ID.
-- `/entity/:id` presents verification context, resolvable relationships, linked
-  intelligence, cached portfolio synthesis, and parcel portfolio.
-- Feed cards link recognized names to the case file; unresolved names remain
-  explicitly labeled instead of being force-merged.
+## Municipal discovery scope
 
-## Monetization (Directional, Not Committed)
-
-The product must validate desire before pricing. Current hypothesis:
-
-- **Free tier:** search, property pages, county feed, and a small local watchlist.
-- **Investor ($79/mo):** server-backed watchlists, refresh-to-refresh change
-  flags, and full entity portfolios.
-- **Pro ($249/mo):** team seats, CSV export, API access, saved searches, corridor-scan subscriptions.
-
-Price discovery happens via manual outreach to ~10 local investors before any paywall ships. We are not putting paywalls on the site until we have conversations.
-
-## Current Non-Goals
-
-- Simultaneously loading multiple counties into the current county-local schema.
-  County manifests and one-stack-per-county deployment are supported; see
-  `docs/operations/county-onboarding.md`.
-- Mobile app.
-- Native map drawing tools beyond what MapLibre provides.
-- MLS integration.
-- Integrations with CRMs (Salesforce, HubSpot, etc.).
-- AI chatbot / unrestricted "ask a question" interface. Case files are the synthesis surface; chat is not.
-
-## Immediate Delivery Sequence
-
-This is ordered by what can produce a trustworthy product trial now, not by a
-calendar estimate.
-
-- Surface **cross-signal insight** (from `meta.intelligence_passes.cross_signal_insight`) on property page. **Built in this pass.**
-- Surface **linked proceedings** (zoning hearings, subdivision applications) on property page. **Built in this pass.**
-- Build the **unified intelligence feed** over deterministic parcel/tax changes
-  and cached Pass 0 municipal extraction. **Implemented; live migration,
-  backfill, and product QA remain.**
-- Let users **watch projects and parcels** directly from evidence-backed event
-  cards. **Browser-local MVP implemented.**
-- Build the **entity case file** (`/entity/:id`) on the stable owner identity,
-  link it from events, and support entity watches. **Implemented and browser-tested.**
-
-### After observed user demand
-
-Build these only after product trials show that users return to watched records.
-
-- Clerk auth, role = `investor` / `developer` / `admin`.
-- `public.watchlists` + `public.watchlist_items` (parcel, entity, municipality, corridor).
-- Event log (`public.watchlist_events`) — Dagster sensor fires one row per change that matters to anyone's watchlist.
-- Upgrade the existing `/watch` UI to server persistence.
-
-### Distribution and price discovery
-- 10 investor interviews (target list: York Builders Association, PA REIA chapter).
-- One-page landing at the root with "what you get" + form.
-- Paid pilot with 3 investors at $79/mo; no billing infra, invoice by hand.
-- Instrument usage: which pages viewed, which briefs read, which watchlist items fire.
-- Decide Phase D on revenue signal.
-
-## Open Strategic Questions
-
-Worth naming so we don't rediscover them in 60 days.
-
-1. **Assessment data:** the scraper is live on the weekly schedule even though
-   commercial-use terms remain ambiguous. Decide whether to accept that risk,
-   disable it, or replace it with licensed data.
-2. **Multi-seat pricing:** developers want team access; investors want cheap. Two SKUs or one?
-3. **Data-broker exposure:** selling investor-targeted signals against public data on people (tax delinquency at a known address) has reputational risk. The Phase 2 auth gate + audit log in `docs/privacy.md` is the mitigating control. Not sufficient for a "find distressed owners" mailing-list product — which we're not building.
-4. **County #2 selection:** which adjacent county has both observed user demand
-   and a source/rights profile that clears the onboarding gates?
-
-## Working Principles
-
-- **No feature ships without a mapped buyer job.** Every surface answers a specific question P1 or P2 asks. If it doesn't, it's a portfolio project, not this product.
-- **Retention first, acquisition second.** The alert loop is worth more than the landing page.
-- **Evidence-backed case UI.** Lead with current changes, connected subjects,
-  and the original record. Cached Pass 3 synthesis supports the case; Pass 4 is
-  off by default.
-- **Evidence, not magic.** Every claim in a brief or narrative cites its source. If users can't click through, they won't trust it.
+A specifically identified land development plan is useful even when an agenda
+omits the proposed use or building size. Classify it as `plan_review` and preserve
+that uncertainty; do not infer construction, units or an approval. Generic plan
+headings, bond-only history, extensions and minor property adjustments remain
+context. Identified capital upgrades and their bidding stages are discoverable
+with the actual procedural scope visible. These are source-backed reasons to
+investigate, not forecasts. This replaces the earlier requirement that every
+discoverable plan state a physical construction scope. The JSON evidence contract
+adds one relevance scope; no table migration is needed. Existing outputs retain
+their original release identity and are not silently republished.

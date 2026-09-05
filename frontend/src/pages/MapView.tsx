@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { Map } from 'react-map-gl/maplibre'
+import { Map, NavigationControl } from 'react-map-gl/maplibre'
 import { DeckGL } from '@deck.gl/react'
 import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { PickingInfo, MapViewState } from '@deck.gl/core'
 import type { Feature, Geometry } from 'geojson'
 import Nav from '../components/Nav'
 import LayerToggle, { type LayerConfig } from '../components/LayerToggle'
+import { ButtonLink } from '../components/ui'
 import { formatCurrency, formatCurrencyCompact } from '../lib/format'
 import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
+import { fitGeometry, splitBounds, urlView, visibleBounds, type MapSize } from '../lib/mapViewport'
 import type {
   FloodZoneProperties,
   MunicipalityProperties,
@@ -22,6 +24,7 @@ import type {
 } from '../types/api'
 
 type RadarBasis = 'opportunity' | 'momentum'
+type ParcelFilter = 'all' | 'delinquent' | 'vacant' | 'vacant_delinquent' | 'radar'
 interface RadarPoint {
   properties: { pidn: string; radar_score: number; top_signal: string | null; radar_basis: RadarBasis }
   lng: number
@@ -30,6 +33,12 @@ interface RadarPoint {
 
 type ParcelFeature = Feature<Geometry, ParcelFeatureProperties>
 type ZoningFeature = Feature<Geometry, ZoningProperties>
+type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
+type ParcelMapData = ParcelFeatureCollection & {
+  count?: number
+  limit?: number
+  truncated?: boolean
+}
 type TooltipProperties =
   | RadarPoint['properties']
   | ParcelFeatureProperties
@@ -52,7 +61,10 @@ const ZONING_COLORS: Record<string, [number, number, number, number]> = {
 }
 const ZONING_DEFAULT: [number, number, number, number] = [124, 92, 191, 50]
 
-const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+const BASEMAPS = {
+  light: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+  dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+}
 
 const DEFAULT_VIEW = {
   longitude: -76.73,
@@ -83,7 +95,6 @@ const URL_LAYER_MAP: Record<string, string> = {
 }
 
 const RADAR_MIN_ZOOM = 11
-
 function radarColor(score: number): [number, number, number, number] {
   if (score >= 60) return [61, 189, 111, 220]
   if (score >= 40) return [232, 181, 60, 220]
@@ -93,20 +104,19 @@ function radarColor(score: number): [number, number, number, number] {
 
 export default function MapView() {
   const [searchParams] = useSearchParams()
+  const [darkMap, setDarkMap] = useState(() => document.documentElement.dataset.theme === 'dark')
+  useEffect(() => {
+    const update = () => setDarkMap(document.documentElement.dataset.theme === 'dark')
+    update()
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
 
   const initialViewState = useMemo(() => {
-    const lat = searchParams.get('lat')
-    const lng = searchParams.get('lng')
-    const zoom = searchParams.get('zoom')
     const layer = searchParams.get('layer')
-    if (lat && lng) {
-      return {
-        ...DEFAULT_VIEW,
-        latitude: parseFloat(lat),
-        longitude: parseFloat(lng),
-        zoom: zoom ? parseFloat(zoom) : 16,
-      }
-    }
+    const linkedView = urlView(searchParams, DEFAULT_VIEW)
+    if (linkedView !== DEFAULT_VIEW) return linkedView
     if (layer === 'vacant' || layer === 'delinquent') {
       return { ...DEFAULT_VIEW, zoom: 14 }
     }
@@ -115,6 +125,8 @@ export default function MapView() {
     }
     return DEFAULT_VIEW
   }, [searchParams])
+  const [viewState, setViewState] = useState<MapViewState>(initialViewState)
+  const [mapSize, setMapSize] = useState<MapSize>({ width: 1, height: 1 })
 
   const [layers, setLayers] = useState<LayerConfig[]>(() => {
     const urlLayer = searchParams.get('layer')
@@ -131,22 +143,8 @@ export default function MapView() {
   const [highlightPidn, setHighlightPidn] = useState<string | null>(
     () => searchParams.get('highlight')
   )
-  const [clusterPidns, setClusterPidns] = useState<Set<string>>(
-    () => new Set((searchParams.get('cluster') || '').split(',').filter(Boolean))
-  )
-  const [seedPidn, setSeedPidn] = useState<string | null>(
-    () => searchParams.get('seed')
-  )
-  const isClusterMode = clusterPidns.size > 0
-
-  useEffect(() => {
-    if (highlightPidn && !isClusterMode) {
-      const timer = setTimeout(() => setHighlightPidn(null), 8000)
-      return () => clearTimeout(timer)
-    }
-  }, [highlightPidn, isClusterMode])
-
-  const [parcelFilter, setParcelFilter] = useState<'all' | 'delinquent' | 'vacant' | 'vacant_delinquent' | 'radar'>(
+  const parcelsEnabled = layers.find((layer) => layer.id === 'parcels')?.enabled
+  const [parcelFilter, setParcelFilter] = useState<ParcelFilter>(
     () => {
       const layer = searchParams.get('layer')
       if (layer === 'vacant') return 'vacant'
@@ -157,121 +155,234 @@ export default function MapView() {
   )
   const [radarBasis] = useState<RadarBasis>(() => (searchParams.get('radar') === 'momentum' ? 'momentum' : 'opportunity'))
   const [radarData, setRadarData] = useState<RadarPoint[] | null>(null)
+  const [radarTruncated, setRadarTruncated] = useState(false)
+  const [radarStatus, setRadarStatus] = useState<LoadStatus>('idle')
 
   const [geoData, setGeoData] = useState<Record<string, GeoJSON.FeatureCollection>>({})
-  const [parcelData, setParcelData] = useState<ParcelFeatureCollection | null>(null)
+  const [layerAvailability, setLayerAvailability] = useState<Record<string, Exclude<LoadStatus, 'idle'>>>({})
+  const loadedLayers = useRef(new Set<string>())
+  const enabledStaticLayers = layers.filter(layer => layer.enabled && STATIC_LAYER_IDS.includes(layer.id)).map(layer => layer.id).join(',')
+  const [parcelData, setParcelData] = useState<ParcelMapData | null>(null)
+  const [parcelStatus, setParcelStatus] = useState<LoadStatus>('idle')
   const [currentZoom, setCurrentZoom] = useState(initialViewState.zoom)
   const [hoverInfo, setHoverInfo] = useState<PickingInfo | null>(null)
 
   const [selectedPidn, setSelectedPidn] = useState<string | null>(null)
   const [propertyReport, setPropertyReport] = useState<PropertyReport | null>(null)
-  // Panel visibility and report-loading are derived from the selection —
-  // they were always toggled in lockstep with selectedPidn anyway.
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportFailed, setReportFailed] = useState(false)
   const panelOpen = selectedPidn !== null
-  const reportLoading = selectedPidn !== null && propertyReport?.parcel?.pidn !== selectedPidn
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewStateRef = useRef<MapViewState | null>(null)
+  const mapCanvasRef = useRef<HTMLDivElement | null>(null)
+  const fittedHighlightRef = useRef<string | null>(null)
+  const userNavigatedRef = useRef(false)
+  const parcelRequestRef = useRef(0)
+  const radarRequestRef = useRef(0)
+  const parcelPendingKeyRef = useRef<string | null>(null)
+  const radarPendingKeyRef = useRef<string | null>(null)
+  const parcelLoadedKeyRef = useRef<string | null>(null)
+  const radarLoadedKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    STATIC_LAYER_IDS.forEach((id) => {
-      fetch(`/api/layers/${id}`)
+    const controller = new AbortController()
+    enabledStaticLayers.split(',').filter(Boolean).forEach((id) => {
+      if (loadedLayers.current.has(id)) return
+      setLayerAvailability((prev) => ({ ...prev, [id]: 'loading' }))
+      fetch(`/api/layers/${id}`, { signal: controller.signal })
         .then((r) => {
           if (!r.ok) throw new Error(`${r.status}`)
           return r.json()
         })
         .then((data) => {
+          if (controller.signal.aborted) return
+          loadedLayers.current.add(id)
           setGeoData((prev) => ({ ...prev, [id]: data }))
+          setLayerAvailability((prev) => ({ ...prev, [id]: 'ready' }))
         })
         .catch(() => {
-          // Layer data unavailable -- leave empty
+          if (!controller.signal.aborted) {
+            setLayerAvailability((prev) => ({ ...prev, [id]: 'error' }))
+            setLayers((prev) => prev.map((layer) => (
+              layer.id === id ? { ...layer, enabled: false } : layer
+            )))
+          }
         })
     })
-  }, [])
+    return () => {
+      controller.abort()
+    }
+  }, [enabledStaticLayers])
 
   const fetchRadar = useCallback((vs: MapViewState) => {
+    if (mapSize.width < 2 || mapSize.height < 2) return
     if (!vs || vs.zoom < RADAR_MIN_ZOOM) {
+      ++radarRequestRef.current
+      radarPendingKeyRef.current = null
+      radarLoadedKeyRef.current = null
       setRadarData(null)
+      setRadarTruncated(false)
+      setRadarStatus('idle')
       return
     }
-    const degPerPixel = 360 / (512 * Math.pow(2, vs.zoom))
-    const halfW = degPerPixel * 700
-    const halfH = degPerPixel * 450
-    const params = new URLSearchParams({
-      west: (vs.longitude - halfW).toFixed(6),
-      south: (vs.latitude - halfH).toFixed(6),
-      east: (vs.longitude + halfW).toFixed(6),
-      north: (vs.latitude + halfH).toFixed(6),
-      view: radarBasis,
-      min_score: '10',
-    })
-    fetch(`/api/radar/development/bbox?${params}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`${r.status}`)
-        return r.json()
+    const bounds = visibleBounds(vs, mapSize)
+    const requestKey = [radarBasis, bounds.west, bounds.south, bounds.east, bounds.north]
+      .map((value) => typeof value === 'number' ? value.toFixed(6) : value)
+      .join(':')
+    if (radarPendingKeyRef.current === requestKey || radarLoadedKeyRef.current === requestKey) return
+    const requestId = ++radarRequestRef.current
+    radarPendingKeyRef.current = requestKey
+    radarLoadedKeyRef.current = null
+    setRadarStatus('loading')
+    const requests = splitBounds(bounds).map((bounds) => {
+      const params = new URLSearchParams({
+        west: bounds.west.toFixed(6),
+        south: bounds.south.toFixed(6),
+        east: bounds.east.toFixed(6),
+        north: bounds.north.toFixed(6),
+        view: radarBasis,
+        min_score: '10',
       })
-      .then((data: RadarBboxResponse) => {
+      return fetch(`/api/radar/development/bbox?${params}`).then((response) => {
+        if (!response.ok) throw new Error(`${response.status}`)
+        return response.json() as Promise<RadarBboxResponse>
+      })
+    })
+
+    Promise.all(requests)
+      .then((responses) => {
+        if (requestId !== radarRequestRef.current) return
+        const seen = new Set<string>()
         setRadarData(
-          (data.parcels || [])
+          responses.flatMap((response) => response.parcels || [])
             .filter((item: RadarBboxItem) => item.lng != null && item.lat != null)
+            .filter((item: RadarBboxItem) => {
+              if (seen.has(item.pidn)) return false
+              seen.add(item.pidn)
+              return true
+            })
             .map((item: RadarBboxItem) => ({
               properties: { pidn: item.pidn, radar_score: Number(item.score), top_signal: item.top_signal, radar_basis: radarBasis },
               lng: Number(item.lng),
               lat: Number(item.lat),
             }))
         )
+        setRadarTruncated(responses.some((response) => response.truncated))
+        radarLoadedKeyRef.current = requestKey
+        setRadarStatus('ready')
       })
       .catch(() => {
-        // Radar data unavailable
+        if (requestId === radarRequestRef.current) {
+          setRadarData(null)
+          setRadarTruncated(false)
+          setRadarStatus('error')
+        }
       })
-  }, [radarBasis])
+      .finally(() => {
+        if (requestId === radarRequestRef.current) radarPendingKeyRef.current = null
+      })
+  }, [radarBasis, mapSize])
 
   const fetchParcels = useCallback((vs: MapViewState) => {
+    if (mapSize.width < 2 || mapSize.height < 2) return
     if (parcelFilter === 'radar') fetchRadar(vs)
+    else {
+      ++radarRequestRef.current
+      radarPendingKeyRef.current = null
+      radarLoadedKeyRef.current = null
+      setRadarData(null)
+      setRadarTruncated(false)
+      setRadarStatus('idle')
+    }
     if (!vs || vs.zoom < MIN_PARCEL_ZOOM) {
+      ++parcelRequestRef.current
+      parcelPendingKeyRef.current = null
+      parcelLoadedKeyRef.current = null
       setParcelData(null)
+      setParcelStatus('idle')
       return
     }
 
-    const degPerPixel = 360 / (512 * Math.pow(2, vs.zoom))
-    const halfW = degPerPixel * 600
-    const halfH = degPerPixel * 400
+    const bounds = visibleBounds(vs, mapSize)
+    const requestKey = [parcelFilter, bounds.west, bounds.south, bounds.east, bounds.north]
+      .map((value) => typeof value === 'number' ? value.toFixed(6) : value)
+      .join(':')
+    if (parcelPendingKeyRef.current === requestKey || parcelLoadedKeyRef.current === requestKey) return
+    const requestId = ++parcelRequestRef.current
+    parcelPendingKeyRef.current = requestKey
+    parcelLoadedKeyRef.current = null
+    setParcelStatus('loading')
 
-    const west = vs.longitude - halfW
-    const east = vs.longitude + halfW
-    const south = vs.latitude - halfH
-    const north = vs.latitude + halfH
-
-    const bboxLayer = parcelFilter === 'vacant' ? 'vacant' : parcelFilter === 'vacant_delinquent' ? 'vacant_delinquent' : 'delinquent'
-    const url = `/api/parcels/bbox?west=${west.toFixed(6)}&south=${south.toFixed(6)}&east=${east.toFixed(6)}&north=${north.toFixed(6)}&layer=${bboxLayer}`
-
-    fetch(url)
-      .then((r) => {
+    const bboxLayer = parcelFilter === 'delinquent'
+      ? 'delinquent'
+      : parcelFilter === 'vacant'
+        ? 'vacant'
+        : parcelFilter === 'vacant_delinquent'
+          ? 'vacant_delinquent'
+          : null
+    Promise.all(splitBounds(bounds).map((part) => {
+      const params = new URLSearchParams({ west: part.west.toFixed(6), south: part.south.toFixed(6), east: part.east.toFixed(6), north: part.north.toFixed(6) })
+      if (bboxLayer) params.set('layer', bboxLayer)
+      return fetch(`/api/parcels/bbox?${params}`).then((r) => {
         if (!r.ok) throw new Error(`${r.status}`)
-        return r.json()
+        return r.json() as Promise<ParcelMapData>
       })
-      .then((data: ParcelFeatureCollection) => {
-        if (parcelFilter === 'vacant_delinquent') {
-          data.features = data.features.filter(
-            (f) => f.properties?.has_tax_delinquency === true
-          )
+    }))
+      .then((responses) => {
+        if (requestId !== parcelRequestRef.current) return
+        const seen = new Set<string>()
+        const data: ParcelMapData = {
+          type: 'FeatureCollection',
+          features: responses.flatMap((response) => response.features).filter((feature) => {
+            const pidn = feature.properties?.pidn
+            if (!pidn || seen.has(pidn)) return false
+            seen.add(pidn)
+            return true
+          }),
+          truncated: responses.some((response) => response.truncated),
         }
-        setParcelData(data)
+        if (parcelFilter === 'delinquent' || parcelFilter === 'vacant_delinquent') {
+          setParcelData({
+            ...data,
+            features: data.features.filter(
+              (feature) => feature.properties?.has_tax_delinquency === true
+            ),
+          })
+        } else {
+          setParcelData(data)
+        }
+        parcelLoadedKeyRef.current = requestKey
+        setParcelStatus('ready')
       })
       .catch(() => {
-        // Parcel data unavailable
+        if (requestId !== parcelRequestRef.current) return
+        setParcelData(null)
+        setParcelStatus('error')
       })
-  }, [parcelFilter, fetchRadar])
+      .finally(() => {
+        if (requestId === parcelRequestRef.current) parcelPendingKeyRef.current = null
+      })
+  }, [parcelFilter, fetchRadar, mapSize])
 
   const onViewStateChange = useCallback(
-    ({ viewState }: { viewState: MapViewState }) => {
+    ({ viewState, interactionState }: { viewState: MapViewState; interactionState?: Record<string, boolean> }) => {
       viewStateRef.current = viewState
+      setViewState(viewState)
+      if (interactionState && Object.values(interactionState).some(Boolean)) userNavigatedRef.current = true
       setCurrentZoom(viewState.zoom)
 
       if (viewState.zoom < MIN_PARCEL_ZOOM) {
+        ++parcelRequestRef.current
+        parcelPendingKeyRef.current = null
+        parcelLoadedKeyRef.current = null
+        setParcelStatus('idle')
+        setParcelData(null)
         setHoverInfo(null)
         setSelectedPidn(null)
         setPropertyReport(null)
+        setReportLoading(false)
+        setReportFailed(false)
       }
 
       if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -285,8 +396,17 @@ export default function MapView() {
     [fetchParcels, layers]
   )
 
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    ++parcelRequestRef.current
+    ++radarRequestRef.current
+    parcelPendingKeyRef.current = null
+    radarPendingKeyRef.current = null
+    parcelLoadedKeyRef.current = null
+    radarLoadedKeyRef.current = null
+  }, [])
+
   useEffect(() => {
-    const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
     const vs = viewStateRef.current || initialViewState
     const minZoom = parcelFilter === 'radar' ? RADAR_MIN_ZOOM : MIN_PARCEL_ZOOM
     if (!parcelsEnabled || (vs.zoom ?? 0) < minZoom) return
@@ -295,12 +415,40 @@ export default function MapView() {
     // filter flips.
     const timer = setTimeout(() => fetchParcels(vs as MapViewState), 0)
     return () => clearTimeout(timer)
-  }, [parcelFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parcelFilter, mapSize, parcelsEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const canvas = mapCanvasRef.current
+    if (!canvas) return
+    const update = () => setMapSize({ width: canvas.clientWidth, height: canvas.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!highlightPidn || userNavigatedRef.current || fittedHighlightRef.current === highlightPidn || !parcelData) return
+    if (mapSize.width < 2 || mapSize.height < 2) return
+    const feature = parcelData.features.find((item) => item.properties?.pidn === highlightPidn)
+    if (!feature?.geometry) return
+    const fitted = fitGeometry(viewStateRef.current || viewState, mapSize, feature.geometry)
+    if (!fitted) return
+    const timer = window.setTimeout(() => {
+      if (userNavigatedRef.current) return
+      fittedHighlightRef.current = highlightPidn
+      viewStateRef.current = fitted
+      setViewState(fitted)
+      setCurrentZoom(fitted.zoom)
+      fetchParcels(fitted)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [highlightPidn, parcelData, mapSize, viewState, fetchParcels])
 
   useEffect(() => {
     if (!selectedPidn) return
     let cancelled = false
-    fetch(`/api/parcels/${selectedPidn}`)
+    fetch(`/api/parcels/${encodeURIComponent(selectedPidn)}`)
       .then((r) => {
         if (!r.ok) throw new Error(`${r.status}`)
         return r.json()
@@ -309,7 +457,13 @@ export default function MapView() {
         if (!cancelled) setPropertyReport(data)
       })
       .catch(() => {
-        if (!cancelled) setPropertyReport(null)
+        if (!cancelled) {
+          setPropertyReport(null)
+          setReportFailed(true)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReportLoading(false)
       })
     return () => {
       cancelled = true
@@ -322,24 +476,44 @@ export default function MapView() {
     )
   }, [])
 
+  const selectParcel = useCallback((pidn: string) => {
+    if (pidn === selectedPidn) return
+    setHighlightPidn(null)
+    setSelectedPidn(pidn)
+    setPropertyReport(null)
+    setReportFailed(false)
+    setReportLoading(true)
+    setHoverInfo(null)
+  }, [selectedPidn])
+
   const handleParcelClick = useCallback((info: PickingInfo) => {
     const pidn = info.object?.properties?.pidn
-    if (pidn) {
-      setSelectedPidn(pidn)
-    }
-  }, [])
+    if (pidn) selectParcel(pidn)
+  }, [selectParcel])
 
   const closePanel = useCallback(() => {
     setSelectedPidn(null)
     setPropertyReport(null)
+    setReportLoading(false)
+    setReportFailed(false)
   }, [])
+
+  useEffect(() => {
+    if (!panelOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closePanel()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [closePanel, panelOpen])
 
   const deckLayers = useMemo(() => {
     const result = []
+    const foregroundLayers = []
 
     const parcelsLayer = layers.find((l) => l.id === 'parcels')
     if (parcelsLayer?.enabled && parcelData && currentZoom >= MIN_PARCEL_ZOOM) {
-      result.push(
+      foregroundLayers.push(
         new GeoJsonLayer<ParcelFeatureProperties>({
           id: 'parcels',
           data: parcelData,
@@ -347,30 +521,24 @@ export default function MapView() {
           filled: true,
           getFillColor: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
-            if (isClusterMode) {
-              if (pidn === seedPidn) return [255, 215, 0, 220]
-              if (pidn && clusterPidns.has(pidn)) return [124, 92, 191, 160]
-              return [40, 40, 60, 30]
-            }
-            if (highlightPidn && pidn === highlightPidn) return [255, 215, 0, 200]
+            if (selectedPidn && pidn === selectedPidn) return [15, 91, 98, 65]
+            if (highlightPidn && pidn === highlightPidn) return [216, 169, 75, 65]
+            if (parcelFilter === 'vacant_delinquent') return [216, 169, 75, 150]
             if (parcelFilter === 'vacant') return [61, 189, 111, 120]
-            if (f.properties?.has_tax_delinquency) return [224, 82, 82, 120]
+            if (parcelFilter === 'delinquent') return [224, 82, 82, 120]
             return [96, 165, 250, 40]
           },
           getLineColor: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
-            if (isClusterMode) {
-              if (pidn === seedPidn) return [255, 215, 0, 255]
-              if (pidn && clusterPidns.has(pidn)) return [124, 92, 191, 255]
-              return [40, 40, 60, 50]
-            }
-            if (highlightPidn && pidn === highlightPidn) return [255, 215, 0, 255]
+            if (selectedPidn && pidn === selectedPidn) return [15, 91, 98, 255]
+            if (highlightPidn && pidn === highlightPidn) return [174, 115, 19, 255]
+            if (parcelFilter === 'vacant_delinquent') return [216, 169, 75, 230]
             if (parcelFilter === 'vacant') return [61, 189, 111, 150]
             return [96, 165, 250, 100]
           },
           getLineWidth: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
-            if (isClusterMode && pidn && (pidn === seedPidn || clusterPidns.has(pidn))) return 3
+            if (selectedPidn && pidn === selectedPidn) return 3
             if (highlightPidn && pidn === highlightPidn) return 3
             return 1
           },
@@ -381,16 +549,16 @@ export default function MapView() {
           autoHighlight: true,
           highlightColor: [255, 255, 255, 60],
           updateTriggers: {
-            getFillColor: [parcelFilter, highlightPidn, isClusterMode, clusterPidns, seedPidn],
-            getLineColor: [parcelFilter, highlightPidn, isClusterMode, clusterPidns, seedPidn],
-            getLineWidth: [highlightPidn, isClusterMode, clusterPidns, seedPidn],
+            getFillColor: [parcelFilter, highlightPidn, selectedPidn],
+            getLineColor: [parcelFilter, highlightPidn, selectedPidn],
+            getLineWidth: [highlightPidn, selectedPidn],
           },
         })
       )
     }
 
-    if (parcelFilter === 'radar' && radarData && currentZoom >= RADAR_MIN_ZOOM) {
-      result.push(
+    if (parcelsLayer?.enabled && parcelFilter === 'radar' && radarData && currentZoom >= RADAR_MIN_ZOOM) {
+      foregroundLayers.push(
         new ScatterplotLayer<RadarPoint>({
           id: 'radar-points',
           data: radarData,
@@ -407,7 +575,7 @@ export default function MapView() {
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
           onClick: (info: PickingInfo) => {
             const pidn = (info.object as RadarPoint | undefined)?.properties?.pidn
-            if (pidn) setSelectedPidn(pidn)
+            if (pidn) selectParcel(pidn)
           },
         })
       )
@@ -421,9 +589,9 @@ export default function MapView() {
           data: geoData.municipalities,
           stroked: true,
           filled: true,
-          getFillColor: [61, 189, 111, 30],
-          getLineColor: [61, 189, 111, 200],
-          getLineWidth: 2,
+          getFillColor: darkMap ? [61, 189, 111, 16] : [70, 106, 91, 8],
+          getLineColor: darkMap ? [106, 168, 133, 150] : [70, 106, 91, 140],
+          getLineWidth: 1,
           lineWidthUnits: 'pixels' as const,
           pickable: true,
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
@@ -495,19 +663,32 @@ export default function MapView() {
       )
     }
 
-    return result
-  }, [layers, geoData, parcelData, radarData, currentZoom, handleParcelClick, parcelFilter, highlightPidn, isClusterMode, clusterPidns, seedPidn])
+    // Reference polygons remain visible underneath parcels without intercepting
+    // parcel picking. Deck.gl resolves pointer hits from the last drawn layer.
+    return [...result, ...foregroundLayers]
+  }, [layers, geoData, parcelData, radarData, currentZoom, handleParcelClick, parcelFilter, highlightPidn, selectedPidn, selectParcel, darkMap])
 
-  const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
-  const showZoomMessage = parcelsEnabled && currentZoom < MIN_PARCEL_ZOOM
+  const showRadarZoomHint = parcelsEnabled && parcelFilter === 'radar'
+    && currentZoom >= RADAR_MIN_ZOOM && currentZoom < MIN_PARCEL_ZOOM
+  const showZoomMessage = parcelsEnabled && currentZoom < MIN_PARCEL_ZOOM && !showRadarZoomHint
+  const parcelCount = parcelData?.features.length ?? 0
+  const mapStatus: LoadStatus = parcelStatus === 'error' || (parcelFilter === 'radar' && radarStatus === 'error')
+    ? 'error'
+    : parcelStatus === 'loading' || (parcelFilter === 'radar' && radarStatus === 'loading')
+      ? 'loading'
+      : parcelStatus
+  const retryParcels = () => {
+    const viewState = viewStateRef.current || initialViewState
+    fetchParcels(viewState as MapViewState)
+  }
 
   return (
     <div className="map-shell" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Nav />
-      <div className="map-canvas" style={{ position: 'relative', flex: 1 }}>
+      <div ref={mapCanvasRef} className="map-canvas" data-panel-open={panelOpen} style={{ position: 'relative', flex: 1 }}>
         <Link
           className="map-back-link"
-          to="/"
+          to="/search"
           style={{
             position: 'absolute',
             top: 16,
@@ -544,12 +725,31 @@ export default function MapView() {
               strokeLinejoin="round"
             />
           </svg>
-          Back to Home
+          Find a property
         </Link>
 
-        <LayerToggle layers={layers} onToggle={handleToggle} />
+        <LayerToggle layers={layers} onToggle={handleToggle} availability={layerAvailability} />
 
-        {currentZoom < MIN_PARCEL_ZOOM && currentZoom >= RADAR_MIN_ZOOM && (
+        {parcelsEnabled && currentZoom >= MIN_PARCEL_ZOOM && mapStatus !== 'idle' && (
+          <div className="map-data-status" data-state={mapStatus} role="status" aria-live="polite">
+            {mapStatus === 'loading' && <span>{parcelFilter === 'radar' ? 'Loading map data…' : 'Loading parcels…'}</span>}
+            {mapStatus === 'error' && (
+              <>
+                <span>{radarStatus === 'error' ? 'Radar data unavailable' : 'Parcel data unavailable'}</span>
+                <button type="button" onClick={retryParcels}>Retry</button>
+              </>
+            )}
+            {mapStatus === 'ready' && (
+              <span>
+                {parcelCount === 0 ? 'No parcels in this view' : `${parcelCount.toLocaleString()} parcel${parcelCount === 1 ? '' : 's'} in view`}
+                {parcelFilter === 'radar' && radarData ? ` · ${radarData.length.toLocaleString()}${radarTruncated ? '+' : ''} radar results` : ''}
+                {parcelData?.truncated ? ' · zoom in for the complete set' : ''}
+              </span>
+            )}
+          </div>
+        )}
+
+        {showRadarZoomHint && (
           <div className="map-filter-bar" style={{
             position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
             zIndex: 10, display: 'flex', gap: 8, alignItems: 'center',
@@ -557,7 +757,9 @@ export default function MapView() {
             borderRadius: 8, padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
             fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)',
           }}>
-            <button onClick={() => { if (parcelFilter !== 'radar') { setParcelFilter('radar'); setParcelData(null) } }} style={{
+            <button type="button" aria-pressed={parcelFilter === 'radar'} onClick={() => {
+              if (radarStatus === 'error') retryParcels()
+            }} style={{
               padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
               fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 0.5,
               background: parcelFilter === 'radar' ? 'var(--accent-cyan)' : 'transparent',
@@ -566,7 +768,13 @@ export default function MapView() {
             }}>
               Radar ({radarBasis})
             </button>
-            <span>Zoom in for parcel outlines</span>
+            <span>
+              {radarStatus === 'loading'
+                ? 'Loading radar…'
+                : radarStatus === 'error'
+                  ? 'Radar unavailable · retry'
+                  : `${(radarData?.length ?? 0).toLocaleString()}${radarTruncated ? '+' : ''} results · zoom in for parcel outlines`}
+            </span>
           </div>
         )}
 
@@ -580,11 +788,11 @@ export default function MapView() {
             {([
               { key: 'all', label: 'All Parcels', color: 'var(--accent-blue)' },
               { key: 'delinquent', label: 'Delinquent', color: 'var(--accent-red)' },
-              { key: 'vacant', label: 'Vacant', color: 'var(--accent-green)' },
-              { key: 'vacant_delinquent', label: 'Vacant + Delinquent', color: 'var(--accent-gold)' },
+              { key: 'vacant', label: 'Vacancy screen', color: 'var(--accent-green)' },
+              { key: 'vacant_delinquent', label: 'Vacancy + tax signal', color: 'var(--accent-gold)' },
               { key: 'radar', label: 'Radar', color: 'var(--accent-cyan)' },
             ] as const).map(f => (
-              <button key={f.key} onClick={() => { if (parcelFilter !== f.key) { setParcelFilter(f.key); setParcelData(null) } }} style={{
+              <button key={f.key} type="button" aria-pressed={parcelFilter === f.key} onClick={() => { if (parcelFilter !== f.key) { setParcelFilter(f.key); setParcelData(null) } }} style={{
                 padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 0.5,
                 background: parcelFilter === f.key ? f.color : 'transparent',
@@ -598,53 +806,8 @@ export default function MapView() {
           </div>
         )}
 
-        {currentZoom >= MIN_PARCEL_ZOOM && (
-          <div style={{
-            position: 'absolute', bottom: 24, left: 16, zIndex: 10,
-            background: 'var(--bg-panel)', border: '1px solid var(--border)',
-            borderRadius: 6, padding: '10px 14px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)',
-          }}>
-            {isClusterMode ? (
-              <>
-                <div style={{ fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' as const, marginBottom: 6, color: 'var(--accent-purple)' }}>Assemblage Cluster</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(255,215,0,0.85)', border: '1px solid rgba(255,215,0,1)' }} />
-                  Seed Parcel (Delinquent)
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(124,92,191,0.6)', border: '1px solid rgba(124,92,191,1)' }} />
-                  Adjacent Parcel
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(40,40,60,0.3)' }} />
-                  Other
-                </div>
-                <button onClick={() => { setClusterPidns(new Set()); setSeedPidn(null); setParcelData(null); if (viewStateRef.current) fetchParcels(viewStateRef.current) }} style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)',
-                  background: 'none', border: '1px solid var(--border)', borderRadius: 3,
-                  padding: '2px 8px', cursor: 'pointer',
-                }}>
-                  Clear Cluster View
-                </button>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(96,165,250,0.5)' }} />
-                  Normal Parcel
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(224,82,82,0.7)' }} />
-                  Tax Delinquent
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(61,189,111,0.7)' }} />
-                  Vacant Land
-                </div>
-              </>
-            )}
-          </div>
+        {parcelsEnabled && currentZoom >= (parcelFilter === 'radar' ? RADAR_MIN_ZOOM : MIN_PARCEL_ZOOM) && (
+          <MapLegend filter={parcelFilter} />
         )}
 
         {showZoomMessage && (
@@ -667,25 +830,34 @@ export default function MapView() {
               letterSpacing: 0.3,
             }}
           >
-            Zoom in to see parcels
+            Zoom in to explore parcel boundaries
           </div>
         )}
 
         <DeckGL
-          initialViewState={initialViewState}
+          viewState={viewState}
           controller={true}
+          // Synchronous picking can delay pointer-up on slower devices. Keep
+          // Deck's movement threshold so panning still cannot select a parcel.
+          eventRecognizerOptions={{ click: { time: 1000 } }}
           layers={deckLayers}
           onViewStateChange={onViewStateChange as never}
+          getCursor={({ isDragging, isHovering }) => (
+            isDragging ? 'grabbing' : isHovering ? 'pointer' : 'grab'
+          )}
           style={{ position: 'absolute', inset: '0' }}
         >
           <Map
-            mapStyle={BASEMAP}
+            mapStyle={darkMap ? BASEMAPS.dark : BASEMAPS.light}
             style={{ width: '100%', height: '100%' }}
-          />
+          >
+            <NavigationControl position="bottom-right" showCompass={false} />
+          </Map>
         </DeckGL>
 
         {hoverInfo?.object && hoverInfo.x != null && hoverInfo.y != null && (
           <div
+            className="map-tooltip"
             style={{
               position: 'absolute',
               left: hoverInfo.x + 12,
@@ -707,12 +879,15 @@ export default function MapView() {
         <div
           className="map-property-panel"
           data-open={panelOpen}
+          role={panelOpen ? 'region' : undefined}
+          aria-label={panelOpen ? 'Selected parcel details' : undefined}
+          aria-hidden={!panelOpen}
           style={{
             position: 'absolute',
             top: 0,
             right: 0,
             bottom: 0,
-            width: 320,
+            width: 360,
             zIndex: 25,
             background: 'var(--bg-panel)',
             borderLeft: '1px solid var(--border)',
@@ -727,6 +902,7 @@ export default function MapView() {
             <PropertyPanel
               report={propertyReport}
               loading={reportLoading}
+              failed={reportFailed}
               onClose={closePanel}
             />
           )}
@@ -736,13 +912,43 @@ export default function MapView() {
   )
 }
 
+function MapLegend({ filter }: { filter: ParcelFilter }) {
+  const items = filter === 'radar'
+    ? [
+        { label: 'High score · 60+', color: 'rgba(61,189,111,0.86)' },
+        { label: 'Medium · 40–59', color: 'rgba(232,181,60,0.86)' },
+        { label: 'Lower · 20–39', color: 'rgba(96,165,250,0.78)' },
+        { label: 'Under 20', color: 'rgba(148,163,184,0.63)' },
+      ]
+    : filter === 'vacant'
+      ? [{ label: 'Vacancy screen · verify current use', color: 'rgba(61,189,111,0.72)' }]
+      : filter === 'vacant_delinquent'
+        ? [{ label: 'Vacancy screen + tax delinquency signal', color: 'rgba(216,169,75,0.82)' }]
+        : filter === 'delinquent'
+          ? [{ label: 'Tax delinquency signal', color: 'rgba(224,82,82,0.78)' }]
+          : [{ label: 'Parcel', color: 'rgba(96,165,250,0.55)' }]
+
+  return (
+    <div className="map-legend" aria-label="Map legend">
+      {items.map((item) => (
+        <div key={item.label} className="map-legend-item">
+          <span style={{ background: item.color }} />
+          {item.label}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function PropertyPanel({
   report,
   loading,
+  failed,
   onClose,
 }: {
   report: PropertyReport | null
   loading: boolean
+  failed: boolean
   onClose: () => void
 }) {
   if (loading) {
@@ -782,256 +988,45 @@ function PropertyPanel({
             textAlign: 'center',
           }}
         >
-          Property data unavailable
+          {failed ? 'Property data unavailable' : 'No property selected'}
         </div>
       </div>
     )
   }
 
-  const { parcel: p, tax_delinquency: tax, flood_zone: flood, structures } = report
+  const { parcel: p, tax_delinquency: tax, flood_zone: flood, structures, development_momentum: radar } = report
 
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: 17,
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              lineHeight: 1.3,
-              marginBottom: 4,
-            }}
-          >
-            {p.propadr || 'Address unavailable'}
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 12,
-              color: 'var(--text-secondary)',
-              lineHeight: 1.4,
-            }}
-          >
-            {p.owner_full || 'Owner not displayed'}
-          </div>
-          {p.municipality && (
-            <span
-              style={{
-                display: 'inline-block',
-                marginTop: 8,
-                padding: '2px 10px',
-                background: 'rgba(96, 165, 250, 0.15)',
-                border: '1px solid rgba(96, 165, 250, 0.3)',
-                borderRadius: 100,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                fontWeight: 500,
-                color: '#60a5fa',
-                letterSpacing: 0.5,
-              }}
-            >
-              {p.municipality}
-            </span>
-          )}
+    <div className="map-parcel-summary">
+      <div className="map-parcel-heading">
+        <div>
+          <h2>{p.propadr || 'Address unavailable'}</h2>
+          {p.owner_id ? <Link to={`/entity/${p.owner_id}`}>{p.owner_full || 'Recorded owner'}</Link> : <p>{p.owner_full || 'Owner not displayed'}</p>}
+          <p className="map-parcel-location">{p.municipality} · {getPropertyClassLabel(p.class) || 'Property'}</p>
         </div>
         <CloseButton onClick={onClose} />
       </div>
-
-      <Divider />
-
-      <SectionTitle>Assessment & Sale</SectionTitle>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-        <DataField label="Assessed Total" value={formatCurrency(p.aprtotal)} accent />
-        <DataField label="Acres" value={p.acres ? Number(p.acres).toFixed(2) : '--'} />
-        <DataField label="Sale Date" value={p.saledt || '--'} />
-        <DataField label="Sale Price" value={formatCurrency(p.price)} />
-        {p.prev_price != null && <DataField label="Prev Price" value={formatCurrency(p.prev_price)} />}
-        <DataField label="Class" value={getPropertyClassLabel(p.class) || '--'} />
+      <ButtonLink className="map-parcel-report" tone="primary" to={`/property/${p.pidn}`}>Open property & evidence →</ButtonLink>
+      {radar && <div className="map-parcel-signals">
+        <div className="property-radar-scores">
+          <div><span>Opportunity</span><strong>{radar.opportunity_score}</strong></div>
+          <div><span>Momentum</span><strong>{radar.score}</strong></div>
+          <div><span>Site</span><strong>{radar.site_readiness_score}</strong></div>
+        </div>
+        {radar.top_signal && <p>{radar.top_signal}</p>}
+      </div>}
+      <div className="map-parcel-facts">
+        <DataField label="Acres" value={p.acres != null ? Number(p.acres).toFixed(2) : '—'} />
+        <DataField label="Assessed value" value={formatCurrency(p.aprtotal)} />
+        <DataField label="Recorded sale" value={formatCurrency(p.price)} />
+        <DataField label="Sale date" value={p.saledt || '—'} />
       </div>
-      {(p.aprland || p.aprbldg) && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: 8 }}>
-          <DataField label="Land" value={formatCurrency(p.aprland)} />
-          <DataField label="Building" value={formatCurrency(p.aprbldg)} />
-        </div>
-      )}
-
-      {(p.yrblt || p.style || p.num_stories || p.res_living_area || p.luc) && (
-        <>
-          <Divider />
-          <SectionTitle>Property Details</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-            {p.yrblt != null && <DataField label="Year Built" value={String(p.yrblt)} />}
-            {p.style && <DataField label="Style" value={p.style} />}
-            {p.num_stories != null && <DataField label="Stories" value={String(p.num_stories)} />}
-            {p.res_living_area != null && <DataField label="Living Area" value={`${Number(p.res_living_area).toLocaleString()} sf`} />}
-            {p.luc && <DataField label="LUC" value={p.luc} />}
-            {p.heatsys != null && <DataField label="Heat" value={String(p.heatsys)} />}
-          </div>
-        </>
-      )}
-
-      {(p.school_dis || p.deed_bk) && (
-        <>
-          <Divider />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-            {p.school_dis && <DataField label="School District" value={getSchoolDistrictLabel(p.school_dis)} />}
-            {p.deed_bk && <DataField label="Deed" value={`${p.deed_bk}/${p.deed_pg}`} />}
-          </div>
-        </>
-      )}
-
-      <Divider />
-
-      <SectionTitle>Tax Status</SectionTitle>
-      {tax.is_delinquent ? (
-        <div>
-          <span
-            style={{
-              display: 'inline-block',
-              padding: '3px 10px',
-              background: 'rgba(224, 82, 82, 0.15)',
-              border: '1px solid rgba(224, 82, 82, 0.3)',
-              borderRadius: 4,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 12,
-              fontWeight: 600,
-              color: 'var(--accent-red)',
-            }}
-          >
-            Delinquency signal detected
-          </span>
-          {tax.records && tax.records.length > 0 && (
-            <div style={{ marginTop: 10 }}>
-              {tax.records.map((rec) => (
-                <div
-                  key={rec.tax_year ?? ''}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    padding: '4px 0',
-                    borderBottom: '1px solid var(--border)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                  }}
-                >
-                  <span style={{ color: 'var(--text-secondary)' }}>{rec.tax_year}</span>
-                  <span style={{ color: 'var(--accent-red)' }}>{formatCurrency(rec.total)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '3px 10px',
-            background: 'rgba(61, 189, 111, 0.15)',
-            border: '1px solid rgba(61, 189, 111, 0.3)',
-            borderRadius: 4,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--accent-green)',
-          }}
-        >
-          Current
-        </span>
-      )}
-
-      <Divider />
-
-      <SectionTitle>Flood Risk</SectionTitle>
-      {flood.in_flood_zone ? (
-        <div>
-          <span
-            style={{
-              display: 'inline-block',
-              padding: '3px 10px',
-              background: 'rgba(74, 127, 255, 0.15)',
-              border: '1px solid rgba(74, 127, 255, 0.3)',
-              borderRadius: 4,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 12,
-              fontWeight: 500,
-              color: 'var(--accent-blue)',
-            }}
-          >
-            Zone {flood.zone}
-          </span>
-          {flood.sfha && (
-            <span
-              style={{
-                display: 'inline-block',
-                marginLeft: 8,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: 'var(--accent-gold)',
-              }}
-            >
-              SFHA
-            </span>
-          )}
-        </div>
-      ) : (
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            color: 'var(--text-muted)',
-          }}
-        >
-          Not in flood zone
-        </div>
-      )}
-
-      <Divider />
-
-      <SectionTitle>Structures</SectionTitle>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <DataField label="Count" value={String(structures.count)} />
-        {structures.likely_vacant && (
-          <span
-            style={{
-              padding: '2px 8px',
-              background: 'rgba(212, 168, 67, 0.15)',
-              border: '1px solid rgba(212, 168, 67, 0.3)',
-              borderRadius: 4,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              fontWeight: 600,
-              color: 'var(--accent-gold)',
-            }}
-          >
-            Likely Vacant
-          </span>
-        )}
-      </div>
-
-      <div
-        style={{
-          marginTop: 20,
-          paddingTop: 12,
-          borderTop: '1px solid var(--border)',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-muted)',
-          letterSpacing: 0.5,
-        }}
-      >
-        PIDN: {report.parcel.pidn}
-      </div>
-      <Link to={`/property/${report.parcel.pidn}`} style={{
-        display: 'block', textAlign: 'center', marginTop: 12,
-        padding: '8px', borderRadius: 4,
-        fontFamily: 'var(--font-mono)', fontSize: 11,
-        color: 'var(--accent-blue)', border: '1px solid var(--border)',
-        textDecoration: 'none',
-      }}>
-        View Full Property Report &rarr;
-      </Link>
+      <ul className="map-parcel-context">
+        <li>{tax.is_delinquent ? 'Delinquency signal detected; review the tax records.' : tax.detail_available ? 'No delinquency found in loaded records.' : 'Detailed tax records are unavailable.'}</li>
+        <li>{flood.in_flood_zone ? `Mapped FEMA flood hazard overlap${flood.zone ? ` · Zone ${flood.zone}` : ''}.` : 'No mapped FEMA flood hazard overlap.'}</li>
+        <li>{structures.likely_vacant ? 'Vacancy screen: no mapped building footprint. Verify current use.' : `${structures.count} mapped building ${structures.count === 1 ? 'footprint' : 'footprints'}.`}</li>
+      </ul>
+      <p className="map-parcel-id">PIDN {p.pidn}</p>
     </div>
   )
 }
@@ -1039,6 +1034,8 @@ function PropertyPanel({
 function CloseButton({ onClick }: { onClick: () => void }) {
   return (
     <button
+      type="button"
+      aria-label="Close parcel details"
       onClick={onClick}
       style={{
         background: 'none',
@@ -1063,28 +1060,10 @@ function CloseButton({ onClick }: { onClick: () => void }) {
         e.currentTarget.style.borderColor = 'var(--border)'
       }}
     >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
         <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     </button>
-  )
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 10,
-        fontWeight: 600,
-        letterSpacing: 1.5,
-        textTransform: 'uppercase',
-        color: 'var(--text-muted)',
-        marginBottom: 8,
-      }}
-    >
-      {children}
-    </div>
   )
 }
 
@@ -1114,18 +1093,6 @@ function DataField({ label, value, accent }: { label: string; value: string; acc
         {value}
       </div>
     </div>
-  )
-}
-
-function Divider() {
-  return (
-    <div
-      style={{
-        height: 1,
-        background: 'var(--border)',
-        margin: '14px 0',
-      }}
-    />
   )
 }
 

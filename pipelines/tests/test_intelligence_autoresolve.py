@@ -17,10 +17,10 @@ def test_person_merged_with_organization_is_consequential():
         prior_input_hash="a", challenger_input_hash="a",
     )
     assert assessment.consequential
-    assert "person/organization" in assessment.reasons[0]
+    assert "identity membership" in assessment.reasons[0]
 
 
-def test_organization_to_organization_merge_is_routine():
+def test_organization_to_organization_merge_requires_review():
     prior = _entities({"ACME PROPERTIES LLC"}, {"ACME PROPERTIES L.L.C."})
     challenger = _entities({"ACME PROPERTIES LLC", "ACME PROPERTIES L.L.C."})
     assessment = classify_flip(
@@ -28,7 +28,8 @@ def test_organization_to_organization_merge_is_routine():
         prior_payload=prior, challenger_payload=challenger,
         prior_input_hash="a", challenger_input_hash="b",
     )
-    assert not assessment.consequential
+    assert assessment.consequential
+    assert decide(assessment, "challenger", True) == "queued_consequential"
     assert assessment.version_upgrade
     assert assessment.rule_default == "accept_challenger"
 
@@ -120,3 +121,11 @@ def test_judge_prompt_and_parser():
     assert parse_judge_output({"winner": "Prior", "confidence": 1.7, "reason": "x"}) == ("prior", 1.0, "x")
     assert parse_judge_output({"winner": "maybe"}) is None
     assert parse_judge_output("nope") is None
+
+
+def test_person_to_person_merge_requires_review_even_on_new_version():
+    assessment = classify_flip(output_kind="entity_verification",
+        prior_payload=_entities({"ALEX RIVER"}, {"JORDAN RIVER"}),
+        challenger_payload=_entities({"ALEX RIVER", "JORDAN RIVER"}),
+        prior_input_hash="old", challenger_input_hash="new")
+    assert decide(assessment, None, False) == "queued_consequential"

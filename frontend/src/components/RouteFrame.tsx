@@ -1,8 +1,12 @@
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { startWatchSync, watchSyncState, syncWatches } from '../lib/watchSync'
+import { recordInvestigation } from '../lib/investigationState'
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
 
 const ROUTE_TITLES: Array<[RegExp, string]> = [
-  [/^\/$/, 'CountyIQ — York County Property Intelligence'],
+  [/^\/$/, 'Your Workspace — CountyIQ'],
+  [/^\/app$/, 'Your Workspace — CountyIQ'],
+  [/^\/organizations/, 'Organizations — CountyIQ'],
   [/^\/feed/, 'Intelligence Feed — CountyIQ'],
   [/^\/radar/, 'Development Radar — CountyIQ'],
   [/^\/municipalities/, 'Municipalities — CountyIQ'],
@@ -17,17 +21,33 @@ const ROUTE_TITLES: Array<[RegExp, string]> = [
 
 export default function RouteFrame() {
   const location = useLocation()
+  const [session,setSession]=useState(watchSyncState)
+  useEffect(()=>{
+    const update=()=>setSession(watchSyncState())
+    window.addEventListener('countyiq-watch-sync-changed',update)
+    return ()=>window.removeEventListener('countyiq-watch-sync-changed',update)
+  },[])
+  useEffect(startWatchSync, [])
 
   useEffect(() => {
     document.title = ROUTE_TITLES.find(([pattern]) => pattern.test(location.pathname))?.[1] ?? 'CountyIQ'
   }, [location.pathname])
 
+  useEffect(() => {
+    if (!/^\/(property|project|entity|owner|municipalities)\//.test(location.pathname)) return
+    const timer=window.setTimeout(()=>{
+      const label=document.querySelector('main h1')?.textContent?.trim()
+      if(label)recordInvestigation(location.pathname,label)
+    },1000)
+    return ()=>window.clearTimeout(timer)
+  },[location.pathname])
+
   return (
     <>
       <ScrollRestoration />
-      <Suspense fallback={<div className="route-loading">Loading CountyIQ…</div>}>
+      {session.connected && !session.hydrated ? <main className="route-loading"><p>{session.message || 'Loading your saved workspace…'}</p><button onClick={()=>void syncWatches()}>Retry</button></main> : <Suspense key={session.account?.user?.id ?? 'guest'} fallback={<div className="route-loading">Loading CountyIQ…</div>}>
         <Outlet />
-      </Suspense>
+      </Suspense>}
     </>
   )
 }

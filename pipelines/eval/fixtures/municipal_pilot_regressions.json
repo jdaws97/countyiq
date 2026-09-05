@@ -1,0 +1,1541 @@
+[
+  {
+    "source_id": 1174,
+    "body_name": "Franklin Twp Board of Supervisors",
+    "meeting_date": "2026-08-12",
+    "source_text": "FRANKLIN TOWNSHIP, YORK COUNTY\nBOARD OF SUPERVISORS (BOS)\nMEETING AGENDA\nAugust 12, 2026, 6:00 PM\nAS A COURTESY, PLEASE TURN OFF CELL PHONES\nNOTICE: Meeting is electronically monitored & maintained as part of the record until the minutes are\napproved by the BOS.\n1. Call to Order - Pledge of Allegiance and Prayer\n2. Police Report-Written report included in packet\n3. Public Comment PLEASE KEEP COMMENTS TO FIVE MINUTES MAXIMUM OR THE\nDESCRETION OF THE BOS\n4. CEO/ZO- Written report included in packet.\n5. Engineer/ Subdivision/Land Development\na. Young Subdivision Time Ext\nb. Greenview LLC Time Ext\n6. Reports\n6.1. \u2013 Roadmaster \u2013 Approval to list 2008 truck on Municibid\n6.2 BCO\n6.3 Fire\n6.4 EMA\n6.5 \u2013 DAA\n6.6 \u2013 EMS- Penn State\n6.7 \u2013 Parks & Rec Report\n7. Approval of Minutes:\na. July 8, 2026 Regular BOS Meeting Minutes\n8. Approval & Payment of Bills/Treasurer Report and Memo\na. Treasurer\u2019s Report\nb. Treasurer\u2019s Memo\n9. Solicitor\na. Update on status of Water Street\nb. Trash Hauling/ Recycling\n10. New Business\na. All other business deemed necessary\n11. Old Business\na. Building Improvements\nb. Office Procedures\n12. Correspondence\na. Resident Speed Complaint\nb. Resident Trash Complaint\n13. Executive Session\n14. Adjournment\nNext Regular Meeting\u2013September 9, 2026**\nNext Ordinance 2026-3 Next Resolution-2026-5 Next Conditional Use Case # CUH 2026-10\n*Conditional Use Hearing Application & Plan Submission Monday, August 31 ,2026 before Noon.\n**Meeting item submission and report submission deadline Wednesday, September 2, 2026, before 1:00 p.m.\nDocs > BOS > Agenda > 2026 > Date BOS Mtg Tentative Agenda",
+    "baseline_extractions": [
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "Young Subdivision",
+        "related_entities": [],
+        "what_happened": "The Board of Supervisors agenda lists a time-extension matter for the Young Subdivision.",
+        "why_it_matters": "The subdivision review remains subject to a time-extension action, but the agenda does not record a decision.",
+        "what_happens_next": "The Board of Supervisors may consider the time-extension matter at the August 12, 2026 meeting.",
+        "upcoming_date": "August 12, 2026, 6:00 PM",
+        "supporting_text": "5. Engineer/ Subdivision/Land Development\na. Young Subdivision Time Ext",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Greenview LLC",
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "Greenview LLC Subdivision/Land Development Matter",
+        "related_entities": [],
+        "what_happened": "The Board of Supervisors agenda lists a time-extension matter for Greenview LLC under subdivision and land development.",
+        "why_it_matters": "The subdivision or land-development review remains subject to a time-extension action, but the agenda does not record a decision.",
+        "what_happens_next": "The Board of Supervisors may consider the time-extension matter at the August 12, 2026 meeting.",
+        "upcoming_date": "August 12, 2026, 6:00 PM",
+        "supporting_text": "5. Engineer/ Subdivision/Land Development\na. Young Subdivision Time Ext\nb. Greenview LLC Time Ext",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "conditional_use",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "upcoming_decision"
+        ],
+        "project_name": "Conditional Use Case # CUH 2026-10",
+        "related_entities": [],
+        "what_happened": "The agenda identifies CUH 2026-10 as the next conditional-use case and sets a deadline for submission of the conditional-use hearing application and plan.",
+        "why_it_matters": "A conditional-use matter is anticipated, but the document does not identify the applicant, property, proposed use, or any decision.",
+        "what_happens_next": "The conditional-use hearing application and plan must be submitted by Monday, August 31, 2026, before noon.",
+        "upcoming_date": "Monday, August 31, 2026 before Noon",
+        "supporting_text": "Next Conditional Use Case # CUH 2026-10\n*Conditional Use Hearing Application & Plan Submission Monday, August 31 ,2026 before Noon.",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 1171,
+    "body_name": "Franklin Twp Board of Supervisors",
+    "meeting_date": "2026-07-08",
+    "source_text": "FRANKLIN TOWNSHIP, YORK COUNTY\nBOARD OF SUPERVISORS (BOS)\nMEETING AGENDA\nJuly 8, 2026, 6:00 PM\nAS A COURTESY, PLEASE TURN OFF CELL PHONES\nNOTICE: Meeting is electronically monitored & maintained as part of the record until the minutes are\napproved by the BOS.\n1. Call to Order - Pledge of Allegiance and Prayer\n2. Police Report-Written report included in packet\n3. Public Comment PLEASE KEEP COMMENTS TO FIVE MINUTES MAXIMUM OR THE\nDESCRETION OF THE BOS\na. Jevon Dolan-715/717 Range End Road\nb. Karen Stell- Water Street\n4. CEO/ZO- Written report included in packet.\n5. Engineer/ Subdivision/Land Development\na. Boxx Modular- 10 Century Ln Land Development Plan Review\nb. Joseph Machine Updated Land Development Plan Review\nc. 2026 Sturbridge Phasing Schedule\n6. Reports\n6.1. \u2013 Roadmaster \u2013\n6.2 BCO\n6.3 Fire\n6.4 EMA\n6.5 \u2013 DAA\n6.6 \u2013 EMS- Penn State\n6.7 \u2013 Parks & Rec Report\n7. Approval of Minutes:\na. June 10, 2026 Regular BOS Meeting Minutes\n8. Approval & Payment of Bills/Treasurer Report and Memo\na. Treasurer\u2019s Report\nb. Treasurer\u2019s Memo\n9. Solicitor\na. Update on status of Water Street\nb. Trash Hauling/ Recycling\n10. New Business\na. Schedule CUH 2026-8- Steep Slope\nb. Schedule CUH 2026-9- Accessory Use over 1000sq ft\nc. All other business deemed necessary\n11. Old Business\na. Building Improvements\nb. Office Procedures\n12. Correspondence\n13. Executive Session\n14. Adjournment\nNext Regular Meeting\u2013August 12, 2026**\nNext Ordinance 2026-3 Next Resolution-2026-5 Next Conditional Use Case # CUH 2026-10\n*Conditional Use Hearing Application & Plan Submission Monday, August 3 ,2026 before Noon.\n\n**Meeting item submission and report submission deadline Wednesday, August 5, 2026, before 1:00 p.m.\nDocs > BOS > Agenda > 2026 > Date BOS Mtg Tentative Agenda",
+    "baseline_extractions": [
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Boxx Modular",
+        "parcel_reference": "10 Century Ln",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "Boxx Modular Land Development Plan",
+        "related_entities": [],
+        "what_happened": "The Board of Supervisors agenda listed a land development plan review for Boxx Modular at 10 Century Ln.",
+        "why_it_matters": "The plan is subject to municipal land development review; no decision is recorded in this agenda.",
+        "what_happens_next": "The land development plan review is expected to proceed through the Township's review process; no specific next action is stated.",
+        "upcoming_date": null,
+        "supporting_text": "5. Engineer/ Subdivision/Land Development\na. Boxx Modular- 10 Century Ln Land Development Plan Review",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Joseph Machine",
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "revision"
+        ],
+        "project_name": "Joseph Machine Updated Land Development Plan",
+        "related_entities": [],
+        "what_happened": "The Board of Supervisors agenda listed review of an updated land development plan for Joseph Machine.",
+        "why_it_matters": "The updated plan remains subject to municipal land development review; no decision is recorded in this agenda.",
+        "what_happens_next": "The updated land development plan is expected to continue through the Township's review process; no specific next action is stated.",
+        "upcoming_date": null,
+        "supporting_text": "5. Engineer/ Subdivision/Land Development\nb. Joseph Machine Updated Land Development Plan Review",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "2026 Sturbridge Phasing Schedule",
+        "related_entities": [
+          "Sturbridge"
+        ],
+        "what_happened": "The Board of Supervisors agenda listed the 2026 Sturbridge phasing schedule under subdivision and land development matters.",
+        "why_it_matters": "The phasing schedule concerns the sequencing of a development project, but this agenda does not state a decision or identify the applicant or parcel.",
+        "what_happens_next": "No specific next action is stated.",
+        "upcoming_date": null,
+        "supporting_text": "5. Engineer/ Subdivision/Land Development\nc. 2026 Sturbridge Phasing Schedule",
+        "confidence": "medium"
+      },
+      {
+        "extraction_type": "conditional_use",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "upcoming_decision"
+        ],
+        "project_name": "CUH 2026-8 Steep Slope Conditional Use",
+        "related_entities": [
+          "Franklin Township Board of Supervisors"
+        ],
+        "what_happened": "The Board of Supervisors agenda scheduled Conditional Use Hearing case CUH 2026-8 concerning steep slope use.",
+        "why_it_matters": "The conditional use matter is scheduled for future municipal action, but the agenda does not identify an applicant, parcel, hearing date, or decision.",
+        "what_happens_next": "The conditional use hearing application and plan submission deadline is Monday, August 3, 2026, before noon; the agenda also identifies the next conditional use case as CUH 2026-10.",
+        "upcoming_date": "Monday, August 3, 2026 before Noon",
+        "supporting_text": "10. New Business\na. Schedule CUH 2026-8- Steep Slope\n\n*Conditional Use Hearing Application & Plan Submission Monday, August 3 ,2026 before Noon.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "conditional_use",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "upcoming_decision"
+        ],
+        "project_name": "CUH 2026-9 Accessory Use Over 1,000 Square Feet",
+        "related_entities": [
+          "Franklin Township Board of Supervisors"
+        ],
+        "what_happened": "The Board of Supervisors agenda scheduled Conditional Use Hearing case CUH 2026-9 concerning an accessory use over 1,000 square feet.",
+        "why_it_matters": "The conditional use matter is scheduled for future municipal action, but the agenda does not identify an applicant, parcel, hearing date, or decision.",
+        "what_happens_next": "The conditional use hearing application and plan submission deadline is Monday, August 3, 2026, before noon; the agenda also identifies the next conditional use case as CUH 2026-10.",
+        "upcoming_date": "Monday, August 3, 2026 before Noon",
+        "supporting_text": "10. New Business\nb. Schedule CUH 2026-9- Accessory Use over 1000sq ft\n\n*Conditional Use Hearing Application & Plan Submission Monday, August 3 ,2026 before Noon.",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 5153,
+    "body_name": "York City Planning Commission",
+    "meeting_date": "2026-08-10",
+    "source_text": "The City of York Economic and Community Development\nPennsylvania 101 South George Street\nYork, PA 17401\nThe Honorable Sandie Walker, Mayor www.yorkcity.org\nYork City Planning Commission Agenda\nMonday, August 10, 2026, | 6:00 PM\nCouncil Chambers, City Hall | 101 S George St, York, PA 17401\n1. Call to order.\n2. Roll call (Johnson, Velez, Burgos, Davis, Wolfe, Gaines, Moore)\n3. Minutes of the previous meeting\n4. Committee reports\n1.1. Zoning Hearing Board-emailed\nUnfinished business\n7.1.1 - LD/SD\n844-852 E. Market St.\n\u2022 Recommend [approve/deny] The submitted plan shall follow the requirements set\nforth in the City of York Subdivision and Land Development Ordinance (S.1333).\nThe applicant is requesting a waiver of this requirement based on the proposed\nrehabilitation of the existing structure. Conditioned upon city engineers\u2019\ncomments being satisfied.\n\u2022 Recommendation to [approve/deny] A preliminary plan is required to be submitted\nand approved prior to the submission of a final plan (1333.03). The applicant has\nrequested a waiver of this requirement and proposed to proceed directly to final\nplan approval. We recommend approval. Conditioned upon city engineers\u2019\ncomments being satisfied.\n127 N. Broad St.\n\u2022 Recommend [approve/deny] A preliminary plan is required to be submitted and\napproved prior to the submission of a final plan (1333.03). The applicant has\nrequested a waiver of this requirement and proposed to proceed directly to final\nplan approval. We recommend approval. Conditioned upon city engineers\u2019\ncomments being satisfied.\nPlanning and Z oning P: (717) 849-7005\n\nThe City of York Pennsylvania Page 2 of 4\nThe Honorable Sandie Walker, Mayor\nN. Hartley/W. Philadelphia St. - SD\n\u2022 Recommendation to [approve/deny] A preliminary plan is required to be\nsubmitted and approved prior to the submission of a final plan (1333.03). The\napplicant has requested a waiver of this requirement and proposed to proceed\ndirectly to final plan approval. We recommend approval. Conditioned upon city\nengineers\u2019 comments being satisfied.\n\u2022 Recommendation to [approve/deny] A traffic study including the items found in\nSection 1333.07.s is required to be submitted prior to final plan approval\n(S.1333.07.s). The applicant has requested a waiver of this requirement as there\nwill be a minimal increase in traffic volume with the improvement proposed by the\nplan. We recommend approval. Conditioned upon city engineers\u2019 comments\nbeing satisfied.\nN. Hartley/W. Philadelphia St. \u2013 LD\n\u2022 Recommendation to [approve/deny] A preliminary plan is required to be\nsubmitted and approved prior to the submission of a final plan (1333.03). The\napplicant has requested a waiver of this requirement and proposed to proceed\ndirectly to final plan approval. We recommend approval. Conditioned upon city\nengineers\u2019 comments being satisfied.\n\u2022 Recommendation to [approve/deny] A traffic study including the items found in\nSection 1333.07.s is required to be submitted prior to final plan approval\n(S.1333.07.s). The applicant has requested a waiver of this requirement as there\nwill be a minimal increase in traffic volume with the improvement proposed by the\nplan. We recommend approval. Conditioned upon city engineers\u2019 comments\nbeing satisfied.\n8.1.1\nZDA-26-1 | 721 S. George St.\n\u2022 Recommend to [approve/deny] whether the zoning officer erred by classifying the\nproposed use as a \u201cMultiple-Family Dwelling \u2013 Conversion from a Different Use\u201d\nunder 1304.01.1.02.002, whether the correct classification is a \u201cTwo-Unit\nResidential Dwelling,\u201d which is a permitted use in UN-1 zoning district under\n1303.08(A), whether the zoning officer improperly imposed Special Exception\ncriteria that apply only to conversions of non-residential buildings, for the property\nat 721 S. George St. in the UN1 zoning district.\nPlanning and Z oning P: (717) 849-7005\n\nThe City of York Pennsylvania Page 3 of 4\nThe Honorable Sandie Walker, Mayor\n25-2026-Z-V | 519 N. Franklin St.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking\nspaces found in section 1304.01-1.02.002, for the property at 519 N. Franklin St.\nin the EC zoning district.\n\u2022 Recommend to [approve/deny] of a variance to allow multi-family use, as defined\nin section 1304.01-1.02.002, for the property at 519 N. Franklin St. St. in the EC\nzoning district.\n.\n31-2026-Z-SE-V | 339 W. Philadelphia St.\n\u2022 Recommend to [approve/deny] a variance to the definition of multi-family\nconversion from a different use, as defined in section 1304.01-1.02.002a, for the\nproperty at 339 W. Philadelphia St. in the UN2 zoning district.\n\u2022 Recommend to [approve/deny] of a dimensional variance for 2 units as defined in\n\u00a71304.01.1.02.002(b)(4), for the property at 339 W. Philadelphia St. in the UN2\nzoning district.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking\nspaces found in section 1304.01-1.02.002, for the property at 339 W.\nPhiladelphia St. in the UN2 zoning district.\n\u2022 Recommend to [approve/deny] of a special exception to allow multi-family use,\nas defined in section 1304.01-1.02.002, for the property at 339 W. Philadelphia\nSt. in the UN2 zoning district.\n32-2026-Z-SE | 721 E. Prospect St.\n\u2022 Recommend to [approve/deny] of a special exception to \u00a71304.7.17 \u2013 Group\nhome 8 occupants., for the property at 721 E. Prospect St. in the EC zoning\ndistrict.\n33-2026-Z-V | 123 N. West St.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking\nspaces found in section 1304.01-1.02.002, for the property at 123 N. West St. in\nthe UN2 zoning district.\n34-2026-Z-V | 127 N. West St.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking\nspaces found in section 1304.01-1.02.002, for the property at 127 N. West St. in\nthe UN2 zoning district.\nPlanning and Z oning P: (717) 849-7005\n\nThe City of York Pennsylvania Page 4 of 4\nThe Honorable Sandie Walker, Mayor\n35-2026-Z-SE-V | 721 Jessop Pl.\n\u2022 Recommend to [approve/deny] a variance to the definition of multi-family\nconversion from a different use, as defined in section 1304.01-1.02.002a, for the\nproperty at 721 Jessop Pl. in the MUI2 zoning district.\n\u2022 Recommend to [approve/deny] of a dimensional variance for 2 units as defined in\n\u00a71304.01.1.02.002(b)(4), for the property at 721 Jessop Pl. in the MUI2 zoning\ndistrict.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking\nspaces found in section 1304.01-1.02.002, for the property at for the property at\n721 Jessop Pl. in the MUI2 zoning district.\n\u2022 Recommend to [approve/deny] a variance to waive the special exception\nprovision that the property must have been vacant for two years found in section\n1311.11(c)(1) for the property at 721 Jessop Pl. in the MUI2 zoning district.\n\u2022 Recommend to [approve/deny] of a special exception to allow multi-family use,\nas defined in section 1304.01-1.02.002, for the property at 721 Jessop Pl. in the\nMUI2 zoning district.\nAdjournment\nPlanning and Z oning P: (717) 849-7005",
+    "baseline_extractions": [
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": null,
+        "parcel_reference": "844-852 E. Market St.",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [
+          "City engineers\u2019 comments must be satisfied."
+        ],
+        "event_tags": [
+          "application",
+          "condition"
+        ],
+        "project_name": "844-852 E. Market St. LD/SD plan",
+        "related_entities": [
+          "City of York Planning and Zoning",
+          "city engineers"
+        ],
+        "what_happened": "The Planning Commission considered recommendations on waivers for the 844-852 E. Market St. land development/subdivision plan, including proceeding directly to final plan approval and relief from a stated ordinance requirement, conditioned on city engineers\u2019 comments being satisfied.",
+        "why_it_matters": "The requested waivers would allow the applicant to proceed directly to final plan approval for a proposed rehabilitation of the existing structure, subject to city engineering review.",
+        "what_happens_next": "The matter remains subject to a recommendation or decision and satisfaction of city engineers\u2019 comments.",
+        "upcoming_date": null,
+        "supporting_text": "844-852 E. Market St.\n\u2022 Recommend [approve/deny] The submitted plan shall follow the requirements set forth in the City of York Subdivision and Land Development Ordinance (S.1333). The applicant is requesting a waiver of this requirement based on the proposed rehabilitation of the existing structure. Conditioned upon city engineers\u2019 comments being satisfied.\n\u2022 Recommendation to [approve/deny] A preliminary plan is required to be submitted and approved prior to the submission of a final plan (1333.03). The applicant has requested a waiver of this requirement and proposed to proceed directly to final plan approval. We recommend approval. Conditioned upon city engineers\u2019 comments being satisfied.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": null,
+        "parcel_reference": "127 N. Broad St.",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [
+          "City engineers\u2019 comments must be satisfied."
+        ],
+        "event_tags": [
+          "application",
+          "condition"
+        ],
+        "project_name": "127 N. Broad St. preliminary-to-final plan waiver",
+        "related_entities": [
+          "City of York Planning and Zoning",
+          "city engineers"
+        ],
+        "what_happened": "The Planning Commission considered a recommendation on the applicant\u2019s request to waive the preliminary-plan requirement and proceed directly to final plan approval for 127 N. Broad St.",
+        "why_it_matters": "The requested waiver concerns the sequence of subdivision and land development plan approvals under Section 1333.03.",
+        "what_happens_next": "The matter remains subject to a recommendation or decision and satisfaction of city engineers\u2019 comments.",
+        "upcoming_date": null,
+        "supporting_text": "127 N. Broad St.\n\u2022 Recommend [approve/deny] A preliminary plan is required to be submitted and approved prior to the submission of a final plan (1333.03). The applicant has requested a waiver of this requirement and proposed to proceed directly to final plan approval. We recommend approval. Conditioned upon city engineers\u2019 comments being satisfied.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": null,
+        "parcel_reference": "N. Hartley/W. Philadelphia St.",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [
+          "City engineers\u2019 comments must be satisfied."
+        ],
+        "event_tags": [
+          "application",
+          "condition"
+        ],
+        "project_name": "N. Hartley/W. Philadelphia St. SD plan",
+        "related_entities": [
+          "City of York Planning and Zoning",
+          "city engineers"
+        ],
+        "what_happened": "The Planning Commission considered waivers for the N. Hartley/W. Philadelphia St. subdivision plan to proceed directly to final plan approval and to waive the required traffic study.",
+        "why_it_matters": "The requested waivers would affect the required preliminary-plan sequence and traffic-study submission before final plan approval.",
+        "what_happens_next": "The matter remains subject to a recommendation or decision and satisfaction of city engineers\u2019 comments.",
+        "upcoming_date": null,
+        "supporting_text": "N. Hartley/W. Philadelphia St. - SD\n\u2022 Recommendation to [approve/deny] A preliminary plan is required to be submitted and approved prior to the submission of a final plan (1333.03). The applicant has requested a waiver of this requirement and proposed to proceed directly to final plan approval. We recommend approval. Conditioned upon city engineers\u2019 comments being satisfied.\n\u2022 Recommendation to [approve/deny] A traffic study including the items found in Section 1333.07.s is required to be submitted prior to final plan approval (S.1333.07.s). The applicant has requested a waiver of this requirement as there will be a minimal increase in traffic volume with the improvement proposed by the plan. We recommend approval. Conditioned upon city engineers\u2019 comments being satisfied.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": null,
+        "parcel_reference": "N. Hartley/W. Philadelphia St.",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [
+          "City engineers\u2019 comments must be satisfied."
+        ],
+        "event_tags": [
+          "application",
+          "condition"
+        ],
+        "project_name": "N. Hartley/W. Philadelphia St. LD plan",
+        "related_entities": [
+          "City of York Planning and Zoning",
+          "city engineers"
+        ],
+        "what_happened": "The Planning Commission considered waivers for the N. Hartley/W. Philadelphia St. land development plan to proceed directly to final plan approval and to waive the required traffic study.",
+        "why_it_matters": "The requested waivers would affect the required preliminary-plan sequence and traffic-study submission before final plan approval.",
+        "what_happens_next": "The matter remains subject to a recommendation or decision and satisfaction of city engineers\u2019 comments.",
+        "upcoming_date": null,
+        "supporting_text": "N. Hartley/W. Philadelphia St. \u2013 LD\n\u2022 Recommendation to [approve/deny] A preliminary plan is required to be submitted and approved prior to the submission of a final plan (1333.03). The applicant has requested a waiver of this requirement and proposed to proceed directly to final plan approval. We recommend approval. Conditioned upon city engineers\u2019 comments being satisfied.\n\u2022 Recommendation to [approve/deny] A traffic study including the items found in Section 1333.07.s is required to be submitted prior to final plan approval (S.1333.07.s). The applicant has requested a waiver of this requirement as there will be a minimal increase in traffic volume with the improvement proposed by the plan. We recommend approval. Conditioned upon city engineers\u2019 comments being satisfied.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "development_proposal",
+        "applicant_name": null,
+        "parcel_reference": "721 S. George St.",
+        "current_zoning": "UN1",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "hearing"
+        ],
+        "project_name": "721 S. George St. zoning determination appeal",
+        "related_entities": [
+          "Zoning Hearing Board",
+          "zoning officer"
+        ],
+        "what_happened": "The Planning Commission considered whether the zoning officer erred in classifying the proposed use at 721 S. George St. as a multiple-family dwelling conversion rather than a permitted two-unit residential dwelling.",
+        "why_it_matters": "The classification determines whether the use is permitted in the UN1 district and whether special-exception criteria for non-residential conversions apply.",
+        "what_happens_next": "The document records only a recommendation item and does not state a final decision.",
+        "upcoming_date": null,
+        "supporting_text": "ZDA-26-1 | 721 S. George St.\n\u2022 Recommend to [approve/deny] whether the zoning officer erred by classifying the proposed use as a \u201cMultiple-Family Dwelling \u2013 Conversion from a Different Use\u201d under 1304.01.1.02.002, whether the correct classification is a \u201cTwo-Unit Residential Dwelling,\u201d which is a permitted use in UN-1 zoning district under 1303.08(A), whether the zoning officer improperly imposed Special Exception criteria that apply only to conversions of non-residential buildings, for the property at 721 S. George St. in the UN1 zoning district.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": null,
+        "parcel_reference": "519 N. Franklin St.",
+        "current_zoning": "EC",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "519 N. Franklin St. variance application",
+        "related_entities": [
+          "Zoning Hearing Board"
+        ],
+        "what_happened": "The Planning Commission considered recommendations on variances for required off-street parking and to allow multi-family use at 519 N. Franklin St.",
+        "why_it_matters": "The requested relief concerns parking requirements and use eligibility in the EC zoning district.",
+        "what_happens_next": "The document records recommendations only and does not state a final decision.",
+        "upcoming_date": null,
+        "supporting_text": "25-2026-Z-V | 519 N. Franklin St.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking spaces found in section 1304.01-1.02.002, for the property at 519 N. Franklin St. in the EC zoning district.\n\u2022 Recommend to [approve/deny] of a variance to allow multi-family use, as defined in section 1304.01-1.02.002, for the property at 519 N. Franklin St. St. in the EC zoning district.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": null,
+        "parcel_reference": "339 W. Philadelphia St.",
+        "current_zoning": "UN2",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "339 W. Philadelphia St. multi-family conversion application",
+        "related_entities": [
+          "Zoning Hearing Board"
+        ],
+        "what_happened": "The Planning Commission considered multiple variances for a multi-family conversion at 339 W. Philadelphia St., including relief concerning the conversion definition, two units, and off-street parking, along with a related special-exception request for multi-family use.",
+        "why_it_matters": "The requested relief addresses dimensional, parking, conversion, and use requirements for the property in the UN2 zoning district.",
+        "what_happens_next": "The document records recommendations only and does not state a final decision.",
+        "upcoming_date": null,
+        "supporting_text": "31-2026-Z-SE-V | 339 W. Philadelphia St.\n\u2022 Recommend to [approve/deny] a variance to the definition of multi-family conversion from a different use, as defined in section 1304.01-1.02.002a, for the property at 339 W. Philadelphia St. in the UN2 zoning district.\n\u2022 Recommend to [approve/deny] of a dimensional variance for 2 units as defined in \u00a71304.01.1.02.002(b)(4), for the property at 339 W. Philadelphia St. in the UN2 zoning district.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking spaces found in section 1304.01-1.02.002, for the property at 339 W. Philadelphia St. in the UN2 zoning district.\n\u2022 Recommend to [approve/deny] of a special exception to allow multi-family use, as defined in section 1304.01-1.02.002, for the property at 339 W. Philadelphia St. in the UN2 zoning district.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "special_exception",
+        "applicant_name": null,
+        "parcel_reference": "721 E. Prospect St.",
+        "current_zoning": "EC",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "721 E. Prospect St. group home special exception",
+        "related_entities": [
+          "Zoning Hearing Board"
+        ],
+        "what_happened": "The Planning Commission considered a recommendation on a special exception for a group home with eight occupants at 721 E. Prospect St.",
+        "why_it_matters": "The requested special exception concerns whether the proposed group-home use is authorized under Section 1304.7.17 in the EC zoning district.",
+        "what_happens_next": "The document records a recommendation item only and does not state a final decision.",
+        "upcoming_date": null,
+        "supporting_text": "32-2026-Z-SE | 721 E. Prospect St.\n\u2022 Recommend to [approve/deny] of a special exception to \u00a71304.7.17 \u2013 Group home 8 occupants., for the property at 721 E. Prospect St. in the EC zoning district.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": null,
+        "parcel_reference": "123 N. West St.",
+        "current_zoning": "UN2",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "123 N. West St. parking variance",
+        "related_entities": [
+          "Zoning Hearing Board"
+        ],
+        "what_happened": "The Planning Commission considered a variance from the required off-street parking spaces for 123 N. West St.",
+        "why_it_matters": "The requested variance concerns compliance with the off-street parking requirement in the UN2 zoning district.",
+        "what_happens_next": "The document records a recommendation only and does not state a final decision.",
+        "upcoming_date": null,
+        "supporting_text": "33-2026-Z-V | 123 N. West St.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking spaces found in section 1304.01-1.02.002, for the property at 123 N. West St. in the UN2 zoning district.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": null,
+        "parcel_reference": "127 N. West St.",
+        "current_zoning": "UN2",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "127 N. West St. parking variance",
+        "related_entities": [
+          "Zoning Hearing Board"
+        ],
+        "what_happened": "The Planning Commission considered a variance from the required off-street parking spaces for 127 N. West St.",
+        "why_it_matters": "The requested variance concerns compliance with the off-street parking requirement in the UN2 zoning district.",
+        "what_happens_next": "The document records a recommendation only and does not state a final decision.",
+        "upcoming_date": null,
+        "supporting_text": "34-2026-Z-V | 127 N. West St.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking spaces found in section 1304.01-1.02.002, for the property at 127 N. West St. in the UN2 zoning district.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": null,
+        "parcel_reference": "721 Jessop Pl.",
+        "current_zoning": "MUI2",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "721 Jessop Pl. multi-family conversion application",
+        "related_entities": [
+          "Zoning Hearing Board"
+        ],
+        "what_happened": "The Planning Commission considered multiple variances for a multi-family conversion at 721 Jessop Pl., including relief concerning the conversion definition, two units, parking, and the two-year vacancy requirement, along with a related special-exception request for multi-family use.",
+        "why_it_matters": "The requested relief addresses dimensional, parking, conversion, vacancy, and use requirements for the property in the MUI2 zoning district.",
+        "what_happens_next": "The document records recommendations only and does not state a final decision.",
+        "upcoming_date": null,
+        "supporting_text": "35-2026-Z-SE-V | 721 Jessop Pl.\n\u2022 Recommend to [approve/deny] a variance to the definition of multi-family conversion from a different use, as defined in section 1304.01-1.02.002a, for the property at 721 Jessop Pl. in the MUI2 zoning district.\n\u2022 Recommend to [approve/deny] of a dimensional variance for 2 units as defined in \u00a71304.01.1.02.002(b)(4), for the property at 721 Jessop Pl. in the MUI2 zoning district.\n\u2022 Recommend to [approve/deny] of a variance to the required off-street parking spaces found in section 1304.01-1.02.002, for the property at for the property at 721 Jessop Pl. in the MUI2 zoning district.\n\u2022 Recommend to [approve/deny] a variance to waive the special exception provision that the property must have been vacant for two years found in section 1311.11(c)(1) for the property at 721 Jessop Pl. in the MUI2 zoning district.\n\u2022 Recommend to [approve/deny] of a special exception to allow multi-family use, as defined in section 1304.01-1.02.002, for the property at 721 Jessop Pl. in the MUI2 zoning district.",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 3335,
+    "body_name": "Fairview Twp Zoning Hearing Board",
+    "meeting_date": "2026-08-20",
+    "source_text": "PUBLIC NOTICE\nThe Fairview Township Zoning Hearing Board will hold a Public Hearing on Thursday,\nAugust 20, 2026, at 6:00pm, at the Fairview Township Municipal Building, 599 Lewisberry\nRoad, New Cumberland, PA., 17070, to discuss the following:\nDocket No. 2026-03: Applicants, Lawrence and Brenda Cox, are requesting a Variance\nfrom Section \u00a7300-21, Table 5-3 to adjust the lot line between two non-conforming lots.\nThe subject properties are located at 850 Cardinal Lane, having a UPI No. 27-000-25-\n0022.00-00000 and 854 Cardinal Lane, 27-000-25-0023.00-00000, Lewisberry, PA 17339,\nwhich are located within the (RS) Single Family Residential Zoning District.",
+    "baseline_extractions": [
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": "Lawrence and Brenda Cox",
+        "parcel_reference": "850 Cardinal Lane, UPI No. 27-000-25-0022.00-00000; 854 Cardinal Lane, UPI No. 27-000-25-0023.00-00000, Lewisberry, PA 17339",
+        "current_zoning": "RS Single Family Residential Zoning District",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "Cardinal Lane Lot Line Adjustment Variance",
+        "related_entities": [
+          "Fairview Township Zoning Hearing Board",
+          "Fairview Township"
+        ],
+        "what_happened": "Lawrence and Brenda Cox requested a variance from Section \u00a7300-21, Table 5-3, to adjust the lot line between two non-conforming lots at 850 and 854 Cardinal Lane.",
+        "why_it_matters": "The requested variance concerns a lot-line adjustment affecting two non-conforming residential lots in the RS zoning district.",
+        "what_happens_next": "The Fairview Township Zoning Hearing Board is scheduled to discuss the variance at a public hearing.",
+        "upcoming_date": "Thursday, August 20, 2026, at 6:00pm",
+        "supporting_text": "Docket No. 2026-03: Applicants, Lawrence and Brenda Cox, are requesting a Variance from Section \u00a7300-21, Table 5-3 to adjust the lot line between two non-conforming lots. The subject properties are located at 850 Cardinal Lane, having a UPI No. 27-000-25-0022.00-00000 and 854 Cardinal Lane, 27-000-25-0023.00-00000, Lewisberry, PA 17339, which are located within the (RS) Single Family Residential Zoning District.",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 6302,
+    "body_name": "Lower Windsor Twp Zoning Hearing Board",
+    "meeting_date": "2026-07-16",
+    "source_text": "LOWER WINDSOR TOWNSHIP\nZONING HEARING BOARD AGENDA\nJULY 16, 2026 at 6:30 PM\n1. CALL TO ORDER & PLEDGE TO THE FLAG\n2. REORGANIZATION\nA. Chair\nB. Vice-Chair\nC. Secretary\nD. Appoint Solicitor\nE. Appoint Stenographer\n3. NEW BUSINESS\nA. Zoning Case Z2026-01 Lot 41 Murphy\u2019s Hollow 35-000-KL-0013.00.00000; Variance\nRequest Section 235-24.E(2) of the Floodplain Ordinance; in the Agricultural District.\nDeadline is August 24, 2026.\nB. Zoning Case 2026-02 Susquehanna Heritage Corp. 1696, 1698, & 1706 Long Level\nRd, 35-000-JM-0001.00-00000; 35-000-JM-0002.C0-00000 & 35-000-JM-0003.A0-\n00000; Variance request, Section 235-24.E(2) of the Floodplain Ordinance and\nSection 470-18.E(1)(a) of the Zoning Ordinance; in the Waterfront Recreation\nDistrict. Deadline is August 24, 2026\n4. ADJOURN",
+    "baseline_extractions": [
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": null,
+        "parcel_reference": "Lot 41 Murphy\u2019s Hollow; 35-000-KL-0013.00.00000",
+        "current_zoning": "Agricultural District",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "upcoming_decision"
+        ],
+        "project_name": "Zoning Case Z2026-01 \u2014 Lot 41 Murphy\u2019s Hollow",
+        "related_entities": [
+          "Lower Windsor Township Zoning Hearing Board"
+        ],
+        "what_happened": "Zoning Case Z2026-01 requests a variance from Section 235-24.E(2) of the Floodplain Ordinance for Lot 41 Murphy\u2019s Hollow in the Agricultural District.",
+        "why_it_matters": "The variance request concerns compliance with the Floodplain Ordinance and is subject to a stated August 24, 2026 deadline.",
+        "what_happens_next": "The Zoning Hearing Board is expected to act on the variance request by the stated deadline.",
+        "upcoming_date": "August 24, 2026",
+        "supporting_text": "A. Zoning Case Z2026-01 Lot 41 Murphy\u2019s Hollow 35-000-KL-0013.00.00000; Variance Request Section 235-24.E(2) of the Floodplain Ordinance; in the Agricultural District. Deadline is August 24, 2026.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": "Susquehanna Heritage Corp.",
+        "parcel_reference": "1696, 1698, & 1706 Long Level Rd; 35-000-JM-0001.00-00000; 35-000-JM-0002.C0-00000; 35-000-JM-0003.A0-00000",
+        "current_zoning": "Waterfront Recreation District",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "upcoming_decision"
+        ],
+        "project_name": "Zoning Case 2026-02 \u2014 Long Level Road Properties",
+        "related_entities": [
+          "Lower Windsor Township Zoning Hearing Board"
+        ],
+        "what_happened": "Zoning Case 2026-02, submitted by Susquehanna Heritage Corp., requests variances from Section 235-24.E(2) of the Floodplain Ordinance and Section 470-18.E(1)(a) of the Zoning Ordinance for properties on Long Level Road in the Waterfront Recreation District.",
+        "why_it_matters": "The variance request concerns requirements under both the Floodplain Ordinance and Zoning Ordinance and is subject to a stated August 24, 2026 deadline.",
+        "what_happens_next": "The Zoning Hearing Board is expected to act on the variance request by the stated deadline.",
+        "upcoming_date": "August 24, 2026",
+        "supporting_text": "B. Zoning Case 2026-02 Susquehanna Heritage Corp. 1696, 1698, & 1706 Long Level Rd, 35-000-JM-0001.00-00000; 35-000-JM-0002.C0-00000 & 35-000-JM-0003.A0-00000; Variance request, Section 235-24.E(2) of the Floodplain Ordinance and Section 470-18.E(1)(a) of the Zoning Ordinance; in the Waterfront Recreation District. Deadline is August 24, 2026",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 10481,
+    "body_name": "Hopewell Twp Board of Supervisors",
+    "meeting_date": "2026-09-03",
+    "source_text": "HOPEWELL TOWNSHIP\nYORK COUNTY PA\nBOARD OF SUPERVISORS\nAGENDA FOR REGULAR MEETING\nTHURSDAY, SEPTEMBER 3, 2026 @ 7:00 P.M.\nMEETING ROOM AND VIA ZOOM\nJoin Zoom Meeting\nhttps://us02web.zoom.us/j/87184359483?pwd=sIsisCaagxSdb0d82yhCjvAv74AGXS.1\nMeeting ID: 871 8435 9483\nPasscode: 932640\nDial by your location\n+1 301 715 8592 (Washington DC)\nCall meeting to order, pledge to the flag\nAnnouncement to ask if anyone is recording the meeting to provide their name and\naddress for the record on the sign in sheet\nAnnouncement of Executive Session Held\nApproval of Minutes\nConsider approval of the August 6, 2026, Regular Meeting Minutes, as distributed\nTreasurer\u2019s Report / Invoices\nConsider approval of the August 31, 2026, Treasurer\u2019s Report and previously reviewed\ninvoices listed in this report\nRoads Report\nPavement Marking / Line Painting Proposals \u2013 D.E. Gemmill & Alpha Space Control\nFinishing Leib School Road Paving Project\nTrimming trees and repairing catch basins\nRecommendation from the Roadmaster\n\u27a2 Consider a resolution or ordinance amendment to require a camera record for all\nstormwater facilities that will be publicly maintained\nZoning Officer / Code Enforcement Report\nSubdivision / Land Development Plans\n\nBrian Daniel, 2923 Stewartstown Road \u2013 Sketch Plan\n2026-03 \u2013 Preliminary / Final Subdivision Plan for Lands of L. Dean & Maureen F.\nFromm / Adam & Hallie Reed \u2013 Agricultural Security Area, Letter for Clean & Green,\nand Determination of Non-Prime Farmlands\nSolicitor\u2019s Report\nMunicipal Waste Collection Bid Package\nSolAmerica Solar Project \u2013 Orwig Road\nBattery Energy Storage System (BESS) Ordinance\nOne Energy Solar Overlay Extension Application\n\u27a2 Chris Naylor with Barley Snyder to be present\nBarrens Road South Property \u2013 Clean & Green\nOther Business\nStewartstown Senior Center, Erin Faw \u2013 Annual Report\nApplication for Traffic Signal Approval - Mt Airy & Wolfe Road Pedestrian Improvements\n\u2013 Add sidewalk & ADA ramps \u2013 Shrewsbury Township Grant Project\n\u27a2 Consider approval to sign\nAct 537 Update \u2013 Review 2026 compliance rate for District 1\n2027 York County SPCA Contract\nMinimum Municipal Obligation \u2013 Certify 2027 MMO for Employee Pension Plan\nBudget Workshop \u2013 Set date / time and authorize advertisement\nConfirm York County Convention Attendance \u2013 October 28, 2026\nMason Dixon Library \u2013 Notice of Transition to Branch of York County Library System\n\u27a2 Motion to sign acknowledgement\nC.M. High \u2013 Preventative Maintenance Repair Estimate #4444\nPersonnel \u2013 None\nPublic Comment\nAdjournment",
+    "baseline_extractions": [
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Brian Daniel",
+        "parcel_reference": "2923 Stewartstown Road",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "Brian Daniel Sketch Plan",
+        "related_entities": [],
+        "what_happened": "The agenda lists a sketch plan for Brian Daniel at 2923 Stewartstown Road under subdivision and land development plans.",
+        "why_it_matters": "The sketch plan is identified for municipal subdivision or land development review; the agenda does not state a decision.",
+        "what_happens_next": "The plan may be reviewed by the Board or staff as part of the subdivision and land development agenda item.",
+        "upcoming_date": null,
+        "supporting_text": "Subdivision / Land Development Plans\n\nBrian Daniel, 2923 Stewartstown Road \u2013 Sketch Plan",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "L. Dean & Maureen F. Fromm / Adam & Hallie Reed",
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "2026-03 Preliminary / Final Subdivision Plan",
+        "related_entities": [
+          "L. Dean & Maureen F. Fromm",
+          "Adam & Hallie Reed"
+        ],
+        "what_happened": "The agenda lists the 2026-03 Preliminary / Final Subdivision Plan for lands of L. Dean and Maureen F. Fromm and Adam and Hallie Reed, along with agricultural security, Clean and Green, and non-prime farmland documentation.",
+        "why_it_matters": "The matter involves preliminary and final subdivision-plan review and related farmland and tax-status documentation; no decision or proposed lot count is stated.",
+        "what_happens_next": "The listed plan and accompanying documentation may be reviewed as part of the subdivision and land development agenda item.",
+        "upcoming_date": null,
+        "supporting_text": "2026-03 \u2013 Preliminary / Final Subdivision Plan for Lands of L. Dean & Maureen F.\nFromm / Adam & Hallie Reed \u2013 Agricultural Security Area, Letter for Clean & Green,\nand Determination of Non-Prime Farmlands",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "upcoming_decision"
+        ],
+        "project_name": "Stormwater Facility Camera Record Ordinance Amendment",
+        "related_entities": [],
+        "what_happened": "The Board is scheduled to consider a resolution or ordinance amendment requiring camera records for all stormwater facilities that will be publicly maintained.",
+        "why_it_matters": "The proposed requirement would establish a municipality-wide documentation standard for publicly maintained stormwater facilities if adopted.",
+        "what_happens_next": "The Board is scheduled to consider the resolution or ordinance amendment at the September 3, 2026 regular meeting.",
+        "upcoming_date": "THURSDAY, SEPTEMBER 3, 2026 @ 7:00 P.M.",
+        "supporting_text": "\u27a2 Consider a resolution or ordinance amendment to require a camera record for all\nstormwater facilities that will be publicly maintained",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "development_proposal",
+        "applicant_name": "SolAmerica",
+        "parcel_reference": "Orwig Road",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "SolAmerica Solar Project",
+        "related_entities": [],
+        "what_happened": "The agenda includes the SolAmerica Solar Project located on Orwig Road in the solicitor's report.",
+        "why_it_matters": "The project is identified for discussion in a municipal meeting, but the agenda provides no project scope, formal application type, or decision.",
+        "what_happens_next": "The project may be discussed during the solicitor's report; no further procedural step is stated.",
+        "upcoming_date": null,
+        "supporting_text": "Solicitor\u2019s Report\nMunicipal Waste Collection Bid Package\nSolAmerica Solar Project \u2013 Orwig Road",
+        "confidence": "medium"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "Battery Energy Storage System (BESS) Ordinance",
+        "related_entities": [],
+        "what_happened": "The agenda lists a Battery Energy Storage System ordinance for consideration in the solicitor's report.",
+        "why_it_matters": "The ordinance could establish municipal regulations for battery energy storage systems, but the agenda does not state proposed text or an action taken.",
+        "what_happens_next": "The ordinance may be discussed during the solicitor's report; no decision date or next step beyond the listed meeting is stated.",
+        "upcoming_date": null,
+        "supporting_text": "Solicitor\u2019s Report\nMunicipal Waste Collection Bid Package\nSolAmerica Solar Project \u2013 Orwig Road\nBattery Energy Storage System (BESS) Ordinance",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": "One Energy",
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "One Energy Solar Overlay Extension Application",
+        "related_entities": [
+          "Chris Naylor",
+          "Barley Snyder"
+        ],
+        "what_happened": "The agenda lists an application by One Energy to extend a solar overlay and states that Chris Naylor with Barley Snyder will be present.",
+        "why_it_matters": "The application concerns a proposed extension of a municipal solar-overlay area; the agenda does not identify the affected parcel, existing zoning, proposed boundaries, or a decision.",
+        "what_happens_next": "The application may be presented or discussed at the meeting with Chris Naylor of Barley Snyder present.",
+        "upcoming_date": null,
+        "supporting_text": "One Energy Solar Overlay Extension Application\n\u27a2 Chris Naylor with Barley Snyder to be present",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "Act 537 Update \u2013 District 1 Compliance Rate Review",
+        "related_entities": [],
+        "what_happened": "The agenda includes a review of the 2026 compliance rate for District 1 as part of an Act 537 update.",
+        "why_it_matters": "The item concerns municipal sewage-facilities planning and compliance monitoring for District 1; no plan amendment, capacity decision, or action is stated.",
+        "what_happens_next": "The 2026 District 1 compliance rate may be reviewed at the meeting; no further step is specified.",
+        "upcoming_date": null,
+        "supporting_text": "Act 537 Update \u2013 Review 2026 compliance rate for District 1",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 8082,
+    "body_name": "Conewago Twp Planning Commission",
+    "meeting_date": "2026-06-22",
+    "source_text": "Conewago Township Planning Commission\nMeeting Agenda\n450 Copenhaffer Road, York PA 17404\nMonday June 22nd, 2026 @ 6:00PM\n1. Call meeting to order 6:00pm\n2. Pledge of Allegiance:\n3. Approval of March 23, 2026 minutes\n4. Recognition of public requests:\n-\n(5 minutes maximum per person-20 minutes maximum per meeting) This time is allotted for\nall public comments, including all business listed on the agendas. Please give your full name\nand address. Please direct your comments to the Chairman. Allow time for other people to\nmake comments by making your comments specific and brief.\n5. Old Business:\nLD-01-2026 Carvana Land Development-\n-\na. Carvana submitted an application\nfor Preliminary/Final Land Development pursuant to Conewago Township\nSubdivision and Land Development Ordinance #324 to construct at the Car\nAuction a new building at 115 Industrial Rd, York PA 17406. The site is Zoned\nADDRESS: 115 Industrial Rd Tax Map: NH Parcel: 145A\nIndustrial/Commercial.\ni.\n6. New Business:\nSD-02-2026 Fox Run Phase IV \u2013\n-\na. Faire Wynd Associates, LP has submitted a\nfinal plan for Phase IV of Fox Fun development, containing the final 44 units\nfor this development. The property is located at the intersection of Graffius\nAddress: Graffius Road and Bull Road Tax Map 3 Parcel 1A\nRoad and Bull Road. The site is zoned Village.\ni.\nb. SD-03-202695 Butter Road Minor Subdivision\n\u2013 Landworks Civil Design\nhas submitted a two lot subdivision for the property located at 95 Butter\ni. ADDRESS: 95 Butter Road Tax Map MG Parcel 200\nRoad. The site is zoned Agriculture.\nCase 04-2026 Kuhar Variance Request-\nc. Beth Kuhar submitted a request for\na use variance to allow keeping of chicken on her property pursuant to\nConewago Township Zoning Ordinance #322 \u00a7304. The property is Zoned R-\nAddress: 1845 Mill Creek Rd Tax Map: LG Parcel: 7B\n2.\ni.\n1 | P age\n\nd. Case 05-2026 Prosper development \u2013\nProsper Development has submitted\na request for a Special Exception to construct approximately 73 multi-family\ndwellings on a lot to be created from parts of 3 separate parcels pursuant to\nthe Conewago Township Zoning Ordinance #322 \u00a7 305. The site is zoned\ni. ADDRESS: 201, 235, and 255 Copenhaffer Road Tax Map 1 Parcel\nVillage.\n28; Tax Map 1 Parcel 26; Tax Map 1 Parcel 24A\n7. Other Business:\nThe Township will be holding a special meeting to discuss the draft\nordinance to amend the zoning ordinance to provide regulations for Data Centers\nand their accessory uses within the Township.\nAdjournment:\n2 | P age",
+    "baseline_extractions": [
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Carvana",
+        "parcel_reference": "115 Industrial Rd, York PA 17406; Tax Map NH, Parcel 145A",
+        "current_zoning": "Industrial/Commercial",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "Carvana Land Development",
+        "related_entities": [
+          "Conewago Township Planning Commission",
+          "Conewago Township Subdivision and Land Development Ordinance #324"
+        ],
+        "what_happened": "Carvana submitted a Preliminary/Final Land Development application to construct a new building at the car auction site.",
+        "why_it_matters": "The Planning Commission agenda identifies the application as an old-business land development review under the township subdivision and land development ordinance.",
+        "what_happens_next": "The application is scheduled for consideration by the Planning Commission; no decision is recorded in the agenda.",
+        "upcoming_date": "Monday June 22nd, 2026 @ 6:00PM",
+        "supporting_text": "LD-01-2026 Carvana Land Development- a. Carvana submitted an application for Preliminary/Final Land Development pursuant to Conewago Township Subdivision and Land Development Ordinance #324 to construct at the Car Auction a new building at 115 Industrial Rd, York PA 17406. The site is Zoned Industrial/Commercial. ADDRESS: 115 Industrial Rd Tax Map: NH Parcel: 145A",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Faire Wynd Associates, LP",
+        "parcel_reference": "Graffius Road and Bull Road; Tax Map 3, Parcel 1A",
+        "current_zoning": "Village",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "Fox Run Phase IV",
+        "related_entities": [
+          "Conewago Township Planning Commission"
+        ],
+        "what_happened": "Faire Wynd Associates, LP submitted a final plan for Phase IV of the Fox Run development containing the development's final 44 units.",
+        "why_it_matters": "The final-plan review concerns completion of the remaining 44 units in the Fox Run development.",
+        "what_happens_next": "The final plan is scheduled for Planning Commission consideration; no decision is recorded in the agenda.",
+        "upcoming_date": "Monday June 22nd, 2026 @ 6:00PM",
+        "supporting_text": "SD-02-2026 Fox Run Phase IV \u2013 a. Faire Wynd Associates, LP has submitted a final plan for Phase IV of Fox Fun development, containing the final 44 units for this development. The property is located at the intersection of Graffius Road and Bull Road. Address: Graffius Road and Bull Road Tax Map 3 Parcel 1A The site is zoned Village.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Landworks Civil Design",
+        "parcel_reference": "95 Butter Road; Tax Map MG, Parcel 200",
+        "current_zoning": "Agriculture",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "95 Butter Road Minor Subdivision",
+        "related_entities": [
+          "Conewago Township Planning Commission"
+        ],
+        "what_happened": "Landworks Civil Design submitted a minor subdivision proposal creating two lots at 95 Butter Road.",
+        "why_it_matters": "The Planning Commission agenda identifies a two-lot minor subdivision for review.",
+        "what_happens_next": "The subdivision is scheduled for Planning Commission consideration; no decision is recorded in the agenda.",
+        "upcoming_date": "Monday June 22nd, 2026 @ 6:00PM",
+        "supporting_text": "SD-03-202695 Butter Road Minor Subdivision \u2013 Landworks Civil Design has submitted a two lot subdivision for the property located at 95 Butter Road. ADDRESS: 95 Butter Road Tax Map MG Parcel 200 The site is zoned Agriculture.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": "Beth Kuhar",
+        "parcel_reference": "1845 Mill Creek Rd; Tax Map LG, Parcel 7B",
+        "current_zoning": "R-2",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "Kuhar Use Variance Request",
+        "related_entities": [
+          "Conewago Township Planning Commission",
+          "Conewago Township Zoning Ordinance #322 \u00a7304"
+        ],
+        "what_happened": "Beth Kuhar submitted a use variance request to allow keeping chickens on her property.",
+        "why_it_matters": "The request seeks relief from the stated zoning requirements for the R-2 property under Section 304 of the township zoning ordinance.",
+        "what_happens_next": "The variance request is scheduled for consideration; no decision is recorded in the agenda.",
+        "upcoming_date": "Monday June 22nd, 2026 @ 6:00PM",
+        "supporting_text": "Case 04-2026 Kuhar Variance Request- c. Beth Kuhar submitted a request for a use variance to allow keeping of chicken on her property pursuant to Conewago Township Zoning Ordinance #322 \u00a7304. The property is Zoned R-2. Address: 1845 Mill Creek Rd Tax Map: LG Parcel: 7B",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "special_exception",
+        "applicant_name": "Prosper Development",
+        "parcel_reference": "201, 235, and 255 Copenhaffer Road; Tax Map 1, Parcel 28; Tax Map 1, Parcel 26; Tax Map 1, Parcel 24A",
+        "current_zoning": "Village",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "Prosper Development Multifamily Housing",
+        "related_entities": [
+          "Conewago Township Planning Commission",
+          "Conewago Township Zoning Ordinance #322 \u00a7305"
+        ],
+        "what_happened": "Prosper Development submitted a special-exception request to construct approximately 73 multifamily dwellings on a lot to be created from portions of three parcels.",
+        "why_it_matters": "The proposal requires special-exception review for a multifamily development in the Village-zoned area.",
+        "what_happens_next": "The special-exception request is scheduled for consideration; no decision is recorded in the agenda.",
+        "upcoming_date": "Monday June 22nd, 2026 @ 6:00PM",
+        "supporting_text": "Case 05-2026 Prosper development \u2013 Prosper Development has submitted a request for a Special Exception to construct approximately 73 multi-family dwellings on a lot to be created from parts of 3 separate parcels pursuant to the Conewago Township Zoning Ordinance #322 \u00a7 305. The site is zoned Village. ADDRESS: 201, 235, and 255 Copenhaffer Road Tax Map 1 Parcel 28; Tax Map 1 Parcel 26; Tax Map 1 Parcel 24A",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "Draft Zoning Ordinance Regulations for Data Centers",
+        "related_entities": [
+          "Conewago Township"
+        ],
+        "what_happened": "Conewago Township will hold a special meeting to discuss a draft ordinance amending the zoning ordinance to regulate data centers and their accessory uses within the township.",
+        "why_it_matters": "The proposed ordinance would establish township-wide zoning regulations for data centers and accessory uses.",
+        "what_happens_next": "The township will hold a special meeting to discuss the draft ordinance; the document does not state the meeting date or a final action.",
+        "upcoming_date": null,
+        "supporting_text": "The Township will be holding a special meeting to discuss the draft ordinance to amend the zoning ordinance to provide regulations for Data Centers and their accessory uses within the Township.",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 8079,
+    "body_name": "Conewago Twp Zoning Hearing Board",
+    "meeting_date": "2026-07-13",
+    "source_text": "Conewago Township Zoning Hearing Board\nMeeting Agenda\n490 Copenhaffer Road, York PA 17404\nMonday July 13th, 2026 @ 6:00PM\n1. Call meeting to order 6:00pm\n2. Pledge of Allegiance:\n3. Approval of April 13, 2026 minutes\n4. Old Business:\nNone\n5. New Business:\na. Case 04-2026 Kuhar Variance Request-\n-\nBeth Kuhar submitted a request for a use\nvariance to allow keeping of chicken on her property pursuant to Conewago\nAddress: 1845 Mill Creek Rd Tax Map: LG Parcel: 7B\nTownship Zoning Ordinance #322 \u00a7304. The property is Zoned R-2.\ni.\nb. Case 05-2026 Prosper development \u2013\nProsper Development has submitted a\nrequest for a Special Exception to construct approximately 73 multi-family\ndwellings on a lot to be created from parts of 3 separate parcels pursuant to the\ni. ADDRESS: 201, 235, and 255 Copenhaffer Road Tax Map 1 Parcel 28;\nConewago Township Zoning Ordinance #322 \u00a7 305. The site is zoned Village.\nTax Map 1 Parcel 26; Tax Map 1 Parcel 24A\n6. Adjournment:\n1 | P age",
+    "baseline_extractions": [
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": "Beth Kuhar",
+        "parcel_reference": "1845 Mill Creek Rd; Tax Map: LG, Parcel: 7B",
+        "current_zoning": "R-2",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "Kuhar Use Variance Request",
+        "related_entities": [
+          "Conewago Township Zoning Hearing Board",
+          "Conewago Township Zoning Ordinance #322 \u00a7304"
+        ],
+        "what_happened": "Beth Kuhar submitted a use variance request to allow keeping chickens on her property at 1845 Mill Creek Rd, which is zoned R-2.",
+        "why_it_matters": "The request seeks zoning hearing board relief for a use not otherwise permitted under the cited ordinance provision.",
+        "what_happens_next": "The zoning hearing board is scheduled to consider the request as Case 04-2026; no decision is stated in the agenda.",
+        "upcoming_date": null,
+        "supporting_text": "a. Case 04-2026 Kuhar Variance Request-\n-\nBeth Kuhar submitted a request for a use\nvariance to allow keeping of chicken on her property pursuant to Conewago\nAddress: 1845 Mill Creek Rd Tax Map: LG Parcel: 7B\nTownship Zoning Ordinance #322 \u00a7304. The property is Zoned R-2.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "special_exception",
+        "applicant_name": "Prosper Development",
+        "parcel_reference": "201, 235, and 255 Copenhaffer Road; Tax Map 1 Parcel 28; Tax Map 1 Parcel 26; Tax Map 1 Parcel 24A",
+        "current_zoning": "Village",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application"
+        ],
+        "project_name": "Prosper Development Multifamily Dwelling Project",
+        "related_entities": [
+          "Conewago Township Zoning Hearing Board",
+          "Conewago Township Zoning Ordinance #322 \u00a7305"
+        ],
+        "what_happened": "Prosper Development submitted a special exception request to construct approximately 73 multifamily dwellings on a lot to be created from parts of three separate parcels at 201, 235, and 255 Copenhaffer Road.",
+        "why_it_matters": "The request concerns zoning hearing board approval for a multifamily development under the cited special-exception provision, on a site zoned Village.",
+        "what_happens_next": "The zoning hearing board is scheduled to consider the request as Case 05-2026; no decision is stated in the agenda.",
+        "upcoming_date": null,
+        "supporting_text": "b. Case 05-2026 Prosper development \u2013\nProsper Development has submitted a\nrequest for a Special Exception to construct approximately 73 multi-family\ndwellings on a lot to be created from parts of 3 separate parcels pursuant to the\ni. ADDRESS: 201, 235, and 255 Copenhaffer Road Tax Map 1 Parcel 28;\nConewago Township Zoning Ordinance #322 \u00a7 305. The site is zoned Village.\nTax Map 1 Parcel 26; Tax Map 1 Parcel 24A",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 9599,
+    "body_name": "West Manchester Twp Planning Commission",
+    "meeting_date": "2026-03-10",
+    "source_text": "MINUTES\nWEST MANCHESTER TOWNSHIP\nPLANNING COMMISSION\nDATE: March 10, 2026\nThe meeting was called to order by David Beecher at 7:00 p.m.\nATTENDANCE\nPlanning Commission Members: Staff:\nDavid Beecher, Chairman \u2013 Present Matthew Biehl \u2013 Present\nPatrick Hein, Vice-Chairman \u2013 Present Fred Walters \u2013 Present\nFelicia Dell \u2013 Present Rachelle Sampere, Zoning Officer \u2013 Present\nRyan Cummings, PE (Herbert, Rowland & Grubic) -\nPresent\nTonight\u2019s Planning Commission meeting was held in person. The meeting was broadcasted over Zoom for\nviewing purposes only.\nAPPROVAL OF MINUTES\nMOTION: by Fred Walters to approve the February 10, 2026, Planning Commission meeting minutes.\nSECOND: by Matthew Biehl\nMOTION PASSED: Unanimously (5-0)\nZONING HEARING BOARD CASES\nZHB 26-01 \u2013 Sprich Capital Investment, LLP c/o Andrew Sprich \u2013 requests a special exception \u00a7150-289 to\nexpand and alter an existing nonconforming use (auto repair shop); variance \u00a7150-289.A.8 to create a second\nnonconforming use (Auto Sales \u2013 Used) on the property; variance \u00a7150-58 to exceed 35% impervious coverage;\nvariance \u00a7150-283.B Permitted Sign Chart P-8D to allow 2 attached signs on existing auto repair service building\nexceeding the 4% total wall area located at 1231 West Locust Street (Tax Map: 17; Parcel: 0060) in the R-3\nResidential Zone. Tabled until March 10, 2026, at the request of the Applicant\u2019s Engineer.\nMs. Sampere informed the Planning Commission members that she received an email from the Applicant\u2019s\nEngineer requesting that the plan be tabled until the April 14, 2026, Planning Commission meeting.\nMOTION: by Patrick Hein to recommend the Planning Commission table the application until the April 14,\n2026, Planning Commission meeting.\nSECOND: by Matthew Biehl\nMOTION PASSED: Unanimously (5-0)\nZHB 26-02 - Lowe\u2019s (Delco Plaza) \u2013 requests a variance of Section 150-262.D.2 to hold seasonal sales within\na parking lot longer than the permitted 45 days located at 1175 Carlisle Road (Tax Map: JH; Parcel: 0055B)\nin the Regional Commercial Zone.\nMr. Todd Bartok of Lowe\u2019s Home Improvement Center presented the request. He requested a total of 180 days\nfor the outdoor storage of seasonal sales in the parking lot such as mulch, bagged goods, and soil. Due to\ntransportation costs, Lowe\u2019s would like to bring the goods to the site in one shipment rather than multiple\nshipments over the next three months. Previous variances were granted for a maximum of 150 days. The\nPlanning Commission asked if the applicant would be amenable to 150 days rather than the requested 180 days.\nMr. Biehl asked why the applicant chose the busy side of the parking lot adjacent to the access drive coming in\nfrom Carlisle Road rather than the other side of the Lowe\u2019s parking lot. Mr. Bartok explained that they prefer\nto keep the residential traffic away from the \u201cpro\u201d side of the parking lot. Most residential traffic goes to the\ngarden center. This is the least impactful area to the front of the store.\n\nWest Manchester Township March 10, 2026\nPlanning Commission - Minutes\nMOTION: by Patrick Hein to recommend the Zoning Hearing Board grant the variance request with the\ncondition that the storage in the parking lot be limited to a maximum of 150 days.\nSECOND: by Fred Walters\nMOTION PASSED: Unanimously (5-0)\nNEW BUSINESS\nSewer Planning Module for T-895 Preliminary Subdivision Plan for Steve and Karen Washington \u2013 review\nof a sewer planning module for 10 EDUs for the preliminary subdivision and land development plan for Steve\nand Karen Washington located at the intersection of Taxville Road and Baker Road. Applicant is requesting this\nsewer planning module be forwarded to the Board of Supervisors for consideration so it may be forwarded to\nthe Pennsylvania Department of Environmental Protection for review.\nMs. Sampere explained that the Pennsylvania Department of Environmental Protection would not accept the\npreviously submitted sewer planning module exemption mailer and was requiring a sewer planning module to\nbe prepared and submitted by the Applicant. The Township Engineer has reviewed the documents for\ncompleteness and recommend that the Planning Commission sign their page and forward it on to the Board of\nSupervisors for their review and consideration.\nMOTION: by Felicia Dell to forward the sewer planning module to the Board of Supervisors for their\nconsideration prior to forwarding it to the Pennsylvania Department of Environmental Protection.\nSECOND: by Matthew Biehl\nMOTION PASSED: Unanimously (5-0)\nT-907 Final Phase 1 Subdivision and Land Development Plan for Estates at Honey Run \u2013 to depict phase\n1 of a final subdivision creating 35 single family residential lots and 2 homeowners association lots containing\nopen space and stormwater management facilities, associated roads and sidewalks located along the south side\nof Baker Road near the intersection with Sunset Lane. (Tax Map: JG; Parcel: 0033D) in the R-1 Residential\nZone. The project will be served by public water and public sanitary sewer. A sewer planning module exemption\nmailer was submitted as part of the previously conditionally approved preliminary subdivision and land\ndevelopment plan.\nMr. Craig Smith of RGS Associates presented phase 1 of the final subdivision and land development plan for\nthe Estates at Honey Run. He reminded the Planning Commission members that they have seen this layout\nmultiple times as the preliminary subdivision and land development plan and due to the variance application for\nthe two (2) flag lots. The subdivision and land development plan depicts 35 residential lots, associated roads\nwith two temporary cul-de-sacs, associated public sanitary sewer and public water extensions. There was\ndiscussion regarding the four (4) proposed stormwater basins. Mr. Smith stated that much of the site drains wo\nthe west to a large stormwater infiltration basin. They are proposing to use one MRC facility which will hold\nthe water and disperse it over time. Ms. Dell mentioned the location of the wetlands on lot 64 and asked whether\nthey will be enclosed by a fence and how that will impact the building envelope. Mr. Smith said that there will\nbe an easement for the wetlands as per the NPDES permit. The building envelope has been reduced which will\nrequire a smaller home. Ms. Dell also asked whether the streets will be public or private. Mr. Smith confirmed\nthat the streets will be public and offered for dedication. Mr. Smith said that the outstanding comments are\nmainly administrative and he\u2019s working to address them. In addition to the eight (8) waivers previously approved\nby the Board of Supervisors for the preliminary plan, the Applicant has requested two (2) waivers: to waive the\nrequirement to submit as-built plans prior to obtaining a use and occupancy certificate, as some of the dwellings\nwill be completed prior to the as-built plans being completed due to the phasing of the project and to waive allow\na temporary cul-de-sac to exceed 750 feet in length and to allow the temporary situation to exceed two (2) years\ndue to the phasing of the project.\nMOTION: by Felicia Dell to recommend the Board of Supervisors approve the following requested waivers:\nPage 2\n\nWest Manchester Township March 10, 2026\nPlanning Commission - Minutes\nW1. \u00a7121-23.N Temporary cul-de-sac streets shall not exceed 750 feet in length. Temporary cul-de-sac\nstreets shall only be approved by the Board when the applicant has demonstrated to the satisfaction\nof the Board that the temporary situation will not exceed 2 years. The Applicant is requesting to\nallow a temporary cul-de-sac to exceed 750 feet and to allow the temporary situation to exceed two\n(2) years due to the phasing of the project.\nW2. \u00a7121-21 As-built plans. To waive the requirement to submit as-built plans prior to issuing certificates\nof occupancy due to the phasing of the plan.\nSECOND: by Matthew Biehl\nMOTION PASSED: Unanimously (5-0)\nMOTION: by Matthew Biehl to recommend the Board of Supervisors approve T-907 Final Phase 1 Subdivision\nand Land Development Plan for Estates at Honey Run subject to the following outstanding comments being\naddressed prior to recording the plan:\nZoning Ordinance (ZO):\n1. Include within the \u201cSite/Zoning Data\u201d for required lot width a minimum width of 80\u2019 at the lot\nfrontage for lots along the turnaround of a cul-de-sac. Provide additional notation to indicate the\napproved variance [150-36.B].\n(HRG Review Memo #1)\n2. Revise the \u201cSite/Zoning Data\u201d for rear yard minimum required setback for an accessory building to\n10 feet on each side (20 feet total) [150-38.B.2]. (HRG Review Memo #1)\n3. \u00a7150-38.B.3 Minimum setback requirements Rear Yard for Accessory Structures: 10 feet. Under the\nSite/Zoning Data table, please revise the minimum required and proposed rear yard setback for\naccessory structures. It is listed as 40 feet, but it should be 10 feet.\nSanitary Sewer (Chapter 109): (HRG Review Memo #1)\n1. *Drawing LD-47, Sheet 47 [109-15]: It is noted that the information that was formerly on Drawing\nLD-47, Sheet 47 is now on Drawing LD-48, Sheet 48 on the Preliminary Plan and on Drawing LD-\n49, Sheet 49 on the Final Phase 1 Plan.\na. *As discussed in the November 10, 2025, Siphon review meeting, it was discussed that the\nsiphon pipes should be changed to 6-inch SDR-21 and provide guidance on the Drawings for\nthe Contractor on how the pipe will be restrained. The Ductile Iron pipe is allowable, but it\nshould be Protecto-401 lined. The Drawings shall be updated to provide further guidance\nto the Contractor on how the pipe will be restrained and add a note within the profile that\nspecifies that the Ductile Iron Pipe should be Protecto-401 lined.\nb. MH-10 shall be a 5-foot diameter manhole due to the depth.\nc. Laterals shall connect to the main at a 90-degree angle, Lots 16, 63, and 67 shall be adjusted\naccordingly.\n2. Drawing LD-48, Sheet 48:\nLaterals shall connect to the main at a 90-degree angle and a minimum of 5 feet from a manhole, Lot\n39 shall be adjusted accordingly.\n3. Drawing LD-49, Sheet 49:\na. Provide laterals to the road right-of-way for the three properties with the gravity\nsewer from MH-5 to MH-3 passes.\nStormwater Management Ordinance (SWM): (HRG Review Memo #1)\n1. A Phase 1 stormwater management plan/details shall be provided. If there are any deviations from the\nPreliminary Plan a revised SWM Report shall be provided [113-18].\n2. Provide a Phase 1 erosion and sediment control plan/details [113-18.E.5].\nSubdivision and Land Development Ordinance (SLDO):\nPage 3\n\nWest Manchester Township March 10, 2026\nPlanning Commission - Minutes\n1. Provide planned community documents and homeowners\u2019 association documents to be reviewed and\napproved by the Township Solicitor [General]. (HRG Review Memo #1)\n2. \u00a7121-14.B.11 & \u00a7121-15.B The location and description of existing lot line markers and monuments\nalong the perimeter of the entire existing tract. Please label all existing lot line markers shown on the\nplan. Some markers are shown but are not labeled. Please label all existing lot line markers.\n3. Revise the \u201cSite/Zoning Data\u201d for sewer on the cover sheet to reflect the Township rather than the\nAuthority [121-15.C]. (HRG Review Memo #1)\n4. It appears not all existing lot line monuments and markers were labeled. Please reconcile [121-15.C].\n(HRG Review Memo #1)\n5. \u00a7121-14.D.6 & \u00a7121-15.D Easements. Please label the easements with the types and overall widths,\nespecially on the residential lots to be developed with SFD dwellings. This should be done on all\napplicable sheets of the plan for ease of future reference. (HRG Review Memo #1)\n6. \u00a7121-14.D.12 & \u00a7121-15.D The location of all permanent monuments and lot line markers, including\na note that all monuments and lot line markers are to be set or indicating when they will be set. Please\nlabel the lot line markers on all applicable sheets of the plan set and indicate when they will be set.\n(YCPC Review Memo)\n7. \u00a7121-14.E.2 & \u00a7121-15.E A sewer facilities plan revision (module or exemption mailer) or\nsupplement in accordance with the Pennsylvania Sewerage Facilities Act 537 of 1966, as amended.\nThe sewer planning module was submitted as part of the Preliminary Subdivision and Land\nDevelopment Plan for review and has been forwarded to PA DEP for their review and consideration.\nPlease provide PA DEP\u2019s approval letter to the Township when it becomes available. (YCPC Review\nMemo)\n8. Provide a Phase 1 stormwater management plan/details [121-15.E/121-30]. (HRG Review Memo #1)\n9. \u00a7121-14.F & \u00a7121-15.E Impact statements. Impact statements for residential land uses which exceed\ntwenty-five (25) lots or units in whole or in part\u2026\n1. Transportation. Please include the traffic impact statement with the final plan submission.\n(HRG Review Memo #1)\n2. Recreation Please provide the required statements for the Township Staff and Township\nEngineer to review. Please note, Resolution 23-02 requires $1,500 per lot dwelling unit\nrecreation fee prior to recording the final land development plan. Please provide a check to\nWest Manchester Township in the amount of $52,500.00 prior to recording the plan for the\n35 dwelling lots.\n10. \u00a7121-15.F.6 The submission of controlling agreement in accordance with \u00a7121-23.B when an\napplication proposes to establish areas which are not offered for dedication to public use. The\nApplicant indicates that this will be provided.\n11. \u00a7121-15.F.8 Such written notices of approval as required by this chapter, including written notices\napproving the water supply systems, sanitary sewage systems and stormwater runoff to adjacent\nproperties. The Applicant indicates that these will be provided. Provide verification that YCCD\napproved the E&S control plan. (YCCD Review Memo)\n12.. \u00a7121-17 Financial security. Financial security shall be in the form of letter of credit, escrow account\nor some alternative type of financial security posted by a reputable chartered lending institution or\nbonding company authorized to do business in Pennsylvania and is subject to review by the Township\nSolicitor for adequacy\u2026. The amount of financial security shall be equal to 110% of the cost of\ncompletion estimated as of ninety (90) days following the date scheduled for completion by the\ndeveloper\u2026. The Applicant has prepared a cost opinion for the public improvements associated with\nthis project. HRG will review the cost estimate and provide their recommendation. If providing a\nbond or a letter of credit, the Township prefers them to be automatically extending or evergreen.\nHRG recommends that financial security be required in the amount of $4,037,504. The Planning\nCommission members should discuss this and it should be included in their recommendation to the\nBoard of Supervisors.\nPage 4\n\nWest Manchester Township March 10, 2026\nPlanning Commission - Minutes\n13. \u00a7121-17.D In addition to the bonds or other security required, the applicant\u2026shall deliver to the\nTownship a check payable to the Township in an amount equal to 3.5% of the bond or other security.\nThe amount deposited by the applicant shall be used by the Township to cover the costs of assuring\nthe proper construction, and completion of improvements, including inspection, administrative costs\nand other related costs\u2026 If the amount deposited by the applicant is not sufficient to cover such\ncosts, the applicant shall furnish additional amounts from time to time when notified to do so. Please\nprovide an engineering escrow check in the amount of 3.5% of the approved financial security\nestimate to the Township prior to the plan being recorded.\n14. \u00a7121-18 Dedication and acceptance of improvements. All improvements shall be deemed to be\nprivate improvements and only for the benefit of the specific project until such time as the same have\nbeen offered for dedication and formally accepted by the Board of Supervisors. No responsibility of\nany kind with respect to improvements shown on the final plan shall be transferred until the\nimprovements have been formally accepted. All requests for dedication shall follow the current\nprocedures of the Township of West Manchester.\n15. \u00a7121-19 Maintenance guaranty. The Board of Supervisors shall require the applicant to submit a\nmaintenance guaranty or other approved guaranty as specified herein, guaranteeing the structural\nintegrity as well as function of any improvement shown on the final plan for a term not to exceed 18\nmonths from the date of acceptance of dedication by the Board of Supervisors. Said guaranty shall\nnot exceed 15% of the actual cost of installation of said improvements and be of the same type of\nfinancial security as required in this Article.\n16. \u00a7121-21 As-built plan. Prior to the issuance of occupancy permits, submit 2 copies of the as-built\nplans to the Township Zoning Department. One (1) copy of the plan will be distributed to the\nTownship Engineer.\n17. \u00a7121-23.B Private streets are prohibited unless they meet the design standards of these regulations.\nApplications which propose a private street shall be accompanied by a right-of-way agreement which\nshall be submitted for review by the Township and recorded with the York County Recorder of Deeds\non the same date as the recording of the final plan. This agreement shall establish the conditions\nunder which the street will be constructed and maintained, as well as conditions controlling an offer\nof dedication. The Applicant indicates that this will be provided.\n18. \u00a7121-23.C Improvements to existing streets.\n1. All existing streets at the perimeter and/or through the development shall be improved\naccording to Township specifications. If an existing street is located at the perimeter of the\ndevelopment, it shall be improved at least to the center line of the street. The Board of\nSupervisors may require the existing street to be improved to its full width. If an existing\nstreet is to be located within the development, it shall be improved to the full width of the\nstreet as required by such specifications.\n2. The Township may require the posting of an escrow account for improvements along existing\nstreet when it is more desirable to delay construction.\n19. \u00a7121-14.D.11 & \u00a7121-15.D Proposed names for new streets. \u00a7121.23.G Street names and signs.\nNames for new streets shall not duplicate or closely resemble names of existing streets within the\nsame postal area. All new street names are subject to approval by the Township. Applicant indicates\nthat the street names are currently being discussed. Please submit the proposed street names to Fire\nChief Laughman for consideration at claughman@wmtwp.com. Street signs shall be installed at all\nnew street intersections. Street signs shall be furnished and installed by the Township after\nacceptance of the street. The cost of the street sign, as established by resolution of the Board of\nSupervisors, will be billed to the developer. (HRG Review Memo #1) (YCPC Review Memo)\n20. \u00a7121-23.K Street improvements. All streets must be constructed in accordance with the prevailing\nWest Manchester Township construction and material specifications for land development. The final\nsurface course shall not be installed until directed by the Township.\n21. It appears a 75\u2019 clear sight triangle was provided for the proposed intersection with Baker Road. A\n150\u2019 clear sight triangle shall be provided for an intersection with a collector street [121-23.L.6].\n(HRG Review Memo #1)\nPage 5\n\nWest Manchester Township March 10, 2026\nPlanning Commission - Minutes\n22. Confirm the temporary cul-de-sac street\u2019s temporary situation will not exceed two years.\nAdditionally, as Phase 1 only proposed one full access point to a public street, it is recommended to\nprovide a secondary stabilized temporary emergency access [121-23.N.1]. (HRG Review Memo #1)\n23. Provide the recreation fee-in-lieu [121-36.B]. (HRG Review Memo #1)\n1. The amount of the fee shall be set by resolution (23-02 - $1,500 per dwelling unit) of the Board of\nSupervisors\n2. The fee shall be paid to the Township prior to approval of the final plan.\nGeneral Comments:\n1. An Operation and Maintenance Agreement is required prior to approval by the Board of Supervisors.\n2. The signatures and seals of the individuals responsible for the plan shall be affixed to the plan prior\nto approval by the Board of Supervisors (\u00a7121-15.F)\n3. The notarized signature of the owner(s) shall be affixed to the plan prior to approval by the Board of\nSupervisors (\u00a7121-15.F.4) (YCPC Review Memo)\n4. All administrative items shall be addressed prior to plan recording (payment of all invoices, etc.)\n5. The final plan, as approved by the Board of Supervisors, shall be submitted in electronic format (i.e.\nPDF) after recording with all required signatures on the plan.\n6. Provide written approval that the plan for erosion and sediment control (NPDES permit) has been\napproved by the York County Conservation District.\n7. Revisions are needed to the following:\nSheet LD-12 of 60, Lot 7 SF and AC appear to be cut off by another overlapping text block.\nSheet LD-13 of 60, Lot 39 there are overlapping numbers along the rear property line.\nSheet LD-13 of 60, Lot 61 there are overlapping numbers along the rear property line.\nSheet LD-14 of 60, Lot 61 there are overlapping numbers along the rear property line.\n8. All original seals, signatures, and notarizations shall be provided on each copy of the final plan and\nreport prior to being recorded [113-18.D]. (HRG Review Memo #1)\n9. All Land Disturbance Activity shall not be initiated until a Stormwater Management Permit has been\nissued [113-23]. (HRG Review Memo #1)\n10. The applicant shall schedule all required inspections [113-24]. (HRG Review Memo #1)\n11. The applicant shall schedule a pre-construction meeting with the Township, Township Engineer, and\nTownship Stormwater Engineer prior to the start of any construction [113-24]. (HRG Review Memo\n#1)\n12. The applicant shall be responsible for scheduling all required inspections with 48-hours\u2019 notice [113-\n24]. (HRG Review Memo #1)\n13. Upon completion of all required improvements and prior to release of the performance bond, the\napplicant shall submit an as-built plan [113-25]. (HRG Review Memo #1)\n14. The YCPC Transportation Planning staff is concerned how this traffic generated by this development\nwill impact the intersection of Baker Road and Taxville Road. This intersection is a skewed\nintersecti8on with an all-way stop. Per the scope of the TIS, the engineer should provide a Level of\nService (LOS) determination for that intersection, as well as crash analysis. Furthermore, based on\nthe number of trips generated by the proposed development and current volumes at that intersection,\nthere are safety concerns that may need to be addressed by West Manchester Township and PennDOT\nto attempt to proactively reduce future crashes at this intersection. The YCPC Transportation and\nPlanning Department recommends expanding the limits of the TIS or completing a traffic study at\nthe intersection of Taxville Road and Baker Road to ensure that the potential of future crashes is\nmediated. (YCPC Review Memo)\n15. The YCPC staff does not recommend that the wetland areas be included as part of Lot 64 but rather\nas part of Lot 66. Wetland areas are not to be disturbed, including mowing and active recreation.\nHow will the Township and the developer enforce protection of these wetland areas? (YCPC Review\nMemo)\nSECOND: by Felicia Dell\nMOTION PASSED: Unanimously (5-0)\nPage 6\n\nWest Manchester Township March 10, 2026\nPlanning Commission - Minutes\nT-908 Preliminary/Final Land Development Plan for Raising Cane\u2019s Restaurant with Drive-Thru \u2013 to\ndepict the demolition of the existing Lyndon Diner and redevelopment of the property located at 1353 Kenneth\nRoad (Tax Map: JH; Parcel: 0054C) for the proposed 3,432 sq. ft. Raising Cane\u2019s restaurant with drive-thru,\noutdoor seating and associated parking and underground stormwater management in the Regional Commercial\nZone. The project will be served by public water and public sanitary sewer. The plan proposes 6 EDUs. Tabled\nuntil the April 14, 2026, Planning Commission meeting.\nMs. Sampere received an email from Bohler Engineering requesting that the plan be tabled until that April 14,\n2026 Planning Commission so the applicant could address staff\u2019s comments received during the in-house staff\nreview.\nMOTION: by Matthew Biehl to table the plan until the April 14, 2026, Planning Commission meeting.\nSECOND: by Fred Walters\nMOTION PASSED: Unanimously (5-0)\nDISCUSSION\nMs. Sampere and Mr. Cummings discussed the option to amend the Subdivision and Land Development\nOrdinance related to the timeline to submit a land development plan for review. Currently, the SALDO requires\nthat the Planning Commission review a plan at a particular meeting only if the plan was filed at least 15 days\nprior to that meeting. Staff would like to amend the SALDO to require that the plan be submitted 28 days prior\nto a Planning Commission meeting in order to give staff more time to review the plan. With proposed\ndevelopment increasing in the Township, staff believes this will be necessary. Mr. Cummings also suggested\nthat we require the applicants to submit CAD files and other electronic files in addition to the hard copies they\nsubmit during the application process. This language would be added to a draft ordinance for the Township\nPlanning Commission to review at a future public meeting. The Planning Commission members seemed\nreceptive to the concept and suggested that a draft text amendment be placed on a future Planning Commission\nmeeting agenda for review and recommendations.\nMs. Sampere informed the Planning Commission members that the Steering Committee for the Zoning\nOrdinance rewrite continues to meet monthly and is having great discussions regarding the updates they\u2019d like\nto see in the Zoning Ordinance.\nMOTION: by Patrick Hein to adjourn the meeting.\nSECOND: by Matthew Biehl\nMOTION PASSED: Unanimously (5-0)\nThe meeting adjourned at 8:06 p.m.\nPage 7",
+    "baseline_extractions": [
+      {
+        "extraction_type": "special_exception",
+        "applicant_name": "Sprich Capital Investment, LLP c/o Andrew Sprich",
+        "parcel_reference": "1231 West Locust Street; Tax Map 17, Parcel 0060",
+        "current_zoning": "R-3 Residential Zone",
+        "proposed_zoning": null,
+        "decision": "continued",
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing",
+          "continuance"
+        ],
+        "project_name": "ZHB 26-01 Auto Repair Shop Expansion and Auto Sales Use",
+        "related_entities": [
+          "Andrew Sprich",
+          "Applicant\u2019s Engineer",
+          "West Manchester Township Zoning Hearing Board"
+        ],
+        "what_happened": "The Planning Commission recommended tabling the application, which requests a special exception and multiple variances related to an existing auto repair shop and proposed used auto sales use, until April 14, 2026.",
+        "why_it_matters": "The requested relief remains pending and was deferred to a later Planning Commission meeting at the applicant\u2019s engineer\u2019s request.",
+        "what_happens_next": "The application is scheduled to return for Planning Commission consideration on April 14, 2026.",
+        "upcoming_date": "April 14, 2026",
+        "supporting_text": "ZHB 26-01 \u2013 Sprich Capital Investment, LLP c/o Andrew Sprich \u2013 requests a special exception \u00a7150-289 to expand and alter an existing nonconforming use (auto repair shop); variance \u00a7150-289.A.8 to create a second nonconforming use (Auto Sales \u2013 Used) on the property; variance \u00a7150-58 to exceed 35% impervious coverage; variance \u00a7150-283.B Permitted Sign Chart P-8D to allow 2 attached signs on existing auto repair service building exceeding the 4% total wall area located at 1231 West Locust Street (Tax Map: 17; Parcel: 0060) in the R-3 Residential Zone. Tabled until March 10, 2026, at the request of the Applicant\u2019s Engineer. ... Ms. Sampere informed the Planning Commission members that she received an email from the Applicant\u2019s Engineer requesting that the plan be tabled until the April 14, 2026, Planning Commission meeting. ... MOTION: by Patrick Hein to recommend the Planning Commission table the application until the April 14, 2026, Planning Commission meeting.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": "Lowe\u2019s (Delco Plaza)",
+        "parcel_reference": "1175 Carlisle Road; Tax Map JH, Parcel 0055B",
+        "current_zoning": "Regional Commercial Zone",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [
+          "The storage in the parking lot be limited to a maximum of 150 days."
+        ],
+        "event_tags": [
+          "application",
+          "hearing",
+          "condition"
+        ],
+        "project_name": "Lowe\u2019s Seasonal Sales Parking-Lot Storage Variance",
+        "related_entities": [
+          "Todd Bartok",
+          "Lowe\u2019s Home Improvement Center",
+          "West Manchester Township Zoning Hearing Board"
+        ],
+        "what_happened": "The Planning Commission recommended that the Zoning Hearing Board grant Lowe\u2019s variance request to conduct seasonal sales in the parking lot for more than the permitted 45 days, subject to a 150-day maximum.",
+        "why_it_matters": "The Planning Commission recommendation would allow seasonal goods to remain in the parking lot longer than the ordinance\u2019s 45-day limit, but the document does not record a final Zoning Hearing Board decision.",
+        "what_happens_next": "The variance recommendation will be considered by the Zoning Hearing Board.",
+        "upcoming_date": null,
+        "supporting_text": "ZHB 26-02 - Lowe\u2019s (Delco Plaza) \u2013 requests a variance of Section 150-262.D.2 to hold seasonal sales within a parking lot longer than the permitted 45 days located at 1175 Carlisle Road (Tax Map: JH; Parcel: 0055B) in the Regional Commercial Zone. ... He requested a total of 180 days for the outdoor storage of seasonal sales in the parking lot such as mulch, bagged goods, and soil. ... MOTION: by Patrick Hein to recommend the Zoning Hearing Board grant the variance request with the condition that the storage in the parking lot be limited to a maximum of 150 days. ... MOTION PASSED: Unanimously (5-0)",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Steve and Karen Washington",
+        "parcel_reference": "Intersection of Taxville Road and Baker Road",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "T-895 Preliminary Subdivision Plan Sewer Planning Module",
+        "related_entities": [
+          "Pennsylvania Department of Environmental Protection",
+          "West Manchester Township Board of Supervisors",
+          "West Manchester Township Engineer"
+        ],
+        "what_happened": "The Planning Commission recommended forwarding the sewer planning module for 10 EDUs associated with Steve and Karen Washington\u2019s T-895 preliminary subdivision and land development plan to the Board of Supervisors for consideration before submission to the Pennsylvania Department of Environmental Protection.",
+        "why_it_matters": "The sewer planning module is required because the Pennsylvania Department of Environmental Protection would not accept the previously submitted exemption mailer, and it must proceed through Township and state review.",
+        "what_happens_next": "The module will be considered by the Board of Supervisors and, if forwarded, submitted to the Pennsylvania Department of Environmental Protection for review.",
+        "upcoming_date": null,
+        "supporting_text": "Sewer Planning Module for T-895 Preliminary Subdivision Plan for Steve and Karen Washington \u2013 review of a sewer planning module for 10 EDUs for the preliminary subdivision and land development plan for Steve and Karen Washington located at the intersection of Taxville Road and Baker Road. Applicant is requesting this sewer planning module be forwarded to the Board of Supervisors for consideration so it may be forwarded to the Pennsylvania Department of Environmental Protection for review. ... MOTION: by Felicia Dell to forward the sewer planning module to the Board of Supervisors for their consideration prior to forwarding it to the Pennsylvania Department of Environmental Protection. ... MOTION PASSED: Unanimously (5-0)",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": null,
+        "parcel_reference": "Along the south side of Baker Road near the intersection with Sunset Lane; Tax Map JG, Parcel 0033D",
+        "current_zoning": "R-1 Residential Zone",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [
+          "Address all outstanding zoning, sanitary sewer, stormwater management, subdivision and land development, traffic, financial security, recreation-fee, easement, monument, wetland, and administrative comments before recording the plan.",
+          "Provide a Phase 1 stormwater management plan and erosion and sediment control plan/details.",
+          "Provide PA DEP approval of the sewer planning module when available.",
+          "Provide a $52,500 recreation fee before recording the plan.",
+          "Provide financial security recommended at $4,037,504 and the required engineering escrow check.",
+          "Address the temporary cul-de-sac length and duration and provide a secondary stabilized temporary emergency access as recommended.",
+          "Obtain required Township, York County Planning Commission, York County Conservation District, and other applicable approvals before plan approval or recording."
+        ],
+        "event_tags": [
+          "application",
+          "hearing",
+          "condition"
+        ],
+        "project_name": "T-907 Final Phase 1 Estates at Honey Run Subdivision and Land Development Plan",
+        "related_entities": [
+          "Estates at Honey Run",
+          "Craig Smith",
+          "RGS Associates",
+          "West Manchester Township Board of Supervisors",
+          "Herbert, Rowland & Grubic",
+          "York County Planning Commission",
+          "Pennsylvania Department of Environmental Protection",
+          "York County Conservation District",
+          "Fire Chief Laughman"
+        ],
+        "what_happened": "The Planning Commission recommended that the Board of Supervisors approve Phase 1 of the Estates at Honey Run final subdivision and land development plan, depicting 35 single-family residential lots and 2 homeowners association lots, subject to outstanding comments being addressed before recording.",
+        "why_it_matters": "The plan received a Planning Commission recommendation but remains subject to Board of Supervisors action and completion of numerous technical, infrastructure, financial-security, fee, and agency requirements.",
+        "what_happens_next": "The Board of Supervisors will consider the recommended waivers and final plan after the outstanding comments and required approvals and submissions are addressed.",
+        "upcoming_date": null,
+        "supporting_text": "T-907 Final Phase 1 Subdivision and Land Development Plan for Estates at Honey Run \u2013 to depict phase 1 of a final subdivision creating 35 single family residential lots and 2 homeowners association lots containing open space and stormwater management facilities, associated roads and sidewalks located along the south side of Baker Road near the intersection with Sunset Lane. (Tax Map: JG; Parcel: 0033D) in the R-1 Residential Zone. ... MOTION: by Matthew Biehl to recommend the Board of Supervisors approve T-907 Final Phase 1 Subdivision and Land Development Plan for Estates at Honey Run subject to the following outstanding comments being addressed prior to recording the plan: ... MOTION PASSED: Unanimously (5-0)",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Raising Cane\u2019s",
+        "parcel_reference": "1353 Kenneth Road; Tax Map JH, Parcel 0054C",
+        "current_zoning": "Regional Commercial Zone",
+        "proposed_zoning": null,
+        "decision": "tabled",
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing",
+          "continuance"
+        ],
+        "project_name": "T-908 Raising Cane\u2019s Restaurant with Drive-Thru",
+        "related_entities": [
+          "Bohler Engineering",
+          "Lyndon Diner"
+        ],
+        "what_happened": "The Planning Commission tabled the T-908 preliminary/final land development plan for demolition of the existing Lyndon Diner and redevelopment as a 3,432-square-foot Raising Cane\u2019s restaurant with drive-thru until April 14, 2026.",
+        "why_it_matters": "The land development plan remains pending so the applicant can address staff comments from the in-house review.",
+        "what_happens_next": "The plan is scheduled to return to the Planning Commission on April 14, 2026, after the applicant addresses staff comments.",
+        "upcoming_date": "April 14, 2026",
+        "supporting_text": "T-908 Preliminary/Final Land Development Plan for Raising Cane\u2019s Restaurant with Drive-Thru \u2013 to depict the demolition of the existing Lyndon Diner and redevelopment of the property located at 1353 Kenneth Road (Tax Map: JH; Parcel: 0054C) for the proposed 3,432 sq. ft. Raising Cane\u2019s restaurant with drive-thru, outdoor seating and associated parking and underground stormwater management in the Regional Commercial Zone. The project will be served by public water and public sanitary sewer. The plan proposes 6 EDUs. Tabled until the April 14, 2026, Planning Commission meeting. ... Ms. Sampere received an email from Bohler Engineering requesting that the plan be tabled until that April 14, 2026 Planning Commission so the applicant could address staff\u2019s comments received during the in-house staff review. ... MOTION PASSED: Unanimously (5-0)",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "hearing",
+          "upcoming_decision"
+        ],
+        "project_name": "Proposed Subdivision and Land Development Ordinance Timeline and Electronic-File Amendment",
+        "related_entities": [
+          "West Manchester Township Planning Commission",
+          "Rachelle Sampere",
+          "Ryan Cummings",
+          "Herbert, Rowland & Grubic"
+        ],
+        "what_happened": "The Planning Commission discussed amending the Subdivision and Land Development Ordinance to require land development plans to be submitted 28 days before a Planning Commission meeting instead of 15 days and to require CAD and other electronic files with applications.",
+        "why_it_matters": "The proposed text amendment would change plan-submission timing and application materials for land development reviews throughout West Manchester Township.",
+        "what_happens_next": "A draft ordinance text amendment is expected to be placed on a future Planning Commission public-meeting agenda for review and recommendations.",
+        "upcoming_date": "a future public meeting",
+        "supporting_text": "Ms. Sampere and Mr. Cummings discussed the option to amend the Subdivision and Land Development Ordinance related to the timeline to submit a land development plan for review. Currently, the SALDO requires that the Planning Commission review a plan at a particular meeting only if the plan was filed at least 15 days prior to that meeting. Staff would like to amend the SALDO to require that the plan be submitted 28 days prior to a Planning Commission meeting in order to give staff more time to review the plan. ... Mr. Cummings also suggested that we require the applicants to submit CAD files and other electronic files in addition to the hard copies they submit during the application process. This language would be added to a draft ordinance for the Township Planning Commission to review at a future public meeting. ... suggested that a draft text amendment be placed on a future Planning Commission meeting agenda for review and recommendations.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "hearing"
+        ],
+        "project_name": "West Manchester Township Zoning Ordinance Rewrite",
+        "related_entities": [
+          "West Manchester Township Zoning Ordinance Rewrite Steering Committee",
+          "West Manchester Township Planning Commission",
+          "Rachelle Sampere"
+        ],
+        "what_happened": "The Planning Commission was informed that the Steering Committee for the Township\u2019s Zoning Ordinance rewrite continues to meet monthly and discuss desired updates.",
+        "why_it_matters": "The ongoing rewrite may result in future zoning ordinance updates, but this document records no proposed text, map amendment, or adoption decision.",
+        "what_happens_next": "The Steering Committee is expected to continue meeting monthly; no specific subsequent decision date is stated.",
+        "upcoming_date": null,
+        "supporting_text": "Ms. Sampere informed the Planning Commission members that the Steering Committee for the Zoning Ordinance rewrite continues to meet monthly and is having great discussions regarding the updates they\u2019d like to see in the Zoning Ordinance.",
+        "confidence": "medium"
+      }
+    ]
+  },
+  {
+    "source_id": 9597,
+    "body_name": "West Manchester Twp Planning Commission",
+    "meeting_date": "2026-02-10",
+    "source_text": "MINUTES\nWEST MANCHESTER TOWNSHIP\nPLANNING COMMISSION\nDATE: February 10, 2026\nThe meeting was called to order by David Beecher at 7:00 p.m.\nATTENDANCE\nPlanning Commission Members: Staff:\nDavid Beecher, Chairman \u2013 Present Matthew Biehl \u2013 Present\nPatrick Hein, Vice-Chairman \u2013 Present Fred Walters \u2013 Present\nFelicia Dell \u2013 Present Rachelle Sampere, Zoning Officer \u2013 Present\nRyan Cummings, PE (Herbert, Rowland & Grubic) -\nPresent\nTonight\u2019s Planning Commission meeting was held in person. The meeting was broadcasted over Zoom for\nviewing purposes only.\nREORGANIZATION\nMOTION: by Felicia Dell to elect David Beecher as Chairman of the Planning Commission for 2026.\nSECOND: by Fred Walters\nMOTION PASSED: 4-0 (1 Abstain \u2013 Beecher)\nACCEPTED: by David Beecher\nMOTION: by David Beecher to elect Patrick Hein as Vice-Chairman of the Planning Commission for 2026.\nSECOND: by Matthew Biehl\nMOTION PASSED: 4-0 (1 Abstain \u2013 Hein)\nACCEPTED: by Patrick Hein\nAPPROVAL OF MINUTES\nMOTION: by Felicia Dell to approve the December 9, 2025, Planning Commission meeting minutes.\nSECOND: by Fred Walters\nMOTION PASSED: Unanimously (5-0)\nZONING HEARING BOARD CASES\n(CONTINUED) ZHB 25-21 \u2013 Jeffrey McVicar for Magnuss McVicar \u2013 requests a variance \u00a7150-231.F to\nexceed maximum width of a driveway curb cut for a driveway located at a single-family dwelling located at\n775 Bairs Road (Tax Map: HG; Parcel: 0059) in the Rural Residential (R) Zone.\nThe applicant was not in attendance to present the application at tonight\u2019s meeting. Dr. David Beecher stated\nthat he doesn\u2019t believe there\u2019s proof of a hardship and he believes they failed to provide information proving a\nhardship. The Planning Commission must act on this application either way because the letter from the Zoning\nOfficer to the Applicants indicated that the Zoning Hearing Board Solicitor advised that the Zoning Hearing\nBoard would not grant any additional continuances.\nMOTION: by Matthew Biehl to recommend the Zoning Hearing Board deny the variance application because\nthere was no proof of a hardship.\nSECOND: by Felicia Dell\nMOTION PASSED: Unanimously (5-0)\n\nWest Manchester Township February 10, 2026\nPlanning Commission - Minutes\nZHB 25-24 \u2013 Michael J. March \u2013 requests a dimensional variance \u00a7150-45 Minimum Lot Width to enable a\nfuture 2 lot residential subdivision located at 1590 Taxville Road (Tax Map: IG; Parcel: 0066) in the R-2\nResidential Zone.\nMr. Grant Anderson, PE of GHI Engineers and Surveyors, presented the variance application. Mr. Anderson\nexplained that the property owner, Mr. March, was unable to attend tonight\u2019s meeting. Mr. Anderson explained\nthat the property owner would like to subdivide the existing 4.164-acre parcel; creating one parcel of 100 feet\nwide, which meets the current Zoning Ordinance, and one lot of 75.92 feet wide which does not meet the current\nZoning Ordinance for a minimum lot width. The required minimum lot width in the R-2 Residential Zone is\n100 feet wide at the front yard setback line. Mr. Anderson explained that this is a dimensional variance and it is\nnot self-created because the lot existed when Mr. March purchased it. Ms. Dell asked if the existing adjacent lot\n66A0 was previously subdivided from lot 66. She\u2019s curious if there\u2019s any notes on the subdivision plan that\nmention future subdivisions of the property. Ms. Sampere said she and her staff searched the Township\u2019s files\nand were not able to find a previous subdivision for this parcel, but that doesn\u2019t mean that one doesn\u2019t exist.\nFurther research would be needed. Mr. Anderson said it was possible that the lot was previously subdivided,\nbut he would not be sure unless he researched the deeds. Dr. Beecher said that this variance, although\ndimensional, is self-created and he does not see a hardship. The Planning Commission has been more cognizant\nof the applicant\u2019s burden of proving a hardship and Mr. Biehl agreed that the applicant hasn\u2019t proven a hardship.\nMOTION: by Felicia Dell to recommend the Zoning Hearing Board deny the variance application due to absence\nof a hardship.\nSECOND: by Matthew Biehl\nMOTION PASSED: Unanimously (5-0)\nZHB 26-01 \u2013 Sprich Capital Investment, LLP c/o Andrew Sprich \u2013 requests a special exception \u00a7150-289 to\nexpand and alter an existing nonconforming use (auto repair shop); variance \u00a7150-289.A.8 to create a second\nnonconforming use (Auto Sales \u2013 Used) on the property; variance \u00a7150-58 to exceed 35% impervious coverage;\nvariance \u00a7150-283.B Permitted Sign Chart P-8D to allow 2 attached signs on existing auto repair service building\nexceeding the 4% total wall area located at 1231 West Locust Street (Tax Map: 17; Parcel: 0060) in the R-3\nResidential Zone. Tabled until March 10, 2026, at the request of the Applicant\u2019s Engineer.\nMs. Sampere informed the Planning Commission members that she received an email from the Applicant\u2019s\nEngineer requesting that the plan be tabled until the March 10, 2026, Planning Commission meeting.\nMOTION: by Patrick Hein to recommend the Planning Commission table the application until the March 10,\n2026, Planning Commission meeting.\nSECOND: by Fred Walters\nMOTION PASSED: Unanimously (5-0)\nOLD BUSINESS\nT-902 Preliminary/Final Subdivision and Land Development for The Learning Experience \u2013 Kenneth\nRoad \u2013 to depict a subdivision creating two (2) parcels in the Professional office zone and to depict the land\ndevelopment of the parcels creating a 10,000 square foot commercial day care facility with associated parking,\nlandscaping and stormwater management on Lot 1 and the land development of a 6,000 square foot office\nbuilding with associated parking, landscaping and stormwater management on Lot 2 located along the 1900\nblock of Kenneth Road in the Professional Office Zone and the R-2 Residential Zone.\nMr. Matthew Kinney, PE, of Pennoni Associates presented the preliminary/final subdivision and land\ndevelopment plan on behalf of Linlo Realty and The Learning Experience. Mr. Kinney reminded the Planning\nCommission that they had seen this layout before as part of the variance application related to the outdoor play\narea for the proposed day care facility. The existing lot is 3.2 acres which has been vacant since the 1980s. The\nproposed subdivision depicts a 10,000 sq. ft. daycare building with an associated parking lot, outdoor fenced in\nPage 2\n\nWest Manchester Township February 10, 2026\nPlanning Commission - Minutes\nplay area split between toddlers and young children and a stormwater management facility. Proposed lot 2\ndepicts a proposed 6,000 sq. ft. office building with an associated parking lot. Mr. Kinney explained that the lot\nhas three frontages, Kenneth Road, Normandie Drive and Austin Lane. Vehicular access will be limited to\nKenneth Road. There will be no vehicular access to the lots from Normandie Drive nor Austin Lane. There will\nbe public sidewalk extended along all three frontages. Mr. Kinney explained that they have received the\ncomment letters from the Township Engineers (HRG and Dawood) and the Township staff and should be able\nto address the comments within the next few weeks. A traffic memo was also prepared by Pennoni and submitted\nto the Township for review.\nAlthough Dawood Engineers didn\u2019t have any opposition to the waiver request and the prepared traffic memo,\nMr. Walters raised concerns regarding the stacking on Kenneth at the intersection with Roosevelt Avenue/Bull\nRoad that occur at various times throughout the day. The Planning Commission discussed their concerns that\nthe stacking may affect the ability of vehicles to turn left out of the proposed daycare facility's parking lot onto\nKenneth Road. The Planning Commission was also concerned that vehicles travelling from Route 30 on\nKenneth toward the subject property may have difficulty turning left into the subject property at various times\nof the day due to the volume of traffic that travel on Kenneth Road.\nMOTION by Patrick Hein to recommend the Board of Supervisors grant the following requested waivers:\nW1. Preliminary Plan. (\u00a7121-9) Which requires the submission of a preliminary plan application and\napproval prior to the submission of a final plan application. Applicant is requesting to submit a\ncombined preliminary/final subdivision and land development plan.\nW2. Traffic Impact Study (\u00a7121-14.F) Which requires all non-residential uses to submit a traffic impact\nstatement. Applicant is requesting to forego the traffic count study. In the alternative, applicant\nproposes to submit a transportation scoping memo which includes ITE trip generation data instead of\na traffic county study. The Planning Commission requested left and right turn lane warrant analysis\nat the access drive locations to be submitted to the Township for review by the Township Engineer.\nW3. Post-development Discharge Rates (\u00a7113-13.1) Which requires that post-development discharge\nrates shall not exceed the pre-development discharge rates for the one year storm. HRG agrees with\nthe applicant\u2019s reasoning and recommends approval of this waiver request.\nW4. Pipe velocity. (\u00a7113-17.G.4) Which requires the velocity to be used in the design of any piped\nstormwater conveyance system shall be a minimum of 2.5 feet per second.) Applicant is requesting\nto allow the post-development conveyance pipe velocity to be less than 2.5 feet per second. HRG\nagrees with the applicant\u2019s reasoning pertaining to I-5 to I-4, I-11 to MH-3, I-8 to I-2 and I-10to I-9\nand recommends approval of this waiver request.\nSECOND: by Felicia Dell\nMOTION PASSED: Unanimously (5-0)\nMOTION: by Felicia Dell to recommend the Board of Supervisors approve the preliminary/final subdivision\nand land development plan for the Learning Center Plan be approved conditioned on addressing the remaining\nfollowing comments in the staff memo and conditioned on conducting left and right turn lane warrant analysis\nat the access drive locations:\nSubdivision and Land Development Ordinance (SLDO):\n1. \u00a7121-14.D.14 & \u00a7121-15.DA statement on the plan indicating any proposed waivers. This statement\nmust be revised, prior to recordation of the plan, to acknowledge the outcome of the requested waiver.\nUpon action by the Board of Supervisors, please update the waiver block on sheet CS0001.\n2. \u00a7121-14.E.2 & \u00a7121-15.F.3 A sewer facilities plan revision module for land development in\naccordance with the Pennsylvania Sewerage Facilities Act 537 of 1966, as amended. The applicant\nhas submitted a sewer planning module exemption mailer for review. If acceptable, Township staff\nwill forward the documents to PA DEP after Board of Supervisor\u2019s conditional approval for PA DEP\u2019s\napproval process. Please provide West Manchester Township with a copy of PA DEP\u2019s approval letter\nprior to recording the plan.\n3. \u00a7121-15.F.9 Improvement guaranties in accordance with Article V. Please submit an estimated\nPage 3\n\nWest Manchester Township February 10, 2026\nPlanning Commission - Minutes\ncost of public improvements for review. [1/7/2026] A Public Improvement Cost Estimate for\nFinancial Security (FS) has been provided. Comments on the FS are provided in a separate letter.\n[2/5/2026] An updated Public Improvement Cost Estimate for Financial Security (FS) has been\nprovided. Comments on the FS are provided in a separate letter.\n4. \u00a7121-17 Financial Security. Final plan applications that include public improvements that have not\nbeen installed shall include financial security\u2026 The amount of financial security shall be equal to\n110% of the cost of completion estimated as of 90 days following the date scheduled for completion\nby the developer. The applicant has submitted an estimated cost of public improvements with this\nsubmission. Dawood Engineers and HRG will review and make recommendations, as necessary.\nFinancial security must be provided prior to the plan being released for recording. West Manchester\nTownship prefers that any letter of credit issued to the Township be automatically extending. The\nfinancial security estimate has been provided to Dawood Engineers and HRG for their review and\nrecommendation. The Township Engineer recommends the Planning Commission forward the\nfinancial security estimate amount of $873,810 for the Board of Supervisors\u2019 consideration.\n5. \u00a7121-17.D \u2026Upon approval by the Board of Supervisors of a final plan, the applicant, in addition to\nall bonds or other security required, shall deliver to the Township a check payable to the Township in\nthe amount of 3.5% of the bond or other security. The amount deposited by the applicant shall be used\nby the Township to cover the costs of assuring the proper construction and completion of\nimprovements, including inspection during installation, inspection upon completion, administrative\ncosts and other related costs. If the amount deposited by the applicant is not sufficient to cover such\ncosts, the applicant shall furnish additional amounts, from time to time, when notified to do so.\nEngineering escrow will be required to be posted with the Township prior to the plan being released\nfor recording. Upon approval of the financial security estimate by the Board of Supervisors, Township\nstaff will inform the applicant of the amount to be deposited for the engineering escrow.\n6. \u00a7121-19 Maintenance Guaranty. The Board of Supervisors shall require the applicant to submit a\nmaintenance guaranty or other approved guaranty as specified herein guaranteeing the structural\nintegrity as well as function of any improvement shown on the final plan for a term not to exceed 18\nmonths from the date of acceptance of dedication by the Board of Supervisors. Said guaranty shall\nnot exceed 15% of the actual cost of installation of said improvements and be of the same type of\nfinancial security as required in this article.\n7. \u00a7121-21 As-built plan. The plan shall indicate the resultant grading, drainage structures and/or\ndrainage systems and erosion and sediment control practices, including vegetative measures and note\ndeviations. Prior to issuance of occupancy permits, submit 2 copies of the as-built plans to the\nTownship Zoning Department. One (1) copy of the plan will be distributed to the Township Engineer.\nDawood Review Memo #2\nSanitary Sewer Ordinance (Chapter 109): HRG\u2019s Review Memo #3\n1. For the \u201cDaycare Bldg. to Ex. 8 Inch Lateral\u201d profile, confirm there is sufficient depth to prevent\nfreeze of the lateral and verify the material of the existing 8-iinch pipe and show a reducer and\ntransition coupling, as needed, in the plan and profile views.\n2. For the \u201cOffice Bldg. to Ex. 8 Inch Lateral\u201d profile, verify the material of the existing 8-inch pipe and\nshow a reducer and transition coupling, as needed, in the plan and profile views.\nStormwater Management Ordinance (Chapter 113): HRG\u2019s Review Memo #2\n1. \u00a7113-18.E.7 Provide additional information from MH-5 TO EX-1 that confirms there is no conflict\nwith the existing forcemain.\n2. \u00a7113-18.E.7 Provide an additional structure between MH-5 to EX-1 to relocate the proposed\nstormwater within the cartway.\n3. \u00a7113-18.E.7 Dimension the distance between crossing utilities on the profiles (i.e. profile INL A-5 to\nINL A-7). It appears that no crossing utilities are shown on the profiles. Please reconcile. It appears\nthe crossing between MH-3 and I-2 are shown, however, the 6\u201d sanitary sewer lateral crossing the\nstorm pipe between MH-2 and MH-1 is not shown. Please reconcile. Additionally, please clarify\nPage 4\n\nWest Manchester Township February 10, 2026\nPlanning Commission - Minutes\nwhy the storm pipe between MH-22 and MH-1 is shown as proposed on the Grading and Drainage\nplan sheets, existing on the Utility plan sheets, and missing on the Landscaping plan sheet.\n4. \u00a7113-18.E.10 Provide construction details and calculations for the proposed anti-seep collars.\nAdditionally, while there appears to be a label for the anti-seep collars on multiple plan sheets, the\nanti-seep collars do not appear to be depicted or labeled on the Grading and Drainage Plan, plan sheet\nCS1501 (11 of 24). Please reconcile. Depict and label the proposed anti-seep collars on the plans.\nAdditionally, provide sizing calculations within the report. Depict and label the proposed anti-seep\ncollars on both the Grading and Drainage Plan as well as the Profile. Additionally, please clarify\nthe discrepancy between the SWM Report sizing calculations (1.74\u2019) and the plan construction detail\n(56.76\u201d).\n5. \u00a7113-18.E.11 Provide a notarized signature of the owner of the parcel for which the SWM site plan\nis proposed indicating that they are aware of and will be responsible for operation and maintenance\nof the facilities. The applicant states acknowledged, however, there does not appear to be a statement\nwith an area to sign for this provided within the plans. Please reconcile.\n6. \u00a7113-18.E.5 Provide a letter from the York County Conservation District approving the Erosion and\nSedimentation Control Plan. The applicant states that they acknowledge the comment.\n7. \u00a7113-18.E.5 Provide a copy of the NPDES permit. The applicant states that they acknowledge the\ncomment.\n8. All original seals, signatures and notarizations shall be provided on each copy of the final plan and\nreport prior to being recorded. \u00a7113.18.D\n9. All Land Disturbance Activity shall not be initiated until a Stormwater Management Permit has been\nissued. \u00a7113-23\n10. The applicant shall schedule a pre-construction meeting with the Township, Township Engineer and\nTownship Stormwater Engineer prior to start of any construction. \u00a7113-24\n11. Applicant shall be responsible for scheduling all required inspections with 48-hours\u2019 notice. \u00a7113-24\n12. Upon completion of all required improvements and prior to release of the performance bond, the\napplicant shall submit an as-built plan. \u00a7113-25\n13. Provide a signed and executed operations and maintenance (O&M) agreement. \u00a7113-27\n14. Provide a financial security estimate. \u00a7113-28\n15. Provide an improvement guarantee. \u00a7113-28\n16. The applicant shall pay all required fees. \u00a7113-29\nAdjustments to the Plan\nDawood believes several recommendations for improving the plans are warranted. Some of these will correct\nerrors or internal inconsistency. The rest are consistent with [SALDO \u00a7121-22] which states, \u201cthe standards\nand requirements contained in this article shall apply as minimum design standards for subdivisions and/or land\ndevelopments. Whenever other Township ordinances or regulations impose more restrictive standards and\nrequirements than those contained herein, the more restrictive shall apply.\u201d\n1. Provide details of the retaining wall construction along the northern portion of the property.\n[1/7/2026] Provide final wall details as well as the complete structural details to ensure it can\nsafely support the nearby stormwater pipe. [2/5/2026] While retaining wall details have been\nsubmitted, a final wall type and manufacturer have not been identified. Final design and\nmanufacturer-specific details shall be provided for review by the Township\u2019s code enforcement\nconsultant [Third-Party Building Code Plan Review and Inspection Agency] prior to construction\n[as part of the building permit process].\n2. An O&M Agreement is being developed between the developer and the Township. Please note,\na separate easement agreement will be required for the fence to be constructed within the area of\nan easement. Please submit a draft of the agreement to the Township so the Township Solicitor\nmay review it prior to recording.\n3. [1/7/2026] Sheet 17 lists the outdoor play area as \u2018Lawn (typ.)\u2019; however, a standard lawn is\nfunctionally incompatible with the concentrated traffic of a 152-student facility. Clarify the final\nPage 5\n\nWest Manchester Township February 10, 2026\nPlanning Commission - Minutes\nsurfacing material. If resilient safety surfacing (e.g., rubber or engineered fiber) is required for\nstate licensing, update the Stormwater Management (SWM) Site Plan and Lot Coverage\ncalculations accordingly. [2/5/2026] The plans list synthetic turf as the lawn type but the Lot\nCoverage Calculations have not been updated accordingly. Provide the updated Lot Coverage\ncalculation. Dawood\u2019s comment.\n[Revise stormwater management as needed. Depict the area as a hatch to ensure it is easily known\nto be impervious.] Twp staff comment.\nGeneral Comments:\n1. Please note, any proposed retaining walls must be inspected as part of a building permit by the\nTownship\u2019s third-party building code plan review and inspection agency, Code Administrators, Inc.\nPlease submit a building permit application and construction plans in accordance with the PA UCC\nand the 2021 IBC for the retaining wall prior to beginning any construction work for the retaining\nwall. Acknowledged by the Applicant.\n2. An Operation and Maintenance agreement is required prior to recording the plan. All signatures must\nbe notarized. Acknowledged by the Applicant. The Applicant states that an O&M agreement is in\nprocess between West Manchester Township and the property owner to allow certain structures to be\nplaced within the stormwater easement inside the play area. Please be prepared to discuss the\nitems/structures that will be located within the stormwater easement. Only the Board of Supervisors\ncan waive the requirements for items not to be placed, planted or constructed within the area of an\neasement.\n3. The signatures and seals of the individuals responsible for the plan shall be affixed to the plan prior\nto approval by the Board of Supervisors (\u00a7121-15.F) Acknowledged by the Applicant.\n4. The notarized signature of the owner(s) shall be affixed to the plan prior to approval by the Board of\nSupervisors (\u00a7121-15.F.4) Acknowledged by the Applicant.\n5. All administrative items shall be addressed prior to plan recording (payment of all invoices, etc.)\nAcknowledged by the Applicant.\n6. All final plans, as recorded, shall be submitted in electronic format (i.e. PDF) Acknowledged by the\nApplicant.\n7. A Knox box is required for each building. Added to sheet CS1001 and CS1002.\n8. Provide written approval that the plan for erosion and sediment control and NPDES permit has been\napproved by the York County Conservation District. Provide a copy of the NPDES permit.\n9. The proposed stormwater facility serves parcel 1 and 2; however, the facility is located entirely on\nparcel 1. A recorded agreement between both parcels shall be provided to the Township.\nSECOND: by Matthew Biehl.\nMOTION PASSED: Unanimously (5-0)\nNEW BUSINESS\nSewer Planning Module for T-895 Preliminary Subdivision Plan for Steve and Karen Washington \u2013 review\nof a sewer planning module for 10 EDUs for the preliminary subdivision and land development plan for Steve\nand Karen Washington located at the intersection of Taxville Road and Baker Road. Applicant is requesting this\nsewer planning module be forwarded to the Board of Supervisors for consideration so it may be forwarded to\nthe Pennsylvania Department of Environmental Protection for review.\nMs. Sampere informed the Planning Commission members that the Township was waiting for additional\ninformation to be provided from the Dover Township Wastewater Treatment Plant and Dover Township\u2019s\nEngineer before HRG could review the sewer planning module for Steve and Karen Washington. Once the\ninformation is received, HRG will review the information and make a recommendation to the Planning\nCommission. The sewer planning module is not considered a complete submission without the conveyance\ninformation that must be provided by Dover Township.\nPage 6\n\nWest Manchester Township February 10, 2026\nPlanning Commission - Minutes\nMOTION: by Felicia Dell to table the review of the sewer planning module until the Dover Township Sewer\nAuthority provides the required information on the sewer planning module for the Township Engineer to review.\nSECOND: by Fred Walters\nMOTION PASSED: Unanimously (5-0)\nDISCUSSION\nMs. Sampere informed the Planning Commission members that the Steering Committee for the Zoning\nOrdinance rewrite continues to meet monthly and is having great discussions regarding the updates they\u2019d like\nto see in the Zoning Ordinance.\nMOTION: by Matthew Biehld to adjourn the meeting.\nSECOND: by Fred Walters\nMOTION PASSED: Unanimously (5-0)\nThe meeting adjourned at 8:20 p.m.\nPage 7",
+    "baseline_extractions": [
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": "Jeffrey McVicar for Magnuss McVicar",
+        "parcel_reference": "775 Bairs Road (Tax Map: HG; Parcel: 0059)",
+        "current_zoning": "Rural Residential (R)",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "hearing"
+        ],
+        "project_name": "ZHB 25-21 Driveway Curb-Cut Width Variance",
+        "related_entities": [
+          "West Manchester Township Planning Commission",
+          "Zoning Hearing Board",
+          "Rachelle Sampere"
+        ],
+        "what_happened": "The Planning Commission considered a continued variance request to exceed the maximum width of a driveway curb cut at a single-family dwelling and unanimously recommended that the Zoning Hearing Board deny it for lack of proof of hardship.",
+        "why_it_matters": "The Planning Commission recommendation will be considered by the Zoning Hearing Board, which has final authority over the variance.",
+        "what_happens_next": "The Zoning Hearing Board is expected to act on the variance; the minutes state that no additional continuances were expected to be granted.",
+        "upcoming_date": null,
+        "supporting_text": "(CONTINUED) ZHB 25-21 \u2013 Jeffrey McVicar for Magnuss McVicar \u2013 requests a variance \u00a7150-231.F to exceed maximum width of a driveway curb cut for a driveway located at a single-family dwelling located at 775 Bairs Road (Tax Map: HG; Parcel: 0059) in the Rural Residential (R) Zone. ... MOTION: by Matthew Biehl to recommend the Zoning Hearing Board deny the variance application because there was no proof of a hardship. SECOND: by Felicia Dell MOTION PASSED: Unanimously (5-0)",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": "Michael J. March",
+        "parcel_reference": "1590 Taxville Road (Tax Map: IG; Parcel: 0066)",
+        "current_zoning": "R-2 Residential Zone",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing"
+        ],
+        "project_name": "ZHB 25-24 Minimum Lot Width Variance",
+        "related_entities": [
+          "GHI Engineers and Surveyors",
+          "Grant Anderson, PE",
+          "West Manchester Township Planning Commission",
+          "Zoning Hearing Board"
+        ],
+        "what_happened": "Michael J. March requested a dimensional variance from the minimum lot-width requirement to enable a future two-lot residential subdivision, and the Planning Commission unanimously recommended denial because it found no hardship had been proven.",
+        "why_it_matters": "The requested variance would allow one proposed lot to have 75.92 feet of width where the R-2 requirement is 100 feet at the front-yard setback line, subject to final action by the Zoning Hearing Board.",
+        "what_happens_next": "The Zoning Hearing Board is expected to decide the variance application.",
+        "upcoming_date": null,
+        "supporting_text": "ZHB 25-24 \u2013 Michael J. March \u2013 requests a dimensional variance \u00a7150-45 Minimum Lot Width to enable a future 2 lot residential subdivision located at 1590 Taxville Road (Tax Map: IG; Parcel: 0066) in the R-2 Residential Zone. ... Mr. Anderson explained that the property owner would like to subdivide the existing 4.164-acre parcel; creating one parcel of 100 feet wide, which meets the current Zoning Ordinance, and one lot of 75.92 feet wide which does not meet the current Zoning Ordinance for a minimum lot width. ... MOTION: by Felicia Dell to recommend the Zoning Hearing Board deny the variance application due to absence of a hardship. SECOND: by Matthew Biehl MOTION PASSED: Unanimously (5-0)",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "special_exception",
+        "applicant_name": "Sprich Capital Investment, LLP c/o Andrew Sprich",
+        "parcel_reference": "1231 West Locust Street (Tax Map: 17; Parcel: 0060)",
+        "current_zoning": "R-3 Residential Zone",
+        "proposed_zoning": null,
+        "decision": "tabled",
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "continuance"
+        ],
+        "project_name": "Sprich Capital Auto Repair and Used Auto Sales Expansion",
+        "related_entities": [
+          "Andrew Sprich",
+          "Applicant\u2019s Engineer",
+          "West Manchester Township Planning Commission",
+          "Zoning Hearing Board"
+        ],
+        "what_happened": "Sprich Capital Investment, LLP requested a special exception to expand and alter an existing nonconforming auto repair use, along with related variances for used auto sales, impervious coverage, and attached signage; the matter was tabled at the applicant engineer\u2019s request until March 10, 2026.",
+        "why_it_matters": "The application combines special-exception and variance relief affecting expansion of the existing auto repair use and creation of a second nonconforming used-auto-sales use.",
+        "what_happens_next": "The Planning Commission is scheduled to revisit the application at its March 10, 2026 meeting.",
+        "upcoming_date": "March 10, 2026",
+        "supporting_text": "ZHB 26-01 \u2013 Sprich Capital Investment, LLP c/o Andrew Sprich \u2013 requests a special exception \u00a7150-289 to expand and alter an existing nonconforming use (auto repair shop); variance \u00a7150-289.A.8 to create a second nonconforming use (Auto Sales \u2013 Used) on the property; variance \u00a7150-58 to exceed 35% impervious coverage; variance \u00a7150-283.B Permitted Sign Chart P-8D to allow 2 attached signs on existing auto repair service building exceeding the 4% total wall area located at 1231 West Locust Street (Tax Map: 17; Parcel: 0060) in the R-3 Residential Zone. Tabled until March 10, 2026, at the request of the Applicant\u2019s Engineer. ... MOTION PASSED: Unanimously (5-0)",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Linlo Realty and The Learning Experience",
+        "parcel_reference": "Along the 1900 block of Kenneth Road; frontages on Kenneth Road, Normandie Drive, and Austin Lane",
+        "current_zoning": "Professional Office Zone and R-2 Residential Zone",
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [
+          "Address the remaining comments in the Township staff and engineering review memoranda before approval and recording.",
+          "Conduct left- and right-turn-lane warrant analysis at the access-drive locations for Township Engineer review.",
+          "Update the waiver block and plan statements after Board of Supervisors action on the requested waivers.",
+          "Provide required Pennsylvania Act 537 sewer-planning documentation and PA DEP approval before recording.",
+          "Provide and obtain review of financial security, including the recommended $873,810 estimate, before the plan is released for recording.",
+          "Provide required engineering escrow, maintenance guaranty, as-built plans, stormwater approvals and permits, operation and maintenance agreement, improvement guarantee, and required fees.",
+          "Provide final retaining-wall, utility, stormwater, erosion-and-sediment-control, NPDES, access, and interparcel-agreement documentation identified in the review comments."
+        ],
+        "event_tags": [
+          "application",
+          "hearing",
+          "condition"
+        ],
+        "project_name": "The Learning Experience \u2013 Kenneth Road Preliminary/Final Subdivision and Land Development",
+        "related_entities": [
+          "The Learning Experience",
+          "Linlo Realty",
+          "Matthew Kinney, PE",
+          "Pennoni Associates",
+          "HRG",
+          "Dawood Engineers",
+          "West Manchester Township Board of Supervisors",
+          "Code Administrators, Inc.",
+          "York County Conservation District",
+          "Pennsylvania Department of Environmental Protection"
+        ],
+        "what_happened": "The Planning Commission reviewed a preliminary/final plan proposing two parcels, a 10,000-square-foot commercial day-care facility on Lot 1, and a 6,000-square-foot office building on Lot 2, recommended four waivers to the Board of Supervisors, and recommended approval subject to outstanding staff and engineering comments and turn-lane warrant analysis.",
+        "why_it_matters": "The proposal would subdivide a vacant 3.2-acre lot and add a day-care facility and office building, but Board of Supervisors action and completion of the listed technical, financial, utility, stormwater, and recording requirements remain necessary.",
+        "what_happens_next": "The Board of Supervisors is expected to consider the requested waivers and the preliminary/final plan; the applicant is expected to address the remaining review comments and submit the required approvals and agreements.",
+        "upcoming_date": null,
+        "supporting_text": "T-902 Preliminary/Final Subdivision and Land Development for The Learning Experience \u2013 Kenneth Road \u2013 to depict a subdivision creating two (2) parcels in the Professional office zone and to depict the land development of the parcels creating a 10,000 square foot commercial day care facility with associated parking, landscaping and stormwater management on Lot 1 and the land development of a 6,000 square foot office building with associated parking, landscaping and stormwater management on Lot 2 located along the 1900 block of Kenneth Road in the Professional Office Zone and the R-2 Residential Zone. ... MOTION by Patrick Hein to recommend the Board of Supervisors grant the following requested waivers: W1. Preliminary Plan. (\u00a7121-9) ... W2. Traffic Impact Study (\u00a7121-14.F) ... W3. Post-development Discharge Rates (\u00a7113-13.1) ... W4. Pipe velocity. (\u00a7113-17.G.4) ... MOTION PASSED: Unanimously (5-0) MOTION: by Felicia Dell to recommend the Board of Supervisors approve the preliminary/final subdivision and land development plan for the Learning Center Plan be approved conditioned on addressing the remaining following comments in the staff memo and conditioned on conducting left and right turn lane warrant analysis at the access drive locations:",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Steve and Karen Washington",
+        "parcel_reference": "Intersection of Taxville Road and Baker Road",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": "tabled",
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing",
+          "continuance"
+        ],
+        "project_name": "T-895 Preliminary Subdivision Plan Sewer Planning Module",
+        "related_entities": [
+          "Dover Township Wastewater Treatment Plant",
+          "Dover Township\u2019s Engineer",
+          "Dover Township Sewer Authority",
+          "HRG",
+          "West Manchester Township Board of Supervisors",
+          "Pennsylvania Department of Environmental Protection"
+        ],
+        "what_happened": "The Planning Commission reviewed a sewer planning module for 10 EDUs associated with the T-895 preliminary subdivision and land development plan and tabled it until Dover Township provides conveyance information needed for Township Engineer review.",
+        "why_it_matters": "The sewer planning module was not considered complete, so it could not be forwarded to the Board of Supervisors or Pennsylvania Department of Environmental Protection for review.",
+        "what_happens_next": "Dover Township Sewer Authority must provide the required information, after which HRG will review the module and make a recommendation to the Planning Commission.",
+        "upcoming_date": null,
+        "supporting_text": "Sewer Planning Module for T-895 Preliminary Subdivision Plan for Steve and Karen Washington \u2013 review of a sewer planning module for 10 EDUs for the preliminary subdivision and land development plan for Steve and Karen Washington located at the intersection of Taxville Road and Baker Road. Applicant is requesting this sewer planning module be forwarded to the Board of Supervisors for consideration so it may be forwarded to the Pennsylvania Department of Environmental Protection for review. ... The sewer planning module is not considered a complete submission without the conveyance information that must be provided by Dover Township. MOTION: by Felicia Dell to table the review of the sewer planning module until the Dover Township Sewer Authority provides the required information on the sewer planning module for the Township Engineer to review. SECOND: by Fred Walters MOTION PASSED: Unanimously (5-0)",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 8113,
+    "body_name": "Hanover Boro Planning Commission",
+    "meeting_date": "2026-08-05",
+    "source_text": "Wednesday, August 5, 2026\nHANOVER PLANNING COMMISSION MEETING\nMeetings of the Hanover Borough Planning Commission shall be held at 6:30 p.m. in Council\nChambers, Administration Building, 33 Frederick Street, Hanover, Pennsylvania. Enter through\nthe Side Alley Door and upstairs to the left. Citizens requiring special accommodations to\nattend in person should contact the Borough Secretary at 717-637-3877 at least 48 hours prior\nto the meeting.\n1. Call to Order\n1.01 Call Meeting to Order: 6:30 PM\n1.02 Approval of Minutes: July 1, 2026\n2. Public Comment\n2.01 Chair Statement\n2.02 Hear Citizens concerning items presented in the Planning Commission Agenda.\n3. Regular Agenda\n3.01 Zoning Hearing Board Application Updates:\na. 370 Poplar St: Dimensional Variance Request \u2013 Addition of a 74\u2019x18\u2019 Dust Collection\nStorage Silo was approved at the Zoning Hearing Board meeting held on July 20, 2026.\nb. 751 George St: Special Exception \u2013 Expansion of Multi Family Dwelling was denied at the\nZoning Hearing Board meeting held on July 20, 2026.\n3.02 Sketch Plan Review / Discussion (No Action):\na. 225 Moul Ave: Potential single family detached / single family semi-detached\ndevelopment.\nb. Rural King: Auto Center Potential Subdivision from parent tract.\n3.03 302-302 \u00bd Third St:\na. Review/Potential Action, Waiver for Preliminary Plan Submittal and Final/Preliminary\nSubdivision Plan approval. (Deadline for action by Borough Council is November 3, 2026).\n3.04 319 Wilson Ave \u2013 Fairfield Inn Update:\na. Revised Plan and Supporting Materials not submitted. Possible review at the September 2,\n2026, Planning Commission Meeting.\n3.05 Upcoming Plans:\na. 495 Eisenhower Dr \u2013 Walmart: Parking Lot Improvements and Building Expansion Land\nDevelopment Plans to be reviewed at the September 2, 2026 Planning Commission\nMeeting.\n4. Public Comment\n4.01 Hear Citizens concerning all other matters pertaining to Planning Commission Business.\n\n5. Announcements, if any\n5.01 Please plan to exit the building within 15 minutes following adjournment so staff may secure the\nbuilding and depart for the evening.\n6. Adjournment\nCommittee Goals\na. Review Zoning Ordinance to identify its current effectiveness and address any shortcomings\nthat may belabor staff and Council or otherwise suppress proper development (including\nadaptive redevelopment). The effort shall include the incorporation of the staff\u2019s running list\nof editorial comments.\nb. Review the Subdivision and Land Development Ordinance (SALDO) to identify effectiveness,\naddress inconsistencies with the Zoning Ordinance as well as shortcomings that may\nsuppress proper development including adaptive redevelopment or promoting economic\ndevelopment, while incorporating the feedback of citizens and Borough staff.\nc. Prepare for the 2026 Comprehensive Plan update to ensure sufficient funding and support to\ninclude an origin and destination study, an official map and third-party assistance.",
+    "baseline_extractions": [
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": null,
+        "parcel_reference": "370 Poplar St",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": "approved",
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "approval"
+        ],
+        "project_name": "Dust Collection Storage Silo",
+        "related_entities": [
+          "Hanover Zoning Hearing Board"
+        ],
+        "what_happened": "A dimensional variance request for a 74-foot-by-18-foot dust collection storage silo at 370 Poplar St was approved by the Zoning Hearing Board on July 20, 2026.",
+        "why_it_matters": "The approval permits the stated dimensional variance for the proposed storage silo.",
+        "what_happens_next": null,
+        "upcoming_date": null,
+        "supporting_text": "370 Poplar St: Dimensional Variance Request \u2013 Addition of a 74\u2019x18\u2019 Dust Collection Storage Silo was approved at the Zoning Hearing Board meeting held on July 20, 2026.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "special_exception",
+        "applicant_name": null,
+        "parcel_reference": "751 George St",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": "denied",
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "denial"
+        ],
+        "project_name": "Multi Family Dwelling Expansion",
+        "related_entities": [
+          "Hanover Zoning Hearing Board"
+        ],
+        "what_happened": "A special exception request to expand a multi-family dwelling at 751 George St was denied by the Zoning Hearing Board on July 20, 2026.",
+        "why_it_matters": "The denial means the reported multi-family dwelling expansion was not approved through the special-exception process.",
+        "what_happens_next": null,
+        "upcoming_date": null,
+        "supporting_text": "751 George St: Special Exception \u2013 Expansion of Multi Family Dwelling was denied at the Zoning Hearing Board meeting held on July 20, 2026.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "development_proposal",
+        "applicant_name": null,
+        "parcel_reference": "225 Moul Ave",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "225 Moul Ave Residential Development",
+        "related_entities": [],
+        "what_happened": "A sketch plan was presented for discussion of a potential single-family detached and single-family semi-detached development at 225 Moul Ave.",
+        "why_it_matters": "The matter was identified as a sketch-plan discussion without action, so no approval or other decision was recorded.",
+        "what_happens_next": null,
+        "upcoming_date": null,
+        "supporting_text": "225 Moul Ave: Potential single family detached / single family semi-detached development.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Rural King",
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "Rural King Auto Center Subdivision",
+        "related_entities": [
+          "Rural King"
+        ],
+        "what_happened": "A sketch plan was identified for discussion regarding a potential subdivision of an auto center from the Rural King parent tract.",
+        "why_it_matters": "The proposal was listed for sketch-plan discussion only, with no action recorded.",
+        "what_happens_next": null,
+        "upcoming_date": null,
+        "supporting_text": "Rural King: Auto Center Potential Subdivision from parent tract.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": null,
+        "parcel_reference": "302-302 \u00bd Third St",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "upcoming_decision"
+        ],
+        "project_name": "302-302 \u00bd Third St Preliminary and Final Subdivision Plan",
+        "related_entities": [
+          "Hanover Borough Council"
+        ],
+        "what_happened": "The Planning Commission agenda listed review and potential action on a waiver for preliminary-plan submittal and approval of preliminary and final subdivision plans for 302-302 \u00bd Third St.",
+        "why_it_matters": "The matter involves both a preliminary-plan submission waiver and preliminary/final subdivision-plan approval, with Borough Council action subject to a November 3, 2026 deadline.",
+        "what_happens_next": "Review and potential action are scheduled in the planning process, with the Borough Council action deadline stated as November 3, 2026.",
+        "upcoming_date": "November 3, 2026",
+        "supporting_text": "302-302 \u00bd Third St: Review/Potential Action, Waiver for Preliminary Plan Submittal and Final/Preliminary Subdivision Plan approval. (Deadline for action by Borough Council is November 3, 2026).",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "development_proposal",
+        "applicant_name": "Fairfield Inn",
+        "parcel_reference": "319 Wilson Ave",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "upcoming_decision"
+        ],
+        "project_name": "Fairfield Inn Update",
+        "related_entities": [
+          "Fairfield Inn"
+        ],
+        "what_happened": "The revised plan and supporting materials for the Fairfield Inn project at 319 Wilson Ave had not been submitted.",
+        "why_it_matters": "Planning Commission review was not ready to proceed because the revised plan and supporting materials were outstanding.",
+        "what_happens_next": "Possible review is identified for the September 2, 2026 Planning Commission meeting, subject to submission of the revised materials.",
+        "upcoming_date": "September 2, 2026",
+        "supporting_text": "319 Wilson Ave \u2013 Fairfield Inn Update: Revised Plan and Supporting Materials not submitted. Possible review at the September 2, 2026, Planning Commission Meeting.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "subdivision_review",
+        "applicant_name": "Walmart",
+        "parcel_reference": "495 Eisenhower Dr",
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "upcoming_decision"
+        ],
+        "project_name": "Walmart Parking Lot Improvements and Building Expansion",
+        "related_entities": [
+          "Walmart"
+        ],
+        "what_happened": "Land development plans for Walmart parking lot improvements and a building expansion at 495 Eisenhower Dr were scheduled for Planning Commission review.",
+        "why_it_matters": "The proposal is an upcoming land-development-plan review and no decision was recorded in this document.",
+        "what_happens_next": "The land development plans are scheduled to be reviewed at the September 2, 2026 Planning Commission meeting.",
+        "upcoming_date": "September 2, 2026",
+        "supporting_text": "495 Eisenhower Dr \u2013 Walmart: Parking Lot Improvements and Building Expansion Land Development Plans to be reviewed at the September 2, 2026 Planning Commission Meeting.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [],
+        "project_name": "2026 Comprehensive Plan Update",
+        "related_entities": [
+          "Hanover Borough Planning Commission",
+          "Borough staff"
+        ],
+        "what_happened": "The Planning Commission identified preparation for the 2026 Comprehensive Plan update as a committee goal, including funding and support for an origin-and-destination study, an official map, and third-party assistance.",
+        "why_it_matters": "The stated goal indicates planned municipality-wide comprehensive-planning work, but no adoption or update decision was recorded.",
+        "what_happens_next": "The Planning Commission is expected to prepare for the comprehensive-plan update and address funding and support needs.",
+        "upcoming_date": null,
+        "supporting_text": "Prepare for the 2026 Comprehensive Plan update to ensure sufficient funding and support to include an origin and destination study, an official map and third-party assistance.",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 5845,
+    "body_name": "Warrington Twp Planning Commission",
+    "meeting_date": "2026-07-15",
+    "source_text": "Warrington Township, York County, PA\nPlanning Commission \u2013 Meeting Minutes\nHeld, pursuant to due notice, in the Municipal Building\n3345 Rosstown Road, Wellsville, PA 17365\nWednesday, July 15, 2026, 6:00 PM\nPresiding: Mr. Benjamin Lance, Chairman\nMr. James Barton, Vice Chairman\nMrs. Carla Repman\nMr. Robert Shelly\nMr. Len Kotz\nMr. Leon Zorbaugh, Alternate 1\nMr. Greg Codner, Alternate 2\nStaff Present: Mr. Gib Patton, Esq., Township Solicitor\nMr. Eric Swiger, Zoning Officer\nMs. Elaine B Smith, Assistant Secretary\nAbsent: Mr. Paul Wilson, P.E., Township Engineer\n1. Approved Meeting Minutes:\na. Motion was made by Mr. Len Kotz & seconded by Mrs. Carla Repman, to approve\nthe Meeting Minutes from the June 17, 2026 PC meeting. Vote carried unanimously.\n2. Sketch Plans, Subdivisions, Planning Modules, &/or Land Development Plans:\na. None\n3. New Business:\na. No Public Recognition.\nb. Township Solicitor: Gib Patton, Esq, gave an overview of the ASA (Agricultural\nSecurity Area) Application Process & then led a general ASA discussion with the PC\n& members of the audience.\n4. Old Business:\na. PC Proposal 26-02: per BOS (3/11/26 meeting), PC discussed revisions (suggested\nby Township Ag Committee), to the Township's current ZO Section 517, with hopes\nof clarifying resident concerns about animal concentrations on working farms\n(Agricultural Operation) vs. non-working residential parcels. PC voted (3/18/26\nmeeting), to send the working \u201cRev 0\u201d red-line draft document, containing the\nproposed text edits, to the YCPC for official review / recommended action by the\nTownship. YCPC official review completed at their 4/21/26 meeting.\n1. Motion was made by Mr. Ben Lance & seconded by Mr. Len Kotz, to adopt the\nproposed text amendments to ZO Section 517 & to forward these proposed text\nrevisions (rev. 0) to the BOS for: consideration / public hearing advertisement /\npossible action. Vote carried unanimously.\n1 Warrington Township\nPlanning Commission Minutes\nJuly 15, 2026\n\nb. PC Proposal 25-02: per BOS (7/10/25 meeting), PC to discussed amending the\ncurrent ZO, to allow for Data Centers. PC discussion (7/16/25 & 8/20/25 PC\nmeetings), suggested the new use be a Conditional Use, only in the Village\nCommercial Zone. This proposed ZO amendment will also require the addition of\nsupplementary regulations in Article VII (Standards for Special Exceptions &\nConditional Uses), by specifically creating new ZO Section 764 \u2013 Data Centers. PC\nopted to use the York County Planning Commission (YCPC) Data Center Model\nOrdinance, for the initial content of new proposed ZO Section 764. BOS voted\n(3/11/26 meeting), to place a 180-day moratorium on all Data Center applications,\nwhile the ZO revisions are completed. PC voted (4/15/26 meeting), to send the\nworking \u201cRev 1\u201d red-line draft document, containing the proposed text edits for ZO\nSections: 203, 307, & all new proposed text for ZO Section 764, to the YCPC for\nofficial review / recommended action by the Township. YCPC official review\ncompleted at their 5/19/26 meeting.\n1. Motion was made by Mr. Ben Lance & seconded by Mrs. Carla Repman, to adopt\nthe proposed text amendments to existing ZO Sections: 203, 307; as well as, new\nsection 764 & to forward these proposed text revisions (rev. 2) to the BOS for:\nconsideration / public hearing advertisement / possible action. Vote carried\nunanimously.\n5. Reviewed Planning Commission's \u201cTo-Do\u201d List:\na. PC quickly reviewed the \u201cTo-Do\u201d List (rev 7/13/2026).\n6. Adjournment:\na. Motion made by Mr. Ben Lance & seconded by Mrs. Carla Repman, to adjourn the\nmeeting. Motion carried unanimously & the meeting adjourned at 7:14PM.\n_____________________________\nElaine B Smith, Assistant Secretary\n2 Warrington Township\nPlanning Commission Minutes\nJuly 15, 2026",
+    "baseline_extractions": [
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "hearing",
+          "upcoming_decision"
+        ],
+        "project_name": "ZO Section 517 Text Amendments \u2014 Agricultural Operations and Animal Concentrations",
+        "related_entities": [
+          "Warrington Township Planning Commission",
+          "Warrington Township Board of Supervisors",
+          "Township Agricultural Committee",
+          "York County Planning Commission"
+        ],
+        "what_happened": "The Planning Commission unanimously voted to adopt proposed revisions to Zoning Ordinance Section 517 and forward revision 0 to the Board of Supervisors for consideration, public-hearing advertisement, and possible action.",
+        "why_it_matters": "The proposed text amendments would clarify the treatment of animal concentrations on working farms compared with non-working residential parcels, but final municipal action remains with the Board of Supervisors.",
+        "what_happens_next": "The proposed text revisions will be forwarded to the Board of Supervisors for consideration, public-hearing advertisement, and possible action.",
+        "upcoming_date": null,
+        "supporting_text": "PC Proposal 26-02: per BOS (3/11/26 meeting), PC discussed revisions (suggested by Township Ag Committee), to the Township's current ZO Section 517, with hopes of clarifying resident concerns about animal concentrations on working farms (Agricultural Operation) vs. non-working residential parcels. PC voted (3/18/26 meeting), to send the working \u201cRev 0\u201d red-line draft document, containing the proposed text edits, to the YCPC for official review / recommended action by the Township. YCPC official review completed at their 4/21/26 meeting.\n1. Motion was made by Mr. Ben Lance & seconded by Mr. Len Kotz, to adopt the proposed text amendments to ZO Section 517 & to forward these proposed text revisions (rev. 0) to the BOS for: consideration / public hearing advertisement / possible action. Vote carried unanimously.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": "Village Commercial Zone for data center conditional uses",
+        "decision": null,
+        "conditions": [],
+        "event_tags": [
+          "hearing",
+          "upcoming_decision"
+        ],
+        "project_name": "ZO Sections 203, 307, and 764 Data Center Amendments",
+        "related_entities": [
+          "Warrington Township Planning Commission",
+          "Warrington Township Board of Supervisors",
+          "York County Planning Commission"
+        ],
+        "what_happened": "The Planning Commission unanimously voted to adopt proposed amendments to Zoning Ordinance Sections 203 and 307 and new Section 764 establishing data center provisions, and to forward revision 2 to the Board of Supervisors.",
+        "why_it_matters": "The proposed amendments would establish data centers as a conditional use only in the Village Commercial Zone and add supplementary regulations, while the Board of Supervisors must still consider and potentially act on the revisions.",
+        "what_happens_next": "The proposed text revisions will be forwarded to the Board of Supervisors for consideration, public-hearing advertisement, and possible action.",
+        "upcoming_date": null,
+        "supporting_text": "PC Proposal 25-02: per BOS (7/10/25 meeting), PC to discussed amending the current ZO, to allow for Data Centers. PC discussion (7/16/25 & 8/20/25 PC meetings), suggested the new use be a Conditional Use, only in the Village Commercial Zone. This proposed ZO amendment will also require the addition of supplementary regulations in Article VII (Standards for Special Exceptions & Conditional Uses), by specifically creating new ZO Section 764 \u2013 Data Centers. PC opted to use the York County Planning Commission (YCPC) Data Center Model Ordinance, for the initial content of new proposed ZO Section 764. BOS voted (3/11/26 meeting), to place a 180-day moratorium on all Data Center applications, while the ZO revisions are completed. PC voted (4/15/26 meeting), to send the working \u201cRev 1\u201d red-line draft document, containing the proposed text edits for ZO Sections: 203, 307, & all new proposed text for ZO Section 764, to the YCPC for official review / recommended action by the Township. YCPC official review completed at their 5/19/26 meeting.\n1. Motion was made by Mr. Ben Lance & seconded by Mrs. Carla Repman, to adopt the proposed text amendments to existing ZO Sections: 203, 307; as well as, new section 764 & to forward these proposed text revisions (rev. 2) to the BOS for: consideration / public hearing advertisement / possible action. Vote carried unanimously.",
+        "confidence": "high"
+      },
+      {
+        "extraction_type": "ordinance_action",
+        "applicant_name": null,
+        "parcel_reference": null,
+        "current_zoning": null,
+        "proposed_zoning": null,
+        "decision": "approved",
+        "conditions": [
+          "180-day moratorium on all Data Center applications"
+        ],
+        "event_tags": [
+          "approval"
+        ],
+        "project_name": "180-Day Data Center Application Moratorium",
+        "related_entities": [
+          "Warrington Township Board of Supervisors",
+          "Warrington Township Planning Commission"
+        ],
+        "what_happened": "The Board of Supervisors voted on March 11, 2026, to place a 180-day moratorium on all data center applications while zoning ordinance revisions were being completed.",
+        "why_it_matters": "The moratorium temporarily affected the submission or processing of data center applications township-wide during the zoning revision process.",
+        "what_happens_next": "The document indicates that the zoning revisions were forwarded to the Board of Supervisors for consideration, public-hearing advertisement, and possible action.",
+        "upcoming_date": null,
+        "supporting_text": "BOS voted (3/11/26 meeting), to place a 180-day moratorium on all Data Center applications, while the ZO revisions are completed.",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "source_id": 8949,
+    "body_name": "Fairview Twp Zoning Hearing Board",
+    "meeting_date": "2026-01-22",
+    "source_text": "BEFORE THE FAIRVIEW TOWNSHIP\nZONING HEARING BOARD\nDECISION\nIN RE: APPLICATION OF MESSIAH HOMES\nAPPLICATION NO. 2026-01\nAPPLICANT(S): Messiah Homes\nHEARING DATE: January 22, 2026\nDECISION DATE: January 22, 2026\nAPPEARANCES: James Strong, Esq. with McNess Wallace & Nurick, LLC (attorney\nfor Applicant)\nBill Fredricks with RGS Associates (the engineer/design\nmanagement for Applicant)\nKarl Brummer, President of Applicant\nHomer Hetrick, neighbor (via letter submission)\nStephen Waller, Township Zoning Officer\nKen Keim, Resident (questions only)\nEXHIBITS: Exhibit 1 \u2013 Application (including all submittals)\nExhibit 2 \u2013 Aerial Exhibit (marked as A-1 at hearing)\nExhibit 3 \u2013 Site Plan (marked as A-2 at hearing)\nExhibit 4 \u2013 Courtyard Homes Exhibit (marked as A-3 at hearing)\nSUBJECT PROPERTY: 100 Spanglers Mill Road, New Cumberland, PA 17070\nBACKGROUND\nThis decision of the Fairview Township Zoning Hearing Board (the \u201cBoard\u201d) is from an\napplication filed with Fairview Township (the \u201cTownship\u201d) on or about December 16, 2025 (the\n\u201cApplication\u201d), seeking zoning relief under the Township\u2019s Zoning Ordinance (the\n\u201cOrdinance\u201d) as follows: (i) \u00a7300.73.D.6.d.3 \u2013 to permit an 8.5\u2019 front to rear separation where\n40\u2019 is required, (ii) \u00a7300.73.D.6.d.4 \u2013 to permit an 8.5\u2019 side to rear separation where 20\u2019 is\nrequired, (iii) \u00a7300.73.D.6.d.5 \u2013 to permit an 8.5\u2019 side to side separation where 15\u2019 is required,\nand (iv) \u00a7300.73.D.6.d.7 \u2013 to permit a 13\u2019 corner to corner separation where 20\u2019 is required. The\nsubject property is located at 100 Spanglers Mill Road, New Cumberland, PA 17070 within the\nTownship\u2019s Single Family Residential (RS) Zoning District.\nA hearing was held on the Application on Thursday, January 22, 2026, with the meeting\nstarting at 6:00 p.m. The Zoning Hearing Board was represented by Timothy Mader (Chairman),\nMark Perry (Vice Chairman), and Keith Bashore (with Daniel Alderman (as the acting alternate\nmember) being in attendance but not voting. All published and posted notices were duly given,\nwith no objection thereto being made in writing or orally at the time of the hearing. No\ntestimony in opposition to the Application was offered or taken, and no parties attended the\nhearing to provide testimony in opposition, although the above referenced resident did submit\nquestions to the Applicant. A letter in support of the Application was submitted by a neighbor,\nHomer Hetrick, dated January 14, 2026. After hearing the testimony and viewing the evidence\nin this matter, the Board makes the following determinations:\n1\n\nFINDINGS OF FACT\n1. Messiah Homes (\u201cApplicant\u201d) is a wholly owned subsidiary of Messiah Lifeways\n(\u201cOwner\u201d) as the owner of property located at 100 Spanglers Mill Road, New Cumberland, PA\n17070, having an area of roughly 85.24 acres (the \u201cProperty\u201d).\n2. The Property is located in the Township\u2019s Single Family Residential (RS) Zoning\nDistrict (the \u201cRS Zone\u201d) and is unimproved.\n3. Owner and/or Applicant has received both preliminary and final land\ndevelopment approval for the construction of a Continuing Care Retirement Community at the\nProperty (the \u201cProject\u201d), for which limited site-work has commenced.\n4. Owner, at Docket No. 2023-07, obtained a variance from the Board on May 25,\n2023 under Section 300-33(A) to reduce the buffer requirement on either side of a second\nemergency access from thirty five feet (35\u2019) to seventeen feet (17\u2019) (for the second emergency\naccess only).\n5. The Property is accessed by Spangler Mill Road, which borders the southwestern\nportion of the Property, for both the main entrance and the second emergency access (as noted\nabove).\n6. The Property is otherwise bound by the Yellow Breeches Creek for the majority\nof the boundary and residential dwellings on the south and southwestern borders of the Property.\n7. The Property has an irregular shape, and contains a variety of open space, wooded\narea, floodplain area, and steep slopes.\n8. Applicant is in the process of commencing an initial phase of the Project to\nconstruct a courtyard home area in the Project consisting of 38 units.\n9. The Ordinance requires certain minimum building separation for continuing care\nretirement community facilities having more than one building on a single lot, requiring: (i) front\nto rear separation of 40 feet, (ii) side to rear separation of 20 feet, (iii) side to side separation of\n15 feet, and (iv) corner to corner separation of 20 feet.\n10. As depicted on Exhibit 4, the courtyard homes propose the following: (i) a front\nto rear separation of 8.5 feet at unit nos. 224-222; (ii) a front to rear separation of 8.5 feet at unit\nnos. 226-228; (iii) a side to rear separation of 8.5 feet at unit nos. 207-209; (iv) a side to rear\nseparation of 8.5 feet at unit nos. 223-225; (v) a side to side separation of 8.5 feet at unit nos.\n229-227; (vi) a side to side separation of 8.5 feet at unit nos. 203-205; (vii) a corner to corner\nseparation of 18.59 feet at unit nos. 236-238; (viii) a corner to corner separation of 18.59 feet at\nunit nos. 208-206; (ix) a corner to corner separation of 13.88 feet at unit nos. 206-204; and (x) a\ncorner to corner separation of 13.88 feet at unit nos. 236-234.\n2\n\n11. The courtyard units are essentially leased to the occupants for the remainder of\ntheir lives, with such occupants paying an initial entry fee, and then a monthly fee.\n12. The courtyard style of the Project allows occupants to remain at the facility while\nproviding an open, neighborly atmosphere.\n13. The courtyard areas were initially planned to be connected via overhead\nwalkways (meaning they would be considered the same structure) at each of the ten (10) areas\nwhere variances are requested, which is how the courtyard is depicted on the final land\ndevelopment plan and approved.\n14. Applicant received feedback from potential residents that they would not prefer\nthe walk-way connections.\n15. All other aspects of the Project will comply with the Ordinance regulations.\n16. Stephen Waller, as the Township Zoning Officer, testified as follows:\nA. All public notice of the application and hearing was legally conducted,\nwith the hearing being advertised in the newspaper on January 8th and 15th, the Property\nbeing posted at multiple locations on January 15th, and the adjoining property owners had\nletters mailed to them on January 2nd.\nB. The courtyard phase of the Project has obtained conditional approval of its\nFinal Land Development plan.\nCONCLUSIONS OF LAW\n1. The Applicant seeks ten (10) separate variances (as there are ten (10) defined\nbuilding separations that it seeks to be reduced), as outlined in paragraph 10 above.\n2. For all ten (10) variances, Applicant has failed to established the elements\nrequired by Section 300-99(E)(4) of the Ordinance regarding the general criteria for a variance in\norder to grant a variance from Section 300.73.D.6.d regarding minimum building separation for\ncontinuing care retirement community facilities having more than one building on a single lot.\n3. Specifically, Applicant failed to establish that any hardship necessitating the\nrequested variances was not self-created as a result of the Project.\nDECISION\nMr. Perry moved to deny the zoning relief requested by the Applicant in the Application,\nbeing ten (10) dimensional variances from Section 300.73.D.6.d regarding minimum building\nseparation for continuing care retirement community facilities having more than one building on\na single lot (with each specific variance as outlined in paragraph 10 above.\n3\n\nMr. Bashore seconded the motion. Upon a vote, the Fairview Township Zoning Hearing\nBoard unanimously approved the motion to deny the requested zoning relief in the Application.\nAPPLICANT SHALL ABIDE BY ALL FEDERAL, STATE AND LOCAL LAWS,\nREGULATIONS AND ORDINANCES PERTAINING TO PERMISSIONS GRANTED\nBY THIS DECISION.\nAPPLICANT SHALL PROCEED PURSUANT TO THIS DECISION IN ACCORDANCE\nWITH THE TESTIMONY AND EXHIBITS PRESENTED AT THE HEARING.\nDate: January 27, 2026\nTimothy Mader, Chairmen\nANY PERSON AGGRIEVED BY THIS DECISION OF THE FAIRVIEW TOWNSHIP\nZONING HEARING BOARD MAY APPEAL TO THE COURT OF COMMON PLEAS\nOF YORK COUNTY, PENNSYLVANIA. THE APPEAL MUST BE FILED WITHIN\nTHIRTY (30) DAYS FROM THE MAILING OF THESE FINDINGS OF FACT,\nCONCLUSIONS OF LAW AND THE ABOVE DECISION.\nMAIL DATE: January 27, 2026\n4\n\nPUBLIC NOTICE\nThe Fairview Township Zoning Hearing Board will hold a Public Hearing on Thursday, January 22,\n2026, at 6:00pm, at the Fairview Township Municipal Building, 599 Lewisberry Road, New\nCumberland, PA 17070, to discuss the following:\nDocket No. 2026-01: The applicant, Messiah Home, is requesting four (4) Variances from Section\n\u00a7300.73.D.6.d. minimum building separation for continuing care retirement community facilities\nhaving more than one building on a single lot. Applicant seeks the following relief: (i)\n\u00a7300.73.D.6.d.3 \u2013 8.5\u2019 front to rear separation (where 40\u2019 is required), (ii) \u00a7300.73.D.6.d.4 \u2013 8.5\u2019\nside to rear separation (where 20\u2019 is required), (iii) \u00a7300.73.D.6.d.5 \u2013 8.5\u2019 side to side separation\n(where 15\u2019 is required), and (iv) \u00a7300.73.D.6.d.7 \u2013 13\u2019 corner to corner separation (where 20\u2019 is\nrequired). The subject property is located at 100 Spanglers Mill Road, New Cumberland, PA\n17070, within the Single-Family Residential (SR) Zoning District.\n\n100 Spanglers Mill Road\nVariance Request Narrative\nFairview Township\nRGS Project No: 2021557-017\nDecember 16, 2025\nBACKGROUND\nThe subject property is located at 100 Spanglers Mill Road, New Cumberland, PA 17070 and is\napproximately 1,500 feet northwest of the intersection of Spanglers Mill Road and Limekiln\nRoad. The property consists of approximately 85 acres in the RS Single Family Residential\nDistrict in which a CCRC is allowed. The property is currently under construction.\nThe applicant, Messiah Home, is proposing a CCRC community at the property, including a mix\nof single and duplex cottages, apartments, and onsite amenities for the residents. The\nproposed project provides two means of access to the property, both along Spanglers Mill.\nVARIANCE\nOn behalf of our client, Messiah Home, we are requesting the following variances from the\nFairview Township Zoning Ordinance:\nSection 330-73.D.6.d.3/4/5/7: Building Separation regulations for CCRC\nThe ordinance states that the required building separation requirements for a CCRC use, where\nmultiple buildings are to be located on the same lot, in the RS Zone is 40\u2019 Front to Rear, 20\u2019 side\nto rear, 15\u2019 side to side, and 20\u2019 corner to corner.\nWe are requesting variances from these requirements to allow for 8.5\u2019 separation for front to\nrear, side to rear and side to side distances, as well as 13\u2019 for corner to corner distances for\ncertain of the proposed buildings.\nThe separation relief is for the Courtyard home product type only. This housing type offers a\nunique neighborhood style of living that creates internal courtyards that are bordered by units.\nThis style of living encourages resident interaction with front porches all fronting on the\ncourtyards/greens, enhancing the sense of community and quality of life, while allowing greater\naccessibility between units.\nJUSTIFICATIONS\n\u2022 The existing site is limited in lot size and configuration.\n\u2022 There are existing steep slopes and woodlands that limit the area of development.\n\u2022 Instead of spacing out units and impacting natural features or creating higher density type\nunits, the applicant is seeking to create internal courtyard homes to better reflect the\nsurrounding community.\n\u2022 The units in their proposed configuration will still meet the building code requirements.\n\u2022 The proposed use aligns with the Zoning Ordinance.\n\nPer the Fairview Township Zoning Ordinance, the following Variance Criteria found in Section\n330-99.E(4) has been provided for all of the above requested relief:\na) That there are unique physical circumstances or conditions, including irregularity,\nnarrowness, or shallowness of lot size or of shape, or exceptional topographical or other\nphysical conditions peculiar to the particular property, and the unnecessary hardship is due\nto such conditions, and not the circumstances or conditions generally created by the\nprovisions of this chapter in the neighborhood or zoning district in which the property is\nlocated.\nTo preserve as much of the topography of the site, the woodland areas, and the waters of\nthe Commonwealth, the applicant is proposing a courtyard design that reduces the\nbuilding separation criteria as defined in the ordinance. The relief would allow the units\nto be placed with internal courtyards that helps to preserve the woodlands and steep\nslopes. Due to the existing conditions and shape of the property, the variances are\nnecessary to limit the impact on existing natural site features.\nb) That because of such physical circumstances or conditions, there is no possibility that the\nproperty can be developed in strict conformity with the provisions of this chapter and that\nthe authorization of a variance is therefore necessary to enable the reasonable use of the\nproperty.\nThe variance would enable a reasonable use of the property.\nc) That such unnecessary hardship has not been created by the appellant.\nThe hardship is created by the existing improvements and natural site features.\nd) That the variance, if authorized, will not alter the essential character of the zoning district or\nneighborhood in which the property is located, nor substantially or permanently impair the\nappropriate use or development of adjacent property, and will not be detrimental to the\npublic welfare.\nThe variance will not alter the essential character of the zone or neighborhood, nor will it\npermanently impair the appropriate use or development of adjacent property, and will\nnot be detrimental to the public welfare.\ne) That the variance, if authorized, will represent the minimum variance that will afford relief\nand will represent the least modification possible of the regulations in issue.\nThe variance represents the minimum variance that will afford relief and represents the\nleast modification possible of the regulation.\nf) The proposed use complies with Article VI of this chapter relating to Floodplain Overlay\nZoning District (FPO) and Chapter 151, relating to floodplains.\nThe variance request does not impact the floodplain or Floodplain Overlay Zoning District.\nADDITIONAL INFORMATION MAY BE PROVIDED AT THE HEARING.\np:\\2021\\2021557-017\\zoning\\2025 - variance application - courtyard homes\\2025-12-16-variance narrative.doc\n\nDecember 16, 2025\nFairview Township\nc/o Stephen Waller, Zoning Officer\n599 Lewisberry Road\nNew Cumberland, PA 17070\nRE: 100 Spanglers Mill Road \u2013 Zoning Variance Application\nDear Mr. Waller:\nOn behalf of our client, Messiah Home, we are hereby submitting the enclosed zoning variance\napplication as outlined in the Township Application Form and supporting documentation. The\nsubmission package includes:\na) Variance Application fee: check for $850;\nb) Six (6) copies, Zoning Hearing Board Application;\nc) Six (6) copies, Properties within 200\u2019 list\nd) Six (6) copies, Properties within 200\u2019 exhibit\ne) Six (6) copies, Zoning Variance Request Narrative\nf) Eight (8) copies, Zoning Plan, full size, dated 12/16/2025\nIf you have any questions, comments or concerns related to this request, please feel free to\ncontact me. We look forward to working with you on this process.\nSincerely,\nWilliam Fredericks, PE\nClient Manager/Associate\ncc: Mr. Karl Bruimmer, Messiah Lifeways\nMr. James Strong, McNees\np:\\2021\\2021557-017\\zoning\\l-2023-04-18 - fairview-twp-zoning-application.docx",
+    "baseline_extractions": [
+      {
+        "extraction_type": "variance_request",
+        "applicant_name": "Messiah Homes",
+        "parcel_reference": "100 Spanglers Mill Road, New Cumberland, PA 17070",
+        "current_zoning": "RS (Single Family Residential)",
+        "proposed_zoning": null,
+        "decision": "denied",
+        "conditions": [],
+        "event_tags": [
+          "application",
+          "hearing",
+          "denial"
+        ],
+        "project_name": "Courtyard Homes at Messiah Homes Continuing Care Retirement Community",
+        "related_entities": [
+          "Messiah Lifeways",
+          "RGS Associates",
+          "McNees Wallace & Nurick, LLC",
+          "Fairview Township Zoning Hearing Board",
+          "Stephen Waller, Township Zoning Officer"
+        ],
+        "what_happened": "The Fairview Township Zoning Hearing Board heard Messiah Homes' application for ten dimensional variances reducing required building separations for the courtyard-home phase of a continuing care retirement community and unanimously denied the requested zoning relief.",
+        "why_it_matters": "The denial means the requested courtyard-home building-separation reductions were not granted under the Township's variance criteria, including the finding that the hardship was self-created by the Project.",
+        "what_happens_next": "Any person aggrieved by the decision may appeal to the Court of Common Pleas of York County, Pennsylvania; the document states that an appeal must be filed within thirty days from mailing of the decision.",
+        "upcoming_date": "within thirty (30) days from the mailing of these Findings of Fact, Conclusions of Law and the above Decision",
+        "supporting_text": "This decision of the Fairview Township Zoning Hearing Board (the \u201cBoard\u201d) is from an application filed with Fairview Township (the \u201cTownship\u201d) on or about December 16, 2025 (the \u201cApplication\u201d), seeking zoning relief under the Township\u2019s Zoning Ordinance (the \u201cOrdinance\u201d) as follows: (i) \u00a7300.73.D.6.d.3 \u2013 to permit an 8.5\u2019 front to rear separation where 40\u2019 is required, (ii) \u00a7300.73.D.6.d.4 \u2013 to permit an 8.5\u2019 side to rear separation where 20\u2019 is required, (iii) \u00a7300.73.D.6.d.5 \u2013 to permit an 8.5\u2019 side to side separation where 15\u2019 is required, and (iv) \u00a7300.73.D.6.d.7 \u2013 to permit a 13\u2019 corner to corner separation where 20\u2019 is required. The subject property is located at 100 Spanglers Mill Road, New Cumberland, PA 17070 within the Township\u2019s Single Family Residential (RS) Zoning District.\n\nApplicant is in the process of commencing an initial phase of the Project to construct a courtyard home area in the Project consisting of 38 units.\n\nThe Applicant seeks ten (10) separate variances (as there are ten (10) defined building separations that it seeks to be reduced), as outlined in paragraph 10 above.\n\nFor all ten (10) variances, Applicant has failed to established the elements required by Section 300-99(E)(4) of the Ordinance regarding the general criteria for a variance in order to grant a variance from Section 300.73.D.6.d regarding minimum building separation for continuing care retirement community facilities having more than one building on a single lot.\n\nSpecifically, Applicant failed to establish that any hardship necessitating the requested variances was not self-created as a result of the Project.\n\nMr. Perry moved to deny the zoning relief requested by the Applicant in the Application, being ten (10) dimensional variances from Section 300.73.D.6.d regarding minimum building separation for continuing care retirement community facilities having more than one building on a single lot (with each specific variance as outlined in paragraph 10 above. Mr. Bashore seconded the motion. Upon a vote, the Fairview Township Zoning Hearing Board unanimously approved the motion to deny the requested zoning relief in the Application.",
+        "confidence": "high"
+      }
+    ]
+  }
+]

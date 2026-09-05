@@ -39,8 +39,19 @@ def _clean_env():
 
 
 def _configure_pass2_authorization(tmp_path, monkeypatch, *, maximum=0.10):
+    import json
+    from countyiq.lib.quality_release import release_identity
     path = tmp_path / "pass2-authorization.json"
     monkeypatch.setenv("COUNTYIQ_PASS2_MODEL", "openai/gpt-5.6-luna")
+    import hashlib
+    artifact = tmp_path / "evaluation.json"
+    artifact.write_text("test evaluation record")
+    quality = tmp_path / "quality.json"
+    quality.write_text(json.dumps({"identity": release_identity(2), "decision": "approved",
+        "reviewer": "test reviewer", "reviewed_at": "2026-09-04",
+        "evaluation_record": {"path": artifact.name, "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}, "catastrophic_errors": 0}))
+    monkeypatch.setenv("COUNTYIQ_PASS2_QUALITY_RECEIPT", str(quality))
+
     create_backfill_authorization(
         path,
         pass_number=2,

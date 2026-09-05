@@ -103,6 +103,8 @@ export interface OwnerProfileResponse {
     parcels: OwnerParcel[]
   }
   delinquency: {
+    /** False when exact claim rows are withheld by the restricted-distress gate. */
+    detail_available?: boolean
     total_owed: number
     delinquent_parcels: number
     records: DelinquencyRecord[]
@@ -168,6 +170,7 @@ export interface PenndotProjectProperties {
 
 export interface ParcelRecord {
   pidn: string
+  owner_id: number | null
   owner_full: string | null
   own_name1: string | null
   own_name2: string | null
@@ -351,6 +354,7 @@ export interface IntelligenceSummary {
 }
 
 export interface LinkedProceeding {
+  decision_scope?: string | null
   proceeding_id: number
   body_name: string | null
   meeting_date: string | null
@@ -437,12 +441,58 @@ export interface IntelligenceFeedResponse {
   has_more: boolean
 }
 
+export interface ZoningInfo {
+  code: string | null
+  name: string | null
+  type: string | null
+  general_code: string | null
+  general_name: string | null
+  municipality: string | null
+  ordinance: string | null
+  adopted: string | null
+  source_url: string | null
+}
+
+export interface NearbyParcel {
+  pidn: string
+  propadr: string | null
+  municipality: string | null
+  class: string | null
+  acres: number | null
+  aprtotal: number | null
+  saledt: string | null
+  price: number | null
+  distance_m: number | null
+  lat: number | null
+  lng: number | null
+  owner_label: string | null
+  owner_kind: string
+  owner_id: number | null
+  has_tax_delinquency: boolean | null
+  likely_vacant: boolean
+  opportunity_score: number | null
+  momentum_score: number | null
+  site_readiness_score: number | null
+  top_signal: string | null
+  has_active_plan: boolean
+}
+
+export interface NearbyParcelsResponse {
+  anchor_pidns: string[]
+  anchor_lat: number | null
+  anchor_lng: number | null
+  radius_m: number
+  count: number
+  parcels: NearbyParcel[]
+}
+
 export interface PropertyReport {
   parcel: ParcelRecord
   tax_delinquency: TaxDelinquency
   flood_zone: FloodZoneInfo
   soil_profile: SoilProfile
   structures: ParcelStructures
+  zoning?: ZoningInfo | null
   development_momentum: DevelopmentMomentum | null
   parcel_brief: ParcelBrief | null
   related_narratives: CountyNarrative[]
@@ -473,6 +523,7 @@ export interface MunicipalityPipelineMatter {
 }
 
 export interface MunicipalityPipeline {
+  policy?: MunicipalityPipelineMatter[]
   window_days: number
   total_matters: number
   by_event_type: { event_type: string; count: number }[]
@@ -519,104 +570,6 @@ export interface LicenseRecord {
   municipality?: string
   last_issue_date?: string | null
   expiration_date?: string | null
-}
-
-export interface MunicipalityLicenseResponse {
-  licenses: LicenseRecord[]
-}
-
-export interface LicenseTypeSummary {
-  license_type: string
-  count: number
-}
-
-export interface LicenseListResponse {
-  licenses: LicenseRecord[]
-  type_summary: LicenseTypeSummary[]
-  total: number
-}
-
-export interface TopDelinquentOwner {
-  owner_name: string
-  parcel_count: number
-  total_owed: number
-  oldest_year: number | null
-  newest_year: number | null
-  years_delinquent: number
-  districts: string[]
-}
-
-export interface DelinquentParcelSummary {
-  pidn: string
-  owner_name: string
-  property_address: string | null
-  tax_district_name: string | null
-  oldest_year: number | null
-  years_delinquent: number
-  total_owed: number
-}
-
-export interface DistressedParcel {
-  pidn: string
-  propadr: string | null
-  class: string | null
-  acres: number | null
-  aprtotal: number | null
-  saledt: string | null
-  price: number | null
-  school_dis: string | null
-  vacant_score: number | null
-  no_flood_score: number | null
-  sheriff_score: number | null
-  traffic_score: number | null
-  delinquency_score: number | null
-  sale_stage_score: number | null
-  acreage_score: number | null
-  value_score: number | null
-  class_score: number | null
-  hold_score: number | null
-  distress_score: number
-}
-
-export interface DistressedResponse {
-  count: number
-  parcels: DistressedParcel[]
-}
-
-export interface AssemblageNeighbor {
-  pidn: string
-  address: string | null
-  acres: NumericLike
-  assessed: NumericLike
-  class: string | null
-  delinquent: boolean
-  vacant: boolean
-}
-
-export interface AssemblageCluster {
-  seed_pidn: string
-  seed_address: string | null
-  seed_class: string | null
-  school_dis: string | null
-  seed_acres: number | null
-  seed_assessed: number | null
-  lat: number | null
-  lng: number | null
-  adjacent_count: number
-  delinquent_neighbors: number
-  vacant_neighbors: number
-  different_owners: number
-  total_neighbor_acres: number | null
-  total_neighbor_assessed: number | null
-  total_acres: number | null
-  total_assessed: number | null
-  unique_owners: number
-  neighbors: AssemblageNeighbor[]
-}
-
-export interface AssemblageResponse {
-  count: number
-  clusters: AssemblageCluster[]
 }
 
 export type RadarViewMode = 'opportunity' | 'momentum' | 'readiness'
@@ -709,4 +662,38 @@ export interface SearchResponse {
   label?: string
   value?: string
   format?: string
+}
+
+export interface ProjectStatusItem {
+  event_key: string
+  evidence_id: string
+  record_date: string | null
+  text: string
+  status: string
+  date?: string | null
+  kind?: string | null
+}
+export interface ProjectDecision {
+  event_key: string
+  evidence_id: string
+  record_date: string | null
+  decision: string
+  body: string | null
+  matter: string | null
+  scope?: string | null
+}
+
+export interface ProjectCaseResponse extends IntelligenceFeedResponse {
+  summary: {
+    status: string
+    as_of: string | null
+    latest_event_key: string | null
+    latest_change: string | null
+    next_verification: string | null
+    decisions: ProjectDecision[]
+    conditions: ProjectStatusItem[]
+    milestones: ProjectStatusItem[]
+    history_incomplete: boolean
+    caveat: string
+  }
 }

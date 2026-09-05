@@ -1,4 +1,6 @@
 # Reviewed false positives in historical commits. Keep these fingerprint-scoped:
+# Public browser localStorage key "countyiq_compare_v1", not a credential.
+ad992968d1e842d185e52d10e491db7bf5a0bae5:frontend/src/lib/investigationState.ts:generic-api-key:7
 # do not broaden to a rule, path, or commit allowlist.
 # SQL column comparison in the Pass 4 self-join.
 e374872f240adf782805a0804ecd79674b48f68f:pipelines/countyiq/lib/pass4_county_narratives.py:generic-api-key:67

@@ -23,6 +23,7 @@ from countyiq.lib.error_budget import check_error_budget
 from countyiq.lib.intelligence_common import (
     fetch_prior_pass_attempts,
     pass_attempt_priority,
+    strip_volatile_evidence,
 )
 from countyiq.lib.intelligence_autoresolve import auto_resolve_contradiction
 from countyiq.lib.intelligence_integrity import (
@@ -30,6 +31,7 @@ from countyiq.lib.intelligence_integrity import (
     inference_input_hash,
     owner_brief_semantic_decision,
     record_inference_decision,
+    signal_version_refs,
     record_validation_rejection,
     validate_owner_brief_citations,
 )
@@ -41,6 +43,7 @@ from countyiq.lib.pass3_owner_briefs import (
     PROMPT_VERSION,
     UPSERT_OWNER_BRIEF,
     build_owner_rollup_prompt,
+    owner_brief_context,
     parse_owner_brief_output,
 )
 from countyiq.lib.pass_llm_config import (
@@ -148,7 +151,7 @@ def owner_briefs(
         subject_key = _owner_subject_key(canonical_name)
         input_hash: str | None = None
         try:
-            with database.dict_cursor() as cur:
+            with database.read_snapshot() as cur:
                 cur.execute(OWNER_PORTFOLIO_QUERY, {"owner_id": owner_id})
                 owner = cur.fetchone()
                 if not owner:
@@ -163,21 +166,25 @@ def owner_briefs(
             if not evidence_rows:
                 continue
 
+            signal_dependencies = signal_version_refs(evidence_rows)
+            owner_context = owner_brief_context(owner, evidence_rows)
             prompt = build_owner_rollup_prompt(owner, evidence_rows)
 
-            # Skip unchanged work. Pass 2 rewrites validated_at on every upsert,
-            # so the eligibility query re-selects owners whose briefs would come
-            # out byte-identical. Hashing the RENDERED prompt (+ model + prompt
-            # version) skips those without a false-invalidation from volatile
-            # timestamp fields — and re-runs when the template itself changes.
+            # Hash stable evidence and its inference identity. Revalidation can
+            # replace a source version without changing rendered prose; that
+            # replacement must regenerate the dependency receipt too.
             source_hash = content_hash(
                 {
-                    "owner": owner,
+                    "owner": owner_context,
                     "evidence": [
                         {
-                            key: row.get(key)
+                            key: (
+                                strip_volatile_evidence(row.get(key))
+                                if key == "evidence_data"
+                                else row.get(key)
+                            )
                             for key in (
-                                "pidn", "signal_key", "validation_status",
+                                "pidn", "signal_key", "active_inference_id", "validation_status",
                                 "adjusted_significance", "validation_reasoning",
                                 "evidence_data", "confidence", "municipality",
                             )
@@ -286,6 +293,8 @@ def owner_briefs(
                 evidence_refs=(
                     [f"signal:{key}" for key in parsed["citations"]]
                     + [f"parcel:{pidn}" for pidn in parsed["parcel_citations"]]
+                    + signal_dependencies
+                    + ["owner-context:v2:" + content_hash(owner_context)]
                 ),
             )
             if not gate.accepted:

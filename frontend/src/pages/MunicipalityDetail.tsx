@@ -8,6 +8,7 @@ import PageShell from '../components/PageShell'
 import Section from '../components/Section'
 import { ButtonLink } from '../components/ui'
 import { formatCurrencyCompact, formatLabel, formatShortDate } from '../lib/format'
+import { isMunicipalityWatched, toggleMunicipalityWatch } from '../lib/watchlist'
 import type { IntelligenceFeedResponse, MunicipalityPipelineMatter, MunicipalityProfile } from '../types/api'
 
 function formatCompactCurrencyOrZero(value: number | null | undefined): string {
@@ -23,6 +24,13 @@ export default function MunicipalityDetail() {
   const [feed, setFeed] = useState<IntelligenceFeedResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [, setWatchRevision] = useState(0)
+
+  useEffect(() => {
+    const refresh = () => setWatchRevision((value) => value + 1)
+    window.addEventListener('countyiq-watchlist-changed', refresh)
+    return () => window.removeEventListener('countyiq-watchlist-changed', refresh)
+  }, [])
 
   useEffect(() => {
     if (!name) return
@@ -38,7 +46,7 @@ export default function MunicipalityDetail() {
         const data: MunicipalityProfile = await response.json()
         if (cancelled) return
         setMunicipality(data)
-        const feedParams = new URLSearchParams({ municipality: `${data.name}%`, since_days: '365', sort: 'priority', limit: '6' })
+        const feedParams = new URLSearchParams({ municipality: data.name, since_days: '365', sort: 'priority', limit: '6' })
         const feedResponse = await fetch(`/api/feed?${feedParams}`)
         if (!cancelled && feedResponse.ok) setFeed(await feedResponse.json() as IntelligenceFeedResponse)
       } catch (loadError) {
@@ -65,6 +73,7 @@ export default function MunicipalityDetail() {
   const pipeline = municipality.development_pipeline ?? null
   const radarTop = municipality.radar_top ?? []
   const events = feed?.events ?? []
+  const watched = isMunicipalityWatched(municipality.name)
 
   return (
     <PageShell maxWidth={1100}>
@@ -76,6 +85,14 @@ export default function MunicipalityDetail() {
         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
           {municipality.muni_type && <Badge color="var(--accent-blue)">{municipality.muni_type}</Badge>}
           {municipality.county && <Badge color="var(--accent-purple)">{municipality.county} County</Badge>}
+          <button
+            type="button"
+            className="watch-button"
+            aria-pressed={watched}
+            onClick={() => toggleMunicipalityWatch({ name: municipality.name })}
+          >
+            {watched ? '★ Watching municipality' : '☆ Watch municipality'}
+          </button>
         </div>
       </div>
 
@@ -103,6 +120,9 @@ export default function MunicipalityDetail() {
                 </Link>
               ))}
             </div>
+            {(pipeline.policy?.length ?? 0) > 0 && (
+              <MatterList label="Municipality-wide policy actions (ordinances, plans, sewer, incentives)" matters={pipeline.policy!} />
+            )}
             {pipeline.upcoming.length > 0 && (
               <MatterList label="Upcoming or recently heard" matters={pipeline.upcoming} />
             )}

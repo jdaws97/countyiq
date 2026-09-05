@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PostgreSQL + intelligence archives -> Cloudflare R2.
+# PostgreSQL backups -> Cloudflare R2.
 # A manifest is uploaded last and is the completion marker for one backup set.
 
 set -euo pipefail
@@ -41,7 +41,7 @@ if [ -n "$BACKUP_LABEL" ] && ! [[ "$BACKUP_LABEL" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{
     exit 2
 fi
 
-ENVIRONMENT_FILE="${COUNTYIQ_ENV_FILE:-/opt/countyiq/.env}"
+ENVIRONMENT_FILE="${COUNTYIQ_ENV_FILE:-/etc/countyiq/production.env}"
 countyiq_validate_secret_file "$ENVIRONMENT_FILE"
 countyiq_load_environment "$ENVIRONMENT_FILE"
 countyiq_require_command docker
@@ -51,11 +51,11 @@ countyiq_require_command rclone
 countyiq_require_command sha256sum
 countyiq_validate_r2_backup_environment
 
-exec 9>/var/lock/countyiq-backup.lock
-if ! flock -n 9; then
-    echo "A CountyIQ backup is already running" >&2
-    exit 1
-fi
+# Refuse new off-host writes after a manual or automatic cost stop. This check
+# also measures both R2 buckets and trips the whole stack if usage is unreadable.
+"$SCRIPT_DIR/cost-guard.sh" --check
+
+countyiq_lock_backup_operations
 
 BACKUP_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_SUFFIX="$BACKUP_REASON"
@@ -66,7 +66,6 @@ BACKUP_ID="${BACKUP_TIMESTAMP}-${BACKUP_SUFFIX}"
 DUMP_DIR="$(mktemp -d)"
 MANIFEST_FILE="$DUMP_DIR/backup-${BACKUP_ID}.manifest"
 REMOTE_POSTGRES_PATH="${COUNTYIQ_BACKUP_REMOTE}/postgres"
-REMOTE_ARCHIVE_PATH="${COUNTYIQ_BACKUP_REMOTE}/intelligence-archives"
 REMOTE_MANIFEST_PATH="${COUNTYIQ_BACKUP_REMOTE}/manifests"
 LLM_ARCHIVE_RETENTION_DAYS="${COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS:-90}"
 DATABASE_USER="${DATABASE_USER:-dagster_admin}"
@@ -147,6 +146,12 @@ for database_name in "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"; do
         printf 'database.%s.sha256=%s\n' "$database_name" "$dump_sha256"
     } >> "$MANIFEST_FILE"
 
+    # Reserve the entire dump before its first remote write so a single backup
+    # cannot carry the account through the configured storage safety margin.
+    checksum_bytes="$(stat -c '%s' "$checksum_file")"
+    "$SCRIPT_DIR/cost-guard.sh" --check \
+        --reserve-bytes "$(( dump_bytes + checksum_bytes ))"
+
     rclone copyto --immutable "$dump_file" "${REMOTE_POSTGRES_PATH}/${dump_name}"
     rclone copyto --immutable "$checksum_file" "${REMOTE_POSTGRES_PATH}/${dump_name}.sha256"
     rclone check "$DUMP_DIR" "$REMOTE_POSTGRES_PATH" \
@@ -156,15 +161,13 @@ for database_name in "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"; do
     echo "[$(date -Iseconds)] $database_name verified off-host: $dump_bytes bytes"
 done
 
-# Upload every backup-set object before publishing its completion manifest.
-# The host deliberately has no remote delete path; R2 lifecycle and bucket-lock
-# rules own remote retention and protect backups from a compromised VPS.
-if [ -d /opt/countyiq/archives ]; then
-    rclone copy --immutable /opt/countyiq/archives "$REMOTE_ARCHIVE_PATH"
-fi
-
+# Raw archives already live in the locked raw bucket. Duplicating them into the
+# backup bucket would consume roughly 2.7 GB without creating provider-level
+# redundancy, so this job stores only database dumps and completion manifests.
 manifest_name="$(basename "$MANIFEST_FILE")"
 remote_manifest_copy="$DUMP_DIR/remote-$manifest_name"
+manifest_bytes="$(stat -c '%s' "$MANIFEST_FILE")"
+"$SCRIPT_DIR/cost-guard.sh" --check --reserve-bytes "$manifest_bytes"
 rclone copyto --immutable "$MANIFEST_FILE" "${REMOTE_MANIFEST_PATH}/${manifest_name}"
 rclone copyto "${REMOTE_MANIFEST_PATH}/${manifest_name}" "$remote_manifest_copy"
 cmp --silent "$MANIFEST_FILE" "$remote_manifest_copy"

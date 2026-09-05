@@ -3,12 +3,9 @@
 ## Product Boundary
 
 The React client serves South-Central Pennsylvania real-estate investors and
-small/mid-size developers. Its primary jobs are parcel/owner lookup, distress
-and assemblage discovery, development-event monitoring, map exploration, and
-retaining a small watchlist. It is public and read-only; there are no accounts
-or server-side user preferences. Browser-local investigation state can be
-exported as a versioned JSON workspace and imported on another device. This is
-deliberate portability, not automatic account sync.
+small/mid-size developers. Its primary jobs are parcel/entity lookup,
+deterministic development screening, development-event monitoring, map
+exploration, and retaining investigations. The public marketing site is separate from the protected app host; verified accounts receive a personal workspace at the app root with synchronized watches, saved searches, comparisons and recent investigations. Guest browser work remains portable through explicit export/import. See [account workspaces](../operations/account-workspaces.md).
 
 ## Stack
 
@@ -19,13 +16,12 @@ deliberate portability, not automatic account sync.
 | Build | Vite 8, Node 22, npm lockfile |
 | Map | MapLibre through `react-map-gl` |
 | Overlays | Direct `@deck.gl/core`, `@deck.gl/layers`, and `@deck.gl/react` packages |
-| Hosting direction | Static build on Cloudflare Pages; API remains behind Caddy |
+| Hosting | Separate marketing/app HTML entries served by Caddy through Cloudflare Tunnel |
 
 The frontend intentionally avoids a global state library. Route state comes
-from URLs, page data comes from `/api/*`, and watches, feed triage, saved
-searches, and the four-parcel comparison are small versioned `localStorage`
-records. If interviews validate automatic multi-device watchlists, authenticated
-server persistence remains a separate product and security decision.
+from URLs, page data comes from `/api/*`, and watches (parcels, projects,
+entities, municipalities), feed triage, saved searches, and the four-parcel
+comparison use small versioned browser records. Verified identity selects an account-specific cache; the server owns synchronized snapshots and optimistic versions. Event triage and visit markers remain local to that account.
 
 `RouteFrame` owns scroll restoration, route-specific document titles, loading,
 and route error handling. `Nav` provides persistent search and a saved light/dark
@@ -35,23 +31,27 @@ focus is visible throughout.
 
 ## Routes
 
-`frontend/src/App.tsx` is authoritative:
+`frontend/src/App.tsx` is authoritative for app-host routes. The marketing host uses the independent frontend/src/marketing.tsx entry:
 
 | Route | Purpose |
 |---|---|
-| `/` | Search-first dashboard and source summary |
+| `/` | Account workspace on app host; marketing homepage on public host |
+| /app | Compatibility alias for the account workspace |
+| /organizations | Searchable directory of business and government ownership groupings |
 | `/map` | Interactive parcel and reference-layer exploration |
-| `/property/:pidn`, `/owner/:id` | Property and owner intelligence |
+| `/property/:pidn` | Property case file: facts, current zoning, signals, proceedings, nearby parcels within a chosen radius, evidence receipts, cached intelligence |
+| `/entity/:id`, `/owner/:id` | Entity case file over the stable `public.owners` identity; the owner path is a compatibility alias |
+| `/project/:key` | Project case file: evidence timeline, connected entities/parcels, parcels near the project, CSV export, watch action |
 | `/radar`, `/feed` | Development signals (Opportunity, Momentum, Movers, Site Screening) and unified events |
 | `/municipalities`, `/municipalities/:name` | Municipality index and the developer-facing municipality page: source-backed planning pipeline, top opportunity parcels with weekly change, recent feed events, and tax aggregates |
 | `/delinquent`, `/distressed`, `/assemblage`, `/licenses`, `/projects` | Legacy bookmarks redirect into Radar, Feed, or Search; their standalone page chunks are no longer in the product router |
 | `/search` | Fuzzy or typed natural-language results |
-| `/watch` | Browser-local retained parcels/projects |
+| `/watch` | Account-synced watches and searches (browser-local for guests), with new-since-last-visit flags, activity within 400 m of watched parcels, and workspace export/import |
 | `/compare` | Side-by-side diligence comparison for 2–4 parcels, with CSV and print/PDF output |
 | `/ops/health` | Source availability, refresh freshness, run failures, policy health, aggregate intelligence integrity, and recent deterministic-gate rejection telemetry |
 
-Home is loaded eagerly. Every other page is route-lazy so MapLibre and deck.gl
-do not inflate the initial application chunk. Heavy map chunks are expected on
+Marketing has its own entry and stylesheet, and makes no API calls. Product
+pages are route-lazy so MapLibre and deck.gl do not inflate the initial application chunk. Heavy map chunks are expected on
 `/map`; a regression that pulls them into the entry chunk should fail review.
 
 ## Map Data Flow
@@ -73,7 +73,8 @@ optimization with its own measurement and cache-invalidation design.
 ## API and Failure Behavior
 
 The browser uses relative `/api/*` URLs. Vite proxies those requests to
-`localhost:8000` in development. A same-origin production proxy requires no
+`localhost:8000` in development on the app.localhost host only. Public-host
+API requests are rejected. See [host rollout and local preview](../operations/account-workspaces.md). A same-origin production proxy requires no
 CORS grant; a separate frontend origin must be configured explicitly as
 described in `docs/api/api.md`.
 

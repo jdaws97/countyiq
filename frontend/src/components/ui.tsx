@@ -71,7 +71,7 @@ export function StatusMessage({
   children: ReactNode
   tone?: 'neutral' | 'error' | 'success'
 }) {
-  return <div className={`status-message status-message-${tone}`}>{children}</div>
+  return <div role={tone === 'error' ? 'alert' : 'status'} className={`status-message status-message-${tone}`}>{children}</div>
 }
 
 export function Freshness({ value, label = 'Evidence current through' }: { value?: string | null; label?: string }) {

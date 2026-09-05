@@ -294,6 +294,7 @@ class IntelligenceSummaryPayload(TypedDict):
 
 
 class LinkedProceedingPayload(TypedDict):
+    decision_scope: str | None
     proceeding_id: int
     body_name: str | None
     meeting_date: str | None
@@ -315,6 +316,7 @@ ParcelPayload = TypedDict(
     "ParcelPayload",
     {
         "pidn": str,
+        "owner_id": int | None,
         "owner_full": str | None,
         "own_name1": str | None,
         "own_name2": str | None,
@@ -352,12 +354,25 @@ ParcelPayload = TypedDict(
 )
 
 
+class ZoningPayload(TypedDict):
+    code: str | None
+    name: str | None
+    type: str | None
+    general_code: str | None
+    general_name: str | None
+    municipality: str | None
+    ordinance: str | None
+    adopted: str | None
+    source_url: str | None
+
+
 class PropertyReportResponse(TypedDict):
     parcel: ParcelPayload
     tax_delinquency: TaxDelinquencyPayload
     flood_zone: FloodZonePayload
     soil_profile: SoilProfilePayload
     structures: ParcelStructuresPayload
+    zoning: ZoningPayload | None
     development_momentum: DevelopmentMomentumPayload | None
     parcel_brief: ParcelBriefPayload | None
     related_narratives: list[CountyNarrativePayload]
@@ -426,6 +441,7 @@ class MunicipalityPipelinePayload(TypedDict):
     by_event_type: list[MunicipalityPipelineCountPayload]
     upcoming: list[MunicipalityPipelineMatterPayload]
     recent: list[MunicipalityPipelineMatterPayload]
+    policy: list[MunicipalityPipelineMatterPayload]
 
 
 class MunicipalityRadarTopPayload(TypedDict):
@@ -447,18 +463,6 @@ class RadarParcelListResponse(TypedDict):
 
 class RadarMunicipalitiesResponse(TypedDict):
     municipalities: list[str]
-
-
-class ParcelBboxProperties(TypedDict, total=False):
-    pidn: str
-    owner_full: str | None
-    propadr: str | None
-    aprtotal: float | None
-    municipality: str | None
-    class_: str | None
-    saledt: str | None
-    price: float | None
-    has_tax_delinquency: bool
 
 
 class ParcelBboxFeature(TypedDict):
@@ -508,16 +512,6 @@ class MunicipalityDelinquencyPayload(TypedDict):
     total_delinquent: float
     oldest_delinquent_year: int | None
     delinquent_years: int
-
-
-class TopDelinquentOwnerPayload(TypedDict):
-    owner_name: str
-    parcel_count: int
-    total_owed: float
-    oldest_year: int | None
-    newest_year: int | None
-    years_delinquent: int
-    districts: list[str]
 
 
 class MunicipalityLicenseSummaryPayload(TypedDict):

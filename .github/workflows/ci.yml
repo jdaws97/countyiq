@@ -76,6 +76,69 @@ jobs:
       - name: Scan API source for high-severity Python issues
         run: uvx bandit==1.9.4 -r api -x api/tests,api/unit_tests,api/.venv -q -lll
 
+  database-integration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.6"
+          python-version: "3.11"
+
+      - name: Install locked API and pipeline dependencies
+        run: |
+          uv sync --project api --locked
+          uv sync --project pipelines --locked --extra dev
+
+      # The API fixture starts postgres-test, creates countyiq_test, migrates
+      # from base, and provisions the read-only API role before contracts run.
+      - name: Migrate fresh database and run API contracts
+        run: uv run --project api pytest api/tests -q
+
+      # Pipeline schema contracts verify migration seed state. API fixtures
+      # deliberately rewrite municipality policies, so do not reuse their DB.
+      - name: Start isolated pipeline contract database
+        run: |
+          docker run -d --name countyiq-pipeline-contracts \
+            -p 127.0.0.1:5434:5432 \
+            -e POSTGRES_DB=countyiq_test -e POSTGRES_USER=dagster_admin \
+            -e POSTGRES_PASSWORD=localtest \
+            -v "$PWD/pipelines/init-db/01-extensions-schemas.sql:/docker-entrypoint-initdb.d/01-extensions-schemas.sql:ro" \
+            postgis/postgis:16-3.4@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5
+          for attempt in $(seq 1 30); do
+            if docker exec countyiq-pipeline-contracts pg_isready -h 127.0.0.1 -U dagster_admin -d countyiq_test; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Migrate isolated pipeline database
+        working-directory: pipelines
+        env:
+          DATABASE_URL: postgresql://dagster_admin:localtest@localhost:5434/countyiq_test
+        run: uv run alembic upgrade head
+
+      - name: Run pipeline database contracts
+        env:
+          DATABASE_HOST: localhost
+          DATABASE_PORT: "5434"
+          DATABASE_NAME: countyiq_test
+          DATABASE_USER: dagster_admin
+          DATABASE_PASSWORD: localtest
+          TEST_DATABASE_URL: postgresql://dagster_admin:localtest@localhost:5434/countyiq_test
+        run: uv run --project pipelines pytest pipelines/tests -q -m integration
+
+      - name: Collect pipeline database logs and clean up
+        if: always()
+        run: |
+          docker logs countyiq-pipeline-contracts || true
+          docker rm -fv countyiq-pipeline-contracts || true
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -103,6 +166,10 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Test browser workspace persistence and exports
+        working-directory: frontend
+        run: npm test
+
       - name: Build production bundle
         working-directory: frontend
         run: npm run build
@@ -118,11 +185,15 @@ jobs:
           sed -i 's/CHANGE_ME_STRONG_PASSWORD/ci-admin-password-000000000000000000000000000000000000/g' .env
           sed -i 's/CHANGE_ME_PIPELINE_PASSWORD/ci-pipeline-password-00000000000000000000000000000000000/g' .env
           sed -i 's/CHANGE_ME_API_PASSWORD/ci-api-password-00000000000000000000000000000000000000/g' .env
+          printf 'CLOUDFLARE_TUNNEL_TOKEN=%0128d\n' 0 >> .env
           docker compose -f docker/docker-compose.yml config --quiet
+
+      - name: Enforce Cloudflare cost policy
+        run: infra/cloudflare/check-cost-policy.sh
 
       - name: Validate deployment scripts and fail-closed preflight
         run: |
-          bash -n docker/setup.sh docker/backup.sh docker/deploy.sh docker/restore-drill.sh docker/lib/operations.sh
+          bash -n docker/check-host.sh docker/setup.sh docker/arm-cost-guard.sh docker/backup.sh docker/cost-guard.sh docker/deploy.sh docker/publish-production-env.sh docker/restore-drill.sh docker/lib/operations.sh infra/cloudflare/check-cost-policy.sh infra/cloudflare/tofu-sops.sh infra/secrets/bootstrap-cloudflare-iac.sh infra/secrets/bootstrap-production.sh
           cat >> .env <<'EOF'
           COUNTYIQ_ARCHIVE_STRICT=true
           R2_ACCESS_KEY_ID=ci-r2-access-key
@@ -131,13 +202,38 @@ jobs:
           COUNTYIQ_BACKUP_R2_ACCESS_KEY_ID=ci-backup-r2-access-key
           COUNTYIQ_BACKUP_R2_SECRET_ACCESS_KEY=ci-backup-r2-secret-key
           COUNTYIQ_BACKUP_BUCKET_LOCK_CONFIRMED=true
-          DOMAIN=api.countyiq.test
-          COUNTYIQ_TRUSTED_HOSTS=api.countyiq.test
+          DOMAIN=countyiq.test
+          COUNTYIQ_TRUSTED_HOSTS=app.countyiq.test
+          COUNTYIQ_AUTH_PROVIDER=cloudflare_access
+          COUNTYIQ_ACCESS_ISSUER=https://ci-team.cloudflareaccess.com
+          COUNTYIQ_ACCESS_AUD=ci-reviewed-application-audience
+          COUNTYIQ_APP_URL=https://app.countyiq.test
+          COUNTYIQ_WORKSPACE_ORIGINS=https://app.countyiq.test
           EOF
           env \
             COUNTYIQ_DEPLOY_REF="$(git rev-parse HEAD)" \
             COUNTYIQ_ENV_FILE="$PWD/.env" \
             docker/deploy.sh --check
 
-      - name: Validate Caddy configuration
-        run: docker run --rm -v "$PWD/docker/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 caddy validate --config /etc/caddy/Caddyfile
+      - name: Build web image and validate Caddy configuration
+        run: |
+          docker build -f docker/Caddy.Dockerfile -t countyiq-web:ci .
+          docker run --rm countyiq-web:ci caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Verify web startup with production restrictions
+        run: |
+          set -euo pipefail
+          container=$(docker run -d --read-only --tmpfs /tmp:size=32m,mode=1777 \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            --pids-limit 128 --memory 256m -e DOMAIN=countyiq.test countyiq-web:ci)
+          trap 'docker logs "$container"; docker rm -f "$container" >/dev/null' EXIT
+          for attempt in $(seq 1 15); do
+            if docker exec "$container" wget -q -O /dev/null http://localhost:8080/healthz; then
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' "$container")" != true ]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          exit 1

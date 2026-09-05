@@ -1,0 +1,8 @@
+all:
+  children:
+    countyiq_vps:
+      hosts:
+        production:
+          ansible_host: 15.204.255.199
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/jdawskey

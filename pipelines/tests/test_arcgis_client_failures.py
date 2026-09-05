@@ -26,27 +26,6 @@ def _resp(json_data, status=200):
     return r
 
 
-def test_partial_fetch_raises_instead_of_returning_subset():
-    with mock.patch.object(arcgis_client, "_get_feature_count", return_value=2000), \
-         mock.patch.object(arcgis_client, "_fetch_page") as fetch_page:
-        def side_effect(url, where, out_fields, out_sr, batch_size, offset, return_geometry):
-            if offset == 1000:
-                raise RuntimeError("boom")
-            return [{"attributes": {"i": n}} for n in range(batch_size)]
-
-        fetch_page.side_effect = side_effect
-        with pytest.raises(RuntimeError, match="Parallel fetch incomplete"):
-            arcgis_client.fetch_all_features_parallel("http://x/FeatureServer/0", batch_size=1000)
-
-
-def test_full_fetch_returns_all_pages_in_order():
-    with mock.patch.object(arcgis_client, "_get_feature_count", return_value=2000), \
-         mock.patch.object(arcgis_client, "_fetch_page") as fetch_page:
-        fetch_page.side_effect = lambda u, w, f, s, b, offset, g: [{"attributes": {"offset": offset}}]
-        features = arcgis_client.fetch_all_features_parallel("http://x/FeatureServer/0", batch_size=1000)
-    assert [f["attributes"]["offset"] for f in features] == [0, 1000]
-
-
 def test_bounded_parallel_iterator_limits_submitted_page_window():
     with mock.patch.object(arcgis_client, "_get_feature_count", return_value=5), \
          mock.patch.object(arcgis_client, "_fetch_page") as fetch_page:

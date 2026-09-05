@@ -1,189 +1,161 @@
 # Operational Runbook
 
-### Daily operations (automated)
+These procedures describe the reviewed single-host Compose deployment. Confirm
+the current release receipt and host state before operating it. Host, user and
+SSH key are recorded in infra/ansible/inventory/production.yml; examples below
+assume an SSH alias named countyiq points to that inventory entry.
 
-Dagster daemon evaluates schedules and sensors every 30 seconds. No manual intervention needed. Check Dagster UI periodically for failed runs.
+## Operator shell
 
-### Checking Dagster status
+Connect with the configured key, then enter a root shell. The production
+environment is root-readable and Docker access is administrative.
 
-```bash
-# Connect to VPS
-ssh countyiq
+    ssh countyiq
+    sudo -i
 
-# Check services
-cd /opt/countyiq/docker
-docker compose ps
-docker compose logs dagster-webserver dagster-daemon --tail=100
-```
+Define the Compose command for this shell:
 
-### Restarting Dagster
+    ciq() {
+      docker compose --env-file /etc/countyiq/production.env \
+        -f /opt/countyiq/docker/docker-compose.yml "$@"
+    }
 
-```bash
-ssh countyiq
-cd /opt/countyiq/docker
-docker compose restart dagster-webserver dagster-daemon
-```
+Keep the checkout at the recorded release commit. Commands must use the
+protected environment's persisted image tag. Do not print environment values
+or enable shell tracing around credentials.
 
-### Emergency stop (all services)
+## Routine checks
 
-```bash
-# SSH to VPS and stop all running project containers without removing them
-ssh countyiq
-cd /opt/countyiq/docker
-docker compose stop -t 60
-```
+    ciq ps
+    ciq logs --tail=100 api dagster-webserver dagster-daemon
+    systemctl status countyiq-cost-guard.timer countyiq-backup.timer
+    /opt/countyiq/docker/cost-guard.sh --status
+    docker stats --no-stream
+    df -h
+    docker system df
+    free -m
 
-Stopping all containers interrupts in-flight requests and jobs. Named volumes
-remain attached, but an in-flight operation may not have committed. Restart
-with `docker compose up -d --wait`. Never use `docker compose down -v` in
-production; `-v` deletes the named database volume.
+Inspect failed Dagster runs and source freshness. A running daemon alone does
+not prove that county ingestion or intelligence coverage is current.
 
-### Deploying a reviewed release
+Postgres is reachable inside Compose; it has no published host TCP port:
 
-```bash
-# Connect to VPS
-ssh countyiq
+    ciq exec -T postgres psql -U dagster_admin -d countyiq \
+      -c "SELECT pg_size_pretty(pg_database_size('countyiq'));"
 
-# Fetch and inspect the exact reviewed commit that will be deployed
-cd /opt/countyiq
-git fetch --prune origin
-git log --oneline --decorate HEAD..origin/main
-export COUNTYIQ_DEPLOY_REF=<reviewed-40-character-commit-sha>
-git checkout --detach "$COUNTYIQ_DEPLOY_REF"
+For an interactive database session:
 
-# Preflight is read-only. It validates the exact checkout, environment,
-# Compose graph, pass gates, role separation, R2 target, and bucket-lock receipt.
-env COUNTYIQ_DEPLOY_REF="$COUNTYIQ_DEPLOY_REF" \
-  COUNTYIQ_ENV_FILE=/opt/countyiq/.env \
-  /opt/countyiq/docker/deploy.sh --check
+    ciq exec postgres psql -U dagster_admin -d countyiq
 
-# The release command owns build, quiescence, backup, migration, readiness,
-# and the receipt. Use --initial only before the first recorded release.
-sudo env COUNTYIQ_DEPLOY_REF="$COUNTYIQ_DEPLOY_REF" \
-  COUNTYIQ_ENV_FILE=/opt/countyiq/.env \
-  /opt/countyiq/docker/deploy.sh
-```
+Use read-only transactions for investigation. Database changes require a
+specific incident or migration procedure.
 
-The script refuses a dirty tree or backward release, tags the API and Dagster
-images with the exact commit, stops API/Dagster writers, verifies that their
-database sessions are gone, uploads and reads back the R2 completion manifest,
-then runs Alembic. A migration-started failure leaves application services
-stopped for review. Success atomically updates
-`COUNTYIQ_IMAGE_TAG` in the protected environment and
-`/var/lib/countyiq/releases/current.env`; retain every timestamped receipt.
-The persisted tag keeps later Compose restarts on the recorded images. Keep the
-checkout detached at the reviewed commit.
+## Host and release preflight
 
-Before an ordinary release, a successful off-host restore drill must be no
-older than `COUNTYIQ_RESTORE_DRILL_MAX_AGE_DAYS`. The first release uses
-`deploy.sh --initial`, followed immediately by a post-deploy backup and restore
-drill before the daily timer is enabled. See
-[Backup and restore](backup-and-restore.md).
+Run the independent read-only host check as root:
 
-Paid intelligence rollout is a separate manual procedure. Follow
-`docs/operations/intelligence-rollout.md`; do not enable a pass or use the full
-pipeline job during an ordinary deploy.
+    /opt/countyiq/docker/check-host.sh
 
-### Monitoring Postgres storage usage
+It checks effective default SSH authentication and actual application-UID
+access to the cost-stop directory. Apply the reviewed Ansible bootstrap if
+these fail. Verify a fresh key-based SSH session after SSH changes. This check
+does not certify provider firewall rules, every possible SSH Match context,
+backup recovery, or application readiness.
 
-```bash
-# Check database size from VPS
-ssh countyiq
-docker exec countyiq-postgres psql -U dagster_admin -d countyiq -c "SELECT pg_size_pretty(pg_database_size('countyiq'));"
-```
+Prepare the reviewed commit:
 
-### Monitoring system resources
+    cd /opt/countyiq
+    git fetch --prune origin
+    git log --oneline --decorate HEAD..origin/main
+    export COUNTYIQ_DEPLOY_REF=<reviewed-40-character-commit-sha>
+    git checkout --detach "$COUNTYIQ_DEPLOY_REF"
+    /opt/countyiq/docker/deploy.sh --check
 
-```bash
-# Quick overview of container resource usage
-ssh countyiq
-docker stats --no-stream
+Configuration preflight validates the exact clean checkout, environment,
+Compose graph, disabled inference passes, role separation, R2 targets and the
+bucket-lock declaration. Actual deployment also enforces the host gate before
+building images or changing services.
 
-# Disk usage
-df -h
-docker system df
+    /opt/countyiq/docker/deploy.sh
 
-# Memory usage
-free -m
-```
+Use --initial only before the first recorded release. Ordinary releases
+require a recent successful restore-drill receipt and authenticated public
+readiness configuration. The script builds commit-tagged images, stops writers,
+verifies the backup, migrates, checks readiness, and promotes the release
+receipt and protected image tag. A failure after migration starts leaves
+application services stopped for reviewed recovery.
 
-### Connecting to the database
+Retain all release receipts and images. Complete the first backup and
+off-host restore drill before enabling the daily backup timer. See
+[Backup and restore](backup-and-restore.md). Paid intelligence rollout remains
+a separate procedure in [Intelligence rollout](intelligence-rollout.md).
 
-```bash
-# SSH tunnel from your local machine to Postgres on the VPS
-ssh -L 5433:localhost:5432 countyiq
+## Restarting a recorded release
 
-# In another terminal, connect with psql or any SQL client
-psql -h localhost -p 5433 -U dagster_admin -d countyiq
-```
+Before restarting a service, establish that no deployment/recovery operation
+is in progress and that the checkout and protected image tag match the release
+receipt. Check the cost guard first; a failed check must stop the procedure.
 
-### Rollback procedures
+    /opt/countyiq/docker/check-host.sh
+    /opt/countyiq/docker/cost-guard.sh --check
+    ciq restart dagster-webserver dagster-daemon
 
-**Bad API deploy (API broken):**
+Verify container health and the relevant Dagster run state after a restart.
 
-```bash
-# Only after reviewing that the last-good API is compatible with schema_after
-# in the current release receipt, reuse its retained commit-tagged image.
-# Do not run deploy.sh from an older checkout: it intentionally rejects a
-# backward migration path.
-ssh countyiq
-cd /opt/countyiq/docker
-export COUNTYIQ_IMAGE_TAG=<recorded-last-good-40-character-sha>
-docker image inspect "countyiq-api:$COUNTYIQ_IMAGE_TAG"
-docker compose --env-file /opt/countyiq/.env up -d --no-deps --wait api
-curl --fail --silent --show-error https://api.countyiq.com/api/ready
-```
+## Emergency stop
 
-**Bad Dagster deploy (pipelines broken):**
+Latch a manual stop so scheduled work cannot silently resume:
 
-```bash
-# Apply the same schema-compatibility review, then reuse the retained image for
-# both processes so the daemon and code server cannot drift.
-ssh countyiq
-cd /opt/countyiq/docker
-export COUNTYIQ_IMAGE_TAG=<recorded-last-good-40-character-sha>
-docker image inspect "countyiq-dagster:$COUNTYIQ_IMAGE_TAG"
-docker compose --env-file /opt/countyiq/.env up -d --no-deps --wait \
-  dagster-webserver dagster-daemon
-```
+    /opt/countyiq/docker/cost-guard.sh --trip manual
 
-**Bad migration (schema broken):**
+Check the command exit status, container state and timers. A failed stop
+operation still records the latch but needs operator follow-up. In-flight work
+may be interrupted. Keep named volumes intact.
 
-```bash
-# Inspect the stopped failure state and both receipt revisions first:
-ssh countyiq
-cd /opt/countyiq/docker
+After resolving the incident, review the stop reason and measured usage.
+The cost-guard reset command rechecks usage; it does not restart services or
+timers. Start them explicitly only after the incident recovery is verified.
+Never remove production volumes as part of routine stop or restart.
 
-# See current migration state
-docker compose run --rm migrate \
-  alembic -c /opt/pipelines/alembic.ini current
+## Code-only rollback
 
-# Do not automatically downgrade. Many production data migrations are
-# intentionally not safely reversible. Keep writers stopped and restore the
-# receipt's pre-deploy backup into a new database or volume. Verify the new
-# target and cut over only under an incident plan; never use pg_restore --clean
-# against the only production database.
-```
+Review schema compatibility with the last-good commit and the schema_after
+value in the current release receipt. Keep the current checkout and migrations;
+select retained commit-tagged images for compatible services. Establish
+exclusive incident ownership before changing services.
 
-See [Backup and restore](backup-and-restore.md) for the tested restore and
-cutover procedure.
+    LAST_GOOD=<recorded-last-good-40-character-sha>
+    /opt/countyiq/docker/check-host.sh
+    /opt/countyiq/docker/cost-guard.sh --check
+    docker image inspect "countyiq-api:$LAST_GOOD"
+    COUNTYIQ_IMAGE_TAG="$LAST_GOOD" ciq up -d --no-deps --wait api
 
-**Corrupted pipeline data (bad scrape wrote garbage):**
+For Dagster, inspect the corresponding countyiq-dagster image and update both
+dagster-webserver and dagster-daemon together. For the frontend, inspect the
+countyiq-web image and update the caddy service. Recheck API/frontend contracts
+when mixing service versions. Record the affected services and image IDs in the
+incident record; these commands do not promote a new release receipt or rewrite
+the persisted default image tag. Do not perform later routine restarts until
+the incident's version choices have been reconciled with a reviewed release.
 
-```bash
-# SCD Type 2 means bad records don't overwrite good ones — they create new rows.
-# Fix by marking the bad rows as superseded:
-UPDATE staging.<table>
-SET valid_to = NOW()
-WHERE valid_from > '<timestamp-of-bad-run>'
-AND valid_to IS NULL;
+Verify public readiness using the configured Access machine credentials:
 
-# The previous good rows (with valid_to = timestamp of the bad run) are still there.
-# Re-run the pipeline to get fresh data.
-```
+    source /opt/countyiq/docker/lib/operations.sh
+    countyiq_load_environment /etc/countyiq/production.env
+    countyiq_check_public_readiness "$COUNTYIQ_PUBLIC_READY_URL"
 
-**Frontend broken (bad React build):**
+## Migration or source-data recovery
 
-Cloudflare Pages keeps all previous deployments. Roll back via the Cloudflare dashboard:
+Inspect both schema revisions and the stopped failure state:
 
-Cloudflare Pages -> Deployments -> select previous deployment -> Rollback
+    ciq run --rm migrate alembic -c /opt/pipelines/alembic.ini current
+
+Keep writers stopped. Restore the recorded pre-deploy backup into a new
+database or volume, validate it, and cut over under the incident plan. Do not
+automatically downgrade or restore destructively over the only database.
+See [Backup and restore](backup-and-restore.md).
+
+For bad source ingestion, identify the affected source records, SCD versions,
+downstream projections and inference receipts first. Closing current SCD rows
+alone does not restore the prior projection. Prepare and verify the specific
+repair against an isolated database before applying it to production.

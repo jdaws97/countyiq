@@ -14,6 +14,9 @@ import { isEntityWatched, toggleEntityWatch } from '../lib/watchlist'
 import type { IntelligenceFeedResponse, OwnerProfileResponse } from '../types/api'
 
 const RECOMMENDATION_COLORS: Record<string, string> = {
+  investigate: 'var(--accent-blue)',
+  watch: 'var(--accent-cyan)',
+  insufficient_evidence: 'var(--text-muted)',
   pursue_acquisition: 'var(--accent-green)',
   compete: 'var(--accent-gold)',
   monitor: 'var(--accent-cyan)',
@@ -246,9 +249,18 @@ export default function OwnerProfile() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 32 }}>
         <StatCard label="Properties" value={portfolio.parcel_count.toLocaleString()} color="var(--accent-blue)" />
         <StatCard label="Total Assessed" value={formatCurrencyCompact(portfolio.total_assessed, { allowBillions: true })} color="var(--accent-green)" />
-        <StatCard label="Delinquent" value={delinq.delinquent_parcels.toLocaleString()} color={delinq.delinquent_parcels > 0 ? 'var(--accent-red)' : 'var(--text-muted)'} />
-        <StatCard label="Total Owed" value={formatCurrencyCompact(delinq.total_owed, { allowBillions: true })} color="var(--accent-gold)" />
+        {delinq.detail_available !== false && (
+          <>
+            <StatCard label="Delinquent" value={delinq.delinquent_parcels.toLocaleString()} color={delinq.delinquent_parcels > 0 ? 'var(--accent-red)' : 'var(--text-muted)'} />
+            <StatCard label="Total Owed" value={formatCurrencyCompact(delinq.total_owed, { allowBillions: true })} color="var(--accent-gold)" />
+          </>
+        )}
       </div>
+      {delinq.detail_available === false && (
+        <div style={{ marginTop: -20, marginBottom: 32, fontSize: 13, color: 'var(--text-muted)' }}>
+          Exact tax-claim balances for this entity are withheld under the current source-use policy. Parcel-level delinquency signals remain visible on each property report.
+        </div>
+      )}
 
       <Section title={`Properties (${portfolio.parcel_count})`}>
         <div className="data-table">

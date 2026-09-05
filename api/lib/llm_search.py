@@ -27,8 +27,9 @@ ALLOWED_REDIRECT_PATHS = frozenset(
         "/map",
         "/feed",
         "/radar",
-        "/licenses",
+        "/municipalities",
         "/watch",
+        "/compare",
     }
 )
 
@@ -48,7 +49,7 @@ INTENTS
 
 4. Existing product page:
 {"intent":"redirect","redirect_path":"/radar","description":"Development radar"}
-Allowed redirect_path values: /, /map, /feed, /radar, /licenses, /watch.
+Allowed redirect_path values: /, /map, /feed, /radar, /municipalities, /watch, /compare.
 
 TABLES AND FIELDS
 - parcels: pidn, propadr, class, acres, aprtotal, aprland, aprbldg, price, saledt, school_dis

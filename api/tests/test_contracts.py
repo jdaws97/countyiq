@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from api.tests.conftest import TEST_MUNICIPALITY, TEST_PIDN
 
 
@@ -59,11 +61,11 @@ def test_ops_health_exposes_source_policy_review_state(client):
     assert integrity["projection_mismatch_count"] == 0
 
     municipal = sources["municipal_proceedings"]
-    assert municipal["configured_count"] == 122
-    assert municipal["active_count"] == 113
+    assert municipal["configured_count"] == 123  # 122 configured sources plus the synthetic fixture body.
+    assert municipal["active_count"] == 104
     assert municipal["healthy_count"] == 0
-    assert municipal["blocked_count"] == 9
-    assert municipal["unchecked_count"] == 113
+    assert municipal["blocked_count"] == 18
+    assert municipal["unchecked_count"] == 104
     assert municipal["stale_count"] == 0
     assert municipal["record_count"] == 0
     assert municipal["status_reason"] == "run_not_observed"
@@ -91,6 +93,7 @@ def test_property_report_contract_includes_intelligence_layers(client):
     payload = response.json()
 
     assert payload["parcel"]["pidn"] == TEST_PIDN
+    assert isinstance(payload["parcel"]["owner_id"], int)
     assert payload["parcel"]["owner_full"] == "Alpha Holdings LLC"
     assert payload["parcel"]["heatsys"] == 1
     assert payload["parcel"]["fuel"] == 2
@@ -115,7 +118,11 @@ def test_property_report_contract_includes_intelligence_layers(client):
     }
     assert payload["structures"]["count"] == 1
     assert payload["structures"]["likely_vacant"] is False
+    assert payload["zoning"]["code"] == "HC"
+    assert payload["zoning"]["name"] == "Highway Commercial"
+    assert payload["zoning"]["general_name"] == "Commercial"
     evidence_by_kind = {item["source_kind"]: item for item in payload["evidence"]}
+    assert evidence_by_kind["official_zoning_layer"]["details"]["code"] == "HC"
     assert evidence_by_kind["official_parcel_record"]["source_record_id"] == TEST_PIDN
     assert evidence_by_kind["official_parcel_record"]["url"] == "https://example.com/parcels/1"
     assert evidence_by_kind["official_flood_layer"]["details"]["zones"] == ["AE"]
@@ -125,19 +132,44 @@ def test_property_report_contract_includes_intelligence_layers(client):
 
     assert payload["development_momentum"]["score"] == 72
     assert payload["development_momentum"]["opportunity_score"] == 64
-    assert "Private Person" not in str(payload["development_momentum"])
+    # Owner identity is public record: the prior owner named in the evidence
+    # and the validation reasoning is served as-is.
+    assert "Private Person" in str(payload["development_momentum"])
     assert payload["development_momentum"]["reason_signals"]
 
-    assert payload["parcel_brief"] is None
-    assert payload["intelligence_summary"] is None
+    # Generated prose is served under the ordinary derived-product use.
+    assert payload["parcel_brief"]["citations"] == ["growth_area", "ownership_change"]
+    assert payload["parcel_brief"]["citation_evidence"]
+    assert payload["intelligence_summary"]["signals_validated_count"] == 2
+    # The seeded, unexpired Pass 4 narrative has no versioned dependencies.
+    # Its presence in storage cannot certify it for the property report.
     assert payload["related_narratives"] == []
 
     match_types = {row["match_type"] for row in payload["linked_proceedings"]}
     assert match_types == {"pidn", "address"}
-    assert all(row["applicant_name"] is None for row in payload["linked_proceedings"])
-    assert all(row["supporting_text"] is None for row in payload["linked_proceedings"])
+    assert all(row["applicant_name"] == "Alpha Holdings LLC" for row in payload["linked_proceedings"])
+    assert all(row["supporting_text"] for row in payload["linked_proceedings"])
     assert all(row["evidence"]["document_url"] for row in payload["linked_proceedings"])
-    assert all(row["evidence"]["excerpt"] is None for row in payload["linked_proceedings"])
+    assert all(row["evidence"]["excerpt"] == row["supporting_text"] for row in payload["linked_proceedings"])
+
+
+def test_parcel_reference_normalizer_links_alphanumeric_pidns(client):
+    """Migration 053: one rule for every proceeding-to-parcel linker."""
+    from api.lib.database import get_cursor
+
+    cases = {
+        "20000NC0073A0": "20000NC0073A0",
+        "20-000-NC-0073.A0": "20000NC0073A0",
+        "Tax Map No. 20-000-NC-0073.A0-00000": "20000NC0073A0",
+        "Parcel ID: 01-001-01-0002.00-00000": "0100101000200",
+        "pidn # 0100101000200": "0100101000200",
+        "1 Main St": "1MAINST",
+        "   ": None,
+    }
+    with get_cursor() as cur:
+        for raw, expected in cases.items():
+            cur.execute("SELECT public.normalize_parcel_reference(%s) AS value", (raw,))
+            assert cur.fetchone()["value"] == expected, raw
 
 
 def test_municipality_profile_contract_is_page_complete(client):
@@ -173,8 +205,22 @@ def test_feed_contract_combines_parcel_and_development_intelligence(client):
     owner_id = client.get("/api/owners/top?limit=1").json()[0]["owner_id"]
     entity_response = client.get(f"/api/feed?entity_ids={owner_id}")
     invalid_response = client.get("/api/feed?event_type=not-a-real-event")
+    # A plain municipality name matches both the county spelling stored on
+    # parcel rows and the public-body spelling carried by extracted events.
+    short_name_response = client.get(f"/api/feed?municipality={TEST_MUNICIPALITY}")
+    long_name_response = client.get("/api/feed?municipality=Test Township")
+    boosted_response = client.get("/api/feed?boost_municipalities=Test Township")
 
     assert all_response.status_code == 200
+    assert short_name_response.status_code == 200
+    assert long_name_response.status_code == 200
+    assert boosted_response.status_code == 200
+    assert len(short_name_response.json()["events"]) == 2
+    assert len(long_name_response.json()["events"]) == 2
+    assert all(
+        "Watched subject" in event["importance_reasons"]
+        for event in boosted_response.json()["events"]
+    )
     assert development_response.status_code == 200
     assert approval_response.status_code == 200
     assert parcel_response.status_code == 200
@@ -197,7 +243,10 @@ def test_feed_contract_combines_parcel_and_development_intelligence(client):
     assert development_payload["events"][0]["category"] == "development"
     assert approval_payload["events"][0]["event_type"] == "approval"
     assert approval_payload["events"][0]["interpretation"]["kind"] == "llm"
-    assert approval_payload["events"][0]["sources"][0]["excerpt"] is None
+    # Verified excerpts are public record and served with the receipt.
+    assert approval_payload["events"][0]["sources"][0]["excerpt"] == (
+        "The board approved the variance with conditions."
+    )
     assert approval_payload["events"][0]["sources"][0]["details"]["decision"] == "approved"
     assert approval_payload["events"][0]["sources"][0]["source_record_id"]
     assert approval_payload["events"][0]["sources"][0]["method"]
@@ -264,16 +313,11 @@ def test_restricted_distress_routes_default_off(client):
     assert client.get("/api/scores/distressed").status_code == 404
 
 
-def test_owner_and_entity_profiles_keep_organizations_but_hide_people(client):
+def test_owner_and_entity_profiles_serve_every_owner(client):
     top = client.get("/api/owners/top")
     assert top.status_code == 200
     owners = top.json()
     assert owners
-    assert all(
-        owner["entity_type"]
-        in {"business", "llc", "corporation", "partnership", "nonprofit", "government"}
-        for owner in owners
-    )
     assert any(owner["entity_type"] == "business" for owner in owners)
 
     owner_id = owners[0]["owner_id"]
@@ -282,9 +326,62 @@ def test_owner_and_entity_profiles_keep_organizations_but_hide_people(client):
     assert profile.status_code == 200
     assert entity_profile.status_code == 200
     assert profile.json()["owner"]["owner_id"] == owner_id
+    # Restricted distress is off by default: the payload must say the rows
+    # were withheld rather than report a zero balance as fact.
+    assert profile.json()["delinquency"]["detail_available"] is False
+    assert profile.json()["delinquency"]["records"] == []
+    # The seeded owner brief is served; no per-row serving flag is exposed.
+    assert profile.json()["brief"]["portfolio_strategy"] == "accumulator"
     verification = profile.json()["verification_evidence"]
     assert verification[0]["citation_key"] == f"evidence:parcels:{TEST_PIDN}"
     assert verification[0]["url"] == "https://example.com/parcels/1"
+
+
+def test_parcels_near_answers_the_corridor_question(client):
+    """Parcels around an anchor parcel or a project's linked parcels."""
+    from api.tests.conftest import OTHER_PIDN, SECOND_PIDN
+
+    wide = client.get(f"/api/parcels/near?pidn={TEST_PIDN}&radius_m=800")
+    tight = client.get(f"/api/parcels/near?pidn={TEST_PIDN}&radius_m=200")
+    by_project = client.get("/api/parcels/near?project_key=project:test-main-street&radius_m=800")
+    missing = client.get("/api/parcels/near?radius_m=800")
+
+    assert wide.status_code == 200
+    assert missing.status_code == 422
+    wide_payload = wide.json()
+    assert wide_payload["anchor_pidns"] == [TEST_PIDN]
+    assert wide_payload["anchor_lat"] is not None
+    pidns = [row["pidn"] for row in wide_payload["parcels"]]
+    assert set(pidns) == {SECOND_PIDN, OTHER_PIDN}
+    assert TEST_PIDN not in pidns
+    nearest = min(wide_payload["parcels"], key=lambda row: row["distance_m"])
+    assert nearest["pidn"] == SECOND_PIDN
+    for row in wide_payload["parcels"]:
+        assert row["owner_label"]
+        assert row["owner_kind"]
+        assert "owner_full" not in row
+        assert isinstance(row["likely_vacant"], bool)
+
+    tight_pidns = [row["pidn"] for row in tight.json()["parcels"]]
+    assert tight_pidns == [SECOND_PIDN]
+
+    project_payload = by_project.json()
+    assert project_payload["anchor_pidns"] == [TEST_PIDN]
+    assert {row["pidn"] for row in project_payload["parcels"]} == {SECOND_PIDN, OTHER_PIDN}
+
+
+def test_feed_can_report_activity_near_watched_parcels(client):
+    from api.tests.conftest import SECOND_PIDN
+
+    response = client.get(f"/api/feed?near_pidns={SECOND_PIDN}&near_radius_m=400&since_days=3650")
+    far = client.get(f"/api/feed?near_pidns={SECOND_PIDN}&near_radius_m=50&since_days=3650")
+
+    assert response.status_code == 200
+    events = response.json()["events"]
+    assert events, "seeded events on the adjacent parcel should be within 400 m"
+    assert all(SECOND_PIDN not in event["related_pidns"] for event in events)
+    assert all(TEST_PIDN in event["related_pidns"] for event in events)
+    assert far.json()["events"] == []
 
 
 def test_parcels_summary_contract_for_watchlist(client):
@@ -314,3 +411,36 @@ def test_parcels_summary_contract_for_watchlist(client):
     assert parcel["changed_recently"] is True  # seeded rows are fresh
     assert parcel["owner_full"] == "Alpha Holdings LLC"
     assert parcel["has_tax_delinquency"] is True
+
+
+@pytest.mark.parametrize("legacy_reference", [None, "Multiple parcels in application"])
+def test_structured_multiple_parcel_ids_report_id_match_method(client, legacy_reference):
+    import psycopg2
+    from psycopg2.extras import Json
+    from api.tests.conftest import DB_ENV, SECOND_PIDN
+
+    with psycopg2.connect(DB_ENV["DATABASE_URL"]) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT pe.id,pe.parcel_reference,pe.extraction_details
+                FROM staging.proceeding_extractions pe
+                JOIN staging.public_proceedings pp ON pp.id=pe.proceeding_id
+                WHERE pp.body_name='Hanover Borough Council' ORDER BY pe.id LIMIT 1
+            """)
+            extraction_id,reference,details=cursor.fetchone()
+            cursor.execute("""
+                UPDATE staging.proceeding_extractions
+                SET parcel_reference=%s, extraction_details=%s
+                WHERE id=%s
+            """,(legacy_reference,Json({"parcel_references":[TEST_PIDN,SECOND_PIDN]}),extraction_id))
+    try:
+        response=client.get(f"/api/parcels/{TEST_PIDN}")
+        assert response.status_code==200,response.text
+        linked=response.json()["linked_proceedings"]
+        row=next(item for item in linked if item["body_name"]=='Hanover Borough Council')
+        assert row["match_type"]=='pidn'
+    finally:
+        with psycopg2.connect(DB_ENV["DATABASE_URL"]) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("UPDATE staging.proceeding_extractions SET parcel_reference=%s,extraction_details=%s WHERE id=%s",
+                               (reference,Json(details),extraction_id))

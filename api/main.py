@@ -2,12 +2,13 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from psycopg2 import Error as PostgresError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from api.lib.auth import require_product_access
 from api.lib.database import DatabasePoolExhausted, close_pool, get_cursor
 from api.lib.response_types import HealthResponse
 from api.lib.settings import (
@@ -17,15 +18,17 @@ from api.lib.settings import (
     restricted_distress_enabled,
     trusted_hosts,
 )
+from api.routes.directory import router as directory_router
+from api.routes.session import router as session_router
 from api.routes.delinquent import router as delinquent_router
 from api.routes.feed import router as feed_router
+from api.routes.case_files import router as case_files_router
+from api.routes.watchspaces import router as watchspaces_router
 from api.routes.layers import router as layers_router
-from api.routes.licenses import router as licenses_router
 from api.routes.municipalities import router as municipalities_router
 from api.routes.ops import router as ops_router
 from api.routes.owners import router as owners_router
 from api.routes.parcels import router as parcels_router
-from api.routes.projects import router as projects_router
 from api.routes.radar import router as radar_router
 from api.routes.scores import router as scores_router
 from api.routes.search import router as search_router
@@ -42,6 +45,7 @@ app = FastAPI(
     title="CountyIQ API",
     version="0.1.0",
     lifespan=lifespan,
+    dependencies=[Depends(require_product_access)],
     docs_url="/api/docs" if api_docs_enabled() else None,
     redoc_url=None,
     openapi_url="/api/openapi.json" if api_docs_enabled() else None,
@@ -66,9 +70,17 @@ async def database_pool_exhausted(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),
-    allow_methods=["GET"],
-    allow_headers=["Accept", "Content-Type"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Accept", "Content-Type", "Authorization", "X-CountyIQ-Workspace", "X-CountyIQ-User"],
 )
+
+
+@app.middleware("http")
+async def private_response_cache_control(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(("/api/session", "/api/watchspaces")):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/api/health")
@@ -108,11 +120,17 @@ app.include_router(owners_router, prefix="/api/owners")
 # space.  The alias keeps old owner URLs working without creating a second
 # entity ID system.
 app.include_router(owners_router, prefix="/api/entities")
-app.include_router(licenses_router, prefix="/api/licenses")
-app.include_router(projects_router, prefix="/api/projects")
 if restricted_distress_enabled():
     app.include_router(delinquent_router, prefix="/api/delinquent")
     app.include_router(scores_router, prefix="/api/scores")
 app.include_router(radar_router, prefix="/api/radar", tags=["radar"])
 app.include_router(ops_router, prefix="/api/ops")
 app.include_router(feed_router, prefix="/api/feed")
+
+app.include_router(case_files_router, prefix="/api/cases/projects")
+
+app.include_router(watchspaces_router, prefix="/api/watchspaces")
+
+app.include_router(session_router, prefix="/api/session")
+
+app.include_router(directory_router, prefix="/api/directory")

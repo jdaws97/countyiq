@@ -1,0 +1,498 @@
+{
+  "decision": "do_not_backfill",
+  "publication": "none; evaluation artifacts only",
+  "quality_receipt_issued": false,
+  "reviewer": "Codex qualitative source review, not independent human gold adjudication",
+  "completed_documents": 40,
+  "totals": {
+    "documents": 40,
+    "successful_responses": 40,
+    "schema_valid_documents": 40,
+    "gate_documents": 16,
+    "gate_nonempty_documents": 9,
+    "gate_empty_documents": 7,
+    "raw_matters": 136,
+    "document_gate_matters": 38,
+    "individual_gate_matters_diagnostic": 81,
+    "discovery_eligible_matters": 13
+  },
+  "batches": [
+    {
+      "artifact_directory": "output/municipal-v3-evaluation-2026-09-04/original30-compatible",
+      "documents": 30,
+      "successful_responses": 30,
+      "schema_valid_documents": 30,
+      "gate_documents": 10,
+      "gate_nonempty_documents": 4,
+      "gate_empty_documents": 6,
+      "raw_matters": 105,
+      "document_gate_matters": 25,
+      "individual_gate_matters_diagnostic": 57,
+      "discovery_eligible_matters": 5,
+      "prefilter_skipped_source_ids": [
+        "9469",
+        "6480",
+        "2224",
+        "6584",
+        "300"
+      ],
+      "usage": {
+        "prompt_tokens": 195733,
+        "completion_tokens": 64242,
+        "reasoning_tokens": 20019,
+        "cached_tokens": 138630,
+        "cost": 0.09413425
+      },
+      "providers": {
+        "OpenAI": 30
+      },
+      "served_models": {
+        "openai/gpt-5.6-luna": 30
+      },
+      "provider_cost_details": {
+        "upstream_inference_prompt_cost": 0.01704385,
+        "upstream_inference_completions_cost": 0.0770904
+      },
+      "sha256": {
+        "sources.json": "212c50ec4658843d890202c6147efadad6df0b3a8997cb28f3e68d669e07f1cb",
+        "manifest.json": "cf7f9952a6ff99bede0f360797219f874127cd93f7d50168489a38205d67335e",
+        "protocol.json": "4b50fbc810113780e994ee1840106b0bfde65689a139e77bf6425b02d2edb765",
+        "results.json": "f2b181162b991ed317054b9d8e259a9acac2113f7b47f70a219cfae8fc777cd4",
+        "spend-authorization.json": "c0a989cb579285a24b7cc0894eb62bb9d71237a541ac291969eea98981cd2b5b"
+      }
+    },
+    {
+      "artifact_directory": "output/municipal-v3-evaluation-2026-09-04/heldout10-compatible",
+      "documents": 10,
+      "successful_responses": 10,
+      "schema_valid_documents": 10,
+      "gate_documents": 6,
+      "gate_nonempty_documents": 5,
+      "gate_empty_documents": 1,
+      "raw_matters": 31,
+      "document_gate_matters": 13,
+      "individual_gate_matters_diagnostic": 24,
+      "discovery_eligible_matters": 8,
+      "prefilter_skipped_source_ids": [],
+      "usage": {
+        "prompt_tokens": 57754,
+        "completion_tokens": 18547,
+        "reasoning_tokens": 6423,
+        "cached_tokens": 41589,
+        "cost": 0.02712793
+      },
+      "providers": {
+        "OpenAI": 10
+      },
+      "served_models": {
+        "openai/gpt-5.6-luna": 10
+      },
+      "provider_cost_details": {
+        "upstream_inference_prompt_cost": 0.00487153,
+        "upstream_inference_completions_cost": 0.0222564
+      },
+      "sha256": {
+        "sources.json": "f5e915ca4a8da0427611f6ab113a70b76d80d26dd00a1fdcdab49efcbd075362",
+        "manifest.json": "95ed7ab8e33ae2e4523e8855265de8493eeb4041567c156ed155c5a348b2793e",
+        "protocol.json": "277300cbe7d7f49f71ddc801a4274fe125587f041c0e564f31a6476982fe83dd",
+        "results.json": "689dc93d5d5cb4062199e38792c799a7030c33a9cb323378106518fcb7946ee6",
+        "spend-authorization.json": "36b1c6d29cdf621a8036ecb637c8ade9e2523b7d918eea460045b16063d14e2c"
+      }
+    }
+  ],
+  "cost": {
+    "approved_total_cap_usd": 1,
+    "successful_provider_reported_usd": 0.12126218,
+    "rejected_request_accounting": [
+      {
+        "directory": "original30",
+        "requests": 1,
+        "provider_reported_cost": null,
+        "conservative_debit_usd": 0.028219476
+      },
+      {
+        "directory": "heldout10",
+        "requests": 1,
+        "provider_reported_cost": null,
+        "conservative_debit_usd": 0.023770108
+      },
+      {
+        "directory": "diagnostic",
+        "requests": 1,
+        "provider_reported_cost": null,
+        "conservative_debit_usd": 0.028219476
+      }
+    ],
+    "rejected_requests_conservative_debit_usd": 0.08020906,
+    "total_accounted_upper_bound_usd": 0.20147124,
+    "restart_authorization_upper_bound_usd": 0.99020906,
+    "prior_v2_successful_provider_reported_usd": 0.14069727,
+    "successful_call_cost_change_percent": -13.813409457056274,
+    "successful_cost_per_source_usd": 0.0030315545
+  },
+  "prior_v2": {
+    "raw_matters": 144,
+    "date_replay_gate_documents": 6,
+    "date_replay_matters": 5
+  },
+  "diagnostics": {
+    "first_error_per_failing_item": {
+      "related_entities must preserve wording from its selected source passages": 10,
+      "event_date_text must preserve wording from its selected source passages": 8,
+      "current_zoning must preserve wording from its selected source passages": 3,
+      "milestones must preserve wording from its selected source passages": 16,
+      "extraction 0 scheduled item uses completed-action wording": 1,
+      "project_reference must preserve wording from its selected source passages": 1,
+      "proposed_zoning must preserve wording from its selected source passages": 2,
+      "parcel_references must preserve wording from its selected source passages": 2,
+      "Decision authority must occur in its source evidence": 10,
+      "extraction 0 next case-number boilerplate is not a filed matter": 1,
+      "Unknown passage ID": 1
+    },
+    "individually_valid_matters_lost_by_document_gate": 43,
+    "lost_item_refs": [
+      [
+        "9599",
+        0
+      ],
+      [
+        "9599",
+        4
+      ],
+      [
+        "9597",
+        0
+      ],
+      [
+        "9597",
+        1
+      ],
+      [
+        "9597",
+        2
+      ],
+      [
+        "8113",
+        0
+      ],
+      [
+        "8113",
+        1
+      ],
+      [
+        "8113",
+        2
+      ],
+      [
+        "8113",
+        3
+      ],
+      [
+        "8113",
+        6
+      ],
+      [
+        "5145",
+        0
+      ],
+      [
+        "5145",
+        2
+      ],
+      [
+        "5145",
+        3
+      ],
+      [
+        "5145",
+        4
+      ],
+      [
+        "5145",
+        5
+      ],
+      [
+        "5145",
+        6
+      ],
+      [
+        "8082",
+        0
+      ],
+      [
+        "8082",
+        1
+      ],
+      [
+        "8082",
+        2
+      ],
+      [
+        "8082",
+        5
+      ],
+      [
+        "7630",
+        0
+      ],
+      [
+        "7630",
+        1
+      ],
+      [
+        "7630",
+        2
+      ],
+      [
+        "9042",
+        4
+      ],
+      [
+        "9042",
+        5
+      ],
+      [
+        "4645",
+        0
+      ],
+      [
+        "4645",
+        1
+      ],
+      [
+        "4645",
+        4
+      ],
+      [
+        "4645",
+        5
+      ],
+      [
+        "9224",
+        1
+      ],
+      [
+        "1174",
+        0
+      ],
+      [
+        "1174",
+        1
+      ],
+      [
+        "6316",
+        1
+      ],
+      [
+        "6316",
+        3
+      ],
+      [
+        "9600",
+        0
+      ],
+      [
+        "9600",
+        1
+      ],
+      [
+        "9600",
+        2
+      ],
+      [
+        "9600",
+        3
+      ],
+      [
+        "9600",
+        5
+      ],
+      [
+        "3178",
+        1
+      ],
+      [
+        "3178",
+        2
+      ],
+      [
+        "3178",
+        3
+      ],
+      [
+        "9939",
+        1
+      ]
+    ],
+    "hydrated_evidence_spans": 64,
+    "invalid_hydrated_evidence_spans": 0,
+    "eligible_items": [
+      {
+        "source_id": "5153",
+        "index": 0,
+        "name": "844-852 E. Market St. plan review"
+      },
+      {
+        "source_id": "5153",
+        "index": 3,
+        "name": "721 S. George St. zoning determination appeal"
+      },
+      {
+        "source_id": "5153",
+        "index": 5,
+        "name": "339 W. Philadelphia St. multi-family conversion request"
+      },
+      {
+        "source_id": "5153",
+        "index": 9,
+        "name": "721 Jessop Pl. multi-family conversion request"
+      },
+      {
+        "source_id": "10481",
+        "index": 0,
+        "name": "Stormwater Facility Camera Record Requirement"
+      },
+      {
+        "source_id": "10281",
+        "index": 0,
+        "name": "6509 Old Hanover Road Agricultural Security Area"
+      },
+      {
+        "source_id": "10281",
+        "index": 1,
+        "name": "Mark Shearer and Dee Guinn Subdivision"
+      },
+      {
+        "source_id": "5133",
+        "index": 1,
+        "name": "318 E. Poplar St. multi-family conversion"
+      },
+      {
+        "source_id": "296",
+        "index": 0,
+        "name": "Floodplain Management Application Fee"
+      },
+      {
+        "source_id": "296",
+        "index": 1,
+        "name": "Short Term Rentals and Solar Panels Zoning Ordinance Considerations"
+      },
+      {
+        "source_id": "296",
+        "index": 2,
+        "name": "Data Center Model Ordinance"
+      },
+      {
+        "source_id": "296",
+        "index": 3,
+        "name": "E. Beaver Street \u2013 Buttonwood Lane Paving"
+      },
+      {
+        "source_id": "671",
+        "index": 0,
+        "name": "Ag District dwelling-unit relinquishment ordinance"
+      }
+    ]
+  },
+  "identity": {
+    "batches_match": true,
+    "current_source_hashes_match": true,
+    "current_fixtures_match": true,
+    "current_prompt_versions_match": true,
+    "current_full_identity_match": true,
+    "frozen": {
+      "pass_number": 0,
+      "source_hashes": {
+        "pass0_templates.py": "14bf72b0c6c6e4498b403a119ad7f776e2901b47e6bc3c7621d7da834b8e76b5",
+        "pass_schemas.py": "679532e7b5473041bfb5df31f70adabba977990e8a19954e2d7380d40d16b1e5",
+        "prompt_prefix.py": "a3989b1f2d1e0b9a1f9709703ace8c7a01a2d91d4b6a70cc66c0df0fef84f159",
+        "proceeding_contract.py": "207c00b7b530270b12559e2c9496db22b1a18e075ff8df1e0323146d486fd870",
+        "intelligence_integrity.py": "10c17e1642092e1428ebd9506656a3f09102474aaf9f7f2aa8be481db62301bc",
+        "proceeding_claims.py": "ceda5309ba3eb58145206be266629d7f968f514dace48c584b9879475e670d07",
+        "source_passages.py": "e65f4a9a7d553ecf3ef8b5604faaf5353d9959b0e26c9e3863d505539d8bffcb",
+        "proceeding_extraction.py": "02b14546c00f7e05694b499a56e38ba4708dbd04a0f8810adcd79eb425c9773e",
+        "061_proceeding_evidence_contract.py": "04740ce2e4ad3f0002afd93e7db2e720b291a86379a6243a702195f7cf573522",
+        "063_intelligence_event_types.py": "b4e8b48d3c524cfc6a4b0904b8eaf0b04428d714a0c50fb67f7b342ea8cedfdd",
+        "064_proceeding_updates.py": "23186ad3ab61a421d97d12deea7f66ad1d6ce10b413ce102cbdf7591242f4206"
+      },
+      "settings": {
+        "COUNTYIQ_PASS0_THINKING": "",
+        "COUNTYIQ_PASS0_MAX_TOKENS": "",
+        "COUNTYIQ_PASS0_ESCALATION_MODEL": "",
+        "COUNTYIQ_PASS0_ESCALATION_REASONING_EFFORT": "",
+        "COUNTYIQ_THINKING": "",
+        "COUNTYIQ_STRICT_SCHEMA": "",
+        "COUNTYIQ_PASS1_ADAPTIVE_VOTING": ""
+      },
+      "model": "openai/gpt-5.6-luna",
+      "prompt_versions": [
+        "9ac0a550703b"
+      ],
+      "reasoning_effort": null,
+      "trials": "1",
+      "fixtures": {
+        "p0_expected.json": "be1490c3101d2b18cb4cfb48a60f38241d4b835fc7b747e12118c7e2cbc74487",
+        "p0_pdfs/carroll_zhb.pdf": "6a974dc2a8498401d52a9242bf5f33dbaee437cbd48c39619babf4d9fa716e50",
+        "p0_pdfs/conewago_zoning.pdf": "d93584ff5e52aa8b90188f36be77ddbcf190cfbfc4ef3a13bc7eb0ca1d17bcef",
+        "p0_pdfs/westman_zhb.pdf": "dba595fb71e14ad48e4c3df4dc53b48c35ff2a3243ba1d9b416849558caecbb7",
+        "p0_pdfs/dillsburg.pdf": "635e3b9393efa1216dee53a0bce7cfa5f743b98fbacb6181d4c779cf7b35fe2a",
+        "p0_pdfs/jackson_twp.pdf": "eb4b8fd3abe1feb12a9b9b7115d93d143830f14bc7e86b299b3dc150cc072602",
+        "p0_pdfs/springetts.pdf": "218c26ee1a47fb488f28a14927d3c5b72879513c56b226bfecc1409ca305e1be",
+        "municipal_pilot_regressions.json": "b78845f2235011c97eb643f257e9aaee44f24bb7043aa3c51bad38a562006331",
+        "p0_claims_contract.json": "ff823d004eb025c63daa843c55902b7e164bccdd5af2c3291b3dbeb312c6d40e"
+      }
+    },
+    "current": {
+      "pass_number": 0,
+      "source_hashes": {
+        "pass0_templates.py": "14bf72b0c6c6e4498b403a119ad7f776e2901b47e6bc3c7621d7da834b8e76b5",
+        "pass_schemas.py": "679532e7b5473041bfb5df31f70adabba977990e8a19954e2d7380d40d16b1e5",
+        "prompt_prefix.py": "a3989b1f2d1e0b9a1f9709703ace8c7a01a2d91d4b6a70cc66c0df0fef84f159",
+        "proceeding_contract.py": "207c00b7b530270b12559e2c9496db22b1a18e075ff8df1e0323146d486fd870",
+        "intelligence_integrity.py": "10c17e1642092e1428ebd9506656a3f09102474aaf9f7f2aa8be481db62301bc",
+        "proceeding_claims.py": "ceda5309ba3eb58145206be266629d7f968f514dace48c584b9879475e670d07",
+        "source_passages.py": "e65f4a9a7d553ecf3ef8b5604faaf5353d9959b0e26c9e3863d505539d8bffcb",
+        "proceeding_extraction.py": "02b14546c00f7e05694b499a56e38ba4708dbd04a0f8810adcd79eb425c9773e",
+        "061_proceeding_evidence_contract.py": "04740ce2e4ad3f0002afd93e7db2e720b291a86379a6243a702195f7cf573522",
+        "063_intelligence_event_types.py": "b4e8b48d3c524cfc6a4b0904b8eaf0b04428d714a0c50fb67f7b342ea8cedfdd",
+        "064_proceeding_updates.py": "23186ad3ab61a421d97d12deea7f66ad1d6ce10b413ce102cbdf7591242f4206"
+      },
+      "settings": {
+        "COUNTYIQ_PASS0_THINKING": "",
+        "COUNTYIQ_PASS0_MAX_TOKENS": "",
+        "COUNTYIQ_PASS0_ESCALATION_MODEL": "",
+        "COUNTYIQ_PASS0_ESCALATION_REASONING_EFFORT": "",
+        "COUNTYIQ_THINKING": "",
+        "COUNTYIQ_STRICT_SCHEMA": "",
+        "COUNTYIQ_PASS1_ADAPTIVE_VOTING": ""
+      },
+      "model": "openai/gpt-5.6-luna",
+      "prompt_versions": [
+        "9ac0a550703b"
+      ],
+      "reasoning_effort": null,
+      "trials": "1",
+      "fixtures": {
+        "p0_expected.json": "be1490c3101d2b18cb4cfb48a60f38241d4b835fc7b747e12118c7e2cbc74487",
+        "p0_pdfs/carroll_zhb.pdf": "6a974dc2a8498401d52a9242bf5f33dbaee437cbd48c39619babf4d9fa716e50",
+        "p0_pdfs/conewago_zoning.pdf": "d93584ff5e52aa8b90188f36be77ddbcf190cfbfc4ef3a13bc7eb0ca1d17bcef",
+        "p0_pdfs/westman_zhb.pdf": "dba595fb71e14ad48e4c3df4dc53b48c35ff2a3243ba1d9b416849558caecbb7",
+        "p0_pdfs/dillsburg.pdf": "635e3b9393efa1216dee53a0bce7cfa5f743b98fbacb6181d4c779cf7b35fe2a",
+        "p0_pdfs/jackson_twp.pdf": "eb4b8fd3abe1feb12a9b9b7115d93d143830f14bc7e86b299b3dc150cc072602",
+        "p0_pdfs/springetts.pdf": "218c26ee1a47fb488f28a14927d3c5b72879513c56b226bfecc1409ca305e1be",
+        "municipal_pilot_regressions.json": "b78845f2235011c97eb643f257e9aaee44f24bb7043aa3c51bad38a562006331",
+        "p0_claims_contract.json": "ff823d004eb025c63daa843c55902b7e164bccdd5af2c3291b3dbeb312c6d40e"
+      }
+    }
+  },
+  "semantic_review_sha256": "2826cd668aa1fced91255379c0e83b42b04c8ef972960200b67a1e60b2bcb27a",
+  "limitations": [
+    "Qualitative model-assisted source review, not independent human gold labels or statistically valid precision/recall.",
+    "All 40 documents were previously inspected in earlier iterations; the comparison ten are no longer unseen.",
+    "Source text, not inferred scrape metadata dates, controls this review.",
+    "Per-item hydration is diagnostic only; it does not represent publication under the whole-document production gate.",
+    "No measured end-to-end parcel matching, project deduplication, organization resolution, downstream LLM costs, or customer ranking quality.",
+    "Exact source quotes prove membership, not that each summary or classification is entailed.",
+    "Sample is deliberately enriched and too small for countywide volume or cost forecasts; no formal precision/recall score."
+  ]
+}

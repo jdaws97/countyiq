@@ -25,11 +25,6 @@ import psycopg2
 import psycopg2.extras
 
 from countyiq.lib.llm_harness import HarnessConfig, get_preset_for_model, detect_model_family
-from countyiq.lib.pass2_signal_validation import (
-    build_signal_validation_prompt,
-    gather_signal_context,
-    parse_signal_validation_output,
-)
 from countyiq.lib.pass2_batched_validation import (
     build_batched_signal_prompt,
     gather_parcel_batch_context,
@@ -157,100 +152,6 @@ def get_connection():
         user=os.environ.get("DATABASE_USER", "dagster_admin"),
         password=os.environ.get("DATABASE_PASSWORD", "localtest"),
     )
-
-
-# ---------------------------------------------------------------------------
-# Pass 2 evaluation
-# ---------------------------------------------------------------------------
-
-def run_pass2(
-    cursor, config: HarnessConfig, pidn: str, top_signal: str,
-    ledger: EvalCostLedger,
-) -> dict:
-    """Run Pass 2 (signal validation) for the top signal on a parcel.
-
-    Returns a result dict with: success, elapsed_seconds, raw_output,
-    parsed_output, error.
-    """
-    # Fetch the top signal row
-    cursor.execute(SIGNALS_FOR_PIDN_SQL, {"pidn": pidn})
-    signal_rows = cursor.fetchall()
-
-    if not signal_rows:
-        return {
-            "success": False,
-            "elapsed_seconds": 0.0,
-            "raw_output": "",
-            "parsed_output": None,
-            "error": f"No signals found in database for pidn={pidn}",
-        }
-
-    # Use the highest-weight signal that matches top_signal, or fallback to first
-    target_row = None
-    for row in signal_rows:
-        r = dict(row)
-        if r.get("signal_key") == top_signal:
-            target_row = r
-            break
-    if target_row is None:
-        target_row = dict(signal_rows[0])
-
-    # Build evidence dict — stored as JSONB, psycopg2 returns it as dict already
-    evidence = target_row.get("evidence") or {}
-    if isinstance(evidence, str):
-        try:
-            evidence = json.loads(evidence)
-        except (json.JSONDecodeError, TypeError):
-            evidence = {}
-
-    signal = {
-        "signal_key": target_row["signal_key"],
-        "signal_weight": target_row.get("signal_weight", 0),
-        "source_table": target_row.get("source_table", ""),
-        "source_id": target_row.get("source_id"),
-        "distance_m": target_row.get("distance_m"),
-        "evidence": evidence,
-    }
-
-    t0 = time.perf_counter()
-    try:
-        context = gather_signal_context(cursor, pidn, signal)
-        prompt = build_signal_validation_prompt(context)
-        archive_key = f"{pidn}:{signal['signal_key']}"
-        result = invoke_tracked(ledger, config, prompt, archive_key=archive_key)
-        elapsed = time.perf_counter() - t0
-
-        if result.success:
-            parsed = parse_signal_validation_output(result.parsed)
-            success = "error" not in parsed
-            return {
-                "success": success,
-                "elapsed_seconds": round(elapsed, 2),
-                "raw_output": (result.raw_output or "")[:2000],  # truncate for storage
-                "parsed_output": parsed,
-                "error": parsed.get("error") if not success else None,
-                "usage": result.metadata,
-            }
-        else:
-            return {
-                "success": False,
-                "elapsed_seconds": round(elapsed, 2),
-                "raw_output": (result.raw_output or "")[:2000],
-                "parsed_output": None,
-                "error": result.error,
-                "usage": result.metadata,
-            }
-    except (EvalCostLimitExceeded, EvalCostUnavailable):
-        raise
-    except Exception as exc:
-        elapsed = time.perf_counter() - t0
-        return {
-            "success": False,
-            "elapsed_seconds": round(elapsed, 2),
-            "raw_output": "",
-            "parsed_output": None,
-            "error": str(exc),
-        }
 
 
 # ---------------------------------------------------------------------------
@@ -488,15 +389,10 @@ Examples:
         help="Enable thinking mode (Gemma <|think|>, Qwen3.5 /think). Default: off. For Mistral, use the Reasoning model variant.",
     )
     parser.add_argument(
-        "--batched",
-        action="store_true",
-        help="Pass 2 only: use batched validation (all signals per parcel in one LLM call).",
-    )
-    parser.add_argument(
         "--max-tokens",
         type=int,
         default=None,
-        help="Max output tokens. Default: 2048 (per-signal) or 4096 (batched). Reasoning models may need 8192+.",
+        help="Max output tokens. Default: 4096 for Pass 2 or 2048 for Pass 3. Reasoning models may need 8192+.",
     )
     parser.add_argument(
         "--pidns-file",
@@ -579,12 +475,12 @@ Examples:
     mode_tag_for_archive = "thinking" if args.thinking else "nothink"
     archive_label = f"eval_{model_name}_{mode_tag_for_archive}_pass{args.pass_num}"
 
-    # Default max_tokens: 4096 for batched (multi-signal output), 2048 for per-signal.
+    # Default output budget: 4096 for Pass 2, 2048 for Pass 3.
     # Reasoning models (Mercury, GPT-OSS) may need 8192+ because reasoning
     # tokens count against the output budget before the JSON answer.
     if args.max_tokens is not None:
         max_tokens = args.max_tokens
-    elif args.batched:
+    elif args.pass_num == 2:
         max_tokens = 4096
     else:
         max_tokens = 2048
@@ -601,43 +497,27 @@ Examples:
             "Unknown model pricing: provide --max-price-prompt and "
             "--max-price-completion so the run can reserve a hard ceiling"
         )
-    if args.pass_num == 3 or (args.pass_num == 2 and args.batched):
-        config = build_production_eval_config(
-            model_path_str,
-            args.pass_num,
-            archive_label=archive_label,
-            max_tokens=max_tokens,
-            thinking=args.thinking,
-            reasoning_effort=args.reasoning_effort,
-            provider_quantizations=quantizations,
-        )
-        config = dataclasses.replace(
-            config,
-            model_family=family,
-            max_price_prompt=price_prompt,
-            max_price_completion=price_completion,
-            **resolved_params,
-        )
-    else:
-        # The legacy per-signal Pass 2 path is intentionally available only
-        # for historical A/B comparisons; it is not the production protocol.
-        config = HarnessConfig(
-            model_path=model_path_str,
-            max_tokens=max_tokens,
-            thinking=args.thinking,
-            model_family=family,
-            archive_label=archive_label,
-            reasoning_effort=args.reasoning_effort,
-            provider_quantizations=quantizations,
-            max_price_prompt=price_prompt,
-            max_price_completion=price_completion,
-            **resolved_params,
-        )
+    config = build_production_eval_config(
+        model_path_str,
+        args.pass_num,
+        archive_label=archive_label,
+        max_tokens=max_tokens,
+        thinking=args.thinking,
+        reasoning_effort=args.reasoning_effort,
+        provider_quantizations=quantizations,
+    )
+    config = dataclasses.replace(
+        config,
+        model_family=family,
+        max_price_prompt=price_prompt,
+        max_price_completion=price_completion,
+        **resolved_params,
+    )
     ledger = EvalCostLedger(max_cost_usd=args.max_cost_usd)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe_model_name = model_name.replace(" ", "_")
     mode_parts = []
-    if args.batched:
+    if args.pass_num == 2:
         mode_parts.append("batched")
     mode_parts.append("thinking" if args.thinking else "nothink")
     mode_tag = "_".join(mode_parts)
@@ -747,10 +627,7 @@ Examples:
 
                 try:
                     if args.pass_num == 2:
-                        if args.batched:
-                            outcome = run_pass2_batched(cursor, config, pidn, ledger)
-                        else:
-                            outcome = run_pass2(cursor, config, pidn, top_signal, ledger)
+                        outcome = run_pass2_batched(cursor, config, pidn, ledger)
                     else:
                         outcome = run_pass3(cursor, config, pidn, ledger)
                 except (EvalCostLimitExceeded, EvalCostUnavailable) as exc:

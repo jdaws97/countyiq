@@ -7,6 +7,7 @@ development interpretation. It never invokes an LLM itself.
 from dagster import AssetExecutionContext, MaterializeResult, MetadataValue, asset
 from psycopg2.extras import Json, execute_batch
 
+from countyiq.lib.intelligence_common import PROCEEDING_USE_ALLOWED_SQL
 from countyiq.lib.intelligence_events import (
     build_delinquency_event,
     build_development_event,
@@ -144,17 +145,26 @@ _DELINQUENCY_EVENTS_SQL = """
      AND p.valid_to IS NULL
     WHERE t.detected_at IS NOT NULL
       AND t.old_total IS DISTINCT FROM t.new_total
+      -- Keep additions and removals. For in-place balance changes, routine
+      -- interest accrual is feed noise; retain only material transitions.
+      AND (
+          t.old_total = 0
+          OR t.new_total = 0
+          OR ABS(t.new_total - t.old_total)
+             >= GREATEST(100::numeric, ABS(t.old_total) * 0.10)
+      )
     ORDER BY t.detected_at, t.pidn
 """
 
 
-_DEVELOPMENT_EVENTS_SQL = """
+_DEVELOPMENT_EVENTS_SQL = f"""
     SELECT
         pe.id,
         pe.proceeding_id,
         pe.extraction_type,
         pe.applicant_name,
         pe.parcel_reference,
+        pe.extraction_details,
         pe.current_zoning,
         pe.proposed_zoning,
         pe.decision,
@@ -191,31 +201,12 @@ _DEVELOPMENT_EVENTS_SQL = """
             SELECT p.pidn, p.owner_full
             FROM staging.parcels p
             WHERE p.valid_to IS NULL
-              AND pe.parcel_reference IS NOT NULL
-              AND (
-                  p.pidn = REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g')
-                  OR (
-                      -- Normalized street match: minutes write "1234 North Main
-                      -- Street, Suite 2" while the assessment file says
-                      -- "1234 N MAIN ST". normalize_street_address (migration
-                      -- 048) folds both to one spelling and is index-backed.
-                      LENGTH(REGEXP_REPLACE(pe.parcel_reference, '[^A-Za-z0-9]', '', 'g')) >= 6
-                      AND public.normalize_street_address(p.propadr)
-                          = public.normalize_street_address(pe.parcel_reference)
-                      AND EXISTS (
-                          SELECT 1
-                          FROM meta.municipality_source_rights msr
-                          WHERE msr.body_name = pp.body_name
-                            AND msr.municipality_name = p.municipality
-                            AND msr.derived_product_allowed = TRUE
-                      )
-                  )
-              )
+              AND p.pidn IN (SELECT matched.pidn FROM public.proceeding_parcel_matches(COALESCE(pe.extraction_details->'parcel_references', jsonb_build_array(pe.parcel_reference)), pp.body_name) matched)
             ORDER BY p.pidn
-            LIMIT 20
         ) m
     ) matches ON TRUE
-    WHERE LEFT(pe.extraction_type, 1) <> '_'
+    WHERE {PROCEEDING_USE_ALLOWED_SQL}
+      AND LEFT(pe.extraction_type, 1) <> '_'
     ORDER BY pe.extracted_at, pe.id
 """
 
@@ -255,9 +246,10 @@ def intelligence_events(
 
     events = [build_parcel_event(row) for row in parcel_rows]
     events.extend(build_delinquency_event(row) for row in delinquency_rows)
-    events.extend(build_development_event(row) for row in development_rows)
+    # Development identities are assigned under the same transaction as the
+    # serving rebuild below, so persisted watches survive later title changes.
 
-    if not events:
+    if not events and not development_rows:
         context.log.warning(
             "No source events were available; preserving the current intelligence ledger"
         )
@@ -269,8 +261,19 @@ def intelligence_events(
         )
 
     with database.transaction() as cur:
+        from countyiq.lib.proceeding_contract import resolve_project_keys
+        cur.execute("LOCK TABLE meta.proceeding_project_aliases IN SHARE ROW EXCLUSIVE MODE")
+        cur.execute("SELECT alias, project_key FROM meta.proceeding_project_aliases")
+        known = dict(cur.fetchall())
+        keys, additions = resolve_project_keys(development_rows, known)
+        for alias, key in additions.items():
+            cur.execute("INSERT INTO meta.proceeding_project_aliases(alias, project_key) VALUES (%s, %s)", (alias, key))
+        for row in development_rows:
+            row["resolved_project_key"] = keys.get(row["id"])
+            events.append(build_development_event(row))
         cur.execute("DELETE FROM public.intelligence_events")
         execute_batch(cur, _INSERT_SQL, [_insert_tuple(event) for event in events], page_size=500)
+        cur.execute("SELECT public.refresh_watch_notifications()")
 
     by_category = {
         "parcel": sum(event["category"] == "parcel" for event in events),

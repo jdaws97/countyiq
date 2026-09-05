@@ -26,7 +26,6 @@ class SourceAuthorization:
     acquisition_method: str
     raw_retention_allowed: bool
     derived_product_allowed: bool
-    person_level_display_allowed: bool
     raw_export_allowed: bool
 
 
@@ -38,7 +37,6 @@ class MunicipalitySourceAuthorization:
     acquisition_method: str
     raw_retention_allowed: bool
     derived_product_allowed: bool
-    person_level_display_allowed: bool
     raw_export_allowed: bool
     allowed_origins: frozenset[str]
     robots_unavailable_risk_accepted: bool
@@ -47,14 +45,12 @@ class MunicipalitySourceAuthorization:
 SourceUse = Literal[
     "raw_retention",
     "derived_product",
-    "person_level_display",
     "raw_export",
 ]
 
 _USE_COLUMNS: dict[SourceUse, str] = {
     "raw_retention": "raw_retention_allowed",
     "derived_product": "derived_product_allowed",
-    "person_level_display": "person_level_display_allowed",
     "raw_export": "raw_export_allowed",
 }
 
@@ -73,18 +69,17 @@ def _source_policy_snapshot(source_key: str, row: tuple) -> dict:
         "acquisition_allowed": row[1],
         "raw_retention_allowed": row[2],
         "derived_product_allowed": row[3],
-        "person_level_display_allowed": row[4],
-        "raw_export_allowed": row[5],
-        "allowed_methods": list(row[6] or []),
-        "reviewed_on": row[7],
-        "review_due_on": row[8],
-        "evidence": row[9] or {},
-        "updated_at": row[10],
-        "publisher": row[11],
-        "source_url": row[12],
-        "terms_url": row[13],
-        "notes": row[14],
-        "policy_version": row[15],
+        "raw_export_allowed": row[4],
+        "allowed_methods": list(row[5] or []),
+        "reviewed_on": row[6],
+        "review_due_on": row[7],
+        "evidence": row[8] or {},
+        "updated_at": row[9],
+        "publisher": row[10],
+        "source_url": row[11],
+        "terms_url": row[12],
+        "notes": row[13],
+        "policy_version": row[14],
     }
 
 
@@ -109,7 +104,6 @@ def authorize_source(
             acquisition_allowed,
             raw_retention_allowed,
             derived_product_allowed,
-            person_level_display_allowed,
             raw_export_allowed,
             allowed_methods,
             reviewed_on,
@@ -138,7 +132,6 @@ def authorize_source(
         acquisition_allowed,
         raw_retention_allowed,
         derived_product_allowed,
-        person_level_display_allowed,
         raw_export_allowed,
         allowed_methods,
         _reviewed_on,
@@ -198,7 +191,6 @@ def authorize_source(
         acquisition_method=acquisition_method,
         raw_retention_allowed=raw_retention_allowed,
         derived_product_allowed=derived_product_allowed,
-        person_level_display_allowed=person_level_display_allowed,
         raw_export_allowed=raw_export_allowed,
     )
 
@@ -210,8 +202,8 @@ def require_source_use(
     """Fail closed before retaining or publishing source-derived material.
 
     Acquisition authorization is intentionally separate from downstream-use
-    authorization: a source can be collectable while raw retention, public
-    person-level display, or export remains prohibited.
+    authorization: a source can be collectable while raw retention or export
+    remains prohibited.
     """
 
     field = f"{use}_allowed"
@@ -242,8 +234,7 @@ def authorize_source_use(
         """
         SELECT
             rights_status, acquisition_allowed,
-            raw_retention_allowed, derived_product_allowed,
-            person_level_display_allowed, raw_export_allowed,
+            raw_retention_allowed, derived_product_allowed, raw_export_allowed,
             allowed_methods, reviewed_on, review_due_on, evidence,
             updated_at, publisher, source_url, terms_url, notes, policy_version
         FROM meta.source_rights
@@ -259,8 +250,8 @@ def authorize_source_use(
 
     row = rows[0]
     rights_status = row[0]
-    use_allowed = row[{"raw_retention": 2, "derived_product": 3, "person_level_display": 4, "raw_export": 5}[use]]
-    review_due_on = row[8]
+    use_allowed = row[{"raw_retention": 2, "derived_product": 3, "raw_export": 4}[use]]
+    review_due_on = row[7]
     snapshot = _source_policy_snapshot(source_key, row)
     snapshot_json, policy_fingerprint = _policy_receipt(snapshot)
     allowed = True
@@ -289,7 +280,7 @@ def authorize_source_use(
             f"use:{use}",
             allowed,
             reason,
-            row[15],
+            row[14],
             policy_fingerprint,
             snapshot_json,
         ),
@@ -367,8 +358,8 @@ def authorize_municipality_sources(
         SELECT
             source_key, body_name, listing_url, proceeding_type,
             rights_status, acquisition_allowed, raw_retention_allowed,
-            derived_product_allowed, person_level_display_allowed,
-            raw_export_allowed, allowed_methods, allowed_origins,
+            derived_product_allowed, raw_export_allowed,
+            allowed_methods, allowed_origins,
             terms_review_status,
             review_due_on, reviewed_on, evidence, updated_at, notes,
             policy_version, terms_url
@@ -397,7 +388,6 @@ def authorize_municipality_sources(
             acquisition_allowed,
             raw_retention_allowed,
             derived_product_allowed,
-            person_level_display_allowed,
             raw_export_allowed,
             allowed_methods,
             allowed_origins,
@@ -420,7 +410,6 @@ def authorize_municipality_sources(
             "acquisition_allowed": acquisition_allowed,
             "raw_retention_allowed": raw_retention_allowed,
             "derived_product_allowed": derived_product_allowed,
-            "person_level_display_allowed": person_level_display_allowed,
             "raw_export_allowed": raw_export_allowed,
             "allowed_methods": list(allowed_methods or []),
             "allowed_origins": list(allowed_origins or []),
@@ -493,7 +482,6 @@ def authorize_municipality_sources(
             acquisition_method=acquisition_method,
             raw_retention_allowed=raw_retention_allowed,
             derived_product_allowed=derived_product_allowed,
-            person_level_display_allowed=person_level_display_allowed,
             raw_export_allowed=raw_export_allowed,
             allowed_origins=frozenset(allowed_origins or []),
             robots_unavailable_risk_accepted=bool(

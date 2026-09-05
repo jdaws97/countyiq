@@ -10,26 +10,14 @@ from fastapi import HTTPException
 SourceUse = Literal[
     "raw_retention",
     "derived_product",
-    "person_level_display",
     "raw_export",
 ]
 
 _USE_COLUMNS: dict[SourceUse, str] = {
     "raw_retention": "raw_retention_allowed",
     "derived_product": "derived_product_allowed",
-    "person_level_display": "person_level_display_allowed",
     "raw_export": "raw_export_allowed",
 }
-
-PUBLIC_ORGANIZATION_TYPES = frozenset(
-    {"business", "llc", "corporation", "partnership", "nonprofit", "government"}
-)
-
-
-def is_public_organization(entity_type: object) -> bool:
-    """Whether an entity type can be shown without enabling people profiles."""
-    return str(entity_type or "").strip().lower() in PUBLIC_ORGANIZATION_TYPES
-
 
 def source_use_allowed(cur, source_key: str, use: SourceUse) -> bool:
     """Return whether a current policy permits one response-layer use."""

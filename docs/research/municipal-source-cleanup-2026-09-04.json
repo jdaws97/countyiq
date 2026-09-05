@@ -1,0 +1,1352 @@
+{
+  "version": "proceeding-metadata-3",
+  "county": "york",
+  "as_of": "2026-09-04",
+  "count": 6459,
+  "statuses": {
+    "ready": 3264,
+    "review_required": 3195
+  },
+  "issues": {
+    "insufficient_document_text": 1204,
+    "primary_board_not_configured": 180,
+    "exact_meeting_date_unverified": 1529,
+    "primary_board_unverified": 1964,
+    "cancelled_meeting": 16,
+    "multiple_meetings": 137,
+    "committee_meeting": 151,
+    "calendar_or_annual_bundle": 14,
+    "unrelated_board": 185,
+    "conflicting_header_dates": 577,
+    "mixed_agenda_minutes_packet": 17,
+    "joint_meeting": 11,
+    "header_filename_date_conflict": 57,
+    "conflicting_filename_dates": 4
+  },
+  "ready_recent_count": 494,
+  "initial_current_records": 7414,
+  "remaining_current_records": 6459,
+  "quarantined_wrong_jurisdiction": 925,
+  "quarantined_exact_duplicates": 30,
+  "recent_ready_records": 494,
+  "recent_ready_municipalities": 46,
+  "recent_prefilter_positive": 476,
+  "pilot_size": 30,
+  "pilot_municipalities": 19,
+  "verification": {
+    "current_proceedings": 6459,
+    "audit_rows": 20332,
+    "unreviewed": 0,
+    "extractions": 0,
+    "parcels": 175928,
+    "active_wrong_sources": 0,
+    "original_records_checked": 7414,
+    "original_fingerprint_mismatches": [],
+    "review_version": "proceeding-metadata-3",
+    "original_records_corrected": 3700,
+    "correction_versions_created": 3809
+  },
+  "source_identity_audit": [
+    {
+      "body": "Hanover Borough Council",
+      "municipality": "hanover borough",
+      "configured_domain": "hanoverboroughpa.gov",
+      "directory": {
+        "domain": "hanoverboroughpa.gov",
+        "page": 82
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Monaghan Twp Board of Supervisors",
+      "municipality": "monaghan township",
+      "configured_domain": "monaghantownship.com",
+      "directory": {
+        "domain": "monaghantownship.com",
+        "page": 110
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Hallam Borough Council",
+      "municipality": "hallam borough",
+      "configured_domain": "hallamborough.com",
+      "directory": {
+        "domain": "hallamborough.com",
+        "page": 80
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Lewisberry Borough Council",
+      "municipality": "lewisberry borough",
+      "configured_domain": "lewisberryborough.org",
+      "directory": {
+        "domain": "lewisberryborough.org",
+        "page": 96
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Manchester Borough Council",
+      "municipality": "manchester borough",
+      "configured_domain": "manchesterborough.gov",
+      "directory": {
+        "domain": "manchesterborough.gov",
+        "page": 104
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "New Salem Borough Council",
+      "municipality": "new salem borough",
+      "configured_domain": "newsalemborough.org",
+      "directory": {
+        "domain": "newsalemborough.com",
+        "page": 116
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "York Haven Borough Council",
+      "municipality": "york haven borough",
+      "configured_domain": "yorkhavenborough.org",
+      "directory": {
+        "domain": "yorkhavenborough.org",
+        "page": 176
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Carroll Twp Board of Supervisors",
+      "municipality": "carroll township",
+      "configured_domain": "carrolltownship.com",
+      "directory": {
+        "domain": "carrolltownship.com",
+        "page": 38
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Codorus Twp Board of Supervisors",
+      "municipality": "codorus township",
+      "configured_domain": "codorustownship.org",
+      "directory": {
+        "domain": "codorustownship.org",
+        "page": 42
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Conewago Twp Board of Supervisors",
+      "municipality": "conewago township",
+      "configured_domain": "conewagotwp.com",
+      "directory": {
+        "domain": "conewagotwp.com",
+        "page": 44
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Dallastown Borough Council",
+      "municipality": "dallastown borough",
+      "configured_domain": "dallastownboro.com",
+      "directory": {
+        "domain": "dallastownboro.com",
+        "page": 48
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "East Hopewell Twp Board of Supervisors",
+      "municipality": "east hopewell township",
+      "configured_domain": "easthopewelltownshippa.gov",
+      "directory": {
+        "domain": "easthopewell.com",
+        "page": 58
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "East Manchester Twp Board of Supervisors",
+      "municipality": "east manchester township",
+      "configured_domain": "emanchestertwp.com",
+      "directory": {
+        "domain": "emanchestertwp.com",
+        "page": 60
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "East Prospect Borough Council",
+      "municipality": "east prospect borough",
+      "configured_domain": "eastprospectborough.com",
+      "directory": {
+        "domain": "epboro.com",
+        "page": 62
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Fairview Twp Board of Supervisors",
+      "municipality": "fairview township",
+      "configured_domain": "twp.fairview.pa.us",
+      "directory": {
+        "domain": "twp.fairview.pa.us",
+        "page": 64
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Fawn Grove Borough Council",
+      "municipality": "fawn grove borough",
+      "configured_domain": "fawngroveborough.org",
+      "directory": {
+        "domain": "fawngroveborough.org",
+        "page": 68
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Fawn Twp Board of Supervisors",
+      "municipality": "fawn township",
+      "configured_domain": "fawntwp.org",
+      "directory": {
+        "domain": "fawntwp.org",
+        "page": 66
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Felton Borough Council",
+      "municipality": "felton borough",
+      "configured_domain": "feltonboroughpa.com",
+      "directory": {
+        "domain": "feltonboroughpa.com",
+        "page": 70
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Franklin Twp Board of Supervisors",
+      "municipality": "franklin township",
+      "configured_domain": "franklintownship.org",
+      "directory": {
+        "domain": "franklintownship.org",
+        "page": 72
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Goldsboro Borough Council",
+      "municipality": "goldsboro borough",
+      "configured_domain": "goldsboropa.com",
+      "directory": {
+        "domain": null,
+        "page": 78
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Hellam Twp Board of Supervisors",
+      "municipality": "hellam township",
+      "configured_domain": "hellamtownship.gov",
+      "directory": {
+        "domain": "hellamtownship.gov",
+        "page": 86
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Hopewell Twp Board of Supervisors",
+      "municipality": "hopewell township",
+      "configured_domain": "hopewelltownship.com",
+      "directory": {
+        "domain": "hopewelltownship.com",
+        "page": 88
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Jackson Twp Board of Supervisors",
+      "municipality": "jackson township",
+      "configured_domain": "jackson-township.org",
+      "directory": {
+        "domain": "jacksontwpyork.org",
+        "page": 90
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "Manchester Twp Board of Supervisors",
+      "municipality": "manchester township",
+      "configured_domain": "mantwp.com",
+      "directory": {
+        "domain": "mantwp.com",
+        "page": 106
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Manheim Twp Board of Supervisors",
+      "municipality": "manheim township",
+      "configured_domain": "manheimtwpyorkpa.org",
+      "directory": {
+        "domain": "manheimtwpyorkpa.org",
+        "page": 108
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "North Codorus Twp Board of Supervisors",
+      "municipality": "north codorus township",
+      "configured_domain": "northcodorustwp.org",
+      "directory": {
+        "domain": "northcodorustwp.org",
+        "page": 120
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "North York Borough Council",
+      "municipality": "north york borough",
+      "configured_domain": "northyorkborough.com",
+      "directory": {
+        "domain": "northyorkborough.com",
+        "page": 124
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Paradise Twp Board of Supervisors",
+      "municipality": "paradise township",
+      "configured_domain": "paradisetownship.org",
+      "directory": {
+        "domain": "paradisetwpyorkco.com",
+        "page": 126
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "Peach Bottom Twp Board of Supervisors",
+      "municipality": "peach bottom township",
+      "configured_domain": "peachbottomtownship.org",
+      "directory": {
+        "domain": "peachbottomtownship.org",
+        "page": 128
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Penn Twp Board of Supervisors",
+      "municipality": "penn township",
+      "configured_domain": "penntownship.org",
+      "directory": {
+        "domain": "penntwp.com",
+        "page": 130
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "Red Lion Borough Council",
+      "municipality": "red lion borough",
+      "configured_domain": "redlionpa.org",
+      "directory": {
+        "domain": "redlionpa.org",
+        "page": 134
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Seven Valleys Borough Council",
+      "municipality": "seven valleys borough",
+      "configured_domain": "sevenvalleysborough.com",
+      "directory": {
+        "domain": "sevenvalleysborough.com",
+        "page": 136
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Shrewsbury Borough Council",
+      "municipality": "shrewsbury borough",
+      "configured_domain": "shrewsburyborough.org",
+      "directory": {
+        "domain": "shrewsburyborough.org",
+        "page": 138
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Spring Garden Twp Board of Supervisors",
+      "municipality": "spring garden township",
+      "configured_domain": "springgardentwp.org",
+      "directory": {
+        "domain": null,
+        "page": 143
+      },
+      "identity_status": "2025_directory_manual_match"
+    },
+    {
+      "body": "Spring Grove Borough Council",
+      "municipality": "spring grove borough",
+      "configured_domain": "springgrovepa.gov",
+      "directory": {
+        "domain": "springgrovepa.gov",
+        "page": 144
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Springfield Twp Board of Supervisors",
+      "municipality": "springfield township",
+      "configured_domain": "springfieldyork.org",
+      "directory": {
+        "domain": "springfieldyork.org",
+        "page": 148
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Springettsbury Twp Board of Supervisors",
+      "municipality": "springettsbury township",
+      "configured_domain": "springettsbury.com",
+      "directory": {
+        "domain": null,
+        "page": 147
+      },
+      "identity_status": "2025_directory_manual_match"
+    },
+    {
+      "body": "Wellsville Borough Council",
+      "municipality": "wellsville borough",
+      "configured_domain": "wellsvilleborough.com",
+      "directory": {
+        "domain": "wellsvilleborough.com",
+        "page": 156
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "West Manchester Twp Board of Supervisors",
+      "municipality": "west manchester township",
+      "configured_domain": "westmanchestertownship.com",
+      "directory": {
+        "domain": "wmtwp.com",
+        "page": 158
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Windsor Twp Board of Supervisors",
+      "municipality": "windsor township",
+      "configured_domain": "windsortownship.com",
+      "directory": {
+        "domain": "windsortwp.com",
+        "page": 166
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "Wrightsville Borough Council",
+      "municipality": "wrightsville borough",
+      "configured_domain": "wrightsvilleborough.com",
+      "directory": {
+        "domain": "wrightsvilleborough.com",
+        "page": 170
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Yoe Borough Council",
+      "municipality": "yoe borough",
+      "configured_domain": "yoeborough.org",
+      "directory": {
+        "domain": "yoeborough.org",
+        "page": 172
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Yorkana Borough Council",
+      "municipality": "yorkana borough",
+      "configured_domain": "yorkanaborough.com",
+      "directory": {
+        "domain": "yorkanaborough.com",
+        "page": 178
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "York City Council",
+      "municipality": "york city",
+      "configured_domain": "yorkcity.org",
+      "directory": null,
+      "identity_status": "2025_directory_manual_match"
+    },
+    {
+      "body": "York Twp Board of Commissioners",
+      "municipality": "york township",
+      "configured_domain": "yorktownshippa.gov",
+      "directory": {
+        "domain": "yorktownship.com",
+        "page": 174
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Chanceford Twp Board of Supervisors",
+      "municipality": "chanceford township",
+      "configured_domain": "chancefordtwp.com",
+      "directory": {
+        "domain": "chancefordtwp.com",
+        "page": 40
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Delta Borough Council",
+      "municipality": "delta borough",
+      "configured_domain": "deltaborough.us",
+      "directory": {
+        "domain": "deltaborough.us",
+        "page": 50
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Dillsburg Borough Council",
+      "municipality": "dillsburg borough",
+      "configured_domain": "dillsburg.com",
+      "directory": {
+        "domain": "dillsburg.com",
+        "page": 52
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Dover Borough Council",
+      "municipality": "dover borough",
+      "configured_domain": "doverboroughpa.com",
+      "directory": {
+        "domain": "doverboroughpa.com",
+        "page": 54
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Franklintown Borough Council",
+      "municipality": "franklintown borough",
+      "configured_domain": "franklintownborough.net",
+      "directory": {
+        "domain": "franklintownborough.net",
+        "page": 74
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Glen Rock Borough Council",
+      "municipality": "glen rock borough",
+      "configured_domain": "glenrockpa.org",
+      "directory": {
+        "domain": "glenrockpa.org",
+        "page": 76
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Jacobus Borough Council",
+      "municipality": "jacobus borough",
+      "configured_domain": "jacobuspa.com",
+      "directory": {
+        "domain": "jacobuspa.com",
+        "page": 92
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Jefferson Borough Council",
+      "municipality": "jefferson borough",
+      "configured_domain": "jeffersonboro.net",
+      "directory": {
+        "domain": "jeffersonboro.net",
+        "page": 94
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Loganville Borough Council",
+      "municipality": "loganville borough",
+      "configured_domain": "loganvilleborough.com",
+      "directory": {
+        "domain": "loganvillepa.us",
+        "page": 98
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Lower Chanceford Twp Board of Supervisors",
+      "municipality": "lower chanceford township",
+      "configured_domain": "lowerchancefordtwppa.gov",
+      "directory": {
+        "domain": "lowerchancefordtwppa.gov",
+        "page": 100
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Lower Windsor Twp Board of Supervisors",
+      "municipality": "lower windsor township",
+      "configured_domain": "lowerwindsor.com",
+      "directory": {
+        "domain": "lowerwindsor.com",
+        "page": 102
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Mount Wolf Borough Council",
+      "municipality": "mount wolf borough",
+      "configured_domain": "mtwolfpa.gov",
+      "directory": {
+        "domain": "mtwolfpa.gov",
+        "page": 112
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Newberry Twp Board of Supervisors",
+      "municipality": "newberry township",
+      "configured_domain": "newberrytwp.com",
+      "directory": {
+        "domain": "newberrytwp.com",
+        "page": 118
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "New Freedom Borough Council",
+      "municipality": "new freedom borough",
+      "configured_domain": "newfreedomboro.org",
+      "directory": {
+        "domain": "newfreedomboro.org",
+        "page": 114
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Stewartstown Borough Council",
+      "municipality": "stewartstown borough",
+      "configured_domain": "stewartstown.org",
+      "directory": {
+        "domain": "stewartstown.org",
+        "page": 150
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Warrington Twp Board of Supervisors",
+      "municipality": "warrington township",
+      "configured_domain": "warringtontwp.org",
+      "directory": {
+        "domain": "warringtontwp.org",
+        "page": 152
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Windsor Borough Council",
+      "municipality": "windsor borough",
+      "configured_domain": "windsorboropa.com",
+      "directory": {
+        "domain": "windsorboropa.com",
+        "page": 164
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Heidelberg Twp Board of Supervisors",
+      "municipality": "heidelberg township",
+      "configured_domain": "heidelbergtwpmunicipal.com",
+      "directory": {
+        "domain": "heidelbergtwpmunicipal.com",
+        "page": 84
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Washington Twp Board of Supervisors",
+      "municipality": "washington township",
+      "configured_domain": "washingtontownshipyc.net",
+      "directory": {
+        "domain": "washington-township.net",
+        "page": 154
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Winterstown Borough Council",
+      "municipality": "winterstown borough",
+      "configured_domain": "winterstownborough.com",
+      "directory": {
+        "domain": "winterstownborough.com",
+        "page": 168
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "North Hopewell Twp Board of Supervisors",
+      "municipality": "north hopewell township",
+      "configured_domain": "northhopewelltwp.com",
+      "directory": {
+        "domain": "northhopewelltwp.com",
+        "page": 122
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "York County Commissioners",
+      "municipality": "",
+      "configured_domain": "yorkcountypa.gov",
+      "directory": null,
+      "identity_status": "2025_directory_manual_match"
+    },
+    {
+      "body": "Carroll Twp Zoning Hearing Board",
+      "municipality": "carroll township",
+      "configured_domain": "carrolltownship.com",
+      "directory": {
+        "domain": "carrolltownship.com",
+        "page": 38
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Conewago Twp Zoning Hearing Board",
+      "municipality": "conewago township",
+      "configured_domain": "conewagotwp.com",
+      "directory": {
+        "domain": "conewagotwp.com",
+        "page": 44
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "East Manchester Twp Zoning Hearing Board",
+      "municipality": "east manchester township",
+      "configured_domain": "emanchestertwp.com",
+      "directory": {
+        "domain": "emanchestertwp.com",
+        "page": 60
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Fairview Twp Zoning Hearing Board",
+      "municipality": "fairview township",
+      "configured_domain": "twp.fairview.pa.us",
+      "directory": {
+        "domain": "twp.fairview.pa.us",
+        "page": 64
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Goldsboro Boro Zoning Hearing Board",
+      "municipality": "goldsboro borough",
+      "configured_domain": "goldsboropa.com",
+      "directory": {
+        "domain": null,
+        "page": 78
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Hanover Boro Zoning Hearing Board",
+      "municipality": "hanover borough",
+      "configured_domain": "hanoverboroughpa.gov",
+      "directory": {
+        "domain": "hanoverboroughpa.gov",
+        "page": 82
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Heidelberg Twp Zoning Hearing Board",
+      "municipality": "heidelberg township",
+      "configured_domain": "heidelbergtwpmunicipal.com",
+      "directory": {
+        "domain": "heidelbergtwpmunicipal.com",
+        "page": 84
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Hellam Twp Zoning Hearing Board",
+      "municipality": "hellam township",
+      "configured_domain": "hellamtownship.gov",
+      "directory": {
+        "domain": "hellamtownship.gov",
+        "page": 86
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Hopewell Twp Zoning Hearing Board",
+      "municipality": "hopewell township",
+      "configured_domain": "hopewelltownship.com",
+      "directory": {
+        "domain": "hopewelltownship.com",
+        "page": 88
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "North Codorus Twp Zoning Hearing Board",
+      "municipality": "north codorus township",
+      "configured_domain": "northcodorustwp.org",
+      "directory": {
+        "domain": "northcodorustwp.org",
+        "page": 120
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Paradise Twp Zoning Hearing Board",
+      "municipality": "paradise township",
+      "configured_domain": "paradisetownship.org",
+      "directory": {
+        "domain": "paradisetwpyorkco.com",
+        "page": 126
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "Peach Bottom Twp Zoning Hearing Board",
+      "municipality": "peach bottom township",
+      "configured_domain": "peachbottomtownship.org",
+      "directory": {
+        "domain": "peachbottomtownship.org",
+        "page": 128
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Penn Twp Zoning Hearing Board",
+      "municipality": "penn township",
+      "configured_domain": "penntownship.org",
+      "directory": {
+        "domain": "penntwp.com",
+        "page": 130
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "Red Lion Boro Zoning Hearing Board",
+      "municipality": "red lion borough",
+      "configured_domain": "redlionpa.org",
+      "directory": {
+        "domain": "redlionpa.org",
+        "page": 134
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Shrewsbury Twp Zoning Hearing Board",
+      "municipality": "shrewsbury township",
+      "configured_domain": "shrewsburytownship.org",
+      "directory": {
+        "domain": "shrewsburytownship.org",
+        "page": 140
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Spring Garden Twp Zoning Hearing Board",
+      "municipality": "spring garden township",
+      "configured_domain": "springgardentwp.org",
+      "directory": {
+        "domain": null,
+        "page": 143
+      },
+      "identity_status": "2025_directory_manual_match"
+    },
+    {
+      "body": "Spring Grove Boro Zoning Hearing Board",
+      "municipality": "spring grove borough",
+      "configured_domain": "springgrovepa.gov",
+      "directory": {
+        "domain": "springgrovepa.gov",
+        "page": 144
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Warrington Twp Zoning Hearing Board",
+      "municipality": "warrington township",
+      "configured_domain": "warringtontwp.org",
+      "directory": {
+        "domain": "warringtontwp.org",
+        "page": 152
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "West Manchester Twp Zoning Hearing Board",
+      "municipality": "west manchester township",
+      "configured_domain": "westmanchestertownship.com",
+      "directory": {
+        "domain": "wmtwp.com",
+        "page": 158
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "York City Zoning Hearing Board",
+      "municipality": "york city",
+      "configured_domain": "yorkcity.org",
+      "directory": null,
+      "identity_status": "2025_directory_manual_match"
+    },
+    {
+      "body": "York Twp Zoning Hearing Board",
+      "municipality": "york township",
+      "configured_domain": "yorktownshippa.gov",
+      "directory": {
+        "domain": "yorktownship.com",
+        "page": 174
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Lower Windsor Twp Zoning Hearing Board",
+      "municipality": "lower windsor township",
+      "configured_domain": "lowerwindsor.com",
+      "directory": {
+        "domain": "lowerwindsor.com",
+        "page": 102
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Carroll Twp Planning Commission",
+      "municipality": "carroll township",
+      "configured_domain": "carrolltownship.com",
+      "directory": {
+        "domain": "carrolltownship.com",
+        "page": 38
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Conewago Twp Planning Commission",
+      "municipality": "conewago township",
+      "configured_domain": "conewagotwp.com",
+      "directory": {
+        "domain": "conewagotwp.com",
+        "page": 44
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Dover Twp Planning Commission",
+      "municipality": "dover township",
+      "configured_domain": "dovertownship.org",
+      "directory": {
+        "domain": "dovertownship.org",
+        "page": 56
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "East Hopewell Twp Planning Commission",
+      "municipality": "east hopewell township",
+      "configured_domain": "easthopewelltownshippa.gov",
+      "directory": {
+        "domain": "easthopewell.com",
+        "page": 58
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "East Manchester Twp Planning Commission",
+      "municipality": "east manchester township",
+      "configured_domain": "emanchestertwp.com",
+      "directory": {
+        "domain": "emanchestertwp.com",
+        "page": 60
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Fairview Twp Planning Commission",
+      "municipality": "fairview township",
+      "configured_domain": "twp.fairview.pa.us",
+      "directory": {
+        "domain": "twp.fairview.pa.us",
+        "page": 64
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Franklin Twp Planning Commission",
+      "municipality": "franklin township",
+      "configured_domain": "franklintownship.org",
+      "directory": {
+        "domain": "franklintownship.org",
+        "page": 72
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Goldsboro Boro Planning Commission",
+      "municipality": "goldsboro borough",
+      "configured_domain": "goldsboropa.com",
+      "directory": {
+        "domain": null,
+        "page": 78
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Heidelberg Twp Planning Commission",
+      "municipality": "heidelberg township",
+      "configured_domain": "heidelbergtwpmunicipal.com",
+      "directory": {
+        "domain": "heidelbergtwpmunicipal.com",
+        "page": 84
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Hanover Boro Planning Commission",
+      "municipality": "hanover borough",
+      "configured_domain": "hanoverboroughpa.gov",
+      "directory": {
+        "domain": "hanoverboroughpa.gov",
+        "page": 82
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Hellam Twp Planning Commission",
+      "municipality": "hellam township",
+      "configured_domain": "hellamtownship.gov",
+      "directory": {
+        "domain": "hellamtownship.gov",
+        "page": 86
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Hopewell Twp Planning Commission",
+      "municipality": "hopewell township",
+      "configured_domain": "hopewelltownship.com",
+      "directory": {
+        "domain": "hopewelltownship.com",
+        "page": 88
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "North Codorus Twp Planning Commission",
+      "municipality": "north codorus township",
+      "configured_domain": "northcodorustwp.org",
+      "directory": {
+        "domain": "northcodorustwp.org",
+        "page": 120
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Paradise Twp Planning Commission",
+      "municipality": "paradise township",
+      "configured_domain": "paradisetownship.org",
+      "directory": {
+        "domain": "paradisetwpyorkco.com",
+        "page": 126
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "Penn Twp Planning Commission",
+      "municipality": "penn township",
+      "configured_domain": "penntownship.org",
+      "directory": {
+        "domain": "penntwp.com",
+        "page": 130
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "Red Lion Boro Planning Commission",
+      "municipality": "red lion borough",
+      "configured_domain": "redlionpa.org",
+      "directory": {
+        "domain": "redlionpa.org",
+        "page": 134
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Spring Garden Twp Planning Commission",
+      "municipality": "spring garden township",
+      "configured_domain": "springgardentwp.org",
+      "directory": {
+        "domain": null,
+        "page": 143
+      },
+      "identity_status": "2025_directory_manual_match"
+    },
+    {
+      "body": "Spring Grove Boro Planning Commission",
+      "municipality": "spring grove borough",
+      "configured_domain": "springgrovepa.gov",
+      "directory": {
+        "domain": "springgrovepa.gov",
+        "page": 144
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "Warrington Twp Planning Commission",
+      "municipality": "warrington township",
+      "configured_domain": "warringtontwp.org",
+      "directory": {
+        "domain": "warringtontwp.org",
+        "page": 152
+      },
+      "identity_status": "2025_directory_domain_match"
+    },
+    {
+      "body": "West Manchester Twp Planning Commission",
+      "municipality": "west manchester township",
+      "configured_domain": "westmanchestertownship.com",
+      "directory": {
+        "domain": "wmtwp.com",
+        "page": 158
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Windsor Twp Planning Commission",
+      "municipality": "windsor township",
+      "configured_domain": "windsortownship.com",
+      "directory": {
+        "domain": "windsortwp.com",
+        "page": 166
+      },
+      "identity_status": "wrong_jurisdiction_quarantined"
+    },
+    {
+      "body": "York City Planning Commission",
+      "municipality": "york city",
+      "configured_domain": "yorkcity.org",
+      "directory": null,
+      "identity_status": "2025_directory_manual_match"
+    },
+    {
+      "body": "York Twp Planning Commission",
+      "municipality": "york township",
+      "configured_domain": "yorktownshippa.gov",
+      "directory": {
+        "domain": "yorktownship.com",
+        "page": 174
+      },
+      "identity_status": "current_municipal_site_verified"
+    },
+    {
+      "body": "Lower Windsor Twp Planning Commission",
+      "municipality": "lower windsor township",
+      "configured_domain": "lowerwindsor.com",
+      "directory": {
+        "domain": "lowerwindsor.com",
+        "page": 102
+      },
+      "identity_status": "2025_directory_domain_match"
+    }
+  ],
+  "replacement_listing_review": [
+    {
+      "body_name": "Penn Township Board of Commissioners",
+      "proceeding_type": "board_of_commissioners",
+      "listing_url": "https://penntwp.com/directory/committees/board-of-commissioners-meeting-minutes/",
+      "resolved_url": "https://penntwp.com/directory/committees/board-of-commissioners-meeting-minutes/",
+      "status": "ok",
+      "robots_allowed": true,
+      "robots_reason": "allowed",
+      "robots_url": "https://penntwp.com/robots.txt",
+      "robots_http_status": 200,
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "document_count": 30,
+      "discovered_document_count": 30,
+      "document_origins": [
+        "https://penntwp.com"
+      ],
+      "document_origin_counts": {
+        "https://penntwp.com": 30
+      },
+      "blocked_document_origin_counts": {},
+      "last_error": null
+    },
+    {
+      "body_name": "Penn Township Planning Commission",
+      "proceeding_type": "planning_commission",
+      "listing_url": "https://penntwp.com/commissions/planning-commission/",
+      "resolved_url": "https://penntwp.com/commissions/planning-commission/",
+      "status": "ok",
+      "robots_allowed": true,
+      "robots_reason": "allowed",
+      "robots_url": "https://penntwp.com/robots.txt",
+      "robots_http_status": 200,
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "document_count": 31,
+      "discovered_document_count": 31,
+      "document_origins": [
+        "https://penntwp.com"
+      ],
+      "document_origin_counts": {
+        "https://penntwp.com": 31
+      },
+      "blocked_document_origin_counts": {},
+      "last_error": null
+    },
+    {
+      "body_name": "Penn Township Zoning Hearing Board",
+      "proceeding_type": "zoning_hearing",
+      "listing_url": "https://penntwp.com/directory/boards/zoning-hearing-board/",
+      "resolved_url": "https://penntwp.com/directory/boards/zoning-hearing-board/",
+      "status": "ok",
+      "robots_allowed": true,
+      "robots_reason": "allowed",
+      "robots_url": "https://penntwp.com/robots.txt",
+      "robots_http_status": 200,
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "document_count": 26,
+      "discovered_document_count": 26,
+      "document_origins": [
+        "https://penntwp.com"
+      ],
+      "document_origin_counts": {
+        "https://penntwp.com": 26
+      },
+      "blocked_document_origin_counts": {},
+      "last_error": null
+    },
+    {
+      "body_name": "Paradise Township Board of Supervisors",
+      "proceeding_type": "board_of_supervisors",
+      "listing_url": "https://paradisetwpyorkco.com/board-of-supervisors-meeting-agendas-and-minutes/",
+      "resolved_url": "https://paradisetwpyorkco.com/board-of-supervisors-meeting-agendas-and-minutes/",
+      "status": "robots_skipped",
+      "robots_allowed": false,
+      "robots_reason": "robots_http_403",
+      "robots_url": "https://paradisetwpyorkco.com/robots.txt",
+      "robots_http_status": 403,
+      "http_status": null,
+      "content_type": null,
+      "document_count": 0,
+      "discovered_document_count": 0,
+      "document_origins": [],
+      "document_origin_counts": {},
+      "blocked_document_origin_counts": {},
+      "last_error": "robots_http_403"
+    },
+    {
+      "body_name": "Paradise Township Planning Commission",
+      "proceeding_type": "planning_commission",
+      "listing_url": "https://paradisetwpyorkco.com/planning-commission-meeting-agendas-and-minutes/",
+      "resolved_url": "https://paradisetwpyorkco.com/planning-commission-meeting-agendas-and-minutes/",
+      "status": "robots_skipped",
+      "robots_allowed": false,
+      "robots_reason": "robots_http_403",
+      "robots_url": "https://paradisetwpyorkco.com/robots.txt",
+      "robots_http_status": 403,
+      "http_status": null,
+      "content_type": null,
+      "document_count": 0,
+      "discovered_document_count": 0,
+      "document_origins": [],
+      "document_origin_counts": {},
+      "blocked_document_origin_counts": {},
+      "last_error": "robots_http_403"
+    },
+    {
+      "body_name": "Jackson Township Board of Supervisors",
+      "proceeding_type": "board_of_supervisors",
+      "listing_url": "https://jacksontwpyork.org/township-calendar-meetings/township-meetings-minutes/board-of-supervisors-meetings-minutes",
+      "resolved_url": "https://jacksontwpyork.org/township-calendar-meetings/township-meetings-minutes/board-of-supervisors-meetings-minutes",
+      "status": "ok",
+      "robots_allowed": true,
+      "robots_reason": "allowed",
+      "robots_url": "https://jacksontwpyork.org/robots.txt",
+      "robots_http_status": 200,
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "document_count": 14,
+      "discovered_document_count": 14,
+      "document_origins": [
+        "https://jacksontwpyork.org"
+      ],
+      "document_origin_counts": {
+        "https://jacksontwpyork.org": 14
+      },
+      "blocked_document_origin_counts": {},
+      "last_error": null
+    },
+    {
+      "body_name": "Windsor Township Board of Supervisors",
+      "proceeding_type": "board_of_supervisors",
+      "listing_url": "https://windsortwp.com/board-of-supervisors-meeting-minutes-agenda/",
+      "resolved_url": "https://windsortwp.com/board-of-supervisors-meeting-minutes-agenda/",
+      "status": "ok",
+      "robots_allowed": true,
+      "robots_reason": "allowed",
+      "robots_url": "https://windsortwp.com/robots.txt",
+      "robots_http_status": 200,
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "document_count": 244,
+      "discovered_document_count": 244,
+      "document_origins": [
+        "https://windsortwp.com"
+      ],
+      "document_origin_counts": {
+        "https://windsortwp.com": 244
+      },
+      "blocked_document_origin_counts": {},
+      "last_error": null
+    },
+    {
+      "body_name": "Windsor Township Planning Commission",
+      "proceeding_type": "planning_commission",
+      "listing_url": "https://windsortwp.com/planning-commission-meeting-minutes-agenda/",
+      "resolved_url": "https://windsortwp.com/planning-commission-meeting-minutes-agenda/",
+      "status": "ok",
+      "robots_allowed": true,
+      "robots_reason": "allowed",
+      "robots_url": "https://windsortwp.com/robots.txt",
+      "robots_http_status": 200,
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "document_count": 103,
+      "discovered_document_count": 103,
+      "document_origins": [
+        "https://windsortwp.com"
+      ],
+      "document_origin_counts": {
+        "https://windsortwp.com": 103
+      },
+      "blocked_document_origin_counts": {},
+      "last_error": null
+    }
+  ],
+  "audit_plan_sha256": {
+    "metadata-plan-fresh.json": "2436c83fdf13d3efc4695113689e388ea9b7ef4d77c4a32a88ba8441f656402e",
+    "metadata-plan-v2.json": "24d8ec2936861d93f3b0d32372587f9c62494fb2fa93b5d2f5e42ed57073d2d6",
+    "metadata-plan-v3.json": "cd713ec8120c05801811e9d1aed9adfcf73e8e0a86bdbad353324b8b49956123"
+  }
+}

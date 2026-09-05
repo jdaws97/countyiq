@@ -112,7 +112,6 @@ def test_movers_orders_by_delta_and_exposes_previous_snapshot(monkeypatch):
     cursor = _Cursor(rows)
     monkeypatch.setattr(radar, "get_cursor", _cursor_context(cursor))
     monkeypatch.setattr(radar, "_require_radar_sources", lambda _cur, **_kw: None)
-    monkeypatch.setattr(radar, "source_use_allowed", lambda *_args, **_kw: False)
 
     response = radar.radar_movers(
         view="opportunity",
@@ -141,7 +140,6 @@ def test_list_views_accept_acreage_and_class_filters(monkeypatch):
     cursor = _Cursor([])
     monkeypatch.setattr(radar, "get_cursor", _cursor_context(cursor))
     monkeypatch.setattr(radar, "_require_radar_sources", lambda _cur, **_kw: None)
-    monkeypatch.setattr(radar, "source_use_allowed", lambda *_args, **_kw: False)
 
     radar.opportunity_scores(
         min_score=30,

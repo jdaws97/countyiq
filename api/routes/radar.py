@@ -22,7 +22,7 @@ from api.lib.response_types import (
 )
 from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import open_data_source_key
-from api.lib.source_policy import require_source_use, source_use_allowed
+from api.lib.source_policy import require_source_use
 
 router = APIRouter(tags=["radar"])
 
@@ -54,7 +54,7 @@ RADAR_ROW_COLUMNS = """
     dm.score_version, dm.computed_at,
     dm.previous_score, dm.previous_opportunity_score, dm.score_delta,
     dm.opportunity_delta, dm.previous_computed_at, dm.is_new,
-    CASE WHEN %(show_owner)s THEN p.owner_full ELSE NULL END AS owner_full,
+    p.owner_full,
     p.propadr, p.municipality, p.acres, p.aprtotal, p.class
 """
 
@@ -103,7 +103,6 @@ def _serialize_radar_row(
     row: dict,
     reason_scope: set[str] | None = None,
     *,
-    allow_people: bool = False,
     score_column: str = "score",
 ) -> RadarParcelPayload:
     d = dict(row)
@@ -116,10 +115,7 @@ def _serialize_radar_row(
     if score_column != "score":
         d["score"] = d.get(score_column)
 
-    presentation_signals = sanitize_signals_for_public(
-        d.get("signals"),
-        allow_people=allow_people,
-    )
+    presentation_signals = sanitize_signals_for_public(d.get("signals"))
     if reason_scope is not None and isinstance(presentation_signals, dict):
         presentation_signals = {
             key: value
@@ -194,9 +190,6 @@ def _list_view(
 
     with get_cursor() as cur:
         _require_radar_sources(cur, include_tax_claims=view != "readiness")
-        params["show_owner"] = source_use_allowed(
-            cur, open_data_source_key(), "person_level_display"
-        )
         cur.execute(f"""
             SELECT {RADAR_ROW_COLUMNS}
             FROM public.development_momentum dm
@@ -231,7 +224,6 @@ def _list_view(
             _serialize_radar_row(
                 r,
                 READINESS_SIGNAL_KEYS if view == "readiness" else None,
-                allow_people=bool(params["show_owner"]),
                 score_column=payload_column,
             )
             for r in rows
@@ -357,9 +349,6 @@ def radar_movers(
 
     with get_cursor() as cur:
         _require_radar_sources(cur)
-        params["show_owner"] = source_use_allowed(
-            cur, open_data_source_key(), "person_level_display"
-        )
         cur.execute(f"""
             SELECT {RADAR_ROW_COLUMNS}
             FROM public.development_momentum dm
@@ -387,7 +376,6 @@ def radar_movers(
         "parcels": [
             _serialize_radar_row(
                 r,
-                allow_people=bool(params["show_owner"]),
                 score_column=payload_column,
             )
             for r in rows

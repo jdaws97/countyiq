@@ -1,4 +1,4 @@
-"""Pass 1 sends only clusters that can reach a customer surface."""
+"""Pass 1 cluster selection includes customer-visible person identity."""
 
 from countyiq.lib.entity_types import classify_entity, is_organization_name
 from countyiq.lib.pass1_entity_verification import (
@@ -16,18 +16,18 @@ CLUSTERS = [
 ]
 
 
-def test_person_only_clusters_are_skipped_by_default(monkeypatch) -> None:
+def test_person_only_clusters_are_included_by_default(monkeypatch) -> None:
     monkeypatch.delenv("COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS", raising=False)
-    kept, skipped = select_pass1_clusters(CLUSTERS)
-    assert kept == CLUSTERS[1:]
-    assert skipped == 1
-
-
-def test_env_flag_restores_person_clusters(monkeypatch) -> None:
-    monkeypatch.setenv("COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS", "true")
     kept, skipped = select_pass1_clusters(CLUSTERS)
     assert kept == CLUSTERS
     assert skipped == 0
+
+
+def test_env_flag_can_disable_person_clusters(monkeypatch) -> None:
+    monkeypatch.setenv("COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS", "false")
+    kept, skipped = select_pass1_clusters(CLUSTERS)
+    assert kept == CLUSTERS[1:]
+    assert skipped == 1
 
 
 def test_explicit_argument_overrides_environment(monkeypatch) -> None:
@@ -38,6 +38,10 @@ def test_explicit_argument_overrides_environment(monkeypatch) -> None:
 
 def test_organization_detection_matches_owner_classifier() -> None:
     assert cluster_involves_organization(["SMITH JOHN", "SMITH FAMILY TRUST"])
+    assert cluster_involves_organization(["211 INVESTORS", "213 INVESTORS"])
+    assert cluster_involves_organization(
+        ["JEFFERSON SEWER AUTH", "JEFFERSON SEWER AUTHOR"]
+    )
     assert not cluster_involves_organization(["SMITH JOHN", "SMITH JON"])
     assert classify_entity("COUNTY OF YORK") == "government"
     assert is_organization_name("MAPLE ST HOLDINGS LLC")
@@ -47,4 +51,6 @@ def test_organization_detection_matches_owner_classifier() -> None:
 def test_candidate_query_excludes_registered_agent_hubs() -> None:
     assert "hub_addresses" in CANDIDATE_CLUSTERS_QUERY
     assert f"COUNT(*) >= {SHARED_ADDRESS_HUB_LIMIT}" in CANDIDATE_CLUSTERS_QUERY
-    assert "NOT IN (SELECT office_address FROM hub_addresses)" in CANDIDATE_CLUSTERS_QUERY
+    assert (
+        "NOT IN (SELECT office_address FROM hub_addresses)" in CANDIDATE_CLUSTERS_QUERY
+    )

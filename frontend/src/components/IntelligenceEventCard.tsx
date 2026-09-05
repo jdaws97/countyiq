@@ -20,6 +20,9 @@ function eventColor(event: IntelligenceEvent): string {
 export default function IntelligenceEventCard({
   event,
   expandedByDefault = false,
+  printEvidence = false,
+  expanded: controlledExpanded,
+  onExpandedChange,
   showTriage = false,
   triageStatus,
   isNew = false,
@@ -27,12 +30,20 @@ export default function IntelligenceEventCard({
 }: {
   event: IntelligenceEvent
   expandedByDefault?: boolean
+  printEvidence?: boolean
+  expanded?: boolean
+  onExpandedChange?: (expanded: boolean) => void
   showTriage?: boolean
   triageStatus?: TriageStatus
   isNew?: boolean
   onTriage?: (status: TriageStatus | null) => void
 }) {
-  const [expanded, setExpanded] = useState(expandedByDefault)
+  const [localExpanded, setLocalExpanded] = useState(expandedByDefault)
+  const expanded = controlledExpanded ?? localExpanded
+  const toggleExpanded = () => {
+    setLocalExpanded(!expanded)
+    onExpandedChange?.(!expanded)
+  }
   const [, setWatchRevision] = useState(0)
 
   useEffect(() => {
@@ -41,7 +52,10 @@ export default function IntelligenceEventCard({
     return () => window.removeEventListener('countyiq-watchlist-changed', refresh)
   }, [])
 
-  const eventDate = formatShortDate(event.event_date ?? event.detected_at)
+  const eventDate = event.event_date
+    ? formatShortDate(event.event_date)
+    : 'Event date unverified'
+  const proceedingDetails = event.sources.find((source) => [2, 3].includes(Number(source.details?.contract_version)))?.details
   const confidence = event.interpretation.kind === 'llm' && event.confidence != null
     ? Math.round(event.confidence * 100)
     : null
@@ -59,11 +73,13 @@ export default function IntelligenceEventCard({
       <div className="intelligence-card-topline">
         <div className="intelligence-card-badges">
           {isNew && <Badge color="var(--accent-gold)">New since last visit</Badge>}
-          <Badge color={eventColor(event)}>{formatLabel(event.event_type)}</Badge>
+          <Badge color={eventColor(event)}>{event.event_type === 'scoped_decision' && typeof proceedingDetails?.decision_scope === 'string' ? formatLabel(proceedingDetails.decision_scope) + ' decision' : formatLabel(event.event_type)}</Badge>
           <Badge color={event.category === 'development' ? 'var(--accent-cyan)' : 'var(--accent-blue)'}>{formatLabel(event.category)}</Badge>
           {triageStatus && <Badge color={triageStatus === 'reviewed' ? 'var(--accent-green)' : 'var(--text-muted)'}>{triageStatus}</Badge>}
         </div>
-        <time dateTime={event.event_date ?? event.detected_at}>{eventDate}</time>
+        {event.event_date
+          ? <time dateTime={event.event_date}>{eventDate}</time>
+          : <span title={'First observed ' + formatShortDate(event.detected_at)}>{eventDate}</span>}
       </div>
 
       <h2>{event.title}</h2>
@@ -73,6 +89,13 @@ export default function IntelligenceEventCard({
 
       <div className="intelligence-card-meta">
         {event.municipality && <span>{event.municipality}</span>}
+        {proceedingDetails?.record_status === 'scheduled' && <span>Scheduled item · outcome unverified</span>}
+        {proceedingDetails?.record_status === 'recommendation' && <span>Recommendation · final decision unverified</span>}
+        {typeof proceedingDetails?.matter_category === 'string' && <span>{formatLabel(proceedingDetails.matter_category)}</span>}
+        {proceedingDetails?.discovery_eligible === false && <span>Property history</span>}
+        {typeof proceedingDetails?.decision_authority === 'string' && <span>{proceedingDetails.decision_authority}</span>}
+        {proceedingDetails?.identity_status === 'needs_review' && <span>Source identity conflict · linking requires review</span>}
+        {proceedingDetails?.location_status === 'location_not_resolved' && Array.isArray(proceedingDetails.parcel_references) && proceedingDetails.parcel_references.length > 0 && <span>Parcel location unverified</span>}
         <span>{event.sources.length} evidence receipt{event.sources.length === 1 ? '' : 's'}</span>
         {confidence !== null && <span>{confidence}% confidence</span>}
         {event.interpretation.kind === 'deterministic' && <span>Recorded source change</span>}
@@ -80,7 +103,7 @@ export default function IntelligenceEventCard({
       </div>
 
       <div className="intelligence-card-actions" data-print-hidden>
-        <Button tone="secondary" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+        <Button tone="secondary" type="button" aria-expanded={expanded} onClick={toggleExpanded}>
           {expanded ? 'Hide details' : 'Review details & evidence'}
         </Button>
         {showTriage && (
@@ -95,8 +118,8 @@ export default function IntelligenceEventCard({
         )}
       </div>
 
-      {expanded && (
-        <div className="intelligence-card-details">
+      {(expanded || printEvidence) && (
+        <div className="intelligence-card-details" hidden={!expanded} data-print-evidence={printEvidence || undefined}>
           <div className="insight-grid">
             <InsightBlock label="What happened" accent={eventColor(event)}>{event.what_happened}</InsightBlock>
             <InsightBlock label="Why it matters" accent="var(--accent-purple)">{event.why_it_matters}</InsightBlock>

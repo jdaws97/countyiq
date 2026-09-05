@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
-PASS2_SCORING_VERSION = "2026-08-30.3"
+PASS2_SCORING_VERSION = "2026-09-05.1"
 
 
 def enforce_production_gate(score: dict, errors: list[str]) -> dict:
@@ -26,7 +26,22 @@ def _normalized(value: Any) -> str:
     if value is None:
         return ""
     text = value if isinstance(value, str) else json.dumps(value, sort_keys=True)
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", text.lower()).split())
+    text = re.sub(
+        r"(?<=\d)\s+(million|billion|thousand)\b",
+        lambda match: {"million": "m", "billion": "b", "thousand": "k"}[match[1].lower()],
+        text,
+        flags=re.I,
+    )
+    normalized = " ".join(re.sub(r"[^a-z0-9]+", " ", text.lower()).split())
+    numbers = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty".split()
+    normalized = re.sub(
+        r"\b(?:" + "|".join(numbers) + r")\b",
+        lambda match: str(numbers.index(match[0])),
+        normalized,
+    )
+    # A count of owners already denotes separate owners. Retain qualifiers
+    # elsewhere: 'different owner' is an identity claim, not a cardinal count.
+    return re.sub(r"\b(\d+) (?:different|distinct) (owners?)\b", r"\1 \2", normalized)
 
 
 def _match_tokens(value: Any) -> list[str]:
@@ -70,7 +85,7 @@ def _ordered_token_match(value: Any, alternative: str, max_gap: int = 6) -> bool
 def _contains_any(value: Any, alternatives: list[str]) -> bool:
     haystack = _normalized(value)
     return any(
-        _normalized(alternative) in haystack or _ordered_token_match(value, alternative)
+        f" {_normalized(alternative)} " in f" {haystack} " or _ordered_token_match(value, alternative)
         for alternative in alternatives
     )
 
@@ -78,7 +93,14 @@ def _contains_any(value: Any, alternatives: list[str]) -> bool:
 def _forbidden_assertions(value: Any, claims: list[str]) -> list[str]:
     """Return prohibited claims unless their sentence explicitly disclaims them."""
     text = value if isinstance(value, str) else json.dumps(value, sort_keys=True)
-    segments = [part for part in re.split(r"[.!?;\n]+", text) if part.strip()]
+    # Preserve decimal numbers, and prevent a disclaimer in one contrastive
+    # clause from concealing an assertion in the next.
+    segments = [
+        part for part in re.split(
+            r"(?<!\d)\.|\.(?!\d)|[!?;\n]+|\b(?:but|however|yet|although)\b",
+            text, flags=re.I,
+        ) if part.strip()
+    ]
     found = []
     negations = {
         "no",
@@ -90,6 +112,9 @@ def _forbidden_assertions(value: Any, claims: list[str]) -> list[str]:
         "unproven",
         "unsupported",
         "unverified",
+        "unestablished",
+        "unconfirmed",
+        "missing",
         "unclear",
         "unknown",
         "cannot",
@@ -399,7 +424,10 @@ def score_pass3(parsed: dict | None, fixture: dict) -> dict:
     }
     brief = str(parsed.get("brief") or "")
     reasoning = str(parsed.get("assessment_reasoning") or "")
-    text = f"{reasoning}\n{brief}"
+    # The customer sees all three cited prose fields. Questions do not count
+    # as factual assertions and cannot satisfy missing evidence anchors.
+    risk = str(parsed.get("top_risk") or "")
+    text = f"{reasoning}\n{brief}\n{risk}"
     cited_in_text = set(_SIGNAL_CITATION_RE.findall(text))
     declared = {
         str(item) for item in parsed.get("citations") or [] if isinstance(item, str)

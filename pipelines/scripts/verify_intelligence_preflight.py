@@ -122,7 +122,7 @@ def _pass2_review_check(receipt_path: Path | None) -> dict:
     return {
         "ok": ok,
         "reason": (
-            "all stability cases human-approved"
+            "all stability cases approved"
             if ok
             else "receipt, fixture hash, reviewer, date, or case approvals are incomplete"
         ),
@@ -206,7 +206,8 @@ def build_report(
     repository_heads = _repository_schema_heads()
     expected_revision = repository_heads[0] if len(repository_heads) == 1 else None
     revision_rows = database.execute("SELECT version_num FROM alembic_version") or []
-    revision = revision_rows[0][0] if revision_rows else None
+    database_revisions = sorted(row[0] for row in revision_rows)
+    revision = database_revisions[0] if len(database_revisions) == 1 else None
     integrity_rows = []
     integrity_error = None
     if expected_revision is not None and revision == expected_revision:
@@ -244,7 +245,7 @@ def build_report(
             )
         else:
             integrity_error = (
-                f"schema revision {revision or 'base'} does not match repository "
+                f"schema revision {revision or database_revisions or 'base'} does not match repository "
                 f"head {expected_revision}; integrity views were not queried"
             )
     gate_rate = None
@@ -335,6 +336,8 @@ def build_report(
             "ok": True,
             "reason": "no additional expanded-label receipt required for this pass",
         }
+    from countyiq.lib.quality_release import check_quality_release
+    quality_release = check_quality_release(target_pass)
     gate_rate_ok = gate_rate is None or bool(gate_rate["ok"])
     estimate_error = None
     try:
@@ -354,6 +357,7 @@ def build_report(
             and review["ok"]
             and gate_rate_ok
             and estimate_ok
+            and quality_release["ok"]
         ),
         "checks": {
             "schema_at_repository_head": (
@@ -364,11 +368,14 @@ def build_report(
             "human_review": review["ok"],
             "gate_pass_rate": gate_rate_ok,
             "estimate_available": estimate_ok,
+            "quality_release": quality_release["ok"],
         },
+        "quality_release": quality_release,
         "first_run_for_pass": first_run,
         "gate_pass_rate": gate_rate,
         "revision": revision,
         "repository_heads": list(repository_heads),
+        "database_revisions": database_revisions,
         "integrity": integrity,
         "integrity_error": integrity_error,
         "runtime_controls": controls,

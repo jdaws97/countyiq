@@ -19,13 +19,14 @@ from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, PASS3B_FIELD_CONTR
 
 # Static instruction block. Sent as a byte-identical system message on every
 # rollup call so providers with implicit prompt caching can reuse it.
-_P3B_SYSTEM_TEMPLATE = """You are analyzing a real-estate investor's entire portfolio of parcels in {county_context}. Your job is to write a single PORTFOLIO-level intelligence brief for another investor deciding whether the owner is a compelling acquisition target (buying them out) or competitor to watch.
+_P3B_SYSTEM_TEMPLATE = """You are summarizing documented portfolio activity in {county_context}. Help a customer verify ownership, concentration, material changes, and missing evidence. Do not recommend buying an owner out or competing with them.
 
 TASKS:
+0. Set urgency to none. Do not infer seller motivation, willingness to sell, beneficial ownership, financing, or development intent. A strategy other than unclear requires explicit longitudinal records. State missing evidence and a concrete verification step.
 1. Identify the portfolio strategy: accumulator | flipper | holder | distressed | institutional | unclear.
 2. Identify concentration risk (geographic clustering, asset class concentration, timing).
-3. Identify the single biggest pattern an outside investor should notice (e.g., "3 of 6 parcels show tax distress — owner appears to be deleveraging").
-4. Commit to a recommendation: pursue_acquisition | monitor | compete | none. Only emit "monitor" when evidence_strength is "weak" — otherwise commit.
+3. Identify the single biggest pattern an outside investor should notice (e.g., "3 of 6 parcels have recorded tax claims; seller motivation is unknown").
+4. Commit to a recommendation: investigate | watch | insufficient_evidence. Investigate requires a specific documented portfolio activity and a concrete unresolved question, such as verifying repeated acquisitions or recorded claims across parcels. Watch a documented change without corroborated activity needing follow-up now. Use insufficient_evidence for static concentration, neighboring ownership, or missing records alone. A generic suggestion to check deeds or zoning does not justify investigation. Watching is valid at any evidence strength. Investigate means verify the records, never buy or compete.
 5. Output confidence in [0.0, 1.0] for the recommendation.
 6. concentration_notes, key_pattern, top_risk, and narrative must each cite
    at least one listed signal as [Signal: key] and/or one listed parcel as
@@ -38,12 +39,12 @@ Return ONE JSON object:
   "portfolio_strategy":  "accumulator|flipper|holder|distressed|institutional|unclear",
   "concentration_notes": "1 cited sentence",
   "key_pattern":         "1-2 cited sentences naming the portfolio-level pattern",
-  "recommendation":      "pursue_acquisition|monitor|compete|none",
-  "urgency":             "urgent_30d|near_term_90d|long_term_12mo|none",
+  "recommendation":      "investigate|watch|insufficient_evidence",
+  "urgency":             "none",
   "top_risk":            "1 cited sentence",
   "evidence_strength":   "strong|moderate|weak",
   "confidence":          <float in [0.0, 1.0]>,
-  "narrative": "3-5 paragraph portfolio brief citing signals as [Signal: key] and parcels as [Parcel: PIDN]. Must be consistent with the structured fields above.",
+  "narrative": "1-2 short paragraph portfolio activity summary citing signals as [Signal: key] and parcels as [Parcel: PIDN]. Must be consistent with the structured fields above.",
   "citations":        ["signal_key_1", "signal_key_2"],
   "parcel_citations": ["PIDN1", "PIDN2"]
 }}
@@ -83,7 +84,7 @@ PROMPT_VERSION = _hashlib.sha256(
 
 # Vocabulary clamps for safe parsing.
 VALID_STRATEGIES     = {"accumulator", "flipper", "holder", "distressed", "institutional", "unclear"}
-VALID_RECOMMENDATIONS = {"pursue_acquisition", "monitor", "compete", "none"}
+VALID_RECOMMENDATIONS = {"investigate", "watch", "insufficient_evidence"}
 VALID_URGENCY         = {"urgent_30d", "near_term_90d", "long_term_12mo", "none"}
 VALID_EVIDENCE        = {"strong", "moderate", "weak"}
 
@@ -144,7 +145,7 @@ OWNER_PORTFOLIO_QUERY = """
 
 
 PORTFOLIO_EVIDENCE_QUERY = """
-    SELECT e.pidn, e.signal_key, e.validation_status,
+    SELECT e.pidn, e.signal_key, e.active_inference_id, e.validation_status,
            e.adjusted_significance, e.validation_reasoning,
            e.evidence_data, e.validated_at, e.confidence,
            p.municipality
@@ -212,8 +213,8 @@ def _format_portfolio_evidence(rows: list[dict]) -> str:
             f"  - Evidence refs: [Signal: {s['signal_key']}] [Parcel: {pidn}]\n"
             f"    {s['signal_key']}: {s['validation_status']} "
             f"({s['adjusted_significance']}) — "
-            f"{(s.get('validation_reasoning') or '')[:180]} | source="
-            f"{json.dumps(s.get('evidence_data') or {}, sort_keys=True, default=str)[:240]}"
+            f"source="
+            f"{json.dumps(s.get('evidence_data') or {}, sort_keys=True, default=str)}"
             for s in sigs
         ]
         chunks.append(f"### Parcel {pidn} — {muni}\n" + "\n".join(sig_lines))
@@ -254,11 +255,22 @@ def parse_owner_brief_output(output: object) -> dict:
         "portfolio_strategy":  _clamp_enum(output.get("portfolio_strategy"), VALID_STRATEGIES, "unclear"),
         "concentration_notes": output.get("concentration_notes") or "",
         "key_pattern":         output.get("key_pattern") or "",
-        "recommendation":      _clamp_enum(output.get("recommendation"), VALID_RECOMMENDATIONS, "monitor"),
+        "recommendation":      _clamp_enum(output.get("recommendation"), VALID_RECOMMENDATIONS, "insufficient_evidence"),
         "urgency":             _clamp_enum(output.get("urgency"), VALID_URGENCY, "none"),
         "top_risk":            output.get("top_risk") or "",
         "evidence_strength":   _clamp_enum(output.get("evidence_strength"), VALID_EVIDENCE, "moderate"),
         "confidence":          _clamp_float_01(output.get("confidence")),
         "citations":           [c for c in citations if isinstance(c, str)],
         "parcel_citations":    [c for c in parcel_citations if isinstance(c, str)],
+    }
+
+
+def owner_brief_context(owner: dict, evidence_rows: list[dict]) -> dict:
+    """Stable non-signal facts supplied to the portfolio brief prompt."""
+    return {
+        **owner,
+        "signal_municipalities": {
+            row["pidn"]: row.get("municipality") or None
+            for row in evidence_rows
+        },
     }

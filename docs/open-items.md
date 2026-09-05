@@ -58,9 +58,8 @@ durable architectural decisions belong in `docs/decisions.md`.
   frozen corpora at a fraction of the cost, but the corpora are small. Promote
   by setting `COUNTYIQ_PASS{N}_MODEL` for the first canary rather than editing
   the code defaults until the canary's gate pass rate and sampled audit hold.
-- Re-enable person-only Pass 1 clusters (`COUNTYIQ_PASS1_INCLUDE_PERSON_CLUSTERS`)
-  only when a customer surface consumes person merges; today person display is
-  policy-disabled and the assemblage signal matches raw owner strings.
+- Person-only Pass 1 clusters now default on after the 2026-09-04 audit; size
+  and fund that larger canary/backfill estimate rather than silently disabling them.
 - Re-run `pipelines/scripts/backtest_radar_weights.py` after the first live
   proceedings backfill and refresh `OPPORTUNITY_WEIGHTS` with the regenerated
   report; `municipal_action` and `entity_assemblage` currently carry priors
@@ -74,10 +73,12 @@ durable architectural decisions belong in `docs/decisions.md`.
 - Measure the live candidate and token reduction from the shipped two-signal
   interpretive gate after the York parcel backfill; do not estimate savings
   from fixture counts.
-- Human-review the 20 selected high-disagreement Pass 2 cases once, before the
-  first Pass 2 run; after that the preflight's live gate pass rate replaces
-  the receipt. Luna remains N=1 unless a changed challenger or prompt clears
-  the reviewed gold.
+- The refreshed 20-case Pass 2 release subset was reviewed on 2026-09-04 by
+  OpenAI Codex GPT-5.6 Sol at the product owner's direction
+  (`docs/research/pass2-rubric-review-2026-09-04.md`); its hash-bound receipt
+  lives under ignored `receipts/`. The remaining 80 expanded cases still carry
+  generated labels. After the first Pass 2 run the preflight's live gate pass
+  rate replaces the receipt.
 - After the first Pass 1 backfill, review the person/organization merge queue
   (`review_intelligence_contradictions.py list`) as one batch session; every
   other same-evidence flip is resolved by the recorded policy.

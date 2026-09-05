@@ -92,8 +92,8 @@ SIGNAL_INTERPRETATIONS: dict[str, str] = {
     "ownership_change": "The county parcel record shows a non-nominal sale within the scoring window.",
     "vacancy": "No county building footprint intersects the parcel and the parcel also passes low-value filters.",
     "tax_distress": "The PIDN appears with a positive balance in the current governed tax-claim listing.",
-    "assemblage": "The parcel geometry intersects several parcels associated with different recorded owner names.",
-    "entity_assemblage": "The same normalized recorded owner name appears on touching parcels after a recent acquisition.",
+    "assemblage": "The parcel geometry intersects several parcels held by different resolved owners (name variants merged).",
+    "entity_assemblage": "The same resolved owner (name variants merged) holds touching parcels after a recent acquisition.",
     "penndot_project": "The closest non-completed PennDOT project point falls within the configured 800 m screen.",
     "development_overlay": "The parcel center point lies inside a county-published municipal development overlay.",
     "local_traffic_activity": "A qualifying traffic-count point from the last five years falls within 400 m of the parcel center.",
@@ -116,7 +116,7 @@ SIGNAL_CAVEATS: dict[str, str] = {
     "vacancy": "Missing footprints can reflect source lag or mapping omissions; this signal does not prove the land is vacant or buildable.",
     "tax_distress": "Exact claims and balances are suppressed under source policy. Confirm current status and payoff directly with the Tax Claim Bureau.",
     "assemblage": "This is a parcel-topology pattern. It can indicate either opportunity or fragmented ownership and does not prove assemblage activity.",
-    "entity_assemblage": "Exact owner-name matching can combine or split legal entities and does not prove coordinated acquisition intent.",
+    "entity_assemblage": "Owner resolution merges recorded name variants but can still combine or split legal entities; it does not prove coordinated acquisition intent.",
     "penndot_project": "A mapped project point and published status do not establish parcel impact, access changes, funding, or completion timing.",
     "development_overlay": "An overlay is a planning or regulatory context layer, not automatic development permission.",
     "local_traffic_activity": "The displayed value is the source's reported volume for a dated count and is not assumed to be current AADT.",
@@ -127,35 +127,6 @@ SIGNAL_CAVEATS: dict[str, str] = {
     "flood_zone": "This is not an official flood determination. Floodplain limits, structures, elevation, and insurance requirements require parcel-specific confirmation.",
     "conservation_easement": "County inventory matching is a strong exclusion screen, but the recorded deed and any permitted building area control.",
     "ag_security": "Pennsylvania states ASA enrollment does not itself prevent sale, subdivision, or development; it is not a conservation easement.",
-}
-
-# Signal JSON is assembled from deterministic source evidence plus optional
-# LLM validation text. These keys can carry natural-person identity or prose
-# that repeats it, so they are removed when the governing source does not
-# permit person-level display. Place/business/project names remain available.
-PERSON_SIGNAL_FIELDS = {
-    "aliases",
-    "applicant_name",
-    "buyer_name",
-    "canonical_name",
-    "claim",
-    "claimant_name",
-    "cross_references",
-    "curr_owner",
-    "current_owner",
-    "grantor",
-    "linked_names",
-    "mail_addr_full",
-    "mail_address",
-    "own_name1",
-    "own_name2",
-    "owner_full",
-    "owner_name",
-    "prev_owner",
-    "related_entities",
-    "seller_name",
-    "supporting_text",
-    "validation_reasoning",
 }
 
 TAX_SIGNAL_PRIVATE_FIELDS = {"total_owed", "years_delinquent", "oldest_year"}
@@ -204,33 +175,18 @@ def signal_priority(key: str) -> int:
 
 def sanitize_signals_for_public(
     signals: SignalMapping | None,
-    *,
-    allow_people: bool,
 ) -> dict[str, object] | None:
-    """Return public-safe signal JSON under the current person-use policy."""
+    """Return public-safe signal JSON.
+
+    Owner identity is public record and passes through unchanged. Exact
+    tax-claim facts are the one restricted surface: the property-level boolean
+    stays visible, balances and claim history do not.
+    """
 
     if signals is None:
         return None
 
-    def sanitize(value: object) -> object:
-        mapping = _as_mapping(value)
-        if mapping is not None:
-            return {
-                str(key): sanitize(item)
-                for key, item in mapping.items()
-                if allow_people or str(key).lower() not in PERSON_SIGNAL_FIELDS
-            }
-        if isinstance(value, (list, tuple)):
-            return [sanitize(item) for item in value]
-        return value
-
-    public_signals = {
-        str(key): sanitize(value)
-        for key, value in signals.items()
-    }
-    # Tax-claim policy suppresses exact claim facts even where a separate
-    # source would permit natural-person display. The property-level boolean
-    # remains visible and useful without exposing balances or claim history.
+    public_signals = {str(key): value for key, value in signals.items()}
     tax_signal = _as_mapping(public_signals.get("tax_distress"))
     if tax_signal is not None:
         cleaned_tax = dict(tax_signal)
@@ -459,7 +415,7 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
         raw = [
             _fact("Touching same-name parcels", ev.get("contiguous_same_owner_parcels")),
             _fact("Latest acquisition", ev.get("latest_acquisition")),
-            _fact("Match basis", "exact normalized recorded owner name"),
+            _fact("Match basis", "resolved owner identity (recorded name variants merged)"),
         ]
     elif key == "penndot_project":
         raw = [

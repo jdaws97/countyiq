@@ -261,12 +261,11 @@ def test_owner_brief_requires_known_signal_and_parcel_markers() -> None:
 
     parsed["brief_text"] = "Distress is concentrated [Signal: tax_distress] [Parcel: P1]."
     parsed["evidence_strength"] = "moderate"
-    assert any(
-        "requires weak" in error
-        for error in validate_owner_brief_citations(
-            parsed, {"tax_distress"}, {"P1"}
-        )
-    )
+    parsed["recommendation"] = "watch"
+    parsed["urgency"] = "none"
+    assert validate_owner_brief_citations(parsed, {"tax_distress"}, {"P1"}) == []
+    parsed["urgency"] = "urgent_30d"
+    assert "investigation briefs must not invent urgency" in validate_owner_brief_citations(parsed, {"tax_distress"}, {"P1"})
 
 
 def test_input_hash_changes_with_model_or_prompt_but_source_hash_does_not() -> None:
@@ -314,3 +313,31 @@ def test_pass2_consequence_ignores_only_non_serving_flips() -> None:
         consequential_flip
     )
     assert signal_validation_consequence({"status": "confirmed"}) == []
+
+
+def test_brief_dependencies_bind_parcel_key_and_inference():
+    import pytest
+    from countyiq.lib.intelligence_integrity import signal_version_refs
+    rows = [{"pidn": "123", "signal_key": "growth_area", "active_inference_id": 42}]
+    assert signal_version_refs(rows + rows) == ["signal-version:123:growth_area:42"]
+    assert signal_version_refs([dict(rows[0], pidn=None)], pidn="456") == [
+        "signal-version:456:growth_area:42"
+    ]
+    for invalid in (None, 0, True, "42"):
+        with pytest.raises(ValueError):
+            signal_version_refs([dict(rows[0], active_inference_id=invalid)])
+
+
+def test_owner_context_tracks_municipalities_without_signal_order_churn():
+    from countyiq.lib.pass3_owner_briefs import owner_brief_context
+    from countyiq.lib.intelligence_integrity import content_hash
+    owner = {"owner_id": 1, "canonical_name": "Example", "entity_type": "llc",
+             "pidns": ["1", "2"], "n_parcels": 2}
+    evidence = [{"pidn": "1", "municipality": "York"}, {"pidn": "2", "municipality": None}]
+    before = owner_brief_context(owner, evidence)
+    assert before["signal_municipalities"] == {"1": "York", "2": None}
+    assert content_hash(before) == content_hash(owner_brief_context(owner, list(reversed(evidence))))
+    assert content_hash(before) != content_hash(owner_brief_context(
+        owner, [dict(evidence[0], municipality="Hanover"), evidence[1]]
+    ))
+    assert "signal_municipalities" not in owner

@@ -9,10 +9,10 @@ from countyiq.lib.llm_harness import HarnessResult
 from countyiq.lib.pass1_entity_verification import ENTITY_VERIFICATION_SYSTEM_PROMPT
 from countyiq.lib.pass2_batched_validation import BATCHED_VALIDATION_SYSTEM_PROMPT
 from countyiq.lib.pass_schemas import (
-    PASS0_EXTRACTION_SCHEMA,
     PASS2_BATCHED_VALIDATION_SCHEMA,
     PASS3_BRIEF_SCHEMA,
 )
+from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA
 from eval.protocol import (
     EvalCostLedger,
     EvalCostLimitExceeded,
@@ -43,7 +43,7 @@ def test_pass0_eval_uses_production_schema_system_and_native_pdf():
     config = build_production_eval_config(
         "openai/gpt-5.6-luna", 0, archive_label="test"
     )
-    assert config.json_schema == PASS0_EXTRACTION_SCHEMA
+    assert config.json_schema == PASS0_CLAIMS_SCHEMA
     assert config.system_prompt
     assert config.pdf_engine == "native"
 
@@ -259,13 +259,155 @@ def test_expanded_pass2_corpus_is_stratified_and_explicitly_diagnostic():
     cases = load_frozen_cases(path)
     assert len(cases) == 100
     assert payload["promotion_status"] == "diagnostic_until_human_review"
-    assert payload["cardinality_counts"] == {"2": 54, "3": 29, "4": 17}
-    assert len({tuple(case["signal_combination"]) for case in cases}) == 24
+    assert payload["cardinality_counts"] == {"2": 42, "3": 38, "4": 20}
+    assert len({tuple(case["signal_combination"]) for case in cases}) == 46
+    stability = json.loads((FIXTURES / "p2_expanded_stability20.json").read_text())
+    reviewed_ids = {case["id"] for case in stability["cases"]}
+    assert len(reviewed_ids) == 20
+    assert stability["promotion_status"] == "reviewed_stability_subset"
     for case in cases:
-        assert case["review"]["status"] == (
-            "rubric_generated_requires_human_confirmation"
+        review = case["review"]
+        assert review["rubric"] == "pass2_expanded_v5"
+        if case["id"] in reviewed_ids:
+            assert review["status"] == "rubric_reviewed"
+            assert (
+                review["reviewed_by"]
+                and review["reviewed_at"]
+                and review["review_record"]
+            )
+        else:
+            assert review["status"] == "rubric_generated_requires_human_confirmation"
+        context_keys = sorted(
+            signal["signal_key"] for signal in case["context"]["signals"]
         )
-        assert len(case["labels"]["signals"]) == len(case["signal_combination"])
+        label_keys = sorted(
+            signal["signal_key"] for signal in case["labels"]["signals"]
+        )
+        assert context_keys == sorted(case["signal_combination"])
+        assert label_keys == sorted(case["signal_combination"])
+    for case in stability["cases"]:
+        assert case["review"]["status"] == "rubric_reviewed"
+
+
+def test_expanded_rubric_v5_rules_match_the_review_decisions():
+    from eval.build_expanded_pass2 import (
+        _active_subdivision_label,
+        _entity_assemblage_label,
+        _ownership_change_label,
+        _vacancy_label,
+        _zoning_mismatch_label,
+    )
+
+    # A land-development plan has no lots or dwelling units by design; the
+    # v7 signal filter keeps it, so the rubric must accept "confirmed".
+    land_dev = _active_subdivision_label(
+        {
+            "distance_m": 36.4,
+            "evidence": {
+                "prop_du": 0,
+                "prop_lots": 0,
+                "pt_land_dev": "YES",
+                "total_acres": 5.0,
+            },
+        },
+        {"parcel": {"acres": 5.75}},
+    )
+    assert land_dev["accepted_statuses"] == ["confirmed", "downgraded"]
+
+    # The same plan 231 m from a 0.165-acre lot is not that parcel's plan.
+    far_away = _active_subdivision_label(
+        {
+            "distance_m": 230.7,
+            "evidence": {
+                "prop_du": 0,
+                "prop_lots": 1,
+                "pt_land_dev": "YES",
+                "total_acres": 5.1,
+            },
+        },
+        {"parcel": {"acres": 0.165}},
+    )
+    assert far_away["accepted_statuses"] == ["downgraded", "irrelevant"]
+    partial_site = _active_subdivision_label(
+        {
+            "distance_m": 25,
+            "evidence": {
+                "prop_du": 8,
+                "prop_lots": 1,
+                "pt_land_dev": "YES",
+                "total_acres": 1.2,
+            },
+        },
+        {"parcel": {"acres": 9.87}},
+    )
+    assert partial_site["accepted_statuses"] == ["confirmed", "upgraded"]
+
+    # A residential-class parcel under the $50k vacancy screen may be confirmed.
+    lot = _vacancy_label(
+        {"parcel": {"owner": "Jordan Patel"}},
+        {"evidence": {"structure_count": 0, "aprtotal": 35300, "class": "R"}},
+    )
+    assert lot["accepted_statuses"] == ["confirmed", "downgraded"]
+    zero_value = _vacancy_label(
+        {"parcel": {"owner": "Avery Bennett"}},
+        {"evidence": {"structure_count": 0, "aprtotal": 0, "class": "R"}},
+    )
+    assert zero_value["accepted_statuses"] == ["downgraded", "irrelevant"]
+
+    # Agricultural-conservation zoning against a rural conservation plan is
+    # one land-use family, not a divergence; commercial vs residential is.
+    same_family = _zoning_mismatch_label(
+        {
+            "evidence": {
+                "current_zname": "Agricultural-Conservation Zone",
+                "future_lu": "Rural Conservation / Open Space",
+                "general_lu": "Conservation / Open Space",
+            }
+        }
+    )
+    assert same_family["accepted_statuses"] == ["downgraded", "irrelevant"]
+    rural_shift = _zoning_mismatch_label(
+        {
+            "evidence": {
+                "current_zname": "Rural Living",
+                "future_lu": "Rural Conservation",
+            }
+        }
+    )
+    assert rural_shift["accepted_statuses"] == ["confirmed", "downgraded"]
+    divergent = _zoning_mismatch_label(
+        {
+            "evidence": {
+                "current_zname": "Commercial Shopping",
+                "future_lu": "Low / Medium Density Residential",
+                "general_lu": "Medium Density Residential",
+            }
+        }
+    )
+    assert divergent["accepted_statuses"] == ["confirmed", "downgraded"]
+
+    assemblage = _entity_assemblage_label(
+        {
+            "evidence": {
+                "contiguous_same_owner_parcels": 3,
+                "latest_acquisition": "2026-01-02",
+                "months_since_latest_acquisition": 8,
+            }
+        }
+    )
+    assert assemblage["accepted_significance"] == ["medium", "low"]
+    assert assemblage["required_fact_groups"][0][0] == "3 contiguous parcel"
+
+    organizational = _ownership_change_label(
+        {}, {"evidence": {"price": 375000, "buyer_name_looks_organizational": True}}
+    )
+    assert (
+        "buyer name looks organizational" in organizational["required_fact_groups"][1]
+    )
+    legacy_llc = _ownership_change_label(
+        {}, {"evidence": {"price": 375000, "buyer_is_llc": True}}
+    )
+    assert "buyer is llc" in legacy_llc["required_fact_groups"][1]
 
 
 def test_pass2_deidentification_preserves_roles_without_synthetic_name_artifacts():
@@ -407,6 +549,48 @@ def test_pass2_forbidden_claims_ignore_explicit_disclaimers_only():
     ]
 
 
+@pytest.mark.parametrize("text,claim", [
+    ("Development intent and distress are unconfirmed.", "development intent"),
+    ("Arm's-length status and buyer development intent are unestablished.", "arm's length"),
+    ("Acquisition prices and a verified developer profile are missing.", "developer"),
+    ("There is no verified developer profile and the delinquency rate is 0.0%.", "developer"),
+])
+def test_forbidden_claims_accept_explicit_absence(text, claim):
+    from eval.scoring import _forbidden_assertions
+
+    assert _forbidden_assertions(text, [claim]) == []
+
+
+@pytest.mark.parametrize("text", [
+    "No rezoning is recorded, but the seller is distressed.",
+    "There is no development application; the seller is distressed.",
+    "The buyer is not only a developer but also a distressed seller.",
+    "A development plan is missing. The seller is distressed.",
+])
+def test_disclaimer_cannot_hide_separate_asserted_claim(text):
+    from eval.scoring import _forbidden_assertions
+
+    assert _forbidden_assertions(text, ["distressed"]) == ["distressed"]
+
+
+def test_required_amounts_accept_spelled_out_magnitude_without_changing_value():
+    from eval.scoring import _contains_any
+
+    assert _contains_any("Recorded sale: $1.16 million", ["1.16m", "1,160,000"])
+    assert _contains_any("A $1.5 million acquisition", ["1.5m", "1,500,000"])
+    assert not _contains_any("Recorded sale: $1.6 million", ["1.16m", "1,160,000"])
+    assert not _contains_any("Recorded sale: $11.16 million", ["1.16m", "1,160,000"])
+
+
+def test_required_counts_accept_equivalent_cardinals_without_substring_matches():
+    from eval.scoring import _contains_any
+
+    assert _contains_any("Zero mapped structures", ["0 structures"])
+    assert _contains_any("13 neighbors across twelve owners", ["12 different owners"])
+    assert not _contains_any("13 neighbors across 112 owners", ["12 different owners"])
+    assert not _contains_any("The parcel has a different owner", ["The parcel has an owner"])
+
+
 def test_pass3_scorer_requires_structured_decision_and_grounded_citations():
     case = load_frozen_cases(FIXTURES / "p3_frozen.json")[0]
     labels = case["labels"]
@@ -430,3 +614,69 @@ def test_pass3_scorer_requires_structured_decision_and_grounded_citations():
     assert score_pass3(parsed, case)["gold_pass"]
     parsed["brief"] = "An uncited factual paragraph with no signal marker."
     assert not score_pass3(parsed, case)["gold_pass"]
+
+
+def test_pass3_facts_in_cited_risk_count_but_questions_do_not():
+    case = load_frozen_cases(FIXTURES / "p3_investigation_frozen.json")[0]
+    labels = case["labels"]
+    citations = labels["required_citations"]
+    markers = " ".join(f"[Signal: {key}]" for key in citations)
+    parsed = {field: accepted[0] for field, accepted in labels["accepted_fields"].items()}
+    facts = "; ".join(group[0] for group in labels["required_fact_groups"])
+    parsed.update({"top_signal_key": citations[0], "citations": citations,
+                   "assessment_reasoning": f"Review the documented plan {markers}",
+                   "brief": f"Confirm the plan scope {markers}",
+                   "top_risk": f"{facts} {markers}"})
+    assert score_pass3(parsed, case)["gold_pass"]
+    parsed["key_questions"] = [f"Are these facts true: {facts}?"]
+    parsed["top_risk"] = f"Approval remains unverified {markers}"
+    assert not score_pass3(parsed, case)["required_facts_pass"]
+
+
+@pytest.mark.parametrize("pass_number", [2, 3])
+def test_live_runner_defaults_to_production_pass_protocol(pass_number, monkeypatch, tmp_path):
+    """The CLI must exercise the serving prompt/schema without a legacy-mode flag."""
+    import sys
+    from unittest.mock import MagicMock
+    from eval import eval_runner
+
+    pidns = tmp_path / "pidns.txt"
+    pidns.write_text("test-parcel\n")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-no-network")
+    monkeypatch.setattr(sys, "argv", [
+        "eval_runner", "--model", "openai/gpt-5.6-luna", "--pass", str(pass_number),
+        "--pidns-file", str(pidns), "--output", str(tmp_path), "--limit", "1",
+    ])
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = [{"signal_key": "ownership_change"}]
+    monkeypatch.setattr(eval_runner, "get_connection", lambda: connection)
+    captured = []
+
+    def evaluate(cursor, config, pidn, ledger):
+        captured.append(config)
+        assert pidn == "test-parcel"
+        assert isinstance(ledger, EvalCostLedger)
+        return {
+            "success": True, "elapsed_seconds": 0.1, "raw_output": "{}",
+            "parsed_output": {}, "error": None,
+        }
+
+    expected_route = "run_pass2_batched" if pass_number == 2 else "run_pass3"
+    other_route = "run_pass3" if pass_number == 2 else "run_pass2_batched"
+    monkeypatch.setattr(eval_runner, expected_route, evaluate)
+    monkeypatch.setattr(eval_runner, other_route, lambda *args: pytest.fail("Wrong pass selected"))
+    eval_runner.main()
+
+    assert len(captured) == 1
+    expected = build_production_eval_config(
+        "openai/gpt-5.6-luna", pass_number, archive_label="test"
+    )
+    assert captured[0].system_prompt == expected.system_prompt
+    assert captured[0].json_schema == expected.json_schema
+    assert captured[0].max_tokens == (4096 if pass_number == 2 else 2048)
+    results = json.loads(next(tmp_path.glob("eval_*.json")).read_text())
+    assert results["results"][0]["pass_num"] == pass_number
+    assert results["results"][0]["success"] is True
+    connection.close.assert_called_once()

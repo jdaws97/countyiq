@@ -219,7 +219,6 @@ def _load_municipality_policies(database) -> list[dict]:
         "acquisition_allowed",
         "raw_retention_allowed",
         "derived_product_allowed",
-        "person_level_display_allowed",
         "raw_export_allowed",
         "allowed_origins",
         "reviewed_on",
@@ -232,8 +231,8 @@ def _load_municipality_policies(database) -> list[dict]:
             source_key, municipality_name, body_name, listing_url,
             proceeding_type, rights_status, terms_review_status,
             acquisition_allowed, raw_retention_allowed,
-            derived_product_allowed, person_level_display_allowed,
-            raw_export_allowed, allowed_origins, reviewed_on,
+            derived_product_allowed, raw_export_allowed,
+            allowed_origins, reviewed_on,
             review_due_on, notes
         FROM meta.municipality_source_rights
         ORDER BY municipality_name NULLS LAST, body_name

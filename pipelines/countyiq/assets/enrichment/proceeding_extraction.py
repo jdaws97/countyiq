@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 import requests
 from dagster import AssetExecutionContext, MaterializeResult, MetadataValue, asset
 
+from countyiq.lib.intelligence_common import PROCEEDING_USE_ALLOWED_SQL
 from countyiq.lib.county_config import get_county_config, municipality_source_key
 from countyiq.lib.doc_text import extract_text_from_pdf_bytes
 from countyiq.lib.error_budget import check_error_budget
@@ -26,6 +27,7 @@ from countyiq.lib.intelligence_integrity import (
     record_validation_rejection,
     validate_pass0_extractions,
 )
+from countyiq.lib.proceeding_contract import details_for
 from countyiq.lib.pass0_templates import (
     EXTRACTION_USER_TEMPLATE,
     PASS0_SYSTEM_PROMPT,
@@ -37,7 +39,8 @@ from countyiq.lib.pass_llm_config import (
     PassSpendLimitExceeded,
     resolve_pass_harness,
 )
-from countyiq.lib.pass_schemas import PASS0_EXTRACTION_SCHEMA
+from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA, review_claims
+from countyiq.lib.pass0_templates import document_prompt
 from countyiq.lib.robots import RobotsPolicy
 from countyiq.lib.source_rights import (
     authorize_municipality_sources,
@@ -56,7 +59,7 @@ _MAX_RAW_TEXT_CHARS = 140_000
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"}
 _ROBOTS_PRODUCT_TOKEN = "CountyIQ"
 
-PENDING_PROCEEDINGS_QUERY = """
+PENDING_PROCEEDINGS_QUERY = f"""
     SELECT pp.id,
         pp.body_name,
         pp.meeting_date,
@@ -66,7 +69,10 @@ PENDING_PROCEEDINGS_QUERY = """
         pp.content_hash
     FROM staging.public_proceedings pp
     WHERE pp.valid_to IS NULL
+      AND {PROCEEDING_USE_ALLOWED_SQL}
       AND pp.document_url IS NOT NULL
+      AND pp.metadata_quality->>'status' = 'ready'
+      AND pp.meeting_date <= CURRENT_DATE
     ORDER BY pp.meeting_date DESC
 """
 
@@ -115,6 +121,31 @@ LANDUSE_TERMS = (
     "developer",
     "parcel",
     "tax map",
+    # Municipality-wide policy actions (ordinance_action extractions).
+    "ordinance",
+    "comprehensive plan",
+    "act 537",
+    "official map",
+    "moratori",
+    "lerta",
+    "keystone opportunity",
+    "tax increment",
+    # Explicit public capital work, including the pilot's prefilter misses.
+    "capital project",
+    "construction bid",
+    "park project",
+    "play equipment",
+    "social hall",
+    "substation",
+    "storm drain",
+    "solar project",
+    "roof",
+    "public bid",
+    "bridge project",
+    "bridge work",
+    "pedestrian improvements",
+    "energy storage",
+    "office addition",
 )
 
 NO_LANDUSE_MARKER = "_no_landuse_terms"
@@ -207,6 +238,8 @@ def _write_proceeding_extractions(
                 proposed_tags=extraction.get("event_tags") or [],
                 what_happens_next=extraction.get("what_happens_next"),
                 upcoming_date=extraction.get("upcoming_date"),
+                record_status=extraction.get("record_status"),
+                decision_scope=extraction.get("decision_scope"),
             )
             related_entities = list(
                 dict.fromkeys(
@@ -229,10 +262,10 @@ def _write_proceeding_extractions(
                      event_tags, project_name, related_entities,
                      what_happened, why_it_matters, what_happens_next,
                      upcoming_date, interpretation_generated_at,
-                     active_inference_id)
+                     active_inference_id, extraction_details)
                 VALUES
                     (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s,
-                     %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+                     %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s::jsonb)
                 """,
                 (
                     proceeding_id,
@@ -255,6 +288,7 @@ def _write_proceeding_extractions(
                     extraction.get("what_happens_next"),
                     extraction.get("upcoming_date"),
                     inference_id,
+                    json.dumps(details_for(extraction)),
                 ),
             )
             inserted_count += 1
@@ -322,8 +356,8 @@ def proceeding_extraction(
             pass_number=0,
             archive_label="pass0_extraction",
             reasoning_task=False,
-            default_max_tokens=4096,
-            json_schema=PASS0_EXTRACTION_SCHEMA,
+            default_max_tokens=8192,
+            json_schema=PASS0_CLAIMS_SCHEMA,
             schema_name="pass0_extractions",
             # Static block goes out as a byte-identical system message so
             # providers with implicit prompt caching can reuse it per doc.
@@ -391,6 +425,11 @@ def proceeding_extraction(
     skipped_unchanged = 0
     skipped_prefilter = 0
     errors = 0
+    quarantined_items_count = 0
+    partial_documents = 0
+    coverage_review_documents = 0
+    citation_repairs_count = 0
+    withheld_entity_claims = 0
     spend_limit_reached = False
 
     for (
@@ -417,7 +456,7 @@ def proceeding_extraction(
         pdf_bytes = None
         use_text = bool(raw_text and len(raw_text.strip()) >= _MIN_RAW_TEXT_CHARS)
         verification_text = (
-            raw_text[:_MAX_RAW_TEXT_CHARS] if use_text else ""
+            raw_text if use_text else ""
         )
         source_version = (
             content_hash({
@@ -605,16 +644,14 @@ def proceeding_extraction(
         if not item_budget.claim(log, label="pending proceedings"):
             break
 
-        date_clause = f" dated {meeting_date}" if meeting_date else ""
-        prompt = EXTRACTION_USER_TEMPLATE.format(
-            body_name=body_name,
-            county_name=county.name,
-            state=county.state,
-            proceeding_type=proceeding_type,
-            date_clause=date_clause,
-        )
+        try:
+            prompt = document_prompt(verification_text, body_name=body_name, county_name=county.name,
+                                     state=county.state, proceeding_type=proceeding_type, meeting_date=meeting_date)
+        except ValueError as exc:
+            log.warning("Skipping proceeding %d: %s", proceeding_id, exc)
+            errors += 1
+            continue
         if use_text:
-            prompt += "\n\nDOCUMENT TEXT:\n" + raw_text[:_MAX_RAW_TEXT_CHARS]
             from_raw_text += 1
         else:
             from_pdf += 1
@@ -625,7 +662,7 @@ def proceeding_extraction(
                 prompt,
                 retries=1,
                 archive_key=f"{proceeding_id}",
-                pdf_bytes=pdf_bytes,
+                pdf_bytes=None,  # Indexed local text is the evidence contract, including PDF fallback.
             )
         except PassSpendLimitExceeded as exc:
             spend_limit_reached = True
@@ -647,9 +684,16 @@ def proceeding_extraction(
             errors += 1
             continue
 
-        extractions = (result.parsed or {}).get("extractions", [])
+        extractions, rejected_items = [], []
         model_used = Path(config.model_path).name
-        validation_errors = validate_pass0_extractions(extractions, verification_text)
+        try:
+            review = review_claims(result.parsed, verification_text, meeting_date=meeting_date)
+            extractions, rejected_items = review["extractions"], review["rejected_items"]
+            validation_errors = validate_pass0_extractions(extractions, verification_text, meeting_date=meeting_date, require_contract=True)
+            if rejected_items and not extractions:
+                validation_errors.extend(f"item {item['index']}: {'; '.join(item['errors'])}" for item in rejected_items)
+        except ValueError as exc:
+            validation_errors = [str(exc)]
         if validation_errors:
             _update_pass_status(
                 database,
@@ -678,6 +722,15 @@ def proceeding_extraction(
             continue
 
         try:
+            if rejected_items:
+                record_validation_rejection(
+                    database, subject_key=f"proceeding:{proceeding_id}", pass_number=0,
+                    output_kind="proceeding_extraction", source_hash=source_hash, input_hash=input_hash,
+                    requested_model=config.model_path, prompt_version=PROMPT_VERSION,
+                    errors=[f"item {item['index']}: {'; '.join(item['errors'])}" for item in rejected_items],
+                )
+                log.warning("Proceeding %d: quarantined %d item(s); retaining %d validated item(s)",
+                            proceeding_id, len(rejected_items), len(extractions))
             gate = record_inference_decision(
                 database,
                 subject_key=f"proceeding:{proceeding_id}",
@@ -690,7 +743,10 @@ def proceeding_extraction(
                 served_model=result.metadata.get("served_model"),
                 provider=result.metadata.get("provider"),
                 prompt_version=PROMPT_VERSION,
-                payload={"extractions": extractions},
+                payload={"extractions": extractions, "model_claims": result.parsed,
+                         "rejected_items": rejected_items, "accepted_indices": review["accepted_indices"],
+                         "citation_repairs": review["citation_repairs"], "coverage": review["coverage"],
+                         "field_rejections": review["field_rejections"]},
                 semantic_decision=pass0_semantic_decision(extractions),
                 citations=[
                     extraction["supporting_text"]
@@ -754,9 +810,17 @@ def proceeding_extraction(
             )
 
         extractions_inserted += inserted_for_proceeding
+        quarantined_items_count += len(rejected_items)
+        partial_documents += int(bool(rejected_items or review["field_rejections"]))
+        coverage_review_documents += int(review["coverage"]["needs_review"])
+        citation_repairs_count += len(review["citation_repairs"])
+        withheld_entity_claims += len(review["field_rejections"])
         proceedings_processed += 1
         _update_pass_status(
-            database, proceeding_id, "complete", input_hash or ""
+            database, proceeding_id, "complete", input_hash or "",
+            json.dumps({"quarantined_items": rejected_items, "coverage": review["coverage"],
+                        "citation_repairs": review["citation_repairs"], "field_rejections": review["field_rejections"]})
+            if rejected_items or review["coverage"]["needs_review"] or review["citation_repairs"] or review["field_rejections"] else None,
         )
         log.info(
             "Proceeding %d complete: %d extraction(s)",
@@ -775,6 +839,11 @@ def proceeding_extraction(
             "model": MetadataValue.text(config.model_path),
             "proceedings_processed": MetadataValue.int(proceedings_processed),
             "extractions_inserted": MetadataValue.int(extractions_inserted),
+            "quarantined_items": MetadataValue.int(quarantined_items_count),
+            "partial_documents": MetadataValue.int(partial_documents),
+            "coverage_review_documents": MetadataValue.int(coverage_review_documents),
+            "citation_repairs": MetadataValue.int(citation_repairs_count),
+            "withheld_entity_claims": MetadataValue.int(withheld_entity_claims),
             "from_raw_text": MetadataValue.int(from_raw_text),
             "from_pdf_fallback": MetadataValue.int(from_pdf),
             "skipped_unchanged": MetadataValue.int(skipped_unchanged),

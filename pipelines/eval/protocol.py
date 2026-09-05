@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA
+
 import dataclasses
 import json
 import math
@@ -20,7 +22,6 @@ from countyiq.lib.pass2_batched_validation import BATCHED_VALIDATION_SYSTEM_PROM
 from countyiq.lib.pass3_brief_generation import BRIEF_GENERATION_SYSTEM_PROMPT
 from countyiq.lib.pass_llm_config import build_pass_harness_config
 from countyiq.lib.pass_schemas import (
-    PASS0_EXTRACTION_SCHEMA,
     PASS2_BATCHED_VALIDATION_SCHEMA,
     PASS3_BRIEF_SCHEMA,
 )
@@ -43,7 +44,7 @@ PASS_EVAL_PROTOCOLS = {
         reasoning_task=False,
         default_thinking=False,
         system_prompt=PASS0_SYSTEM_PROMPT,
-        json_schema=PASS0_EXTRACTION_SCHEMA,
+        json_schema=PASS0_CLAIMS_SCHEMA,
         schema_name="pass0_extractions",
         pdf_engine="native",
     ),
@@ -78,7 +79,9 @@ PASS_EVAL_PROTOCOLS = {
 # provider.max_price; the reservation calculation below then turns the token
 # ceilings into a pre-call absolute run-budget reservation.
 EVAL_MODEL_PRICE_CEILINGS = {
-    "openai/gpt-5.6-luna": (0.22, 1.32),
+    # Include the provider's $0.25/M cache-write tier, not just its $0.20/M
+    # uncached input tier. Actual reported usage remains authoritative.
+    "openai/gpt-5.6-luna": (0.28, 1.32),
     "z-ai/glm-5.3-flash": (0.16, 0.55),
     "x-ai/grok-4.6": (2.50, 8.00),
     # 2026-09-02 cost-reduction candidates (OpenRouter list price + ~10%,

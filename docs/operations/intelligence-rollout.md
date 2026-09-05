@@ -44,7 +44,7 @@ must remain false during this deployment.
 
 ## 2. Complete the remaining human label review
 
-Pass 2 requires review of all 20 high-disagreement cases in
+Pass 2 requires review of all 20 release-review cases in
 `pipelines/eval/fixtures/p2_expanded_stability20.json`. Inspect the source
 evidence, every accepted status/significance range, required fact, and forbidden
 claim. Do not approve a rubric merely because Luna agreed with it.
@@ -56,7 +56,10 @@ rubric is wrong, correct and review the frozen promotion corpus before approval;
 the receipt must not paper over a bad label.
 
 The Pass 2 preflight validates that all 20 IDs are approved and that the receipt
-matches the exact fixture bytes.
+matches the exact fixture bytes. The product owner may delegate this review to
+an AI reviewer; the receipt must then name the reviewer as such and link the
+written case-by-case record (the current 2026-09-04 review is in
+`docs/research/pass2-rubric-review-2026-09-04.md`).
 
 This receipt is a first-run gate only. Once a pass has accepted model runs in
 the ledger, the preflight replaces it with the live deterministic-gate pass
@@ -185,7 +188,7 @@ runs immediately:
 
 | Situation | Outcome |
 |---|---|
-| Consequential flip: a natural person merged into or out of an organization, approved <-> denied, a signal moving between high and non-actionable, pursue <-> pass | Stays in the queue for a person |
+| Consequential flip: any entity membership merge or split, approved <-> denied, a signal crossing medium-or-high brief eligibility, investigate <-> insufficient evidence (including historical pursue/pass/none labels) | Stays in the queue for a person |
 | Routine flip from a newer model or prompt version | Challenger accepted automatically |
 | Routine flip on the same model, prompt and evidence | Incumbent kept automatically |
 | `COUNTYIQ_JUDGE_MODEL` set and the judge disagrees with the rule default | Stays in the queue with the judge's reasoning |
@@ -246,3 +249,9 @@ The canary is acceptable only when:
 
 Only then prepare a separate full-backfill authorization. This runbook does not
 authorize or execute that backfill.
+
+## Version-bound product release gate
+
+See [LLM product release](llm-product-release.md) for the mandatory quality receipt,
+private-watch migration, frozen rubric checks, and isolated local test setup.
+A structural gate pass rate does not approve a model/prompt release.

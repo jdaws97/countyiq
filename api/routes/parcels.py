@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query
 
+from api.lib.inference_provenance import BRIEF_SIGNAL_VERSIONS_CURRENT_SQL, SUPPORTING_PROCEEDINGS_CURRENT_SQL, CROSS_SIGNAL_SUMMARY_CURRENT_SQL
 from api.lib.database import get_cursor
 from api.lib.development_radar import (
     build_signal_presentation,
@@ -20,11 +21,7 @@ from api.lib.query_bounds import MAX_BBOX_RESULTS, validate_bbox
 from api.lib.response_types import ParcelBboxResponse, PropertyReportResponse
 from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import county_metadata, open_data_source_key
-from api.lib.source_policy import (
-    PUBLIC_ORGANIZATION_TYPES,
-    require_source_use,
-    source_use_allowed,
-)
+from api.lib.source_policy import require_source_use, source_use_allowed
 
 router = APIRouter(tags=["parcels"])
 
@@ -88,21 +85,6 @@ def _soil_profile(rows: list[dict]) -> dict:
         "source_url": arcgis_record_url(source_url, "OBJECTID_1", source_ids) or source_url,
     }
 
-_PUBLIC_OWNER_NAME_SQL = """
-CASE
-    WHEN %(show_people)s OR EXISTS (
-        SELECT 1
-        FROM public.owner_source_links osl
-        JOIN public.owners owner_entity ON owner_entity.owner_id = osl.owner_id
-        WHERE osl.source_type = 'parcel'
-          AND osl.source_id = p.pidn
-          AND lower(COALESCE(owner_entity.entity_type, '')) = ANY(%(organization_types)s)
-    ) THEN p.owner_full
-    ELSE NULL
-END
-"""
-
-
 @router.get("/bbox", response_model=None)
 def parcels_bbox(
     west: float = Query(..., ge=-180, le=180),
@@ -120,16 +102,11 @@ def parcels_bbox(
     with get_cursor() as cur:
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
-        show_people = source_use_allowed(
-            cur, parcel_source, "person_level_display"
-        )
         bbox_params = {
             "west": west,
             "south": south,
             "east": east,
             "north": north,
-            "show_people": show_people,
-            "organization_types": list(PUBLIC_ORGANIZATION_TYPES),
             "fetch_limit": limit + 1,
         }
         if layer == "delinquent":
@@ -138,7 +115,7 @@ def parcels_bbox(
                 SELECT
                     ST_AsGeoJSON(p.geom)::json AS geometry,
                     p.pidn,
-                    {_PUBLIC_OWNER_NAME_SQL} AS owner_full,
+                    p.owner_full,
                     p.propadr, p.aprtotal, p.municipality,
                     p.class, p.saledt, p.price,
                     tc.pidn IS NOT NULL AS has_tax_delinquency
@@ -172,7 +149,7 @@ def parcels_bbox(
                 SELECT
                     ST_AsGeoJSON(p.geom)::json AS geometry,
                     p.pidn,
-                    {_PUBLIC_OWNER_NAME_SQL} AS owner_full,
+                    p.owner_full,
                     p.propadr, p.aprtotal, p.municipality,
                     p.class, p.saledt, p.price,
                     {tax_signal_sql} AS has_tax_delinquency
@@ -199,7 +176,7 @@ def parcels_bbox(
                 SELECT
                     ST_AsGeoJSON(p.geom)::json AS geometry,
                     p.pidn,
-                    {_PUBLIC_OWNER_NAME_SQL} AS owner_full,
+                    p.owner_full,
                     p.propadr, p.aprtotal, p.municipality,
                     p.class, p.saledt, p.price
                 FROM staging.parcels p
@@ -233,19 +210,158 @@ def parcels_bbox(
     }
 
 
-def _redact_parcel_owner_fields(
-    parcel: dict,
-    *,
-    show_people: bool,
-    show_current_owner: bool,
-) -> None:
-    """Apply the legal-organization exception only to the current owner label."""
-    if show_people:
-        return
-    for key in ("own_name1", "own_name2", "prev_owner", "mail_addr_full"):
-        parcel[key] = None
-    if not show_current_owner:
-        parcel["owner_full"] = None
+@router.get("/near")
+def parcels_near(
+    pidn: str | None = Query(default=None, max_length=32),
+    project_key: str | None = Query(default=None, max_length=64),
+    radius_m: int = Query(default=800, ge=50, le=3000),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict:
+    """Parcels within ``radius_m`` of an anchor parcel or a project's linked parcels.
+
+    This is the corridor question ("what is around the plan that just landed")
+    that neither the radar filters nor the map could answer directly. Rows are
+    ranked by opportunity score, then distance. Owner names are public record;
+    an owner links to its case file when the entity resolver knows it.
+    """
+    if not pidn and not project_key:
+        raise HTTPException(status_code=422, detail="pidn or project_key is required")
+
+    with get_cursor() as cur:
+        parcel_source = open_data_source_key()
+        require_source_use(cur, parcel_source, "derived_product", conceal=False)
+        include_tax = source_use_allowed(cur, "tax_claims", "derived_product")
+        include_scores = all(
+            source_use_allowed(cur, key, "derived_product")
+            for key in ("penndot_open_data", "fema_nfhl")
+        )
+
+        anchors: list[str] = [pidn.strip()] if pidn and pidn.strip() else []
+        if project_key:
+            cur.execute(
+                """
+                SELECT DISTINCT linked.pidn
+                FROM public.intelligence_events ev
+                CROSS JOIN LATERAL unnest(COALESCE(ev.related_pidns, ARRAY[]::text[])) AS linked(pidn)
+                WHERE ev.project_key = %(project_key)s
+                ORDER BY linked.pidn
+                LIMIT 50
+                """,
+                {"project_key": project_key},
+            )
+            anchors.extend(str(row["pidn"]) for row in cur.fetchall())
+        anchors = list(dict.fromkeys(anchors))[:50]
+
+        rows: list[dict] = []
+        anchor_point = None
+        if anchors:
+            tax_sql = (
+                "EXISTS (SELECT 1 FROM staging.tax_claims tc "
+                "WHERE tc.valid_to IS NULL AND tc.total > 0 AND tc.pidn = p.pidn)"
+                if include_tax
+                else "NULL::boolean"
+            )
+            cur.execute(
+                f"""
+                WITH anchor AS (
+                    SELECT ST_Union(geom) AS geom
+                    FROM staging.parcels
+                    WHERE pidn = ANY(%(anchors)s) AND valid_to IS NULL AND geom IS NOT NULL
+                )
+                SELECT
+                    p.pidn, p.propadr, p.municipality, p.class, p.acres, p.aprtotal,
+                    p.saledt, p.price,
+                    ROUND(ST_Distance(p.geom::geography, a.geom::geography)::numeric) AS distance_m,
+                    ST_Y(ST_Centroid(p.geom)) AS lat,
+                    ST_X(ST_Centroid(p.geom)) AS lng,
+                    ST_Y(ST_Centroid(a.geom)) AS anchor_lat,
+                    ST_X(ST_Centroid(a.geom)) AS anchor_lng,
+                    p.owner_full,
+                    owner_entity.owner_id,
+                    lower(COALESCE(owner_entity.entity_type, '')) AS entity_type,
+                    {tax_sql} AS has_tax_delinquency,
+                    NOT EXISTS (
+                        SELECT 1 FROM staging.structures s
+                        WHERE s.valid_to IS NULL AND s.geom IS NOT NULL
+                          AND ST_Intersects(s.geom, p.geom)
+                    )
+                    AND (p.class NOT IN ('R') OR p.aprtotal IS NULL OR p.aprtotal::numeric < 50000)
+                    AND (p.price IS NULL OR p.price::numeric < 100000) AS likely_vacant,
+                    dm.opportunity_score, dm.score AS momentum_score,
+                    dm.site_readiness_score, dm.top_signal, dm.has_active_plan, dm.eligible
+                FROM staging.parcels p
+                CROSS JOIN anchor a
+                LEFT JOIN public.owner_source_links osl
+                    ON osl.source_type = 'parcel' AND osl.source_id = p.pidn
+                LEFT JOIN public.owners owner_entity ON owner_entity.owner_id = osl.owner_id
+                LEFT JOIN public.development_momentum dm ON dm.pidn = p.pidn
+                WHERE p.valid_to IS NULL
+                  AND p.geom IS NOT NULL
+                  AND a.geom IS NOT NULL
+                  AND NOT (p.pidn = ANY(%(anchors)s))
+                  AND ST_DWithin(p.geom::geography, a.geom::geography, %(radius_m)s)
+                ORDER BY COALESCE(dm.opportunity_score, 0) DESC, distance_m ASC, p.pidn
+                LIMIT %(limit)s
+                """,
+                {
+                    "anchors": anchors,
+                    "radius_m": radius_m,
+                    "limit": limit,
+                },
+            )
+            rows = [dict(row) for row in cur.fetchall()]
+            if not rows:
+                cur.execute(
+                    """
+                    SELECT ST_Y(ST_Centroid(ST_Union(geom))) AS anchor_lat,
+                           ST_X(ST_Centroid(ST_Union(geom))) AS anchor_lng
+                    FROM staging.parcels
+                    WHERE pidn = ANY(%(anchors)s) AND valid_to IS NULL AND geom IS NOT NULL
+                    """,
+                    {"anchors": anchors},
+                )
+                anchor_point = cur.fetchone()
+
+    parcels = []
+    for row in rows:
+        owner_kind = row.get("entity_type") or "unknown"
+        owner_label = row.get("owner_full")
+        owner_id = row.get("owner_id")
+        parcels.append(
+            {
+                "pidn": row["pidn"],
+                "propadr": row.get("propadr"),
+                "municipality": row.get("municipality"),
+                "class": row.get("class"),
+                "acres": float(row["acres"]) if row.get("acres") is not None else None,
+                "aprtotal": float(row["aprtotal"]) if row.get("aprtotal") is not None else None,
+                "saledt": row.get("saledt"),
+                "price": float(row["price"]) if row.get("price") is not None else None,
+                "distance_m": int(row["distance_m"]) if row.get("distance_m") is not None else None,
+                "lat": row.get("lat"),
+                "lng": row.get("lng"),
+                "owner_label": owner_label,
+                "owner_kind": owner_kind,
+                "owner_id": owner_id,
+                "has_tax_delinquency": row.get("has_tax_delinquency"),
+                "likely_vacant": bool(row.get("likely_vacant")),
+                "opportunity_score": row.get("opportunity_score") if include_scores else None,
+                "momentum_score": row.get("momentum_score") if include_scores else None,
+                "site_readiness_score": row.get("site_readiness_score") if include_scores else None,
+                "top_signal": row.get("top_signal") if include_scores else None,
+                "has_active_plan": bool(row.get("has_active_plan")) if include_scores else False,
+            }
+        )
+
+    first = rows[0] if rows else (dict(anchor_point) if anchor_point else {})
+    return {
+        "anchor_pidns": anchors,
+        "anchor_lat": first.get("anchor_lat"),
+        "anchor_lng": first.get("anchor_lng"),
+        "radius_m": radius_m,
+        "count": len(parcels),
+        "parcels": parcels,
+    }
 
 
 @router.get("/summary")
@@ -270,14 +386,11 @@ def parcels_summary(
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
         require_source_use(cur, "tax_claims", "derived_product", conceal=False)
-        show_people = source_use_allowed(
-            cur, parcel_source, "person_level_display"
-        )
         cur.execute(
             f"""
             SELECT
                 p.pidn,
-                {_PUBLIC_OWNER_NAME_SQL} AS owner_full,
+                p.owner_full,
                 p.propadr, p.municipality,
                 p.aprtotal, p.class, p.acres,
                 p.valid_from AS changed_at,
@@ -296,8 +409,6 @@ def parcels_summary(
             """,
             {
                 "pidns": pidn_list,
-                "show_people": show_people,
-                "organization_types": list(PUBLIC_ORGANIZATION_TYPES),
             },
         )
         rows = [dict(r) for r in cur.fetchall()]
@@ -317,19 +428,20 @@ def parcels_summary(
 @router.get("/{pidn}")
 def parcel_detail(pidn: str) -> PropertyReportResponse:
     """Full property report card for a single parcel."""
-    with get_cursor() as cur:
+    with get_cursor(snapshot=True) as cur:
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
         require_source_use(cur, "tax_claims", "derived_product", conceal=False)
         require_source_use(cur, "public_proceedings", "derived_product", conceal=False)
-        show_people = source_use_allowed(
-            cur, parcel_source, "person_level_display"
-        )
-        show_proceeding_people = source_use_allowed(
-            cur, "public_proceedings", "person_level_display"
-        )
         cur.execute("""
             SELECT pidn, owner_full, own_name1, own_name2, prev_owner,
+                   (
+                       SELECT osl.owner_id
+                       FROM public.owner_source_links osl
+                       WHERE osl.source_type = 'parcel' AND osl.source_id = pidn
+                       ORDER BY osl.owner_id
+                       LIMIT 1
+                   ) AS owner_id,
                    propadr, mail_addr_full, municipality, school_dis,
                    class, luc, acres, style, num_stories, res_living_area,
                    yrblt, heatsys, fuel, clean_green, grade, cdu,
@@ -345,27 +457,22 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         if not parcel:
             raise HTTPException(status_code=404, detail=f"Parcel not found: {pidn}")
 
-        show_owner = show_people
-        if not show_owner:
-            cur.execute(
-                """
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM public.owner_source_links osl
-                    JOIN public.owners owner_entity
-                      ON owner_entity.owner_id = osl.owner_id
-                    WHERE osl.source_type = 'parcel'
-                      AND osl.source_id = %(pidn)s
-                      AND lower(COALESCE(owner_entity.entity_type, ''))
-                          = ANY(%(organization_types)s)
-                ) AS allowed
-                """,
-                {
-                    "pidn": pidn,
-                    "organization_types": list(PUBLIC_ORGANIZATION_TYPES),
-                },
-            )
-            show_owner = bool((cur.fetchone() or {}).get("allowed"))
+        # Current zoning at the parcel center point: table stakes for "can a
+        # business go here", separate from the plan/zoning divergence signal.
+        cur.execute("""
+            SELECT z.zrecid, z.zcode, z.zname, z.ztype, z.gen_zcode, z.gen_zname,
+                   z.muni_name, z.muni_ord, z.adpt_date, z.source_url, z.valid_from
+            FROM staging.zoning z
+            WHERE z.valid_to IS NULL
+              AND z.geom IS NOT NULL
+              AND ST_Intersects(z.geom, (
+                  SELECT ST_Centroid(geom) FROM staging.parcels
+                  WHERE pidn = %(pidn)s AND valid_to IS NULL
+              ))
+            ORDER BY z.adpt_date DESC NULLS LAST, z.zrecid
+            LIMIT 1
+        """, {"pidn": pidn})
+        zoning_row = cur.fetchone()
 
         cur.execute("""
             SELECT
@@ -477,7 +584,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         momentum_row = cur.fetchone()
 
         # Parcel brief (Pass 3)
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 brief_text,
                 assessment,
@@ -487,45 +594,45 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                 citations,
                 brief_version,
                 generated_at
-            FROM public.parcel_briefs
+            FROM public.parcel_briefs brief
             WHERE pidn = %(pidn)s
-        """, {"pidn": pidn})
+              AND {BRIEF_SIGNAL_VERSIONS_CURRENT_SQL}
+              AND EXISTS (
+                  SELECT 1 FROM meta.intelligence_inference_history context_history
+                  WHERE context_history.inference_id=brief.active_inference_id
+                    AND context_history.evidence_refs ? (
+                        'parcel-context:v1:' || meta.parcel_brief_source_fingerprint(brief.pidn)
+                    )
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM jsonb_array_elements_text(COALESCE(brief.citations, '[]'::jsonb)) citation(signal_key)
+                  WHERE NOT EXISTS (
+                      SELECT 1 FROM public.evidence supporting
+                      WHERE supporting.pidn = brief.pidn
+                        AND supporting.signal_key = citation.signal_key
+                        AND supporting.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+                        AND {SUPPORTING_PROCEEDINGS_CURRENT_SQL}
+                  )
+              )
+        """, {"pidn": pidn, "brief_kind": "parcel_brief", "brief_subject": pidn})
         brief_row = cur.fetchone()
 
-        # County narratives that explicitly reference this parcel (Pass 4)
-        cur.execute("""
-            SELECT
-                narrative_id,
-                title,
-                body,
-                narrative_type,
-                trajectory,
-                key_entities,
-                citations,
-                generated_at
-            FROM public.county_narratives
-            WHERE (expires_at IS NULL OR expires_at > NOW())
-              AND affected_pidns IS NOT NULL
-              AND %(pidn)s = ANY(affected_pidns)
-            ORDER BY generated_at DESC NULLS LAST, narrative_id DESC
-            LIMIT 5
-        """, {"pidn": pidn})
-        related_narratives = cur.fetchall()
+        # Pass 4 has no immutable upstream dependency receipts or serving-time
+        # freshness contract. Expiry and parcel membership cannot certify prose.
+        # Retain stored narratives, but do not expose them until that contract
+        # supports source revocation, changed evidence and legacy-cache handling.
+        related_narratives = []
 
         # Pass 2 cross-signal insight for this parcel
-        cur.execute("""
+        cur.execute(f"""
             SELECT cross_signal_insight, last_run_at, signals_validated_count
-            FROM meta.intelligence_passes
+            FROM meta.intelligence_passes pass_record
             WHERE pidn = %(pidn)s AND pass_number = 2 AND status = 'complete'
+              AND {CROSS_SIGNAL_SUMMARY_CURRENT_SQL}
         """, {"pidn": pidn})
         intelligence_row = cur.fetchone()
 
-        # Pass 0 proceeding extractions linked by PIDN or property address.
-        # parcel_reference is free-text: Pass 0 writes whatever the PDF said,
-        # which is usually an address, occasionally a PIDN. Match both.
-        match_refs = [pidn]
-        if parcel["propadr"]:
-            match_refs.append(parcel["propadr"])
+        # Use the shared attribution result, subject to current source eligibility.
         cur.execute("""
             SELECT
                 pe.proceeding_id,
@@ -536,43 +643,43 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                 pp.content_hash,
                 pp.valid_from AS source_observed_at,
                 pe.extraction_type,
-                CASE WHEN %(show_people)s THEN pe.applicant_name ELSE NULL END
-                    AS applicant_name,
+                pe.applicant_name,
                 pe.decision,
+                pe.extraction_details->>'decision_scope' AS decision_scope,
                 pe.current_zoning,
                 pe.proposed_zoning,
-                CASE WHEN %(show_people)s THEN LEFT(pe.supporting_text, 280)
-                     ELSE NULL END AS supporting_text,
+                LEFT(pe.supporting_text, 280) AS supporting_text,
                 pp.document_url,
                 pe.extraction_confidence,
                 pe.page_number,
                 pe.extracted_at AS interpretation_observed_at,
-                CASE
-                    WHEN pe.parcel_reference = %(pidn)s THEN 'pidn'
-                    ELSE 'address'
-                END AS match_type
+                matched.match_method AS match_type
             FROM staging.proceeding_extractions pe
             JOIN staging.public_proceedings pp ON pp.id = pe.proceeding_id
+            CROSS JOIN LATERAL public.proceeding_parcel_matches(
+                COALESCE(pe.extraction_details->'parcel_references', jsonb_build_array(pe.parcel_reference)),
+                pp.body_name) matched
             WHERE pp.valid_to IS NULL
               AND LEFT(pe.extraction_type, 1) <> '_'
-              AND pe.parcel_reference = ANY(%(match_refs)s)
+              AND matched.pidn = %(pidn)s
+              AND pp.metadata_quality->>'status' = 'ready'
+              AND EXISTS (
+                  SELECT 1 FROM meta.municipality_source_rights body_policy
+                  WHERE body_policy.body_name = pp.body_name
+                    AND body_policy.rights_status <> 'paused'
+                    AND body_policy.derived_product_allowed
+                    AND body_policy.review_due_on >= CURRENT_DATE
+              )
             ORDER BY pp.meeting_date DESC NULLS LAST, pe.proceeding_id DESC
             LIMIT 20
         """, {
             "pidn": pidn,
-            "match_refs": match_refs,
-            "show_people": show_proceeding_people,
         })
         proceeding_rows = cur.fetchall()
 
     p = dict(parcel)
     parcel_source_url = p.pop("source_url", None)
     parcel_record_effective_at = p.pop("parcel_record_effective_at", None)
-    _redact_parcel_owner_fields(
-        p,
-        show_people=show_people,
-        show_current_owner=show_owner,
-    )
     for key in ("aprland", "aprbldg", "aprtotal", "price", "prev_price", "acres", "lat", "lng"):
         if p.get(key):
             p[key] = float(p[key])
@@ -588,10 +695,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
     momentum = dict(momentum_row) if momentum_row else None
     signal_receipts: list[dict] = []
     if momentum:
-        momentum["signals"] = sanitize_signals_for_public(
-            momentum.get("signals"),
-            allow_people=show_people,
-        )
+        momentum["signals"] = sanitize_signals_for_public(momentum.get("signals"))
         public_signals = momentum.get("signals") or {}
         signal_receipts = signal_evidence_items(
             public_signals,
@@ -619,10 +723,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         )
         serialize_temporal_fields(momentum, "computed_at")
 
-    # Existing LLM prose was not generated under a person-name redaction
-    # contract. Keep it backend-only until the governing source permits
-    # person-level display or public-safe briefs are regenerated.
-    brief = dict(brief_row) if brief_row and show_people else None
+    brief = dict(brief_row) if brief_row else None
     if brief:
         brief["key_questions"] = brief.get("key_questions") or []
         brief["citations"] = brief.get("citations") or []
@@ -635,11 +736,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             observed_at=brief.get("generated_at"),
         )
 
-    narratives = (
-        [dict(row) for row in related_narratives]
-        if show_owner and show_proceeding_people
-        else []
-    )
+    narratives = [dict(row) for row in related_narratives]
     for narrative in narratives:
         narrative["key_entities"] = narrative.get("key_entities") or []
         narrative["citations"] = narrative.get("citations") or []
@@ -652,9 +749,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             observed_at=narrative.get("generated_at"),
         )
 
-    intelligence_summary = (
-        dict(intelligence_row) if intelligence_row and show_people else None
-    )
+    intelligence_summary = dict(intelligence_row) if intelligence_row else None
     if intelligence_summary:
         serialize_temporal_fields(intelligence_summary, "last_run_at")
 
@@ -688,6 +783,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                     "proceeding_type",
                     "extraction_type",
                     "decision",
+                    "decision_scope",
                     "current_zoning",
                     "proposed_zoning",
                     "page_number",
@@ -697,7 +793,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             },
             effective_at=record.get("meeting_date"),
             observed_at=interpretation_observed_at or source_observed_at,
-            method="CountyIQ extracted the linked matter and verified the displayed excerpt against the municipal document.",
+            method="CountyIQ extracted this linked matter from the municipal document. Consult the source passage for its full context.",
             caveat=(
                 "An address match can be ambiguous; confirm the parcel reference in the original document."
                 if record.get("match_type") == "address"
@@ -706,6 +802,21 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             confidence=record.get("extraction_confidence"),
         )
         linked_proceedings.append(record)
+
+    zoning = None
+    if zoning_row:
+        zoning = {
+            "code": zoning_row.get("zcode"),
+            "name": zoning_row.get("zname"),
+            "type": zoning_row.get("ztype"),
+            "general_code": zoning_row.get("gen_zcode"),
+            "general_name": zoning_row.get("gen_zname"),
+            "municipality": zoning_row.get("muni_name"),
+            "ordinance": zoning_row.get("muni_ord"),
+            "adopted": zoning_row.get("adpt_date"),
+            "source_url": zoning_row.get("source_url"),
+        }
+        serialize_temporal_fields(zoning, "adopted")
 
     county_name = county_metadata()["county_name"]
     report_evidence = [
@@ -844,6 +955,26 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                 caveat="A missing footprint can reflect vacant land, recent construction, or source-data lag.",
             )
         )
+    if zoning_row:
+        report_evidence.append(
+            evidence_item(
+                scope=f"parcel:{pidn}",
+                citation_key=f"zoning:{zoning_row.get('zrecid') or pidn}",
+                label=f"{county_name} zoning layer",
+                source_kind="official_zoning_layer",
+                source_record_id=str(zoning_row.get("zrecid") or ""),
+                url=zoning_row.get("source_url"),
+                details={
+                    key: zoning.get(key)
+                    for key in ("code", "name", "type", "general_name", "municipality", "ordinance", "adopted")
+                    if zoning.get(key) is not None
+                },
+                effective_at=zoning_row.get("adpt_date"),
+                observed_at=zoning_row.get("valid_from"),
+                method="CountyIQ intersects the parcel center point with the county zoning layer.",
+                caveat="A center-point match can miss a split-zoned parcel; confirm against the municipal ordinance and official zoning map.",
+            )
+        )
     report_evidence.extend(signal_receipts)
     for item in report_evidence:
         serialize_temporal_fields(item, "effective_at", "observed_at")
@@ -875,6 +1006,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                 for r in structure_rows
             ],
         },
+        "zoning": zoning,
         "development_momentum": momentum,
         "parcel_brief": brief,
         "related_narratives": narratives,

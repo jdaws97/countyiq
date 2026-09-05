@@ -2,12 +2,22 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageShell from '../components/PageShell'
 import { formatCurrency } from '../lib/format'
+import { useCountyMeta } from '../lib/useCountyMeta'
+import { getMunicipalityWatchlist } from '../lib/watchlist'
 import type { MunicipalitySummary as Municipality } from '../types/api'
 
 export default function MunicipalityList() {
+  const county = useCountyMeta()
   const [municipalities, setMunicipalities] = useState<Municipality[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [watchedNames, setWatchedNames] = useState(() => new Set(getMunicipalityWatchlist().map((item) => item.name)))
+
+  useEffect(() => {
+    const refresh = () => setWatchedNames(new Set(getMunicipalityWatchlist().map((item) => item.name)))
+    window.addEventListener('countyiq-watchlist-changed', refresh)
+    return () => window.removeEventListener('countyiq-watchlist-changed', refresh)
+  }, [])
 
   useEffect(() => {
     fetch('/api/municipalities')
@@ -40,7 +50,7 @@ export default function MunicipalityList() {
               marginBottom: 12,
             }}
           >
-            York County &middot; PA
+            {county.county_name} &middot; {county.state}
           </div>
           <h1
             style={{
@@ -62,7 +72,7 @@ export default function MunicipalityList() {
               color: 'var(--text-secondary)',
             }}
           >
-            72 jurisdictions across York County
+            {loading ? `Jurisdictions across ${county.county_name}` : `${municipalities.length} jurisdictions across ${county.county_name}`}
           </p>
         </div>
 
@@ -167,6 +177,7 @@ export default function MunicipalityList() {
                       color: 'var(--text-primary)',
                     }}
                   >
+                    {watchedNames.has(muni.name) && <span style={{ color: 'var(--accent-gold)', marginRight: 6 }} title="Watched municipality">★</span>}
                     {muni.name}
                   </div>
 

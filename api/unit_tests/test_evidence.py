@@ -52,7 +52,9 @@ def test_feed_source_is_upgraded_to_evidence_receipt():
     assert item["source_record_id"] == "44"
     assert item["details"] == {"decision": "approved"}
     assert item["confidence"] == 0.91
-    assert "verified" in item["method"].lower()
+    # Receipt normalization has no source text or verification receipt.
+    assert "language model" in item["method"].lower()
+    assert "verified" not in item["method"].lower()
 
 
 def test_arcgis_layer_url_becomes_record_deep_link():

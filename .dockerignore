@@ -25,3 +25,10 @@ frontend/.vite
 
 archives
 pipelines/eval/results
+
+# Host credentials/state, review artifacts and research are never image inputs.
+infra
+receipts
+output
+outputs
+benchmarks

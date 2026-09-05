@@ -3,26 +3,45 @@ import { Link, useParams } from 'react-router-dom'
 
 import Badge from '../components/Badge'
 import IntelligenceEventCard from '../components/IntelligenceEventCard'
+import NearbyParcels from '../components/NearbyParcels'
 import PageShell from '../components/PageShell'
 import ReportActions from '../components/ReportActions'
 import Section from '../components/Section'
-import { Button } from '../components/ui'
+import { Button, StatusMessage } from '../components/ui'
 import { downloadText, toCsv } from '../lib/investigationState'
+import { openEvidenceReceipt } from '../lib/evidence'
+import { formatLabel } from '../lib/format'
 import { useFetchJson } from '../lib/useFetchJson'
 import {
   isProjectWatched,
   toggleProjectWatch,
 } from '../lib/watchlist'
-import type { IntelligenceEntityLink, IntelligenceFeedResponse } from '../types/api'
+import type { IntelligenceEntityLink, ProjectCaseResponse } from '../types/api'
 
 
 export default function ProjectCaseFile() {
   const { key = '' } = useParams<{ key: string }>()
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(() => new Set())
+  const expandEvent = (eventKey: string, expanded = true) => {
+    setExpandedEvents((current) => {
+      const next = new Set(current)
+      if (expanded) next.add(eventKey)
+      else next.delete(eventKey)
+      return next
+    })
+  }
+  const openRecord = (eventKey: string, evidenceId: string) => {
+    expandEvent(eventKey)
+    requestAnimationFrame(() => {
+      openEvidenceReceipt(evidenceId)
+      document.getElementById(evidenceId)?.scrollIntoView({ block: 'center' })
+    })
+  }
   const [, setWatchRevision] = useState(0)
   const url = key
-    ? `/api/feed?since_days=3650&limit=100&sort=latest&project_keys=${encodeURIComponent(key)}`
+    ? `/api/cases/projects/${encodeURIComponent(key)}`
     : null
-  const { data, error, loading } = useFetchJson<IntelligenceFeedResponse>(url)
+  const { data, error, loading } = useFetchJson<ProjectCaseResponse>(url)
   const events = useMemo(() => data?.events ?? [], [data])
   const project = events.find((event) => event.project)?.project ?? { key, name: key }
   const watched = Boolean(key) && isProjectWatched(key)
@@ -41,6 +60,15 @@ export default function ProjectCaseFile() {
     () => Array.from(new Set(events.flatMap((event) => event.related_pidns))),
     [events],
   )
+  const parcelReferences = useMemo(() => {
+    const values = events.flatMap((event) => event.sources.flatMap((source) => {
+      const structured = source.details.parcel_references
+      if (Array.isArray(structured)) return structured.filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+      const legacy = source.details.parcel_reference
+      return typeof legacy === 'string' && legacy.trim() ? [legacy] : []
+    }))
+    return Array.from(new Set(values))
+  }, [events])
   const entities = useMemo(() => {
     const byId = new Map<number, IntelligenceEntityLink>()
     for (const event of events) {
@@ -50,8 +78,16 @@ export default function ProjectCaseFile() {
   }, [events])
 
   const exportCsv = () => {
-    const rows: Array<Array<string | number | null>> = [['Date', 'Type', 'Title', 'Municipality', 'What happened', 'Why it matters', 'Next step', 'Evidence receipts']]
-    for (const event of events) rows.push([event.event_date ?? event.detected_at, event.event_type, event.title, event.municipality, event.what_happened, event.why_it_matters, event.what_happens_next, event.sources.length])
+    const scope = data?.has_more
+      ? 'Partial export: additional events exist outside this view'
+      : 'Loaded linked records; source coverage may be incomplete'
+    const rows: Array<Array<string | number | null>> = [['Event date', 'Detected at', 'Type', 'Title', 'Municipality', 'What happened', 'Why it matters', 'Next step', 'Evidence receipts', 'Source documents', 'Export scope']]
+    for (const event of events) rows.push([
+      event.event_date, event.detected_at, event.event_type, event.title, event.municipality,
+      event.what_happened, event.why_it_matters, event.what_happens_next, event.sources.length,
+      Array.from(new Set(event.sources.map((source) => source.document_url || source.url).filter(Boolean))).join(' | '),
+      scope,
+    ])
     downloadText(`countyiq-project-${project.key || 'case-file'}.csv`, toCsv(rows), 'text/csv')
   }
 
@@ -71,6 +107,7 @@ export default function ProjectCaseFile() {
           ))}
           {key && (
             <button
+              data-print-hidden
               onClick={() => {
                 toggleProjectWatch(project)
                 setWatchRevision((value) => value + 1)
@@ -89,13 +126,13 @@ export default function ProjectCaseFile() {
               {watched ? '★ Watching project' : '☆ Watch project'}
             </button>
           )}
-          {events.length > 0 && <Button tone="quiet" onClick={exportCsv}>Export CSV</Button>}
+          {events.length > 0 && <Button tone="quiet" data-print-hidden onClick={exportCsv}>Export CSV</Button>}
           <ReportActions label={`${project.name || 'Project'} case file`} />
         </div>
       </div>
 
-      {loading && <Status color="var(--text-muted)">Loading project evidence…</Status>}
-      {!loading && error && <Status color="var(--accent-red)">{error}</Status>}
+      {loading && <StatusMessage>Loading project evidence…</StatusMessage>}
+      {!loading && error && <StatusMessage tone="error">{error}</StatusMessage>}
       {!loading && !error && events.length === 0 && (
         <Section title="No linked evidence yet">
           <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.7, color: 'var(--text-secondary)' }}>
@@ -104,7 +141,21 @@ export default function ProjectCaseFile() {
         </Section>
       )}
 
-      {events.length > 0 && (entities.length > 0 || pidns.length > 0) && (
+      {data?.summary && events.length > 0 && (
+        <Section title="Current recorded status">
+          <h2>{data.summary.status}</h2>
+          {data.summary.as_of && <p>Latest dated activity: {data.summary.as_of}</p>}
+          {data.summary.latest_change && <p>{data.summary.latest_change} <a onClick={() => expandEvent(data.summary.latest_event_key!)} href={`#project-event-${data.summary.latest_event_key}`}>Verify record →</a></p>}
+          {data.summary.next_verification && <p><strong>Next verification:</strong> {data.summary.next_verification}</p>}
+          <p>{data.summary.caveat}</p>
+          {data.summary.history_incomplete && <p role="status">Some history is undated or outside this view. Verify the full source history before relying on this status.</p>}
+          {data.summary.decisions.length > 0 && <><h3>Recorded decisions and scope</h3><ul>{data.summary.decisions.map((item, i) => <li key={item.event_key + '-decision-' + i}><strong>{item.scope && formatLabel(item.scope) + ': '}{item.decision}</strong>{item.body && <> — {item.body}</>}{item.matter && <> · {item.matter.replace(/_/g, ' ')}</>} <a onClick={() => openRecord(item.event_key, item.evidence_id)} href={'#' + item.evidence_id}>Verify record ({item.record_date ?? 'undated'}) →</a></li>)}</ul></>}
+          {data.summary.conditions.length > 0 && <><h3>Conditions to verify</h3><ul>{data.summary.conditions.map((item, i) => <li key={`${item.event_key}-${i}`}><strong>{item.text}</strong> — {item.status} <a onClick={() => openRecord(item.event_key, item.evidence_id)} href={'#' + item.evidence_id}>Source ({item.record_date ?? 'undated'}) →</a></li>)}</ul></>}
+          {data.summary.milestones.length > 0 && <><h3>Stated milestones</h3><ul>{data.summary.milestones.map((item, i) => <li key={`${item.event_key}-${i}`}><strong>{item.kind && formatLabel(item.kind) + ': '}{item.text}</strong> — {item.status} <a onClick={() => openRecord(item.event_key, item.evidence_id)} href={'#' + item.evidence_id}>Source ({item.record_date ?? 'undated'}) →</a></li>)}</ul></>}
+        </Section>
+      )}
+
+      {events.length > 0 && (entities.length > 0 || pidns.length > 0 || parcelReferences.length > 0) && (
         <Section title="Connected record">
           <div style={{ display: 'grid', gap: 14 }}>
             {entities.length > 0 && (
@@ -121,25 +172,39 @@ export default function ProjectCaseFile() {
             )}
             {pidns.length > 0 && (
               <div>
-                <Label>Parcels</Label>
+                <Label>Linked parcels ({pidns.length})</Label>
+                <p>These are matched parcel records, not a complete project boundary. Compare them with the source references below.</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {pidns.slice(0, 20).map((pidn) => (
+                  {pidns.map((pidn) => (
                     <Link key={pidn} to={`/property/${pidn}`} style={{ textDecoration: 'none' }}>
                       <Badge color="var(--accent-blue)">{pidn} →</Badge>
                     </Link>
                   ))}
-                  {pidns.length > 20 && <Badge color="var(--text-muted)">+{pidns.length - 20} more</Badge>}
                 </div>
+              </div>
+            )}
+            {parcelReferences.length > 0 && (
+              <div>
+                <Label>Parcel references recorded in the source</Label>
+                {pidns.length === 0 && <p>No parcel records have been linked to these references.</p>}
+                <ul style={{ paddingLeft: 20, overflowWrap: 'anywhere' }}>
+                  {parcelReferences.map((reference) => <li key={reference}>{reference}</li>)}
+                </ul>
+                <p>References may include unresolved or inconsistent identifiers. Verify them in the evidence timeline before relying on the linked parcel list.</p>
               </div>
             )}
           </div>
         </Section>
       )}
 
+      {events.length > 0 && pidns.length > 0 && (
+        <NearbyParcels projectKey={key} title="Parcels near this project" />
+      )}
+
       {events.length > 0 && (
         <Section title={`Evidence timeline (${events.length})`}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {events.map((event) => <IntelligenceEventCard key={event.event_key} event={event} />)}
+            {events.map((event) => <div key={event.event_key} id={`project-event-${event.event_key}`}><IntelligenceEventCard event={event} printEvidence expanded={expandedEvents.has(event.event_key)} onExpandedChange={(expanded) => expandEvent(event.event_key, expanded)} /></div>)}
           </div>
         </Section>
       )}
@@ -154,9 +219,4 @@ function Label({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   )
-}
-
-
-function Status({ children, color }: { children: React.ReactNode; color: string }) {
-  return <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color, textAlign: 'center', padding: '80px 0' }}>{children}</div>
 }

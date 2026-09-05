@@ -28,6 +28,7 @@ from dagster import (
 )
 
 from countyiq.lib.county_config import county_open_data_source_key, get_county_config
+from countyiq.lib.intelligence_common import RETRACT_STALE_EVIDENCE_QUERY, VOLATILE_EVIDENCE_KEYS
 from countyiq.lib.source_rights import authorize_source_uses, source_use_is_authorized
 from countyiq.resources.database import DatabaseResource
 
@@ -157,7 +158,8 @@ _SIGNALS: list[tuple[str, str]] = [
     # 2b. municipal_action — the parcel is the subject of a rezoning, variance,
     #     special exception, conditional use, or land-development matter in
     #     Pass 0 municipal proceedings within the last 24 months. Linking is
-    #     deterministic (PIDN digits or the normalized street address); the
+    #     deterministic (normalized alphanumeric PIDN or the normalized street
+    #     address, see migration 053); the
     #     weight follows the procedural state and decays with age.
     (
         "municipal_action",
@@ -210,32 +212,20 @@ _SIGNALS: list[tuple[str, str]] = [
                 (EXTRACT(YEAR FROM AGE(NOW(), pp.meeting_date)) * 12
                  + EXTRACT(MONTH FROM AGE(NOW(), pp.meeting_date)))::int AS months_since,
                 CASE
-                    WHEN p.pidn = REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g')
+                    WHEN matched.match_method = 'pidn'
                         THEN 'pidn'
                     ELSE 'normalized_address'
                 END AS match_method
             FROM staging.proceeding_extractions pe
             JOIN staging.public_proceedings pp
               ON pp.id = pe.proceeding_id AND pp.valid_to IS NULL
+            CROSS JOIN LATERAL public.proceeding_parcel_matches(
+                COALESCE(pe.extraction_details->'parcel_references', jsonb_build_array(pe.parcel_reference)),
+                pp.body_name) matched
             JOIN staging.parcels p
-              ON p.valid_to IS NULL
-             AND (
-                 p.pidn = REGEXP_REPLACE(pe.parcel_reference, '[^0-9]', '', 'g')
-                 OR (
-                     LENGTH(REGEXP_REPLACE(pe.parcel_reference, '[^A-Za-z0-9]', '', 'g')) >= 6
-                     AND public.normalize_street_address(p.propadr)
-                         = public.normalize_street_address(pe.parcel_reference)
-                     AND EXISTS (
-                         SELECT 1
-                         FROM meta.municipality_source_rights msr
-                         WHERE msr.body_name = pp.body_name
-                           AND msr.municipality_name = p.municipality
-                           AND msr.derived_product_allowed = TRUE
-                     )
-                 )
-             )
+              ON p.valid_to IS NULL AND p.pidn = matched.pidn
             WHERE LEFT(pe.extraction_type, 1) <> '_'
-              AND pe.parcel_reference IS NOT NULL
+              AND pe.extraction_details->>'discovery_eligible' IS DISTINCT FROM 'false'
               AND pp.meeting_date IS NOT NULL
               AND pp.meeting_date >= NOW() - INTERVAL '24 months'
         ) m
@@ -282,7 +272,9 @@ _SIGNALS: list[tuple[str, str]] = [
           AND LOWER(REPLACE(z.zname, ' ', '')) != LOWER(REPLACE(f.future_lu, ' ', ''))
           AND f.future_lu NOT ILIKE '%%' || z.zname || '%%'
           AND z.zname NOT ILIKE '%%' || f.future_lu || '%%'
-        ORDER BY p.pidn
+        -- The county layer keeps a superseded district polygon alongside a
+        -- rezoning (7 parcels on 2026-09-03); the newest adoption is current.
+        ORDER BY p.pidn, z.adpt_date DESC NULLS LAST, z.zrecid DESC
         """,
     ),
     # 4. ownership_change — real market sale in the last 12 months. The weight
@@ -389,54 +381,83 @@ _SIGNALS: list[tuple[str, str]] = [
         ) agg
         """,
     ),
-    # 7. assemblage — touches many differently owned parcels
+    # 7. assemblage — touches many differently owned parcels. Ownership is
+    #    compared on the resolved owner identity (public.owner_source_links,
+    #    which merges spelling, punctuation, and suffix variants and Pass 1
+    #    merges) with the raw recorded name as the fallback, so "SMITH JOHN"
+    #    and "SMITH JOHN A" are one owner, not two.
     (
         "assemblage",
         """
         INSERT INTO public.development_signals
             (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
+        WITH resolved AS (
+            -- One resolved owner per current parcel. The parcel self-join
+            -- below stays on staging.parcels so its geometry index is used; a
+            -- materialized CTE over all parcels would lose that index.
+            SELECT DISTINCT ON (source_id) source_id AS pidn, owner_id
+            FROM public.owner_source_links
+            WHERE source_type = 'parcel'
+            ORDER BY source_id, owner_id
+        ),
+        neighbors AS (
+            SELECT
+                p.pidn,
+                p.source_url,
+                CASE
+                    WHEN po.owner_id IS NOT NULL THEN 'owner:' || po.owner_id::text
+                    WHEN NULLIF(TRIM(p.owner_full), '') IS NOT NULL
+                        THEN 'raw:' || UPPER(TRIM(p.owner_full))
+                END AS owner_key,
+                n.pidn AS neighbor_pidn,
+                CASE
+                    WHEN nb.owner_id IS NOT NULL THEN 'owner:' || nb.owner_id::text
+                    WHEN NULLIF(TRIM(n.owner_full), '') IS NOT NULL
+                        THEN 'raw:' || UPPER(TRIM(n.owner_full))
+                END AS neighbor_owner_key
+            FROM staging.parcels p
+            JOIN staging.parcels n
+                ON n.valid_to IS NULL
+               AND n.geom IS NOT NULL
+               AND p.pidn <> n.pidn
+               -- ST_Intersects, not ST_Touches: county parcel polygons often
+               -- overlap slightly, which makes interiors intersect and silently
+               -- fails the strict touch test.
+               AND p.geom && n.geom
+               AND ST_Intersects(p.geom, n.geom)
+            LEFT JOIN resolved po ON po.pidn = p.pidn
+            LEFT JOIN resolved nb ON nb.pidn = n.pidn
+            WHERE p.valid_to IS NULL
+              AND p.geom IS NOT NULL
+        )
         SELECT
-            p.pidn,
+            pidn,
             'assemblage',
             CASE
-                WHEN COUNT(DISTINCT NULLIF(TRIM(n.owner_full), '')) FILTER (
-                    WHERE COALESCE(NULLIF(TRIM(n.owner_full), ''), '__blank__')
-                          <> COALESCE(NULLIF(TRIM(p.owner_full), ''), '__blank__')
+                WHEN COUNT(DISTINCT neighbor_owner_key) FILTER (
+                    WHERE neighbor_owner_key IS DISTINCT FROM owner_key
                 ) >= %(assemblage_strong_neighbors)s THEN 0.10
                 ELSE 0.06
             END,
             'staging.parcels',
-            p.pidn,
+            pidn,
             NULL,
             jsonb_build_object(
                 'different_owner_neighbors',
-                COUNT(DISTINCT NULLIF(TRIM(n.owner_full), '')) FILTER (
-                    WHERE COALESCE(NULLIF(TRIM(n.owner_full), ''), '__blank__')
-                          <> COALESCE(NULLIF(TRIM(p.owner_full), ''), '__blank__')
+                COUNT(DISTINCT neighbor_owner_key) FILTER (
+                    WHERE neighbor_owner_key IS DISTINCT FROM owner_key
                 ),
                 'neighbor_parcels',
-                COUNT(DISTINCT n.pidn) FILTER (
-                    WHERE COALESCE(NULLIF(TRIM(n.owner_full), ''), '__blank__')
-                          <> COALESCE(NULLIF(TRIM(p.owner_full), ''), '__blank__')
+                COUNT(DISTINCT neighbor_pidn) FILTER (
+                    WHERE neighbor_owner_key IS DISTINCT FROM owner_key
                 ),
-                'source_url', MIN(p.source_url)
+                'match_basis', 'resolved_owner_identity',
+                'source_url', MIN(source_url)
             )
-        FROM staging.parcels p
-        JOIN staging.parcels n
-            ON p.valid_to IS NULL
-           AND n.valid_to IS NULL
-           AND p.geom IS NOT NULL
-           AND n.geom IS NOT NULL
-           AND p.pidn <> n.pidn
-           -- ST_Intersects, not ST_Touches: county parcel polygons often
-           -- overlap slightly, which makes interiors intersect and silently
-           -- fails the strict touch test.
-           AND ST_Intersects(p.geom, n.geom)
-        WHERE p.valid_to IS NULL
-        GROUP BY p.pidn, p.owner_full
-        HAVING COUNT(DISTINCT NULLIF(TRIM(n.owner_full), '')) FILTER (
-            WHERE COALESCE(NULLIF(TRIM(n.owner_full), ''), '__blank__')
-                  <> COALESCE(NULLIF(TRIM(p.owner_full), ''), '__blank__')
+        FROM neighbors
+        GROUP BY pidn, owner_key
+        HAVING COUNT(DISTINCT neighbor_owner_key) FILTER (
+            WHERE neighbor_owner_key IS DISTINCT FROM owner_key
         ) >= %(assemblage_min_neighbors)s
         """,
     ),
@@ -451,17 +472,39 @@ _SIGNALS: list[tuple[str, str]] = [
         """
         INSERT INTO public.development_signals
             (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
-        WITH recent AS (
+        WITH resolved AS (
+            SELECT DISTINCT ON (source_id) source_id AS pidn, owner_id
+            FROM public.owner_source_links
+            WHERE source_type = 'parcel'
+            ORDER BY source_id, owner_id
+        ),
+        owner_keys AS (
+            -- Resolved owner identity (name variants and Pass 1 merges folded
+            -- into one key), raw recorded name as the fallback.
             SELECT
                 p.pidn,
-                UPPER(TRIM(p.owner_full)) AS owner_key,
+                p.geom,
+                p.source_url,
+                p.saledt,
+                p.price,
+                CASE
+                    WHEN r.owner_id IS NOT NULL THEN 'owner:' || r.owner_id::text
+                    WHEN NULLIF(TRIM(p.owner_full), '') IS NOT NULL
+                        THEN 'raw:' || UPPER(TRIM(p.owner_full))
+                END AS owner_key
+            FROM staging.parcels p
+            LEFT JOIN resolved r ON r.pidn = p.pidn
+            WHERE p.valid_to IS NULL AND p.geom IS NOT NULL
+        ),
+        recent AS (
+            SELECT
+                p.pidn,
+                p.owner_key,
                 p.geom,
                 p.source_url,
                 to_date(p.saledt, 'DD-MON-YYYY') AS sale_date
-            FROM staging.parcels p
-            WHERE p.valid_to IS NULL
-              AND p.geom IS NOT NULL
-              AND NULLIF(TRIM(p.owner_full), '') IS NOT NULL
+            FROM owner_keys p
+            WHERE p.owner_key IS NOT NULL
               AND p.saledt ~* '^\\d{1,2}-[a-z]{3}-\\d{4}$'
               AND to_date(p.saledt, 'DD-MON-YYYY') >= NOW() - INTERVAL '24 months'
               AND to_date(p.saledt, 'DD-MON-YYYY') <= NOW()
@@ -471,11 +514,10 @@ _SIGNALS: list[tuple[str, str]] = [
             SELECT r.pidn AS seed_pidn, r.owner_key, r.sale_date,
                    r.source_url, n.pidn AS neighbor_pidn
             FROM recent r
-            JOIN staging.parcels n
-              ON n.valid_to IS NULL
-             AND n.geom IS NOT NULL
-             AND n.pidn <> r.pidn
-             AND UPPER(TRIM(n.owner_full)) = r.owner_key
+            JOIN owner_keys n
+              ON n.pidn <> r.pidn
+             AND n.owner_key = r.owner_key
+             AND r.geom && n.geom
              AND ST_Intersects(r.geom, n.geom)
         ),
         members AS (
@@ -508,7 +550,7 @@ _SIGNALS: list[tuple[str, str]] = [
                 'months_since_latest_acquisition',
                     (EXTRACT(YEAR FROM AGE(NOW(), a.latest_acquisition)) * 12
                      + EXTRACT(MONTH FROM AGE(NOW(), a.latest_acquisition)))::int,
-                'match_basis', 'exact_recorded_owner_name_and_intersecting_parcels',
+                'match_basis', 'resolved_owner_identity_and_intersecting_parcels',
                 'source_url', a.source_url
             )
         FROM agg a
@@ -1024,7 +1066,12 @@ def development_signals(
             total += count
             context.log.info(f"  {signal_key}: {count:,} rows")
 
+        # Publish source replacement and validation retraction atomically.
+        # Waiting for the next paid-pass job leaves stale validations visible.
+        cur.execute(RETRACT_STALE_EVIDENCE_QUERY, {"volatile": list(VOLATILE_EVIDENCE_KEYS)})
+        evidence_retracted = cur.rowcount
         conn.commit()
+        context.log.info("Retracted %d stale validation rows", evidence_retracted)
         context.log.info(f"Committed {total:,} total signal rows")
 
     except Exception:
@@ -1035,7 +1082,7 @@ def development_signals(
             conn.autocommit = True
         cur.close()
 
-    metadata = {"total_signal_rows": MetadataValue.int(total)}
+    metadata = {"total_signal_rows": MetadataValue.int(total), "evidence_retracted": MetadataValue.int(evidence_retracted)}
     for key, count in signal_counts.items():
         metadata[key] = MetadataValue.int(count)
     return MaterializeResult(metadata=metadata)
