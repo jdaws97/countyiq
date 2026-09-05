@@ -533,10 +533,8 @@ def load_county_manifests(
 
 
 _manifest_directory = Path(
-    os.environ.get(
-        "COUNTYIQ_COUNTY_CONFIG_DIR",
-        str(Path(__file__).resolve().parents[1] / "counties"),
-    )
+    os.environ.get("COUNTYIQ_COUNTY_CONFIG_DIR", "").strip()
+    or str(Path(__file__).resolve().parents[1] / "counties")
 )
 COUNTY_CONFIGS.update(load_county_manifests(_manifest_directory, existing=COUNTY_CONFIGS))
 

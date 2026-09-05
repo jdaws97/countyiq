@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -155,6 +158,24 @@ invented_source = "nope"
 
     with pytest.raises(ValueError, match="unknown CountyConfig field"):
         load_county_manifests(tmp_path)
+
+
+@pytest.mark.parametrize("directory", [None, "", "  "])
+def test_optional_manifest_directory_does_not_scan_working_directory(tmp_path: Path, directory):
+    # Compose supplies an empty value for this optional setting. An unrelated
+    # TOML file in the process directory must not prevent Dagster startup.
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "not-a-county"\n')
+    environment = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+    environment.pop("COUNTYIQ_COUNTY_CONFIG_DIR", None)
+    if directory is not None:
+        environment["COUNTYIQ_COUNTY_CONFIG_DIR"] = directory
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "from countyiq.lib.county_config import get_county_config; "
+         "assert get_county_config('york').name == 'York County'"],
+        cwd=tmp_path, env=environment, capture_output=True, text=True, timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_county_identity_helpers_are_not_york_specific():
