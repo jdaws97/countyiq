@@ -81,10 +81,10 @@ export default function ProjectCaseFile() {
     const scope = data?.has_more
       ? 'Partial export: additional events exist outside this view'
       : 'Loaded linked records; source coverage may be incomplete'
-    const rows: Array<Array<string | number | null>> = [['Event date', 'Detected at', 'Type', 'Title', 'Municipality', 'What happened', 'Why it matters', 'Next step', 'Evidence receipts', 'Source documents', 'Export scope']]
+    const rows: Array<Array<string | number | null>> = [['Event date', 'Detected at', 'Type', 'Title', 'Municipality', 'Recorded action', 'Evidence receipts', 'Source documents', 'Export scope']]
     for (const event of events) rows.push([
       event.event_date, event.detected_at, event.event_type, event.title, event.municipality,
-      event.what_happened, event.why_it_matters, event.what_happens_next, event.sources.length,
+      event.what_happened, event.sources.length,
       Array.from(new Set(event.sources.map((source) => source.document_url || source.url).filter(Boolean))).join(' | '),
       scope,
     ])
@@ -146,7 +146,6 @@ export default function ProjectCaseFile() {
           <h2>{data.summary.status}</h2>
           {data.summary.as_of && <p>Latest dated activity: {data.summary.as_of}</p>}
           {data.summary.latest_change && <p>{data.summary.latest_change} <a onClick={() => expandEvent(data.summary.latest_event_key!)} href={`#project-event-${data.summary.latest_event_key}`}>Verify record →</a></p>}
-          {data.summary.next_verification && <p><strong>Next verification:</strong> {data.summary.next_verification}</p>}
           <p>{data.summary.caveat}</p>
           {data.summary.history_incomplete && <p role="status">Some history is undated or outside this view. Verify the full source history before relying on this status.</p>}
           {data.summary.decisions.length > 0 && <><h3>Recorded decisions and scope</h3><ul>{data.summary.decisions.map((item, i) => <li key={item.event_key + '-decision-' + i}><strong>{item.scope && formatLabel(item.scope) + ': '}{item.decision}</strong>{item.body && <> — {item.body}</>}{item.matter && <> · {item.matter.replace(/_/g, ' ')}</>} <a onClick={() => openRecord(item.event_key, item.evidence_id)} href={'#' + item.evidence_id}>Verify record ({item.record_date ?? 'undated'}) →</a></li>)}</ul></>}

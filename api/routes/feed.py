@@ -181,11 +181,6 @@ def _display_event_copy(row: dict, *, allow_restricted_distress: bool) -> dict:
     return {
         **row,
         "what_happened": happened,
-        "why_it_matters": (
-            "A change in the public listing can warrant source review, but it does not "
-            "establish the balance, lien priority, willingness to sell, or other obligations."
-        ),
-        "what_happens_next": "Use the cited county listing to verify the current source status.",
         "source_evidence": safe_sources,
     }
 
@@ -492,8 +487,6 @@ def fetch_feed(
                 event_tags,
                 title,
                 what_happened,
-                why_it_matters,
-                what_happens_next,
                 event_date,
                 detected_at,
                 confidence,
@@ -551,8 +544,6 @@ def fetch_feed(
         ]
         title = row["title"]
         what_happened = row["what_happened"]
-        why_it_matters = row["why_it_matters"]
-        what_happens_next = row["what_happens_next"]
         raw_sources = list(row.get("source_evidence") or [])
         sources = [
             normalize_source_evidence(
@@ -585,8 +576,6 @@ def fetch_feed(
                 "event_tags": list(row.get("event_tags") or []),
                 "title": title,
                 "what_happened": what_happened,
-                "why_it_matters": why_it_matters,
-                "what_happens_next": what_happens_next,
                 "event_date": row.get("event_date"),
                 "detected_at": row["detected_at"],
                 "confidence": display_confidence,

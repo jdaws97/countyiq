@@ -49,7 +49,10 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
                     "url": "https://example.com/meeting",
                     "document_url": "https://example.com/minutes.pdf",
                     "excerpt": "The commission approved the plan.",
-                    "details": {"decision": "approved"},
+                    "details": {"decision": "approved", "record_status": "decision",
+                                "conditions": ["Submit a traffic study"],
+                                "milestones": [{"kind": "hearing", "text": "September 20, 2026", "date": "2026-09-20"}],
+                                "supports": ["condition:0", "milestone:0"]},
                 }
             ],
             "interpretation_kind": "llm",
@@ -161,6 +164,10 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
     assert response["limit"] == 1
     assert len(response["events"]) == 1
     event = response["events"][0]
+    assert "why_it_matters" not in event and "what_happens_next" not in event
+    assert event["sources"][0]["details"]["conditions"] == ["Submit a traffic study"]
+    assert event["sources"][0]["details"]["milestones"][0]["date"] == "2026-09-20"
+    assert event["sources"][0]["details"]["supports"] == ["condition:0", "milestone:0"]
     assert event["event_date"] == "2026-08-20"
     assert event["detected_at"] == "2026-08-27T12:30:00+00:00"
     assert event["project"] == {

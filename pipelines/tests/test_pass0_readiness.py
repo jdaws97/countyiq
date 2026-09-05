@@ -169,7 +169,7 @@ def test_deferred_case_is_scheduled_and_contradictory_terminal_prose_is_rejected
     wire = simple(source, "The case is identified for August because more details are needed.")
     item = wire["extractions"][0]
     item["record_status"] = "removed"
-    item["what_happens_next"] = {"text": action, "passage_ids": item["what_happened"]["passage_ids"]}
+    item["milestones"] = [{"kind": "other", "text": action, "passage_ids": item["what_happened"]["passage_ids"]}]
     value = hydrate_claims(wire, source)[0]
     assert value["record_status"] == "scheduled"
     assert value["event_tags"] == ["application"]

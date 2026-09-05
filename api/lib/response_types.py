@@ -266,8 +266,6 @@ class IntelligenceEventPayload(TypedDict):
     event_tags: list[str]
     title: str
     what_happened: str
-    why_it_matters: str
-    what_happens_next: str
     event_date: str | None
     detected_at: str
     confidence: float | None

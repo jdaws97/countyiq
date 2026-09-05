@@ -258,25 +258,12 @@ def build_parcel_event(row: dict[str, Any]) -> dict[str, Any]:
         else:
             what_happened = _format_change_list(evidence)
         title = f"Ownership activity at {location}"
-        why = (
-            "An ownership or deed change can precede financing, redevelopment, or portfolio repositioning, "
-            "but this record alone does not establish development intent."
-        )
-        next_step = "Monitor later deed, planning, zoning, and permit activity for corroboration."
     elif event_type == "value_change":
         what_happened = _format_change_list(evidence)
         title = f"Assessed value changed at {location}"
-        why = (
-            "A material assessment change may reflect improvements, demolition, reassessment, or a county data correction."
-        )
-        next_step = "Compare the change with structure records and municipal proceedings before drawing a conclusion."
     else:
         what_happened = _format_change_list(evidence)
         title = f"Recorded structure details changed at {location}"
-        why = (
-            "A structure-record change can be an early indicator of construction or demolition, but may also be a data correction."
-        )
-        next_step = "Check later parcel refreshes and related municipal documents for confirmation."
 
     entity_candidates = [row.get("owner_full")]
     for field in ("owner_full", "prev_owner"):
@@ -293,8 +280,10 @@ def build_parcel_event(row: dict[str, Any]) -> dict[str, Any]:
         "event_tags": [event_type],
         "title": title,
         "what_happened": what_happened,
-        "why_it_matters": why,
-        "what_happens_next": next_step,
+        # Keep the rollback-compatible storage columns empty. Customer events
+        # expose the recorded change and evidence, without generic commentary.
+        "why_it_matters": "",
+        "what_happens_next": "",
         "event_date": row.get("event_date"),
         "detected_at": row["detected_at"],
         "confidence": 0.95 if row.get("confidence") == "confirmed" else 0.65,
@@ -338,12 +327,6 @@ def build_delinquency_event(row: dict[str, Any]) -> dict[str, Any]:
         title = f"Delinquency decreased at {location}"
         what_happened = f"Affected delinquent claims decreased from ${old_total:,.2f} to ${new_total:,.2f}."
 
-    why = (
-        "A delinquency change can indicate financial pressure or resolution of an obligation, "
-        "but it does not establish willingness to sell or the status of other liens."
-    )
-    next_step = "Confirm the latest balance with the Tax Claim Bureau and monitor later county listings."
-
     evidence = {
         "change_kind": change_kind,
         "old_affected_total": old_total,
@@ -361,8 +344,8 @@ def build_delinquency_event(row: dict[str, Any]) -> dict[str, Any]:
         "event_tags": ["delinquency_change"],
         "title": title,
         "what_happened": what_happened,
-        "why_it_matters": why,
-        "what_happens_next": next_step,
+        "why_it_matters": "",
+        "what_happens_next": "",
         "event_date": row.get("event_date"),
         "detected_at": row["detected_at"],
         # This is a deterministic source transition, not a probabilistic model
@@ -441,31 +424,7 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
     if conditions:
         fallback_what += f" The record includes {len(conditions)} condition{'s' if len(conditions) != 1 else ''}."
 
-    why_by_type = {
-        "approval": "An approval advances the matter procedurally, subject to any stated conditions and later permitting requirements.",
-        "denial": "A denial may stop the current application or lead to an appeal or revised submission.",
-        "continuance": "A continuance leaves the matter unresolved and creates another opportunity for the proposal to change.",
-        "revision": "A revision indicates the proposal is still active and that its scope or conditions may be changing.",
-        "application": "A newly observed application is an early public signal of potential development activity.",
-        "hearing": "A public hearing places the matter into a formal municipal review process.",
-        "condition": "Conditions can materially affect project timing, cost, design, or ultimate feasibility.",
-        "upcoming_decision": "A stated next action identifies a near-term point when the project's status may change.",
-    }
-    next_by_type = {
-        "approval": "Monitor recorded plans, permits, satisfaction of conditions, and construction activity.",
-        "denial": "Monitor for an appeal, amended application, or later resubmission.",
-        "continuance": "Monitor the next agenda and meeting minutes for a revised plan or decision.",
-        "revision": "Compare the next submission or hearing record with the current proposal.",
-        "application": "Monitor scheduling, staff review, and the first formal decision.",
-        "hearing": "Monitor the meeting record for a decision, conditions, or continuance.",
-        "condition": "Monitor whether each stated condition is satisfied or revised.",
-        "upcoming_decision": "Monitor the stated next meeting or procedural milestone.",
-    }
-
-    model_interpretation = any(
-        _clean_text(row.get(field))
-        for field in ("what_happened", "why_it_matters", "what_happens_next")
-    )
+    model_interpretation = bool(_clean_text(row.get("what_happened")))
     related_entities = _dedupe(
         [applicant, *(row.get("related_entities") or []), *(row.get("matched_owners") or [])]
     )
@@ -520,15 +479,8 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
         "event_tags": tags,
         "title": f"{heading}: {subject}",
         "what_happened": _clean_text(row.get("what_happened")) or fallback_what,
-        "why_it_matters": _clean_text(row.get("why_it_matters")) or (
-            "Verify the source scope and authority; this record alone does not establish construction permission."
-            if details.get("contract_version") == 3 else
-            "A municipality-wide ordinance or plan action changes what can be built across "
-            "the affected districts, not just on one parcel."
-            if is_policy_action
-            else why_by_type.get(event_type, "The source records an update; verify its scope before relying on it.")
-        ),
-        "what_happens_next": _clean_text(row.get("what_happens_next")) or next_by_type.get(event_type, "Check later source records for the next action."),
+        "why_it_matters": "",
+        "what_happens_next": "",
         "event_date": (
             details.get("event_date") if details.get("contract_version") in {2, 3}
             else row.get("meeting_date")

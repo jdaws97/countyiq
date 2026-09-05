@@ -471,3 +471,57 @@ Artifacts: `fair-model-comparison/pass0-york-july-canary/` contains the source,
 reference, request protocol, original results/transcripts and separate
 `replay-and-source-review.json`. The [metadata review](proceeding-metadata-review-2026-09-05.md)
 records pre-model selection fixes and preserves unapplied drafts.
+
+## Recorded facts instead of narrative cards
+
+Pass 0 no longer requests `why_it_matters` or `what_happens_next`; retired and
+unknown fields remain rejected. Current extraction leaves the historical storage
+columns empty. Explicit historical replay validates the old schema without
+changing responses or source binding. Event builders no longer fill generic
+commentary templates, and the API, project summary, export and UI stop publishing
+these fields. Cards show the action once, with stated conditions, milestones and
+their own evidence receipts. No table migration or historical-data rewrite is needed.
+
+The prompt now distinguishes an explicit source correction from an unresolved
+conflict. Exact evidence of substantive interior renovation can establish
+redevelopment without implying expansion or a change from an unstated prior use.
+Saved-response replay raises Luna and GLM from two to all three reference
+discovery matters in the July minutes. DeepSeek's older excerpt still lacks the
+physical scope. Historical conflicts and incorrect narrative citations remain
+preserved; replay does not silently repair them.
+
+Three matched calls with the same complete source, unchanged reference, low
+reasoning, 16,384-token allowance and FP8 requirements cost **$0.008049745**.
+The cumulative review is **210 calls / $0.322589861**. OpenRouter routes/prices
+were captured before dispatch. No generation retries were made.
+
+| Model | Actual cost | Seconds | Records accepted | Reference matters discoverable |
+| --- | ---: | ---: | ---: | ---: |
+| Luna | $0.004117750 | 17.334 | 4/4 | 3/3 |
+| GLM 5.3 Flash | $0.002169850 | 48.713 | 4/4 | 3/3 |
+| DeepSeek 0731 | $0.001762145 | 75.057 | 0/4 | 0/3 |
+
+Primary source review found no invented next action or numerical scope in the
+repeat. Three votes remain advisory recommendations; the no-show remains an
+update. **GLM meets this document's source-first criteria.** Luna still lists
+the explicit UN1-to-UN2 correction as an unresolved identity conflict, preventing
+linking of that matter. Its raw operating-relief `plan_review` label is correctly
+demoted by the scope gate. Its generic “proposed emergency shelter” reference
+also exposed an alias risk: pure facility descriptions now cannot connect
+separate applications; source application IDs and distinctive names remain usable.
+
+DeepSeek repeats `current_zonong` and `proposed_zonong` in every item. The
+production schema rejects all four. Its unchanged raw content identifies the
+four intended matters and corrected UN2. A separate offline diagnostic changes
+only those two object-key spellings: all four records and three discovery matters
+then pass the unchanged source validator. This is an interface failure, not
+evidence of failed source understanding. Production does not apply this repair;
+original responses and zero-acceptance results remain intact. The response used
+11,171 reasoning tokens, so latency and rejects remain part of its effective cost.
+
+Artifacts: `fair-model-comparison/pass0-recorded-facts-retest/` retains the exact
+source/reference copies, protocol, route snapshot, responses/transcripts,
+saved-response replay, semantic review and separate key diagnostic. This is a
+matched regression after the findings informed changes, not an unseen source
+sample or full-pass qualification. No serving writes, quality receipts, model
+default changes or backfill occurred. Metadata version 6 remains unapplied.

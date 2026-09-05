@@ -18,7 +18,6 @@ def payload(source=SOURCE):
         "what_happened": claim("Council approved the project bond release."),
         "applicant_name": None, "current_zoning": None, "proposed_zoning": None,
         "conditions": [claim("Submit an inspection report.")],
-        "why_it_matters": None, "what_happens_next": None,
         "record_status": "decision",
         "decision": {"outcome": "approved", "scope": "bond", "authority": "Council", "passage_ids": ids.copy(), "action_text": source.splitlines()[0]},
         "event_date": claim("July 20, 2026"),
@@ -72,6 +71,39 @@ def test_caller_binding_preserves_raw_claims_and_source_evidence():
     assert raw == before
     bound["extractions"][0]["project_name"] = "Changed after binding"
     assert raw == before
+
+
+@pytest.mark.parametrize("field", ["why_it_matters", "what_happens_next"])
+def test_retired_narrative_claim_is_quarantined_even_when_cited(field):
+    from jsonschema import Draft202012Validator
+    from countyiq.lib.proceeding_claims import PASS0_MODEL_SCHEMA
+    wire = payload()
+    item = wire["extractions"][0]
+    assert not list(Draft202012Validator(PASS0_MODEL_SCHEMA).iter_errors({"extractions": [item]}))
+    item[field] = {"text": "Monitor a possible appeal.",
+                   "passage_ids": item["what_happened"]["passage_ids"]}
+    raw = {"extractions": wire["extractions"]}
+    bound = bind_model_claims(raw, SOURCE, expected_source_sha256=wire["source_sha256"])
+    assert review_claims(bound, SOURCE)["accepted_indices"] == []
+    assert raw["extractions"][0][field]["text"] == "Monitor a possible appeal."
+
+
+def test_historical_narrative_replay_is_explicit_and_preserves_response():
+    wire = payload()
+    wire["extractions"][0].update(why_it_matters=None, what_happens_next={
+        "text": "The recorded bid opening is September 10, 2026.",
+        "passage_ids": wire["extractions"][0]["what_happened"]["passage_ids"],
+    })
+    before = deepcopy(wire)
+    assert not review_claims(wire, SOURCE)["extractions"]
+    replay = review_claims(wire, SOURCE, narrative_evaluation=True)
+    assert replay["accepted_indices"] == [0]
+    assert replay["extractions"][0]["what_happens_next"] == wire["extractions"][0]["what_happens_next"]["text"]
+    assert wire == before
+    # Rebuilding customer events does not repeat retired prose from stored rows.
+    event = build_development_event(row(replay["extractions"][0]))
+    assert event["what_happens_next"] == ""
+    assert event["source_evidence"][0]["details"]["milestones"]
 
 
 @pytest.mark.parametrize("raw", [None, {}, [], {"extractions": None},
@@ -243,7 +275,7 @@ def test_frozen_multi_passage_contract_uses_different_milestone_receipts():
     import json
     from pathlib import Path
     fixture = json.loads((Path(__file__).parents[1] / "eval/fixtures/p0_claims_contract.json").read_text())
-    item = hydrate_claims(fixture["model_claims"], fixture["source_text"])[0]
+    item = hydrate_claims(fixture["model_claims"], fixture["source_text"], narrative_evaluation=True)[0]
     for key in ("decision_scope", "discovery_eligible", "event_date"):
         assert item[key] == fixture["expected"][key]
     assert [m["date"] for m in item["milestones"]] == fixture["expected"]["milestone_dates"]
@@ -252,6 +284,19 @@ def test_frozen_multi_passage_contract_uses_different_milestone_receipts():
         return next(e for e in event["source_evidence"] if marker in e["details"]["supports"])
     assert evidence("milestone:0") != evidence("milestone:1")
     assert "November 30, 2026" in evidence("milestone:1")["excerpt"]
+
+
+def test_generic_facility_labels_cannot_merge_separate_applications():
+    from countyiq.lib.proceeding_contract import resolve_project_keys
+    records = []
+    for identifier in ("ZHB 2026-01", "ZHB 2026-02"):
+        records.append(dict(id=identifier, body_name="Synthetic Township Council",
+            extraction_details=dict(contract_version=3, identity_status="source_identified",
+                application_ids=[identifier], project_reference="proposed emergency shelter")))
+    keys, aliases = resolve_project_keys(records)
+    assert len(set(keys.values())) == 2
+    assert not any(alias.startswith("named|") for alias in aliases)
+    assert distinctive_project_reference("LifePath Emergency Shelter")
 
 
 def test_disjoint_passages_cannot_fabricate_one_literal_reference():

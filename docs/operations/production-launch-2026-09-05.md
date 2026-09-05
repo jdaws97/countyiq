@@ -110,8 +110,8 @@ workspace and cross-session persistence verification remain outstanding.
 ## LLM qualification and cost
 
 The [model comparison](../research/model-comparison-2026-09-05.md) contains the
-current source reviews and preserved raw results: 207 evaluation-only calls,
-$0.314540116 total. None issued a quality receipt or wrote serving intelligence.
+current source reviews and preserved raw results: 210 evaluation-only calls,
+$0.322589861 total. None issued a quality receipt or wrote serving intelligence.
 
 The harness now uses explicit model-appropriate reasoning and sampling settings.
 Removing factual examples from the shared citation prompt materially improved
@@ -125,8 +125,8 @@ discrepancy is resolved: other-owner counts and all-neighbor acreage describe
 different populations, now labeled in the prompt. Pass 0 source fingerprints
 are caller-owned; replay checks retain the original source binding. New canaries
 still expose agenda/decision-scope errors and incorrect repeated numeric facts.
-Models and frozen labels have not been silently changed. Reduce unnecessary
-model narration before another broad comparison; full backfill remains disabled.
+Models and frozen labels have not been silently changed. The recorded-facts
+iteration below removes unnecessary model narration; full backfill remains disabled.
 
 The current harness uses synchronous OpenRouter Chat Completions. Parcel-level
 “batching” in Pass 2 is unrelated to the discounted provider Batch API. Direct
@@ -249,7 +249,48 @@ left schema revision 066 unchanged. Post-deployment public readiness returns
 customer sign-in challenge on `/api/session`. The deployment log is
 `output/production-readiness-2026-09-05/metadata-v6/production-source-review-deploy.log`.
 
-Work stopped at the user's request after this verification. The proposed next
-step—removing repetitive proceeding commentary from the model request and event
-cards—has not been implemented. No further canary calls, metadata cleanup or
-full backfill were started.
+Work stopped at the user's request after that verification. At that stopping
+point the card simplification was still proposed. The user subsequently resumed
+the production-readiness goal; the next iteration is recorded below.
+
+## Recorded-facts release review
+
+The reviewed change removes “Why it matters” and “What happens next” from the
+current Pass 0 request and customer event contract, including project exports.
+Cards show the recorded action once, then stated conditions and milestones with
+their own source links. Old storage columns remain available for rollback; new
+events leave them empty. Historical response replay uses an explicit old-schema
+option and preserves the original response and source binding.
+
+The exact excerpt must establish substantive interior renovation before it can
+qualify as redevelopment without expansion. Pure facility descriptions no longer
+act as project-name aliases across different application IDs. The matched
+three-model repeat costs $0.008049745: GLM passes this document's source criteria,
+Luna retains a false identity conflict, and DeepSeek's otherwise relevant response
+is rejected for misspelled schema keys. This is regression evidence, not unseen
+source qualification. Full results and separate offline diagnostics are in the
+[model comparison](../research/model-comparison-2026-09-05.md).
+
+A fresh real-browser review covered marketing, search, property and Watches at
+desktop and 390px. It found that first-observed parcels could be marked recently
+changed. The API now requires a prior expired source version, and the badge names
+its 30-day window. Watching `0100201000100` through the real local app now shows
+one parcel and no false change. Neither size overflows horizontally. Synthetic
+browser-only proceeding fixtures verify the condition/milestone links and card
+layout; they are not served intelligence or source-quality evidence. Local
+anonymous navigation does not establish a production sign-in defect. The empty
+activity/project data remains a product-release gap until extraction qualifies.
+
+Validation: 1,445 pipeline unit/regression tests and 124 database integration
+tests pass; the final interior-work boundary adds one case and passes all 53
+focused item-review tests. All 120 API unit tests and 110 integration tests pass;
+the later watch fix passes six focused contract cases including two new history
+cases. Frontend TypeScript, lint, production build and 30 tests pass; TypeScript
+and lint were repeated after preserving original evidence-array indexes.
+The integration suite uses a separate migrated pipeline database on port 5434;
+an initial run against API fixture state on 5433 was invalid environment evidence.
+
+Deployment is pending at this point in the record. All production paid flags
+remain disabled, metadata version 6 is unapplied, and no backfill is approved.
+Browser evidence: `output/playwright/recorded-facts-*` and
+`output/playwright/customer-review-20260905/`.

@@ -274,8 +274,6 @@ def test_feed_contract_combines_parcel_and_development_intelligence(client):
     for event in all_payload["events"]:
         for key in (
             "what_happened",
-            "why_it_matters",
-            "what_happens_next",
             "related_entities",
             "entity_links",
             "related_pidns",
@@ -285,6 +283,8 @@ def test_feed_contract_combines_parcel_and_development_intelligence(client):
             "interpretation",
         ):
             assert key in event
+        assert "why_it_matters" not in event
+        assert "what_happens_next" not in event
 
 
 def test_radar_routes(client):
@@ -409,9 +409,31 @@ def test_parcels_summary_contract_for_watchlist(client):
     ):
         assert key in parcel
     assert parcel["pidn"] == TEST_PIDN
-    assert parcel["changed_recently"] is True  # seeded rows are fresh
+    assert parcel["changed_recently"] is False  # first observation is not a change
     assert parcel["owner_full"] == "Alpha Holdings LLC"
     assert parcel["has_tax_delinquency"] is True
+
+
+@pytest.mark.parametrize("days_ago,expected", [(1, True), (45, False)])
+def test_watch_changes_require_recent_version_history(client, days_ago, expected):
+    import psycopg2
+    from api.tests.conftest import DB_ENV
+
+    pidn = "0000000000987"
+    with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""INSERT INTO staging.parcels(pidn, owner_full, valid_from, valid_to)
+                VALUES (%s, 'Prior owner', NOW() - INTERVAL '90 days', NOW() - %s * INTERVAL '1 day'),
+                       (%s, 'Current owner', NOW() - %s * INTERVAL '1 day', NULL)""",
+                (pidn, days_ago, pidn, days_ago))
+    try:
+        response = client.get(f"/api/parcels/summary?pidns={pidn}")
+        assert response.status_code == 200
+        assert response.json()["parcels"][0]["changed_recently"] is expected
+    finally:
+        with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM staging.parcels WHERE pidn = %s", (pidn,))
 
 
 @pytest.mark.parametrize("legacy_reference", [None, "Multiple parcels in application"])

@@ -33,7 +33,6 @@ import {
   toggleMunicipalityWatch,
   toggleProjectWatch,
   toggleWatch,
-  WATCHLIST_CAP,
 } from '../lib/watchlist'
 import type { IntelligenceEvent, IntelligenceFeedResponse, WatchlistSummaryResponse } from '../types/api'
 
@@ -133,10 +132,9 @@ export default function Watchlist() {
   return (
     <PageShell maxWidth={1040}>
       <PageHeader
-        eyebrow="Retained intelligence"
-        title="Watched Intelligence"
-        description="Return to the parcels, projects, entities, municipalities, saved searches, and new evidence that matter to your current investigation."
-        meta={<><Badge color="var(--accent-blue)">{watched.length}/{WATCHLIST_CAP} parcels</Badge><Badge color="var(--accent-cyan)">{watchedProjects.length} projects</Badge><Badge color="var(--accent-green)">{watchedEntities.length} entities</Badge><Badge color="var(--accent-purple)">{watchedMunicipalities.length} municipalities</Badge>{changedCount > 0 && <Badge color="var(--accent-gold)">{changedCount} parcels changed</Badge>}</>}
+        title="Watches"
+        description="Your saved places, projects and source updates."
+        meta={<>{watched.length > 0 && <Badge color="var(--accent-blue)">{watched.length} parcel{watched.length === 1 ? '' : 's'}</Badge>}{watchedProjects.length > 0 && <Badge color="var(--accent-cyan)">{watchedProjects.length} project{watchedProjects.length === 1 ? '' : 's'}</Badge>}{watchedEntities.length > 0 && <Badge color="var(--accent-green)">{watchedEntities.length} entit{watchedEntities.length === 1 ? 'y' : 'ies'}</Badge>}{watchedMunicipalities.length > 0 && <Badge color="var(--accent-purple)">{watchedMunicipalities.length} municipalit{watchedMunicipalities.length === 1 ? 'y' : 'ies'}</Badge>}{changedCount > 0 && <Badge color="var(--accent-gold)">{changedCount} parcel{changedCount === 1 ? '' : 's'} changed in 30 days</Badge>}</>}
         actions={<><Button tone="quiet" onClick={exportWorkspace}>Export workspace</Button><Button tone="quiet" onClick={() => importRef.current?.click()}>Import workspace</Button><input ref={importRef} className="sr-only" type="file" accept="application/json,.json" onChange={importWorkspace} /></>}
       />
 
@@ -188,7 +186,7 @@ export default function Watchlist() {
               <div className={`watch-parcel-row${parcel.changed_recently ? ' watch-parcel-changed' : ''}`} key={parcel.pidn}>
                 <div><Link to={`/property/${parcel.pidn}`}>{parcel.propadr ?? parcel.pidn}</Link><span>{parcel.owner_full ?? 'Owner not displayed'} · {parcel.municipality ?? 'Municipality unavailable'}</span></div>
                 <div><strong>{parcel.aprtotal !== null ? formatCurrencyCompact(parcel.aprtotal, { allowBillions: true }) : '—'}</strong><span>{getPropertyClassLabel(parcel.class) || parcel.class || 'Class unavailable'}</span></div>
-                <div>{parcel.changed_recently ? <Badge color="var(--accent-gold)">Changed</Badge> : <span>No recent change</span>}</div>
+                <div>{parcel.changed_recently ? <Badge color="var(--accent-gold)">Record changed in 30 days</Badge> : <span>No recent recorded change</span>}</div>
                 <Button tone="quiet" onClick={() => toggleWatch(parcel.pidn)}>Unwatch</Button>
               </div>
             ))}

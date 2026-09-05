@@ -139,7 +139,7 @@ def test_delinquency_event_describes_direction_and_limit():
     )
     assert event["event_type"] == "delinquency_change"
     assert "$1,000.00" in event["what_happened"]
-    assert "does not establish willingness to sell" in event["why_it_matters"]
+    assert event["why_it_matters"] == ""
     assert event["confidence"] is None
 
 
@@ -244,7 +244,7 @@ def test_development_event_falls_back_without_llm_interpretation():
     )
     assert event["event_type"] == "denial"
     assert event["interpretation_kind"] == "deterministic"
-    assert "appeal" in event["what_happens_next"].lower()
+    assert event["what_happens_next"] == ""
 
 
 def test_development_event_does_not_create_project_from_board_alone():

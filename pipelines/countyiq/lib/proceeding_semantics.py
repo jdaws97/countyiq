@@ -277,6 +277,21 @@ def relevance_projection(category, scope, basis, evidence, *, summary='', source
         r"\bpreviously\b|\bin \d{4}\b|\bnot proposed\b", reuse_text, re.I)
     if adaptive_reuse:
         category, scope = "development", "conversion"
+    # An identified proposal can rebuild substantial interior space without
+    # enlarging its shell or establishing a change from a known prior use.
+    # Require the physical work in the exact selected excerpt, not in rationale
+    # or an unrelated neighboring paragraph. Ordinary repairs remain context.
+    fitout_spaces = re.findall(
+        r"\bkitchens?\b|\brestroom(?: facilities)?\b|\boffice space\b|"
+        r"\bmultipurpose (?:meeting )?(?:area|room)\b", reuse_text, re.I)
+    interior_work = (source_identity and len(set(s.casefold() for s in fitout_spaces)) >= 2
+        and re.search(r"\b(?:renovat\w*|remodel\w*|reconfigur\w*|fit[ -]?out)\b", reuse_text, re.I)
+        and not re.search(r"\b(?:no|not|without)\s+(?:(?:planned|proposed|any)\s+)?(?:renovat|remodel|reconfigur|fit[ -]?out)|"
+                          r"(?:renovat|remodel|reconfigur|fit[ -]?out).{0,150}\bnot (?:planned|proposed)\b|"
+                          r"\b(?:previously|completed|historical|neighboring)\b|"
+                          r"\bin \d{4}\b|\b(?:routine|repair|paint|maintenance)\w*\b", reuse_text, re.I))
+    if interior_work:
+        category, scope = "development", "redevelopment"
     # Model labels alone cannot qualify an opportunity. Require physical scope
     # or a land-use subject in the item's exact excerpt/limited source context.
     # Unknown work remains available as context instead of guessed construction.
@@ -308,7 +323,9 @@ def relevance_projection(category, scope, basis, evidence, *, summary='', source
             "conversion": r"conver|change of use",
             "redevelopment": r"redevelop|rehabilitat|adaptive reuse",
         }
-        if not re.search(work[scope], grounded, re.I) and not (scope == "conversion" and adaptive_reuse):
+        if (not re.search(work[scope], grounded, re.I)
+                and not (scope == "conversion" and adaptive_reuse)
+                and not (scope == "redevelopment" and interior_work)):
             category, scope = "context_only", "unknown"
     if category == "landuse_policy" and scope == "policy_change":
         subject = re.search(r"zon(?:e|ing)|rezon|comprehensive plan|land use plan|ZO Sections?|wireless communications facilities|stormwater|"

@@ -2,6 +2,11 @@
 
 This file is the fast answer to "where are we really with this repo?"
 
+For the current deployed commit, recovery receipts and qualification evidence,
+use the [September 5 launch record](operations/production-launch-2026-09-05.md).
+The private app is live; municipal extraction publication and full backfill
+remain gated. The model defaults below are configuration, not quality approval.
+
 ## What CountyIQ Is Right Now
 
 CountyIQ is a real-estate intelligence platform for York County, PA. The repo contains:
@@ -78,7 +83,7 @@ tools remain under `pipelines/eval/`.
 | Object storage | Cloudflare R2 (via `R2_ENDPOINT_URL` — required, otherwise boto3 targets AWS) |
 | Front door | Cloudflare |
 | Inference backend | OpenRouter |
-| Deployment | Not deployed. Docker Compose on the configured VPS behind Cloudflare is the target. The repo now has a fail-closed exact-SHA deploy path, versioned local images, stable volume names, verified R2 backup manifests, release/restore receipts, and a persistent systemd backup timer; read-only checks on 2026-09-04 confirmed Ubuntu 24.04 and an SSH-only UFW firewall, but also found old SSH include ordering still enabling password authentication and root-only cost-guard directory permissions. Current repository hardening, a first application release, backup scheduling, off-host recovery and provider controls remain to be verified. |
+| Deployment | Private application live at app.countyiq.net on the configured VPS behind Cloudflare Access and Tunnel. Exact-commit releases, R2 backup/restore verification and the backup timer are operational. Live customer sign-in and cross-session workspace checks remain outstanding. Current release and evidence: [launch record](operations/production-launch-2026-09-05.md). |
 
 ## Current Model Lineup
 

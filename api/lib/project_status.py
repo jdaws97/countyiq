@@ -110,7 +110,6 @@ def summarize_project(events, *, incomplete=False, today=None):
     return {"status": status, "as_of": latest.get("event_date") if latest else None,
         "latest_event_key": latest.get("event_key") if latest else None,
         "latest_change": latest.get("what_happened") if latest else None,
-        "next_verification": latest.get("what_happens_next") if latest else None,
         "decisions": decisions, "conditions": conditions, "milestones": milestones,
         "history_incomplete": incomplete or any(not exact_date(e.get("event_date")) for e in events),
         "caveat": "Status describes linked records, not construction permission. Conditions remain unverified until a source explicitly resolves them; later silence does not satisfy them."}

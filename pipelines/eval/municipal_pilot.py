@@ -26,7 +26,7 @@ from countyiq.lib.backfill_authorization import BackfillAuthorization, create_ba
 from countyiq.lib.intelligence_integrity import validate_pass0_extractions
 from countyiq.lib.pass0_templates import EXTRACTION_USER_TEMPLATE, PROMPT_VERSION
 from countyiq.lib.pass_llm_config import resolve_pass_model
-from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA, PASS0_MODEL_SCHEMA, bind_model_claims, review_claims
+from countyiq.lib.proceeding_claims import PASS0_CLAIMS_SCHEMA, PASS0_MODEL_SCHEMA, NARRATIVE_REPLAY_SCHEMA, bind_model_claims, review_claims
 from countyiq.lib.pass0_templates import document_prompt
 from countyiq.lib.llm_harness import probe_llm_archive_destination
 from countyiq.lib.quality_release import release_identity
@@ -78,20 +78,28 @@ def load_sources(manifest: dict) -> list[dict]:
     return result
 
 
-def evaluate_format(parsed: dict | None, source_text: str, meeting_date=None, *, expected_source_sha256: str | None = None) -> dict:
+def evaluate_format(parsed: dict | None, source_text: str, meeting_date=None, *, expected_source_sha256: str | None = None,
+                    narrative_evaluation: bool = False) -> dict:
     """Review an archived envelope, or current wire claims with a pre-call hash.
 
     Historical responses keep their original hash validation. New invocations
     explicitly supply the fingerprint captured before sending the request.
     """
     schema = PASS0_MODEL_SCHEMA if expected_source_sha256 is not None else PASS0_CLAIMS_SCHEMA
+    if narrative_evaluation:
+        from copy import deepcopy
+        schema = deepcopy(NARRATIVE_REPLAY_SCHEMA)
+        if expected_source_sha256 is not None:
+            del schema["properties"]["source_sha256"]
+            schema["required"].remove("source_sha256")
     schema_errors = [e.message for e in Draft202012Validator(schema).iter_errors(parsed)]
     extractions, evidence_errors, rejected_items = [], [], []
     citation_repairs, field_rejections, coverage = [], [], None
     try:
         bound = (bind_model_claims(parsed, source_text, expected_source_sha256=expected_source_sha256)
                  if expected_source_sha256 is not None else parsed)
-        review = review_claims(bound, source_text, meeting_date=meeting_date)
+        review = review_claims(bound, source_text, meeting_date=meeting_date,
+                              narrative_evaluation=narrative_evaluation)
         extractions, rejected_items = review["extractions"], review["rejected_items"]
         citation_repairs, coverage = review["citation_repairs"], review["coverage"]
         field_rejections = review["field_rejections"]
@@ -103,6 +111,7 @@ def evaluate_format(parsed: dict | None, source_text: str, meeting_date=None, *,
     # distinguishing partial acceptance from an entirely clean document.
     return {"schema_errors": schema_errors, "evidence_errors": evidence_errors,
             "source_binding": "caller" if expected_source_sha256 is not None else "envelope",
+            "contract": "historical_narrative_replay" if narrative_evaluation else "current",
             "runtime_gate_passed": publishable,
             "complete_document_gate_passed": publishable and not rejected_items and not field_rejections and not schema_errors,
             "rejected_items": rejected_items, "citation_repairs": citation_repairs, "field_rejections": field_rejections, "coverage": coverage,

@@ -12,6 +12,7 @@ def test_later_hearing_does_not_repeat_old_approval_as_current():
     result=summarize_project([event('a','2026-01-01','approved'),event('b','2026-02-01')])
     assert result['status']=='Later activity recorded; verify decision status'
     assert result['decisions'][0]['event_key']=='a'
+    assert 'next_verification' not in result
 
 
 def test_conflicts_conditions_and_ambiguous_dates_remain_explicit():

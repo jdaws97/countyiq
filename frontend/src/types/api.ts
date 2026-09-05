@@ -416,8 +416,6 @@ export interface IntelligenceEvent {
   event_tags: string[]
   title: string
   what_happened: string
-  why_it_matters: string
-  what_happens_next: string
   event_date: string | null
   detected_at: string
   confidence: number | null
@@ -691,7 +689,6 @@ export interface ProjectCaseResponse extends IntelligenceFeedResponse {
     as_of: string | null
     latest_event_key: string | null
     latest_change: string | null
-    next_verification: string | null
     decisions: ProjectDecision[]
     conditions: ProjectStatusItem[]
     milestones: ProjectStatusItem[]

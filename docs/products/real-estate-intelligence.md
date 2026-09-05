@@ -119,3 +119,13 @@ investigate, not forecasts. This replaces the earlier requirement that every
 discoverable plan state a physical construction scope. The JSON evidence contract
 adds one relevance scope; no table migration is needed. Existing outputs retain
 their original release identity and are not silently republished.
+
+Substantive interior renovation of an identified nonresidential project also
+qualifies when the original record states the physical work. Keep it distinct
+from a building expansion or a change from an unknown prior use. Operating
+permission alone, ordinary repairs and maintenance do not establish that scope.
+
+Event cards present the recorded action once, followed by actual conditions,
+milestones and evidence. Do not generate generic significance or next-step
+paragraphs. An explicit source correction resolves that field; a correction is
+not itself a proposed rezoning or an unresolved identity conflict.

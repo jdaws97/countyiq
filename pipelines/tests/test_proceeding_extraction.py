@@ -154,8 +154,8 @@ class TestExtractionPrompt:
             "project_name",
             "related_entities",
             "what_happened",
-            "why_it_matters",
-            "what_happens_next",
+            "conditions",
+            "decision",
             "milestones",
         ):
             assert field in prompt

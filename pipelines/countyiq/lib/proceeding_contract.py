@@ -251,6 +251,11 @@ def resolve_project_keys(rows, known_aliases=None):
 def distinctive_project_reference(value):
     """Generic relief/plan descriptions cannot identify unrelated applications."""
     words = _key_text(value).split()
+    if re.fullmatch(
+        r"(?:(?:the|a|an|proposed|new|existing) )*"
+        r"(?:emergency shelter|community cent(?:er|re)|industrial building|apartment building)"
+        r"(?: (?:project|renovation|conversion|expansion))?", " ".join(words)):
+        return False
     generic = set("a an the and or of for at to in on proposed potential preliminary final plan plans subdivision development project review request variance relief application case accessory use steep slope dimensional building site lot lots line adjustment ordinance amendment zoning text draft road rd street st lane ln drive dr north south east west phase".split())
     generic.update("grant township borough municipality municipal county city system".split())
     if (re.search(r"\bordinance\b", str(value or ""), re.I)

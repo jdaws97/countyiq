@@ -119,10 +119,42 @@ def test_narrative_cannot_invent_decision_excerpt_or_relevance_excerpt():
 
 def test_old_wire_shape_is_offline_only():
     wire = payload()
+    wire["extractions"][0].update(why_it_matters=None, what_happens_next=None)
     del wire["extractions"][0]["decision"]["action_text"]
     del wire["extractions"][0]["relevance"]["source_text"]
     assert review_claims(wire, SOURCE)["extractions"] == []
     assert review_claims(wire, SOURCE, legacy_evaluation=True)["extractions"]
+
+
+@pytest.mark.parametrize("negative_scope", ["", " No building expansion is proposed."])
+def test_identified_interior_project_is_discoverable_without_building_expansion(negative_scope):
+    action = "The first phase of renovations includes a kitchen, restroom facilities, office space and a multipurpose meeting area." + negative_scope
+    source = "SYNTHETIC APPLICATION. 5 Oak St. " + action
+    wire = simple(source, "Interior renovations at 5 Oak St. are scheduled for review; no building expansion is proposed.")
+    item = wire["extractions"][0]
+    item["parcel_references"] = [{"text": "5 Oak St.", "passage_ids": item["what_happened"]["passage_ids"]}]
+    item["relevance"].update(category="development", scope="redevelopment", source_text=action)
+    result = hydrate_claims(wire, source)[0]
+    assert result["discovery_eligible"]
+    assert result["relevance_scope"] == "redevelopment"
+    assert result["decision"] is None
+
+
+@pytest.mark.parametrize("excerpt", [
+    "The first phase of renovations was completed in 2020 and includes a kitchen and office space.",
+    "No renovations to the kitchen or office space are proposed.",
+    "Routine renovations repair paint in the kitchen and office space.",
+    "The neighboring project has renovations including a kitchen and office space.",
+    "Permission to operate a center with a kitchen and office space.",
+])
+def test_interior_context_does_not_establish_a_current_physical_proposal(excerpt):
+    source = "SYNTHETIC APPLICATION. 5 Oak St. " + excerpt
+    wire = simple(source)
+    item = wire["extractions"][0]
+    item["parcel_references"] = [{"text": "5 Oak St.", "passage_ids": item["what_happened"]["passage_ids"]}]
+    item["relevance"].update(category="development", scope="redevelopment", source_text=excerpt)
+    result = hydrate_claims(wire, source)[0]
+    assert not result["discovery_eligible"]
 
 
 def test_neighbor_compliance_report_does_not_suppress_bess_policy():

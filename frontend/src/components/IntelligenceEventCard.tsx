@@ -5,6 +5,7 @@ import Badge from './Badge'
 import EvidencePanel from './EvidencePanel'
 import { Button } from './ui'
 import { formatLabel, formatShortDate } from '../lib/format'
+import { openEvidenceReceipt } from '../lib/evidence'
 import type { TriageStatus } from '../lib/investigationState'
 import { isProjectWatched, isWatched, toggleProjectWatch, toggleWatch } from '../lib/watchlist'
 import type { IntelligenceEvent } from '../types/api'
@@ -56,9 +57,16 @@ export default function IntelligenceEventCard({
     ? formatShortDate(event.event_date)
     : 'Event date unverified'
   const proceedingDetails = event.sources.find((source) => [2, 3].includes(Number(source.details?.contract_version)))?.details
-  const confidence = event.interpretation.kind === 'llm' && event.confidence != null
-    ? Math.round(event.confidence * 100)
-    : null
+  const conditions = Array.isArray(proceedingDetails?.conditions)
+    ? proceedingDetails.conditions.flatMap((value, index) => typeof value === 'string' && value.trim() ? [{text: value, index}] : [])
+    : []
+  const milestones = Array.isArray(proceedingDetails?.milestones)
+    ? proceedingDetails.milestones.flatMap((value, index) =>
+      value && typeof value === 'object' && typeof value.text === 'string' && value.text.trim()
+        ? [{text: value.text, kind: typeof value.kind === 'string' ? value.kind : null, index}] : [])
+    : []
+  const sourceFor = (marker: string) => event.sources.find((source) =>
+    Array.isArray(source.details?.supports) && source.details.supports.includes(marker))
   const projectWatched = event.project ? isProjectWatched(event.project.key) : false
   const pidns = event.related_pidns.slice(0, 8)
   const entityLinks = event.entity_links ?? []
@@ -83,9 +91,7 @@ export default function IntelligenceEventCard({
       </div>
 
       <h2>{event.title}</h2>
-      {/* Lead with the specific fact (amounts, dates); the generic significance
-          sentence lives in the expanded details. */}
-      <p className="intelligence-card-summary">{event.what_happened || event.why_it_matters}</p>
+      <p className="intelligence-card-summary">{event.what_happened}</p>
 
       <div className="intelligence-card-meta">
         {event.municipality && <span>{event.municipality}</span>}
@@ -97,9 +103,8 @@ export default function IntelligenceEventCard({
         {proceedingDetails?.identity_status === 'needs_review' && <span>Source identity conflict · linking requires review</span>}
         {proceedingDetails?.location_status === 'location_not_resolved' && Array.isArray(proceedingDetails.parcel_references) && proceedingDetails.parcel_references.length > 0 && <span>Parcel location unverified</span>}
         <span>{event.sources.length} evidence receipt{event.sources.length === 1 ? '' : 's'}</span>
-        {confidence !== null && <span>{confidence}% confidence</span>}
         {event.interpretation.kind === 'deterministic' && <span>Recorded source change</span>}
-        {event.interpretation.kind === 'llm' && <span>Source-grounded extraction</span>}
+        {event.interpretation.kind === 'llm' && <span>Extracted from record</span>}
       </div>
 
       <div className="intelligence-card-actions" data-print-hidden>
@@ -120,11 +125,21 @@ export default function IntelligenceEventCard({
 
       {(expanded || printEvidence) && (
         <div className="intelligence-card-details" hidden={!expanded} data-print-evidence={printEvidence || undefined}>
-          <div className="insight-grid">
-            <InsightBlock label="What happened" accent={eventColor(event)}>{event.what_happened}</InsightBlock>
-            <InsightBlock label="Why it matters" accent="var(--accent-purple)">{event.why_it_matters}</InsightBlock>
-            <InsightBlock label="What happens next" accent="var(--accent-gold)">{event.what_happens_next}</InsightBlock>
-          </div>
+          {conditions.length > 0 && <div className="recorded-event-facts">
+            <h3>Stated conditions</h3>
+            <p>Completion is not established by this record.</p>
+            <ul>{conditions.map((item) => <li key={item.index}>{item.text}{' '}
+              <FactSource evidenceId={sourceFor(`condition:${item.index}`)?.evidence_id} />
+            </li>)}</ul>
+          </div>}
+          {milestones.length > 0 && <div className="recorded-event-facts">
+            <h3>Stated milestones</h3>
+            <p>A stated date does not establish that the action occurred.</p>
+            <ul>{milestones.map((item) => <li key={item.index}>
+              {typeof item.kind === 'string' && item.kind !== 'other' && <strong>{formatLabel(item.kind)}: </strong>}{item.text}{' '}
+              <FactSource evidenceId={sourceFor(`milestone:${item.index}`)?.evidence_id} />
+            </li>)}</ul>
+          </div>}
 
           {event.project && (
             <RelatedGroup label="Related project">
@@ -166,10 +181,10 @@ export default function IntelligenceEventCard({
   )
 }
 
-function InsightBlock({ label, children, accent }: { label: string; children: string; accent: string }) {
-  return <div className="insight-block" style={{ '--insight-accent': accent } as React.CSSProperties}><div className="record-label">{label}</div><div>{children}</div></div>
-}
-
 function RelatedGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="related-group"><div className="record-label">{label}</div><div className="related-group-items">{children}</div></div>
+}
+
+function FactSource({ evidenceId }: { evidenceId?: string }) {
+  return evidenceId ? <a href={'#' + evidenceId} onClick={() => openEvidenceReceipt(evidenceId)}>Source →</a> : null
 }

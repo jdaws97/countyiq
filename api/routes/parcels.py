@@ -377,8 +377,8 @@ def parcels_summary(
     """Batch summary for a set of parcels — powers the client-side watchlist.
 
     Returns current fundamentals plus change indicators derived from SCD2:
-    `changed_at` is the current row's valid_from, so a recent value means the
-    parcel's tracked fields changed in a recent pipeline run.
+    `changed_at` is the current row's valid_from. A recent initial observation
+    is not a change: `changed_recently` also requires an earlier source version.
     """
     pidn_list = [p.strip() for p in pidns.split(",") if p.strip()][:100]
     if not pidn_list:
@@ -396,7 +396,11 @@ def parcels_summary(
                 p.propadr, p.municipality,
                 p.aprtotal, p.class, p.acres,
                 p.valid_from AS changed_at,
-                (p.valid_from >= NOW() - INTERVAL '30 days') AS changed_recently,
+                (p.valid_from >= NOW() - INTERVAL '30 days' AND EXISTS (
+                    SELECT 1 FROM staging.parcels previous
+                    WHERE previous.pidn = p.pidn AND previous.valid_to IS NOT NULL
+                      AND previous.valid_from < p.valid_from
+                )) AS changed_recently,
                 EXISTS (
                     SELECT 1 FROM staging.tax_claims tc
                     WHERE tc.valid_to IS NULL AND tc.total > 0 AND tc.pidn = p.pidn

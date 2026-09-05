@@ -71,6 +71,12 @@ decision_schema["required"].append("action_text")
 relevance_schema = ITEM["properties"]["relevance"]
 relevance_schema["properties"]["source_text"] = {"type": "string", "minLength": 1}
 relevance_schema["required"].append("source_text")
+# Preserve the prior cited wire shape for explicit offline replay. The stored
+# projection remains version 3; the current prompt/schema identity changes.
+NARRATIVE_REPLAY_SCHEMA = deepcopy(PASS0_CLAIMS_SCHEMA)
+for field in ("why_it_matters", "what_happens_next"):
+    del ITEM["properties"][field]
+    ITEM["required"].remove(field)
 # The stored/replay envelope retains its fingerprint. The model only selects
 # claims; copying a cryptographic hash cannot establish request provenance.
 PASS0_MODEL_SCHEMA = obj({"extractions": deepcopy(PASS0_CLAIMS_SCHEMA["properties"]["extractions"])})
@@ -105,9 +111,13 @@ def bind_model_claims(payload, source_text, *, expected_source_sha256):
         raise ValueError("Invalid model-claims envelope: " + "; ".join(e.message for e in errors[:5]))
     return {"source_sha256": expected_source_sha256, "extractions": deepcopy(payload["extractions"])}
 
-def hydrate_claims(payload, source_text, *, meeting_date=None, legacy_evaluation=False):
+def hydrate_claims(payload, source_text, *, meeting_date=None, legacy_evaluation=False,
+                   narrative_evaluation=False):
     """Validate a source-bound envelope before producing a stored projection."""
-    validator = Draft202012Validator(LEGACY_CLAIMS_SCHEMA) if legacy_evaluation else _VALIDATOR
+    if legacy_evaluation and narrative_evaluation:
+        raise ValueError("Choose one historical replay contract")
+    validator = (Draft202012Validator(LEGACY_CLAIMS_SCHEMA) if legacy_evaluation else
+                 Draft202012Validator(NARRATIVE_REPLAY_SCHEMA) if narrative_evaluation else _VALIDATOR)
     errors = sorted(validator.iter_errors(payload), key=lambda e: str(e.path))
     if errors:
         raise ValueError("Invalid cited claims: " + "; ".join(f"{e.json_path}: {e.message}" for e in errors[:5]))
@@ -159,10 +169,14 @@ def hydrate_claims(payload, source_text, *, meeting_date=None, legacy_evaluation
         result = {"contract_version": VERSION, "extraction_type": item["extraction_type"],
                   "project_name": item["project_name"], "record_status": item["record_status"],
                   "confidence": item["confidence"]}
-        for field in ("what_happened", "applicant_name", "current_zoning", "proposed_zoning",
-                      "why_it_matters", "what_happens_next", "project_reference"):
+        for field in ("what_happened", "applicant_name", "current_zoning", "proposed_zoning", "project_reference"):
             result[field] = claim(item[field], field, literal=field in {
                 "applicant_name", "current_zoning", "proposed_zoning", "project_reference"})
+        # Retired storage columns stay empty for current extractions. Historical
+        # evaluation retains original claims and their evidence without rewriting
+        # a saved response to make it conform to the current wire contract.
+        for field in ("why_it_matters", "what_happens_next"):
+            result[field] = claim(item[field], field) if legacy_evaluation or narrative_evaluation else None
         for field in ("conditions", "application_ids", "parcel_references", "related_entities", "identity_conflicts"):
             result[field] = [claim(c, field, literal=field in {"application_ids", "parcel_references", "related_entities"})
                              for c in item[field]]
@@ -279,7 +293,7 @@ def hydrate_claims(payload, source_text, *, meeting_date=None, legacy_evaluation
         if result["record_status"] in {"removed", "withdrawn"}:
             lifecycle_text = scope_context or relevance_source
             for field in ("what_happens_next", "what_happened"):
-                value = item[field]
+                value = item.get(field)
                 if value and any(compact(value["text"]).casefold() in compact(q).casefold()
                                  for q in passages(value["passage_ids"], [field])):
                     lifecycle_text += " " + value["text"]
@@ -456,13 +470,17 @@ def _repair_relevance_citation(item, doc, source_text):
         # Shape errors must still reach the normal per-item validator.
         return item, None
 
-def review_claims(payload, source_text, *, meeting_date=None, legacy_evaluation=False):
+def review_claims(payload, source_text, *, meeting_date=None, legacy_evaluation=False,
+                  narrative_evaluation=False):
     """Validate the envelope once and quarantine bad items without publishing them.
 
     Empty model output differs from an entirely rejected document. All conflicting
     duplicate items are quarantined together; input order cannot pick a winner.
     """
-    schema = deepcopy(LEGACY_CLAIMS_SCHEMA if legacy_evaluation else PASS0_CLAIMS_SCHEMA)
+    if legacy_evaluation and narrative_evaluation:
+        raise ValueError("Choose one historical replay contract")
+    schema = deepcopy(LEGACY_CLAIMS_SCHEMA if legacy_evaluation else
+                      NARRATIVE_REPLAY_SCHEMA if narrative_evaluation else PASS0_CLAIMS_SCHEMA)
     schema["properties"]["extractions"]["items"] = {}
     errors = list(Draft202012Validator(schema).iter_errors(payload))
     if errors:
@@ -476,7 +494,8 @@ def review_claims(payload, source_text, *, meeting_date=None, legacy_evaluation=
             candidate, fields = (item, []) if legacy_evaluation else _withhold_optional_entities(item, doc)
             candidate, repair = (candidate, None) if legacy_evaluation else _repair_relevance_citation(candidate, doc, source_text)
             value = hydrate_claims({"source_sha256": payload["source_sha256"], "extractions": [candidate]},
-                source_text, meeting_date=meeting_date, legacy_evaluation=legacy_evaluation)[0]
+                source_text, meeting_date=meeting_date, legacy_evaluation=legacy_evaluation,
+                narrative_evaluation=narrative_evaluation)[0]
             accepted.append(value)
             indices.append(index)
             if repair:
