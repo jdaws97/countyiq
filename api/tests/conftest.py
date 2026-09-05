@@ -897,6 +897,7 @@ def _contract_brief_payload(cur, kind):
         cur.execute("SELECT to_jsonb(b) FROM public.parcel_briefs b WHERE pidn=%s", (TEST_PIDN,))
         payload = cur.fetchone()[0]
         payload["brief"] = payload.pop("brief_text")
+        payload["recommendation"] = "watch"
     else:
         cur.execute("SELECT to_jsonb(b) FROM public.owner_briefs b WHERE canonical_name='Alpha Holdings LLC'")
         payload = cur.fetchone()[0]

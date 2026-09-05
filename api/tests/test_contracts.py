@@ -138,6 +138,7 @@ def test_property_report_contract_includes_intelligence_layers(client):
     assert payload["development_momentum"]["reason_signals"]
 
     # Generated prose is served under the ordinary derived-product use.
+    assert payload["parcel_brief"]["recommendation"] == "watch"
     assert payload["parcel_brief"]["citations"] == ["growth_area", "ownership_change"]
     assert payload["parcel_brief"]["citation_evidence"]
     assert payload["intelligence_summary"]["signals_validated_count"] == 2

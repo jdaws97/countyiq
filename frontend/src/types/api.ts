@@ -325,6 +325,7 @@ export interface DevelopmentMomentum {
 
 export interface ParcelBrief {
   brief_text: string
+  recommendation: 'investigate' | 'watch' | 'insufficient_evidence' | null
   assessment: string | null
   assessment_reasoning: string | null
   key_questions: string[]

@@ -179,3 +179,25 @@ issued, and production LLM flags remain disabled. See the updated
 [model comparison](../research/model-comparison-2026-09-05.md) for evidence,
 measured call reduction and limitations. These newer pipeline changes are not
 included in the production revision recorded above.
+
+The local property report now presents the accepted brief's action: investigate,
+watch, or no clear development lead. It reads that action from the same inference
+history that authenticates its text. It removes the old opportunity assessment badge, repeated rationale and
+duplicate citation badges. Source links and questions remain. API contract and
+brief provenance tests passed (57), as did frontend type checking, lint and the
+production build. Browser-only fixtures exercised all three action labels and
+legacy null, opened source evidence at 1440px and 390px with no horizontal
+overflow, and were removed afterward. No fixture was written to the database or
+published as a real brief. Screenshots are
+`output/playwright/research-brief-390-fixture.png` and
+`output/playwright/research-brief-1440-fixture.png`.
+
+That walkthrough exposed a source-refresh follow-up on local PIDN
+`54000HJ012400`: the property report selects current zoning record 1706,
+Residential Low Density, adopted 2026-05-12, but its cached zoning-mismatch signal
+still names record 1291, Commercial Industrial, whose adoption date is absent.
+Both polygons intersect the parcel center. Verify the production snapshot and
+refresh deterministic signals consistently before downstream LLM qualification;
+do not treat the cached label as the current zoning. The soil panel also repeats
+separate polygons of the same mapped soil unit; consider consolidating their
+display while preserving source IDs and avoiding double-counted overlap.

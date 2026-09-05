@@ -167,6 +167,7 @@ class DevelopmentMomentumPayload(TypedDict):
 
 class ParcelBriefPayload(TypedDict):
     brief_text: str
+    recommendation: str | None
     assessment: str | None
     assessment_reasoning: str | None
     key_questions: list[str]

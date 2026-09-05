@@ -10,7 +10,7 @@ import PageShell from '../components/PageShell'
 import ReportActions from '../components/ReportActions'
 import Section from '../components/Section'
 import { Button, ButtonLink, Freshness } from '../components/ui'
-import { openEvidenceReceipt, sourceLinkLabel } from '../lib/evidence'
+import { sourceLinkLabel } from '../lib/evidence'
 import { formatCurrency, formatLabel, formatShortDate } from '../lib/format'
 import { isCompared, toggleComparison } from '../lib/investigationState'
 import { useFetchJson } from '../lib/useFetchJson'
@@ -71,6 +71,12 @@ function significanceBadgeColor(significance: string): string {
   return 'var(--accent-blue)'
 }
 
+const BRIEF_ACTIONS = {
+  investigate: { label: 'Investigate the record', color: 'var(--accent-blue)' },
+  watch: { label: 'Watch for changes', color: 'var(--accent-cyan)' },
+  insufficient_evidence: { label: 'No clear development lead', color: 'var(--text-muted)' },
+}
+
 export default function PropertyDetail() {
   const { pidn } = useParams<{ pidn: string }>()
   const navigate = useNavigate()
@@ -93,6 +99,7 @@ export default function PropertyDetail() {
   const flood = report.flood_zone
   const structures = report.structures
   const brief = report.parcel_brief
+  const briefAction = brief?.recommendation ? BRIEF_ACTIONS[brief.recommendation] : null
   const narratives = report.related_narratives
   const intelligence = report.intelligence_summary
   const proceedings = report.linked_proceedings ?? []
@@ -487,7 +494,7 @@ export default function PropertyDetail() {
         )}
 
         {brief && (
-          <Section title="Intelligence Brief">
+          <Section title="Research brief">
             <div style={{
               background: 'var(--bg-card)',
               border: '1px solid var(--border)',
@@ -495,38 +502,27 @@ export default function PropertyDetail() {
               padding: 18,
             }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-                {brief.assessment && (
-                  <Badge color={({ strong_opportunity: 'var(--accent-blue)', emerging: 'var(--accent-cyan)', speculative: 'var(--accent-gold)', constrained: 'var(--accent-red)', not_actionable: 'var(--text-muted)' } as Record<string, string>)[brief.assessment] ?? 'var(--text-muted)'}>
-                    {brief.assessment.replace(/_/g, ' ')}
+                {briefAction && (
+                  <Badge color={briefAction.color}>
+                    {briefAction.label}
                   </Badge>
                 )}
                 {brief.signal_count != null && (
-                  <Badge color="var(--accent-blue)">{brief.signal_count} validated signals</Badge>
+                  <Badge color="var(--text-muted)">{brief.signal_count} source {brief.signal_count === 1 ? 'signal' : 'signals'}</Badge>
                 )}
                 {brief.generated_at && (
                   <Badge color="var(--accent-cyan)">Generated {formatShortDate(brief.generated_at)}</Badge>
                 )}
               </div>
 
-              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 15, lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: brief.assessment_reasoning || brief.key_questions.length > 0 || brief.citations.length > 0 ? 16 : 0 }}>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: 15, lineHeight: 1.7, color: 'var(--text-primary)', marginBottom: brief.key_questions.length > 0 || brief.citations.length > 0 ? 16 : 0 }}>
                 <CitedText text={brief.brief_text} evidence={brief.citation_evidence ?? []} />
               </div>
-
-              {brief.assessment_reasoning && (
-                <div style={{ marginBottom: brief.key_questions.length > 0 || brief.citations.length > 0 ? 16 : 0 }}>
-                  <div className="record-label">
-                    Assessment Rationale
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                    <CitedText text={brief.assessment_reasoning} evidence={brief.citation_evidence ?? []} />
-                  </div>
-                </div>
-              )}
 
               {brief.key_questions.length > 0 && (
                 <div style={{ marginBottom: brief.citations.length > 0 ? 16 : 0 }}>
                   <div className="record-label">
-                    Key Questions
+                    Questions to resolve
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {brief.key_questions.map((question) => (
@@ -538,37 +534,12 @@ export default function PropertyDetail() {
                 </div>
               )}
 
-              {brief.citations.length > 0 && (
-                <div>
-                  <div className="record-label">
-                    Citations
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {brief.citations.map((citation) => {
-                      const index = (brief.citation_evidence ?? []).findIndex((item) => item.citation_key.toLowerCase() === `signal:${citation}`.toLowerCase())
-                      const receipt = index >= 0 ? brief.citation_evidence[index] : null
-                      return receipt ? (
-                        <a
-                          key={citation}
-                          href={`#${receipt.evidence_id}`}
-                          onClick={() => openEvidenceReceipt(receipt.evidence_id)}
-                          style={{ textDecoration: 'none' }}
-                        >
-                          <Badge color="var(--accent-cyan)">E{index + 1} · {formatLabel(citation)}</Badge>
-                        </a>
-                      ) : (
-                        <Badge key={citation} color="var(--text-muted)">{formatLabel(citation)}</Badge>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
               {(brief.citation_evidence?.length ?? 0) > 0 && (
                 <div style={{ marginTop: 16 }}>
                   <EvidencePanel
                     items={brief.citation_evidence}
-                    title="Verify the brief"
-                    intro="Each receipt resolves an internal signal citation to its source facts and record link."
+                    title="Source evidence"
+                    intro="Review the source facts behind this summary."
                   />
                 </div>
               )}

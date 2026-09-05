@@ -587,6 +587,11 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         cur.execute(f"""
             SELECT
                 brief_text,
+                (
+                    SELECT action_history.payload->>'recommendation'
+                    FROM meta.intelligence_inference_history action_history
+                    WHERE action_history.inference_id = brief.active_inference_id
+                ) AS recommendation,
                 assessment,
                 assessment_reasoning,
                 key_questions,
@@ -725,6 +730,8 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
 
     brief = dict(brief_row) if brief_row else None
     if brief:
+        if brief.get("recommendation") not in {"investigate", "watch", "insufficient_evidence"}:
+            brief["recommendation"] = None
         brief["key_questions"] = brief.get("key_questions") or []
         brief["citations"] = brief.get("citations") or []
         serialize_temporal_fields(brief, "generated_at")
