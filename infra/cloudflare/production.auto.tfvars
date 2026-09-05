@@ -5,6 +5,7 @@ access_auth_domain    = "countyiq.cloudflareaccess.com"
 
 access_allowed_emails = [
   "jarod.daws@protonmail.com",
+  "thowe095@gmail.com",
 ]
 
 # These bounds are deliberately conservative. The VPS guard hard-stops all
