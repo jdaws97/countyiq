@@ -181,11 +181,11 @@ def test_gate_query_requires_interacting_interpretive_signals():
     )
     q = PARCELS_NEEDING_VALIDATION_QUERY
     for sig in ("active_subdivision", "municipal_action", "ownership_change",
-                "vacancy", "assemblage", "entity_assemblage", "zoning_mismatch"):
+                "assemblage", "entity_assemblage", "zoning_mismatch"):
         assert sig in q, f"interpretive signal {sig} missing from gate"
     for deterministic in (
         "tax_distress", "flood_zone", "economic_development_park",
-        "environmental_diligence", "nearby_subdivision",
+        "environmental_diligence", "nearby_subdivision", "vacancy",
     ):
         assert deterministic not in q
     assert "WHERE 2 <=" in q

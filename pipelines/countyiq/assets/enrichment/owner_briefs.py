@@ -53,6 +53,7 @@ from countyiq.lib.pass_llm_config import (
     resolve_pass_harness,
 )
 from countyiq.lib.pass_schemas import PASS3B_OWNER_BRIEF_SCHEMA
+from countyiq.lib.signal_policy import INTERPRETIVE_SIGNAL_KEYS_SQL
 from countyiq.resources.database import DatabaseResource
 
 
@@ -83,7 +84,7 @@ def owner_briefs(
     # Projection cleanup is deterministic and must still run when Pass 3 is
     # disabled or unavailable.
     database.execute(
-        """
+        f"""
         DELETE FROM public.owner_briefs ob
         WHERE NOT EXISTS (
             SELECT 1
@@ -92,6 +93,7 @@ def owner_briefs(
               ON osl.owner_id = o.owner_id AND osl.source_type = 'parcel'
             JOIN public.evidence e ON e.pidn = osl.source_id
             WHERE o.canonical_name = ob.canonical_name
+              AND e.signal_key IN ({INTERPRETIVE_SIGNAL_KEYS_SQL})
               AND e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
               AND e.adjusted_significance IN ('high', 'medium')
             GROUP BY o.owner_id

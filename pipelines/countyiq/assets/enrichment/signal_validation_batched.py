@@ -58,6 +58,7 @@ from countyiq.lib.pass_llm_config import (
     resolve_pass_harness,
 )
 from countyiq.lib.pass_schemas import PASS2_BATCHED_VALIDATION_SCHEMA
+from countyiq.lib.signal_policy import INTERPRETIVE_SIGNAL_KEYS_SQL
 from countyiq.resources.database import DatabaseResource
 
 
@@ -197,8 +198,7 @@ _CANDIDATE_QUERY_TEMPLATE = r"""
         SELECT COUNT(*) FROM public.development_signals ds
         WHERE ds.pidn = c.pidn
           AND ds.signal_key IN (
-              'active_subdivision', 'municipal_action', 'ownership_change',
-              'vacancy', 'assemblage', 'entity_assemblage', 'zoning_mismatch'
+              {interpretive_signal_keys}
           )
     )
     ORDER BY pidn
@@ -206,10 +206,10 @@ _CANDIDATE_QUERY_TEMPLATE = r"""
 
 PARCELS_NEEDING_VALIDATION_QUERY = _CANDIDATE_QUERY_TEMPLATE.replace(
     "{full_scan_branch}", _FULL_SCAN_BRANCH
-)
+).replace("{interpretive_signal_keys}", INTERPRETIVE_SIGNAL_KEYS_SQL)
 PARCELS_NEEDING_VALIDATION_FAST_QUERY = _CANDIDATE_QUERY_TEMPLATE.replace(
     "{full_scan_branch}", ""
-)
+).replace("{interpretive_signal_keys}", INTERPRETIVE_SIGNAL_KEYS_SQL)
 
 FINGERPRINT_SELECT = """
     SELECT fingerprint FROM meta.pass_config_fingerprints WHERE pass_number = %(pass_number)s

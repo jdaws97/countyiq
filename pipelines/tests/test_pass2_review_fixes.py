@@ -140,7 +140,7 @@ def test_land_development_with_zero_lots_uses_the_decision_fact():
     assert "downgrade active_subdivision only when" in prompt
     assert "confirmed" in label["accepted_statuses"]
     assert "one- or two-lot/unit proposal is normally medium or low" in prompt
-    assert "zero assessment, exempt classification" in prompt
+    assert "missing-footprint screens are factual context, not validation targets" in prompt
     assert any(
         "pt_land_dev=yes" in fact_group for fact_group in label["required_fact_groups"]
     )

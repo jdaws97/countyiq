@@ -646,6 +646,8 @@ def validate_parcel_brief_citations(parsed: dict, allowed_signal_keys: Iterable[
             errors.append(f"{field} has no sentences")
             continue
         markers = {marker.strip() for marker in _SIGNAL_MARKER.findall(text)}
+        if _PARCEL_MARKER.search(text):
+            errors.append(f"{field} uses [Parcel: PIDN] markers; parcel briefs require [Signal: key] citations")
         if not markers:
             errors.append(f"uncited {field}: no [Signal: key] marker")
         unknown = markers - allowed

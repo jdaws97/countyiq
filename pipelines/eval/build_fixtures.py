@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Build de-identified frozen Pass 2/3 fixtures and a live shadow manifest.
+"""Check historical frozen fixtures or refresh unlabelled live selectors.
 
-This command performs no model calls. It reads deterministic database context,
-selects one reproducible parcel for every two-signal production combination,
-de-identifies direct identifiers, joins human-reviewed labels, and fingerprints
-the exact contexts used by the frozen promotion lane.
+The live lane selects one parcel per current two-signal combination. It never
+assigns old gold labels to newly selected parcels by ordinal position. Historical
+de-identification helpers remain here for reproducible source lineage.
 """
 
 from __future__ import annotations
@@ -22,18 +21,12 @@ from typing import Any
 import psycopg2
 import psycopg2.extras
 
-from countyiq.lib.pass2_batched_validation import gather_parcel_batch_context
+from countyiq.lib.signal_policy import INTERPRETIVE_SIGNAL_KEYS
 from eval.fixture_io import canonical_context_hash, load_frozen_cases
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-INTERPRETIVE_SIGNALS = (
-    "active_subdivision",
-    "assemblage",
-    "ownership_change",
-    "vacancy",
-    "zoning_mismatch",
-)
+INTERPRETIVE_SIGNALS = INTERPRETIVE_SIGNAL_KEYS
 
 _PERSON_ALIASES = (
     "Avery Bennett",
@@ -322,37 +315,14 @@ def main() -> None:
     if not args.refresh_live:
         parser.error("Use --check or --refresh-live. Frozen gold changes require explicit source and label review.")
 
-    labels = _load_labels()
     conn = _db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(PAIR_SAMPLE_QUERY, {"signals": list(INTERPRETIVE_SIGNALS)})
     selected = [dict(row) for row in cur.fetchall()]
-    if len(selected) != 10:
-        raise RuntimeError(
-            f"Expected 10 two-signal combinations, found {len(selected)}"
-        )
-
-    pass2_cases = []
     shadow_rows = []
     for index, row in enumerate(selected, 1):
-        case_id = f"p2-{index:03d}"
-        if case_id not in labels:
-            raise RuntimeError(f"Missing human label for {case_id}")
-        raw = gather_parcel_batch_context(cur, row["pidn"])
-        context = _deidentify_context(raw, case_id)
-        pass2_cases.append(
-            {
-                "id": case_id,
-                "case_type": labels[case_id]["case_type"],
-                "signal_combination": list(row["keys"]),
-                "context": context,
-                "context_sha256": canonical_context_hash(context),
-                "labels": labels[case_id]["labels"],
-                "review": labels[case_id]["review"],
-            }
-        )
         shadow_rows.append(
-            {"pidn": row["pidn"], "signals": list(row["keys"]), "case_id": case_id}
+            {"pidn": row["pidn"], "signals": list(row["keys"]), "case_id": f"live-p2-{index:03d}"}
         )
     cur.close()
     conn.close()
@@ -361,7 +331,7 @@ def main() -> None:
     shadow_payload = {
         "version": 1,
         "refreshed_at": datetime.now(timezone.utc).isoformat(),
-        "selection": "one md5-stable live parcel for every exact two-signal combination",
+        "selection": "one md5-stable live parcel for every current exact two-signal combination; unlabelled diagnostics",
         "cases": shadow_rows,
     }
     outputs = {

@@ -130,6 +130,14 @@ class TestShouldGenerateBrief:
         ]
         assert should_generate_brief(signals) is False
 
+    def test_legacy_high_footprint_or_unknown_signal_cannot_trigger_a_brief(self):
+        for key in ("vacancy", "growth_area", "new_screen"):
+            assert not should_generate_brief([{
+                "signal_key": key,
+                "validation_status": "confirmed",
+                "adjusted_significance": "high",
+            }])
+
     @pytest.mark.parametrize("status", ["stale", "irrelevant"])
     def test_no_with_non_serving_status_even_if_legacy_row_is_high(self, status):
         signals = [{
@@ -165,6 +173,13 @@ class TestBuildBriefGenerationPrompt:
         assert "active_subdivision" in result
         assert "zoning_mismatch" in result
         assert "flood_zone" in result
+
+    def test_prior_narration_cannot_change_the_prompt(self, sample_context):
+        before = build_brief_generation_prompt(sample_context)
+        for signal in sample_context["validated_signals"]:
+            signal["reasoning"] = "The owner will sell and a rezoning is approved."
+            signal["cross_references"] = [{"source": "planning", "detail": "Approved 900 units"}]
+        assert build_brief_generation_prompt(sample_context) == before
 
     def test_includes_entity_profile(self, sample_context):
         result = build_brief_generation_prompt(sample_context)

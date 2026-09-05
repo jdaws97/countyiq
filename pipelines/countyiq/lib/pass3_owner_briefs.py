@@ -16,6 +16,7 @@ import json
 
 from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, PASS3B_FIELD_CONTRACT
+from countyiq.lib.signal_policy import INTERPRETIVE_SIGNAL_KEYS_SQL
 
 # Static instruction block. Sent as a byte-identical system message on every
 # rollup call so providers with implicit prompt caching can reuse it.
@@ -111,7 +112,7 @@ def _clamp_float_01(value: object) -> float | None:
 # SQL to pull a single owner's portfolio + validated signals
 # ---------------------------------------------------------------------------
 
-OWNERS_NEEDING_BRIEFS_QUERY = """
+OWNERS_NEEDING_BRIEFS_QUERY = f"""
     -- All owners with ≥3 parcels under any alpha signal. Python's immutable
     -- source/model/prompt hash skips unchanged owners; selecting the full
     -- eligible set ensures prompt or model changes are not hidden by timestamps.
@@ -125,6 +126,7 @@ OWNERS_NEEDING_BRIEFS_QUERY = """
     JOIN public.evidence e
          ON e.pidn = osl.source_id
     WHERE e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+      AND e.signal_key IN ({INTERPRETIVE_SIGNAL_KEYS_SQL})
       AND e.adjusted_significance IN ('high', 'medium')
     GROUP BY o.owner_id, o.canonical_name
     HAVING COUNT(DISTINCT osl.source_id) >= 3
@@ -144,14 +146,15 @@ OWNER_PORTFOLIO_QUERY = """
 """
 
 
-PORTFOLIO_EVIDENCE_QUERY = """
+PORTFOLIO_EVIDENCE_QUERY = f"""
     SELECT e.pidn, e.signal_key, e.active_inference_id, e.validation_status,
-           e.adjusted_significance, e.validation_reasoning,
+           e.adjusted_significance,
            e.evidence_data, e.validated_at, e.confidence,
            p.municipality
     FROM public.evidence e
     LEFT JOIN staging.parcels p ON p.pidn = e.pidn AND p.valid_to IS NULL
     WHERE e.pidn = ANY(%(pidns)s)
+      AND e.signal_key IN ({INTERPRETIVE_SIGNAL_KEYS_SQL})
       AND e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
       AND e.adjusted_significance IN ('high', 'medium', 'low')
     ORDER BY e.pidn, e.signal_key

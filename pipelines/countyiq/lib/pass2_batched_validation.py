@@ -45,6 +45,7 @@ from countyiq.lib.pass2_signal_validation import (
 )
 from countyiq.lib.pass_schemas import PASS2_BATCHED_VALIDATION_SCHEMA
 from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, schema_block
+from countyiq.lib.signal_policy import CONTEXT_ONLY_SIGNALS, INTERPRETIVE_SIGNAL_KEYS
 
 # ---------------------------------------------------------------------------
 # Signal type classification — which sections of context each signal needs
@@ -68,26 +69,6 @@ SIGNAL_NEEDS_PROCEEDINGS = {
     "municipal_action",
     "zoning_mismatch",
     "ownership_change",
-    "conservation_easement",
-    "ag_security",
-}
-
-
-# Deterministic spatial facts and constraints are context, not claims to
-# validate. They remain visible to the LLM without consuming validation slots
-# or producing evidence rows.
-CONTEXT_ONLY_SIGNALS = {
-    "nearby_subdivision",
-    "economic_development_park",
-    "tax_distress",
-    "penndot_project",
-    "growth_area",
-    "development_overlay",
-    "local_traffic_activity",
-    "soil_constraint",
-    "zoning_constraint",
-    "flood_zone",
-    "environmental_diligence",
     "conservation_easement",
     "ag_security",
 }
@@ -173,8 +154,8 @@ def gather_parcel_batch_context(cursor, pidn: str) -> dict:
             }
         )
 
-    context_signals = [s for s in signals if s["signal_key"] in CONTEXT_ONLY_SIGNALS]
-    signals = [s for s in signals if s["signal_key"] not in CONTEXT_ONLY_SIGNALS]
+    context_signals = [s for s in signals if s["signal_key"] not in INTERPRETIVE_SIGNAL_KEYS]
+    signals = [s for s in signals if s["signal_key"] in INTERPRETIVE_SIGNAL_KEYS]
 
     signal_keys = {s["signal_key"] for s in signals}
 
@@ -285,12 +266,10 @@ Rules:
    not automatically high significance; use its acreage and context.
 4. When prop_lots and prop_du are both present, copy both values into
    key_facts even when one of them is zero.
-5. A zero structure_count means no mapped county building footprint; it does
+5. Missing-footprint screens are factual context, not validation targets.
+   A zero structure_count means no mapped county building footprint; it does
    not establish current land use, occupancy, availability, or vacancy duration.
    Low assessment and a property class do not establish those facts either.
-   Treat zero assessment, exempt classification, or institutional/public
-   ownership as a vacancy data-gap or non-market parcel. Downgrade the vacancy
-   signal unless direct cited evidence establishes genuine vacant land.
 6. A low sale price or organizational-looking buyer name does not establish
    distress, foreclosure, a flip, developer identity, or development intent.
    State that those explanations are unestablished unless cited context shows them.
@@ -368,7 +347,7 @@ BATCHED_VALIDATION_SYSTEM_PROMPT = (
 # trace a regression to a specific prompt change without diffing git history.
 # The formatter marker also invalidates prior inputs when deterministic context
 # rendering changes without modifying either template string.
-_PROMPT_FORMAT_VERSION = "evidence-contract-v7"
+_PROMPT_FORMAT_VERSION = "evidence-contract-v8"
 PROMPT_VERSION = _hashlib.sha256(
     (
         BATCHED_VALIDATION_SYSTEM_PROMPT
@@ -378,6 +357,8 @@ PROMPT_VERSION = _hashlib.sha256(
         + _PROMPT_FORMAT_VERSION
         + "\n"
         + json.dumps(SIGNAL_QUESTIONS, sort_keys=True, separators=(",", ":"))
+        + "\n"
+        + json.dumps(INTERPRETIVE_SIGNAL_KEYS)
     ).encode("utf-8")
 ).hexdigest()[:12]
 

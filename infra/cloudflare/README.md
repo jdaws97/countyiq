@@ -89,21 +89,15 @@ plan][zero-trust-pricing]. The IaC deliberately creates no pay-as-you-go Access
 plan, Worker, Pages Function, Argo subscription, Load Balancer, Cache Reserve,
 or Infrequent Access bucket.
 
-## Deployment status (2026-09-04)
+## Deployment status (2026-09-05)
 
-The initial apply created all 13 planned resources. The encrypted IaC
-credentials and R2 remote state are working. Backup rules are ordered by
-prefix to match Cloudflare's API response and avoid perpetual plan diffs.
-Runtime bucket credentials have been captured in SOPS, and the production
-environment has been installed on the VPS as root:root with mode 0600.
-Both runtime credentials passed a bucket listing check from the VPS. The
-15-minute cost-guard timer is enabled with an 8,000,000,000-byte threshold;
-both buckets were empty at activation. Daily backups remain disabled until
-the database is migrated and the first restore drill succeeds.
-Application deployment, database migration, and billing alerts still require
-completion. The storage guard runs on the VPS;
-it is not a Cloudflare billing cap and cannot stop charges from other clients
-or resources.
+The app and apex DNS, Tunnel, Access policies and R2 resources are deployed.
+The private production app is live, the database is at migration 065, the
+off-host restore drill passed, and daily backups and the 15-minute storage
+guard are active. The guard stops the VPS stack at 8,000,000,000 bytes; it
+cannot stop charges from other clients or resources. Encrypted IaC credentials
+and remote state are working. See the [production release record](../../docs/operations/production-launch-2026-09-05.md)
+for exact deployed revisions, recovery receipts and remaining launch checks.
 
 `check-cost-policy.sh` is enforced in CI. It rejects Terraform modules and any
 resource class outside the explicit DNS, Tunnel, Access, and R2 allowlist, so a
@@ -116,10 +110,11 @@ balancer, or another metered Cloudflare product.
 
 ## CountyIQ account integration
 
-The initial 13-resource apply above predates the app-host split. The latest
-read-only review confirmed app.countyiq.net returns NXDOMAIN while countyiq.net
-resolves. The product DNS and Access resources in the current code must not be
-reported as deployed from the historical apply result. Follow the guarded
-rollout and verify live sign-in before publishing the marketing site.
+Both countyiq.net and app.countyiq.net use exact-email Access allowlists with
+one-time PIN sign-in. Keep tester addresses in `production.auto.tfvars` and
+apply through `tofu-sops.sh`; dashboard-only edits would drift from the managed
+policy. A production health credential is restricted to `/api/ready` and cannot
+authenticate a customer session. Live customer sign-in and workspace persistence
+still need a completed browser check before publishing the marketing site.
 
 See [account workspace configuration and guarded host rollout](../../docs/operations/account-workspaces.md) for the app host issuer/AUD settings and publication steps. The new app host has its own Access application. publish_marketing_site defaults to false so the existing apex gate remains until the split origin is verified. Access protects entry; CountyIQ stores stable account identity and saved-work ownership.

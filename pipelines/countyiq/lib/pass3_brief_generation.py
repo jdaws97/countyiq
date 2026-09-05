@@ -25,6 +25,7 @@ from countyiq.lib.intelligence_common import (
 )
 from countyiq.lib.pass2_signal_validation import SERVING_VALIDATION_STATUSES
 from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, PASS3_FIELD_CONTRACT
+from countyiq.lib.signal_policy import INTERPRETIVE_SIGNAL_KEYS, INTERPRETIVE_SIGNAL_KEYS_SQL
 
 # =============================================================================
 # CONSTANTS
@@ -63,6 +64,12 @@ CONSTRAINTS:
    [Signal: key] markers actually used in nonempty assessment_reasoning,
    top_risk, and brief. Every marker must name a signal printed below, and a
    non-null top_signal_key must appear in citations.
+7. Key facts are retained source fields. Status and significance are earlier
+   model judgments, not independent evidence. Base factual claims on the source
+   fields and parcel records. A plan title resembling an owner name does not
+   prove that the plan includes this parcel. If parcel coverage, a decision,
+   permitted uses, or a current project status is not supplied, say it is not
+   established by these records; do not claim that it does not exist.
 
 RECOMMENDATION:
 - investigate: a specific documented activity tied to this property warrants a concrete follow-up, such as checking the scope or decision of an owner-matched active plan. Name that record and the unresolved question. A generic suggestion to check deeds, zoning, or missing information does not qualify by itself.
@@ -166,6 +173,27 @@ def _format_entity_text(entity: dict, portfolio: dict) -> str:
     return "\n".join(parts)
 
 
+def source_evidence_facts(evidence_data: object) -> list[str]:
+    """Render retained source fields identically in production and evals.
+
+    Never substitute Pass 2 reasoning, generated key facts, or reference prose
+    for a missing source record. Keep zeroes and false values; only volatile
+    age counters are omitted from the stored source snapshot.
+    """
+    if isinstance(evidence_data, str):
+        try:
+            evidence_data = json.loads(evidence_data)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    if not isinstance(evidence_data, dict):
+        return []
+    return [
+        f"{key}={value}"
+        for key, value in sorted(strip_volatile_evidence(evidence_data).items())
+        if value is not None
+    ]
+
+
 def _format_signals_text(validated_signals: list[dict]) -> str:
     """Format validated signals into readable text for the prompt."""
     if not validated_signals:
@@ -176,30 +204,19 @@ def _format_signals_text(validated_signals: list[dict]) -> str:
         signal_key = sig.get("signal_key", "unknown")
         status = sig.get("validation_status", "unknown")
         significance = sig.get("adjusted_significance", "unknown")
-        reasoning = sig.get("reasoning", "")
         key_facts = sig.get("key_facts", [])
-        cross_refs = sig.get("cross_references", [])
         source_url = sig.get("source_url", "")
         internal_url = sig.get("internal_url", "")
 
         lines = [
             f"Signal {i}: {signal_key}",
-            f"  Status: {status} | Significance: {significance}",
-            f"  Reasoning: {reasoning}",
+            f"  Prior assessment: {status} | Significance: {significance}",
         ]
 
         if key_facts:
             lines.append("  Key facts:")
             for fact in key_facts:
                 lines.append(f"    - {fact}")
-
-        if cross_refs:
-            lines.append("  Cross-references:")
-            for ref in cross_refs:
-                if isinstance(ref, dict):
-                    lines.append(f"    - {ref.get('source', '')}: {ref.get('detail', '')}")
-                else:
-                    lines.append(f"    - {ref}")
 
         if source_url:
             lines.append(f"  Source URL: {source_url}")
@@ -231,7 +248,8 @@ def should_generate_brief(validated_signals: list[dict]) -> bool:
     if not validated_signals:
         return False
     return any(
-        sig.get("validation_status") in SERVING_VALIDATION_STATUSES
+        sig.get("signal_key") in INTERPRETIVE_SIGNAL_KEYS
+        and sig.get("validation_status") in SERVING_VALIDATION_STATUSES
         and sig.get("adjusted_significance") in BRIEF_QUALIFYING_SIGNIFICANCE
         for sig in validated_signals
     )
@@ -308,20 +326,18 @@ def gather_brief_context(cursor, pidn: str) -> dict:
 
     # Validated signals from public.evidence
     cursor.execute(
-        """
+        f"""
         SELECT
             signal_key,
             active_inference_id,
             validation_status,
             adjusted_significance,
-            validation_reasoning,
-            claim,
             evidence_data,
-            cross_references,
             source_url,
             internal_url
         FROM public.evidence
         WHERE pidn = %(pidn)s
+          AND signal_key IN ({INTERPRETIVE_SIGNAL_KEYS_SQL})
           AND validation_status IN ('confirmed', 'upgraded', 'downgraded')
           AND adjusted_significance IN ('high', 'medium', 'low')
         ORDER BY
@@ -339,36 +355,14 @@ def gather_brief_context(cursor, pidn: str) -> dict:
     for row in evidence_rows:
         r = dict(row)
         # Feed the next pass structured source evidence, not earlier model prose.
-        evidence_data = r.get("evidence_data") or {}
-        if isinstance(evidence_data, str):
-            try:
-                evidence_data = json.loads(evidence_data)
-            except (json.JSONDecodeError, TypeError):
-                evidence_data = {}
-        key_facts = [
-            f"{key}={value}"
-            for key, value in sorted(strip_volatile_evidence(evidence_data).items())
-            if value is not None
-        ] if isinstance(evidence_data, dict) else []
-
-        # Parse cross_references from JSON
-        cross_refs = r.get("cross_references")
-        if isinstance(cross_refs, str):
-            try:
-                cross_refs = json.loads(cross_refs)
-            except (json.JSONDecodeError, TypeError):
-                cross_refs = []
-        elif not isinstance(cross_refs, list):
-            cross_refs = []
+        key_facts = source_evidence_facts(r.get("evidence_data"))
 
         validated_signals.append({
             "signal_key": r.get("signal_key", ""),
             "active_inference_id": r.get("active_inference_id"),
             "validation_status": r.get("validation_status", ""),
             "adjusted_significance": r.get("adjusted_significance", ""),
-            "reasoning": r.get("validation_reasoning", ""),
             "key_facts": key_facts,
-            "cross_references": cross_refs,
             "source_url": r.get("source_url") or "",
             "internal_url": r.get("internal_url") or "",
         })

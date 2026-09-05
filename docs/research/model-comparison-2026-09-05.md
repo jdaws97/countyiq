@@ -268,8 +268,81 @@ future land-use labels without ordinance evidence. Its p2x-086 response drops a
 required validation and its p2x-050/086 syntheses fail citation checks. None of
 these costs can be presented as the price of a qualified replacement.
 
-The next simplification should reduce repeated generated facts and prevent earlier
-model narration from becoming evidence for a later pass. A missing-footprint
-screen also deserves evaluation as deterministic context rather than another
-paid vacancy judgment. Keep source facts directly rendered, retain the original
-canary failures, and qualify any simpler contract before changing runtime models.
+## Source context and fewer paid judgments
+
+Missing-footprint `vacancy` is now factual context, not a Pass 2 validation target.
+The explicit six-key interpretive allowlist also governs parcel and owner brief
+eligibility. Source refresh and Pass 2 cleanup retract retired active validation
+rows while preserving deterministic signals and immutable inference history.
+The database regression covers a matching current footprint source with a retired
+high-significance validation, including direct brief gathering before cleanup.
+The existing API dependency checks hide briefs after a cited or uncited input
+validation is retracted. Cached momentum annotations refresh with the dependent
+momentum asset; this change does not claim immediate cleanup of existing caches
+merely from deploying code. Pass 4 remains disabled and outside this pilot.
+
+A read-only count on the current local snapshot found **5,548 → 3,404** eligible
+Pass 2 parcels: **2,144 fewer calls (38.6%)**, with **2,424** footprint judgments
+removed from the previously eligible population. This is a measured snapshot,
+not a forecast of counts after future Pass 0/1 backfills. Among the four prior
+targeted cases, p2x-040 now requires no call; p2x-049/050/086 still qualify.
+
+Parcel briefs now receive retained source fields without Pass 2 reasoning or
+generated reference prose. The format explicitly distinguishes earlier status
+and significance judgments from source facts. Missing decisions, project status,
+or permitted uses remain unknown; a matching plan title does not establish parcel
+inclusion. The existing owner brief formatter already used source data directly.
+
+`eval/source_context_cases.py` derives versioned diagnostic inputs without editing
+historical fixtures. For Pass 3 it restores complete signal evidence from the
+original Pass 2 snapshots, including plan titles, proposed counts and full land-use
+labels. Its lineage records that upstream statuses are synthetic fixture inputs,
+and that de-identification can make a surname-associated plan title look like an
+exact owner-name match. p3-001 is only a conditional brief-stage test: it no longer
+qualifies for a fresh Pass 2 call. Existing recommendation labels remain diagnostic
+comparisons, not newly approved gold. Live selectors no longer attach old human
+labels to new parcels by ordinal position, and the expanded rubric excludes
+municipal-action combinations it does not cover.
+
+The matched **21-call** repeat cost **$0.016668453**, bringing this release review
+to **195 calls / $0.283666540**. Exact requests, derived sources, raw outputs,
+usage and the separate source review are in
+`fair-model-comparison/source-context-retest/`. There were no generation retries,
+serving writes, model-default changes or quality approvals.
+
+| Model | Pass 2 cost / original reference gate | Pass 3 cost / original reference gate | Median / maximum seconds, P2; P3 |
+|---|---:|---:|---:|
+| Luna | $0.005640480 / 3 of 3 | $0.003872820 / 4 of 4 | 10.8 / 11.7; 6.6 / 9.6 |
+| GLM 5.3 Flash | $0.002557340 / 3 of 3 | $0.002331780 / 3 of 4 | 11.3 / 17.3; 8.0 / 12.6 |
+| DeepSeek 0731 | $0.001292293 / 3 of 3 | $0.000973740 / 4 of 4 | 16.6 / 28.9; 12.4 / 15.4 |
+
+Source review found the earlier one-lot/zero-lot and assessment contradictions did
+not recur. Luna's three Pass 2 responses preserved the material source facts.
+GLM and DeepSeek still inferred institutional expansion from a nearby eight-unit
+plan and a school parcel without a documented relationship. GLM inferred applicant
+timing ahead of downzoning pressure; DeepSeek treated an old future designation
+as likely no longer reflecting current policy. Conditional generic planning risks
+remain separate from falsely asserting a specific permission, decision or intent.
+
+The briefs remain unqualified. Luna p3-002 says to watch the transfer in its text
+but returns `insufficient_evidence`; it also omits acreage, while p3-003 omits the
+recorded school-authority buyer. GLM p3-001 invents `active_subdecision` and puts a
+PIDN in signal citations; p3-002 misses the material transfer's monitoring value.
+DeepSeek infers minimal current value and development interest in p3-001,
+speculative interest in p3-002, permitted future uses in p3-003, and restrictions
+precluding most development in p3-004 without supporting ordinance evidence.
+
+The review also caught a deterministic gate gap: parcel briefs silently accepted
+`[Parcel: PIDN]` markers alongside valid signal markers. Those markers belong to
+the owner-brief contract. The corrected parcel gate rejects them, including on
+unchanged DeepSeek p3-001, reducing its replay result to 3 of 4. Original run
+results are preserved; `source-review.json` records the replay and module hash.
+Quality receipts now also bind the integrity validator and the source derivation.
+
+Validation: 1,388 pipeline tests passed with integration excluded; four focused
+database regressions passed against the disposable migration-065 test database.
+After the citation fix and selector cleanup, 65 focused integrity/eval/quality
+tests passed and Dagster definitions imported. No production pass was enabled.
+The next product decision is how much repeated prose and categorical assessment
+the customer actually needs: factual records, one consistent action and a concrete
+question should take precedence over preserving redundant generated narratives.

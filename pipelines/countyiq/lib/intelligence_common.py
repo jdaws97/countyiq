@@ -12,6 +12,7 @@ import datetime
 import hashlib
 import json
 from decimal import Decimal
+from countyiq.lib.signal_policy import CONTEXT_ONLY_SIGNALS_SQL
 
 # =============================================================================
 # SQL QUERY CONSTANTS
@@ -677,9 +678,11 @@ def pass_attempt_priority(
 
 
 # Shared by deterministic rebuilds and validation retries.
-RETRACT_STALE_EVIDENCE_QUERY = """
+RETRACT_STALE_EVIDENCE_QUERY = f"""
     DELETE FROM public.evidence e
-    WHERE NOT EXISTS (
+    -- Retired interpretation remains in inference history, not active evidence.
+    WHERE e.signal_key IN ({CONTEXT_ONLY_SIGNALS_SQL})
+       OR NOT EXISTS (
         SELECT 1
         FROM public.development_signals ds
         WHERE ds.pidn = e.pidn

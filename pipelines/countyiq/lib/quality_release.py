@@ -20,7 +20,7 @@ def release_identity(pass_number: int) -> dict:
     }
     names = {0: ["p0_expected.json"], 1: ["p1_frozen.json"],
              2: ["p2_expanded_stability20.json", "feature_cases.json"],
-             3: ["p3_investigation_frozen.json", "feature_cases.json"]}[pass_number]
+             3: ["p3_investigation_frozen.json", "p2_frozen.json", "feature_cases.json"]}[pass_number]
     if pass_number == 0:
         manifest = json.loads((FIXTURES / "p0_expected.json").read_text())
         names.extend("p0_pdfs/" + item["file"] for item in manifest["documents"])
@@ -31,10 +31,11 @@ def release_identity(pass_number: int) -> dict:
     modules = {0: pass0_templates, 1: pass1_entity_verification,
                2: pass2_batched_validation, 3: pass3_brief_generation}
     source_paths = [Path(modules[pass_number].__file__), Path(__file__).with_name("pass_schemas.py"),
-                    Path(__file__).with_name("prompt_prefix.py")]
+                    Path(__file__).with_name("prompt_prefix.py"),
+                    Path(__file__).with_name("intelligence_integrity.py")]
     if pass_number == 0:
         source_paths.extend(Path(__file__).with_name(name) for name in
-                            ("proceeding_contract.py", "intelligence_integrity.py", "proceeding_claims.py", "proceeding_semantics.py", "proceeding_coverage.py", "source_passages.py"))
+                            ("proceeding_contract.py", "proceeding_claims.py", "proceeding_semantics.py", "proceeding_coverage.py", "source_passages.py"))
         source_paths.extend([
             Path(__file__).parents[1] / "assets/enrichment/proceeding_extraction.py",
             Path(__file__).parents[2] / "alembic/versions/061_proceeding_evidence_contract.py",
@@ -43,6 +44,10 @@ def release_identity(pass_number: int) -> dict:
         ])
     if pass_number == 3:
         source_paths.append(Path(pass3_owner_briefs.__file__))
+    if pass_number in (2, 3):
+        source_paths.extend(Path(__file__).with_name(name) for name in
+                            ("signal_policy.py", "intelligence_common.py"))
+        source_paths.append(Path(__file__).parents[2] / "eval/source_context_cases.py")
     if pass_number == 2:
         source_paths.append(Path(__file__).with_name("pass2_signal_validation.py"))
     source_hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths}

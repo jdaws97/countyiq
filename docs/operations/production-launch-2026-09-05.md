@@ -161,3 +161,20 @@ CodeQL upload configuration, complete the LLM canaries/source review,
 and establish a working pilot inquiry path. `hello@countyiq.net` is intended but
 not configured or published. The apex marketing Access gate stays in place until
 contact and live customer checks are complete. No billing or outreach was sent.
+## Latest private-alpha access and LLM review
+
+The live apex and app Access policies now allow `thowe095@gmail.com` alongside
+the existing operator address. OpenTofu applied only the two email-policy changes
+and the subsequent plan showed no drift. The change is committed as `7f74243`;
+its main CI passed. The brother's address is still pending. No invitation email
+was sent. A browser remains at the Cloudflare sign-in screen, so successful live
+customer authentication and account-workspace persistence are still unverified.
+
+The source-context simplification and its 21-call diagnostic repeat bring the
+release review to **195 calls / $0.283666540**. All outputs were reviewed against
+their frozen records; source and action-consistency failures remain across the
+candidate models. The full backfill is **not approved**, no quality receipt was
+issued, and production LLM flags remain disabled. See the updated
+[model comparison](../research/model-comparison-2026-09-05.md) for evidence,
+measured call reduction and limitations. These newer pipeline changes are not
+included in the production revision recorded above.

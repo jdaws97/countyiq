@@ -235,6 +235,14 @@ def test_parcel_brief_citations_are_bidirectional_and_consistent() -> None:
     ) == []
 
 
+def test_parcel_brief_cannot_hide_unsupported_parcel_markers_beside_valid_signals() -> None:
+    for field in ("brief", "assessment_reasoning", "top_risk"):
+        parsed = _parcel_brief()
+        parsed[field] += " An unrelated property is approved [Parcel: NOT-IN-CONTEXT]."
+        errors = validate_parcel_brief_citations(parsed, {"vacancy", "assemblage"})
+        assert any(f"{field} uses [Parcel: PIDN]" in error for error in errors)
+
+
 def test_owner_brief_requires_known_signal_and_parcel_markers() -> None:
     parsed = {
         "brief_text": "Distress is concentrated [Signal: tax_distress] [Parcel: P1].",

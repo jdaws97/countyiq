@@ -43,9 +43,10 @@ from countyiq.lib.pass_llm_config import (
     resolve_pass_harness,
 )
 from countyiq.lib.pass_schemas import PASS3_BRIEF_SCHEMA
+from countyiq.lib.signal_policy import INTERPRETIVE_SIGNAL_KEYS_SQL
 from countyiq.resources.database import DatabaseResource
 
-PARCELS_NEEDING_BRIEFS_QUERY = """
+PARCELS_NEEDING_BRIEFS_QUERY = f"""
     -- Rank-gated selection. A brief is worth paying for when a user is likely
     -- to open the parcel, which the deterministic radar rank predicts far
     -- better than the model's own significance label did. Candidates are the
@@ -63,11 +64,12 @@ PARCELS_NEEDING_BRIEFS_QUERY = """
     FROM public.evidence e
     JOIN ranked r ON r.pidn = e.pidn
     WHERE e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
+      AND e.signal_key IN ({INTERPRETIVE_SIGNAL_KEYS_SQL})
       AND e.adjusted_significance IN ('high', 'medium')
     ORDER BY e.pidn
 """
 
-RETRACT_UNSERVABLE_BRIEFS_QUERY = """
+RETRACT_UNSERVABLE_BRIEFS_QUERY = f"""
     WITH ranked AS (
         SELECT dm.pidn
         FROM public.development_momentum dm
@@ -85,6 +87,7 @@ RETRACT_UNSERVABLE_BRIEFS_QUERY = """
         SELECT 1
         FROM public.evidence e
         WHERE e.pidn = pb.pidn
+          AND e.signal_key IN ({INTERPRETIVE_SIGNAL_KEYS_SQL})
           AND e.validation_status IN ('confirmed', 'upgraded', 'downgraded')
           AND e.adjusted_significance IN ('high', 'medium')
     )

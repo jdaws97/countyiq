@@ -681,8 +681,8 @@ def test_model_context_snapshot_is_consistent_read_only_and_released():
 @pytest.mark.integration
 def test_parcel_brief_context_matches_database_fingerprint():
     import uuid
-    from psycopg2.extras import RealDictCursor
-    from countyiq.lib.pass3_brief_generation import gather_brief_context
+    from psycopg2.extras import Json, RealDictCursor
+    from countyiq.lib.pass3_brief_generation import gather_brief_context, build_brief_generation_prompt
 
     pidn = str(uuid.uuid4().int % 10**12).zfill(13)
     owner = "Review context " + uuid.uuid4().hex
@@ -694,6 +694,17 @@ def test_parcel_brief_context_matches_database_fingerprint():
                   (pidn,owner_full,propadr,aprtotal,acres,price,municipality)
                 VALUES (%s,%s,'Review address',123456,2.5,100000,'Review municipality')
             """, (pidn,owner))
+            for key in ("active_subdivision", "vacancy"):
+                cursor.execute("""
+                    INSERT INTO public.evidence
+                        (pidn, signal_key, claim, evidence_data, validation_status,
+                         adjusted_significance, validation_reasoning, cross_references)
+                    VALUES (%s,%s,'invented claim',%s,'confirmed','high',
+                            'invented approval',%s)
+                """, (pidn, key, Json({
+                    "plan_title": "Recorded Plan", "prop_lots": 1, "prop_du": 0,
+                    "buyer_is_llc": False, "months_since_received": 2,
+                }), Json([{"source": "planning", "detail": "invented 900-unit approval"}])))
             context = gather_brief_context(cursor, pidn)
             assert context["parcel"]["owner"] == owner
             assert context["parcel"]["assessed_value"] == 123456
@@ -701,6 +712,14 @@ def test_parcel_brief_context_matches_database_fingerprint():
             assert context["portfolio"]["portfolio_value"] == 123456
             assert context["portfolio"]["portfolio_delinquency"] == 0
             assert context["entity"] == {"found": False}
+            assert [s["signal_key"] for s in context["validated_signals"]] == ["active_subdivision"]
+            prompt = build_brief_generation_prompt(context)
+            assert "plan_title=Recorded Plan" in prompt
+            assert "prop_lots=1" in prompt
+            assert "prop_du=0" in prompt
+            assert "buyer_is_llc=False" in prompt
+            assert "invented" not in prompt
+            assert "months_since_received" not in prompt
             cursor.execute("SELECT meta.parcel_brief_source_fingerprint(%s) AS fingerprint", (pidn,))
             assert context["source_fingerprint"] == cursor.fetchone()["fingerprint"]
             cursor.execute("UPDATE staging.parcels SET aprtotal=123457 WHERE pidn=%s", (pidn,))
@@ -720,21 +739,65 @@ def test_shared_retraction_removes_changed_and_missing_but_retains_aged_evidence
     pidn = "9090000000009"
     try:
         with connection.cursor() as cursor:
-            for key in ("missing", "changed", "aged"):
+            for key in ("missing", "changed", "aged", "vacancy"):
                 cursor.execute("""
                     INSERT INTO public.evidence (pidn,signal_key,claim,evidence_data,validation_status,adjusted_significance)
                     VALUES (%s,%s,'fixture',%s,'confirmed','high')
                 """, (pidn,key,Json({"fact":1,"months_since_sale":1})))
-            for key, fact in (("changed",2),("aged",1)):
+            for key, fact in (("changed",2),("aged",1),("vacancy",1)):
                 cursor.execute("""
                     INSERT INTO public.development_signals (pidn,signal_key,signal_weight,source_table,evidence)
                     VALUES (%s,%s,1,'fixture',%s)
                 """, (pidn,key,Json({"fact":fact,"months_since_sale":2})))
             cursor.execute(RETRACT_STALE_EVIDENCE_QUERY, {"volatile":list(VOLATILE_EVIDENCE_KEYS)})
             removed = {key for parcel,key in cursor.fetchall() if parcel==pidn}
-            assert removed == {"missing","changed"}
+            assert removed == {"missing","changed","vacancy"}
             cursor.execute("SELECT signal_key FROM public.evidence WHERE pidn=%s",(pidn,))
             assert cursor.fetchall() == [("aged",)]
+            cursor.execute("SELECT COUNT(*) FROM public.development_signals WHERE pidn=%s AND signal_key='vacancy'", (pidn,))
+            assert cursor.fetchone()[0] == 1
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
+def test_footprint_context_does_not_create_a_paid_validation_candidate():
+    import uuid
+    from psycopg2.extras import RealDictCursor
+    from countyiq.assets.enrichment.signal_validation_batched import (
+        PARCELS_NEEDING_VALIDATION_QUERY, PARCELS_NEEDING_VALIDATION_FAST_QUERY,
+    )
+    from countyiq.lib.pass2_batched_validation import (
+        gather_parcel_batch_context, build_batched_signal_prompt,
+    )
+
+    pidns = [str(uuid.uuid4().int % 10**12).zfill(13) for _ in range(2)]
+    connection = _connect()
+    try:
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            for index, pidn in enumerate(pidns):
+                cursor.execute("INSERT INTO staging.parcels (pidn,owner_full) VALUES (%s,'Policy test owner')", (pidn,))
+                keys = ["active_subdivision", "vacancy", "new_screen"]
+                if index:
+                    keys.append("ownership_change")
+                for key in keys:
+                    cursor.execute("""
+                        INSERT INTO public.development_signals
+                            (pidn,signal_key,signal_weight,source_table,evidence)
+                        VALUES (%s,%s,1,'fixture','{"structure_count":0}'::jsonb)
+                    """, (pidn, key))
+            for query in (PARCELS_NEEDING_VALIDATION_QUERY, PARCELS_NEEDING_VALIDATION_FAST_QUERY):
+                cursor.execute(query)
+                selected = {row["pidn"] for row in cursor.fetchall()} & set(pidns)
+                assert selected == {pidns[1]}
+            context = gather_parcel_batch_context(cursor, pidns[1])
+            assert {s["signal_key"] for s in context["signals"]} == {"active_subdivision", "ownership_change"}
+            assert {s["signal_key"] for s in context["context_signals"]} == {"vacancy", "new_screen"}
+            prompt = build_batched_signal_prompt(context)
+            assert "context:vacancy" in prompt
+            assert "structure_count=0" in prompt
+            assert "2 signals" in prompt
     finally:
         connection.rollback()
         connection.close()
