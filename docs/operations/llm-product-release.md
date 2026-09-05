@@ -148,7 +148,8 @@ release candidate or live production state.
 
 ## Local isolation
 
-Normal UI: localhost:5173 (built container) or localhost:5174 (Vite).
+Current source UI: app.localhost:5180 (product) and localhost:5180 (marketing).
+Port 5173 is an older built container. The September 4 Vite review used 5174.
 Normal API: localhost:8000 -> localhost:5433/countyiq, the real local dataset.
 Synthetic API: localhost:8002 -> localhost:5433/countyiq_test.
 Synthetic Vite: localhost:5175, with

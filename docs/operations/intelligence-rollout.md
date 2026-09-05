@@ -33,9 +33,9 @@ cd /opt/countyiq
 export COUNTYIQ_DEPLOY_REF=<reviewed-40-character-commit-sha>
 git checkout --detach "$COUNTYIQ_DEPLOY_REF"
 env COUNTYIQ_DEPLOY_REF="$COUNTYIQ_DEPLOY_REF" \
-  COUNTYIQ_ENV_FILE=/opt/countyiq/.env docker/deploy.sh --check
+  COUNTYIQ_ENV_FILE=/etc/countyiq/production.env docker/deploy.sh --check
 sudo env COUNTYIQ_DEPLOY_REF="$COUNTYIQ_DEPLOY_REF" \
-  COUNTYIQ_ENV_FILE=/opt/countyiq/.env docker/deploy.sh
+  COUNTYIQ_ENV_FILE=/etc/countyiq/production.env docker/deploy.sh
 ```
 
 Verify `/api/ready`, `/api/ops/health`, and that the database matches the

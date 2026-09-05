@@ -178,9 +178,18 @@ invoice: cache behavior, cache-write charges and direct-provider execution must
 be tested. Nevertheless, comparing alternative models only against synchronous
 Luna overstates their potential backfill savings.
 
-Keep synchronous canaries for short feedback cycles. Before requesting full
-backfill approval, qualify a bounded direct Batch sample and estimate accepted
-output cost, including retries, rejects, cache effects and dependent-pass
-turnaround. Batch results must retain frozen input/model/prompt identity and be
-revalidated before publication; asynchronous processing does not relax the
-existing evidence or authorization gates.
+The user currently has only OpenRouter, with no direct OpenAI account. An
+eight-request evaluation input is prepared locally, with identical frozen
+P2/P3 prompts, source contexts, schemas and labels. Only the provider-specific
+transport fields change. Its conservative bound is $0.050425 under a $0.10
+cap, including the full output allowance and input cache-write pricing. No
+Batch job has been submitted and no account or billing setup is authorized.
+
+Keep synchronous canaries for short feedback cycles. If the user enables
+direct OpenAI access, qualify this bounded Batch sample before recommending
+that transport for backfill. Compare accepted-output cost, including retries,
+rejects, cache effects and dependent-pass turnaround. Otherwise qualify the
+best option on the existing OpenRouter account and present the documented
+Batch saving as an untested alternative. Batch results must retain frozen
+input/model/prompt identity and be revalidated before publication;
+asynchronous processing does not relax the evidence or authorization gates.

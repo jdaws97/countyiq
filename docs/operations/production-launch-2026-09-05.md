@@ -1,264 +1,159 @@
 # Production launch record — September 5, 2026
 
-Status: active implementation and verification. **Full backfill is not approved.**
-The user authorized product iteration, bounded canaries, commits/pushes to main,
-and deployment. Full backfill remains a separate explicit user decision.
+The private application is live at **https://app.countyiq.net** on commit
+`77a34f3cb4d6ef385c5626b65fa9fd1a55af1d42`, deployed at 19:17:53 UTC. All six
+services are running; authenticated public readiness returns HTTP 200 with
+`{"status":"ok"}`. The same service credential receives a customer challenge
+on `/api/session` (302), so it cannot access customer workspaces. **Full
+backfill is not approved.** The user authorized product iteration, bounded canaries, commits,
+pushes to main and deployment; full backfill remains a separate user decision.
 
-Current release: **7d047035820d72e22ef449cc124dff36b909a34e** is committed,
-pushed to main, and checked out cleanly on the VPS. Application images are built;
-the application is not serving yet. The protected revision-061 source dump was
-checksum-verified on the VPS and restored into `countyiq_import_20260905`, with
-175,928 current parcels and 6,459 proceedings. Its final candidate-view refresh
-was interrupted when the credential guard stopped storage operations; all base
-data, constraints and preceding archive entries are restored. The original
-empty production database remains preserved. The indexed view migration now
-passes on the real candidate at revision 065 with 19,870 name pairs and zero
-intelligence integrity discrepancies. Whole-result comparison against the
-original local view is recorded separately before promotion. Fresh integration
-checks pass 104 tests; the non-integration pipeline suite passes 1,357 tests.
+The immutable release receipt is
+`/var/lib/countyiq/releases/20260905T191753Z-77a34f3cb4d6ef385c5626b65fa9fd1a55af1d42.env`.
+Its rollback backup is `20260905T191619Z-pre-deploy-77a34f3cb4d6`. PostgreSQL
+and the API have no host port; Dagster is bound only to loopback.
 
-The 1,110 raw source files (**2,738,271,652 bytes**) are now uploaded to private
-R2 with unchanged relative paths; a full download check reports zero differences.
-The empty pre-import off-host baseline is
-`20260905T180740Z-preimport-empty-baseline`. A backup of the imported data and a
-restore drill remain necessary before the daily timer is enabled.
+## Data and recovery
 
-The obsolete uploader exposed the backup credential in debug output. The log
-was redacted, the user rolled that token, and a hidden-input helper verified
-old-secret rejection before encrypting and publishing the replacement. The
-replacement works; the cost guard is rearmed. Upstream rclone 1.75.1 fixed the
-false upload errors, with first-attempt and download checks passing.
+The real local revision-061 database was checksum-verified, restored to an
+isolated VPS candidate and migrated to revision 065. Promotion preserved the
+original empty database as `countyiq_preimport_20260905`. The live data contains
+175,928 current parcels and 6,459 current proceedings. No evaluation results
+were imported as accepted production intelligence.
 
-The live edge certificate covers `countyiq.net` and `*.countyiq.net`, issued by
-Google Trust Services and valid September 4–December 3, 2026. Cloudflare manages
-renewal; Tunnel encrypts the route to the VPS, with HTTP only on the internal
-Docker hop. SOPS uses the Ed25519 SSH recipient in `.sops.yaml`; decryption uses
-the local `/home/jdaws/.ssh/jdawskey`, which is not copied to the VPS.
+The original candidate-pair refresh was quadratic. Migration 065 uses a
+municipality/name GIN index and an indexed lateral lookup, preserving the
+strict similarity threshold. The full refresh took 4 minutes 48 seconds on the
+VPS. All 19,870 owner-name pairs exactly match the original local result:
+SHA-256 `fe485e5ae14c3710b56c088472d5a47027f72c50cad1f4df62930676e1a5ee48`.
+The pipeline role owns this rebuildable view, while source tables remain
+administrator-owned. Three intelligence-integrity discrepancy counts are zero.
 
-## Product acceptance work
+All 1,110 raw source files, totaling 2,738,271,652 bytes, are stored in private
+R2 under their original relative paths. A full download comparison found no
+differences. Protected local and VPS copies of the source database dump and raw
+archive remain available. The off-host empty baseline is
+`20260905T180740Z-preimport-empty-baseline`.
 
-The launch lane is one York County investigation workspace for local developers
-and acquisition teams. See [product direction](../products/real-estate-intelligence.md).
-Pricing is a $79/month pilot hypothesis, not validated demand or a published offer.
+Database backups have seven-day lifecycle retention and a three-day lock. The
+cost guard enforces the configured 8,000,000,000-byte total storage ceiling.
+The fresh post-deployment backup `20260905T191857Z-restore-drill` is verified
+in R2. Its isolated restore passed for both databases at 19:26:09 UTC, recovering
+175,928 properties and 22 Dagster tables. The receipt is
+`/var/lib/countyiq/restore-drills/20260905T192609Z-20260905T191857Z-restore-drill.env`.
+The daily timer is enabled and active. Its installed systemd service passed
+with exit 0 and verified backup `20260905T192726Z-scheduled`; the next run is
+September 6 at 04:00 UTC plus up to 15 minutes of randomized delay. Storage
+use after this verification is 3,890,664,204 bytes against the 8 GB ceiling. The installed backup service now matches the committed unit,
+including write access to the cost-guard state directory.
 
-Customer review uses current source at port 5180 against the real local API and
-real county database, not the stale built UI container or synthetic API.
-The browser review covers a known-property search, property evidence, watch
-persistence and map selection at desktop and 390px phone widths.
+Evidence: `output/production-readiness-2026-09-05/live-release-receipt.log`,
+`offhost-restore-drill.log` and `scheduled-backup-verification.log`. Main CI
+passes in [run 33986989659](https://github.com/jdaws97/countyiq/actions/runs/33986989659);
+the CodeQL limitation appears in
+[run 33986989674](https://github.com/jdaws97/countyiq/actions/runs/33986989674).
 
-Changes made during this review:
+## Infrastructure findings resolved
 
-- A new workspace starts with property search and useful browsing paths.
-- Property pages lead with three distinct development scores and a concise
-  evidence disclosure. Print packets include the expanded evidence.
-- Empty activity states explain unpublished/limited records and lead to search
-  or radar. Baseline tax imports are not represented as new county activity.
-- Radar labels assessed value clearly and indicates additional results.
-- The map uses a light basemap by default and honors the selected dark theme.
-  Optional static layers load when enabled; municipality outlines are subdued.
-- Viewport requests use the actual canvas bounds, split at the API span limit,
-  and deduplicate parcel IDs. Invalid URL coordinates retain the county view.
-- A linked parcel fits its full geometry, stays highlighted, and loads the
-  surrounding parcels. A deliberate pan prevents delayed automatic recentering.
-- Real browser testing found that synchronous graphics picking could delay a
-  click by 498 ms, exceeding Deck's 250 ms tap limit. A 1000 ms click limit
-  retains the built-in movement threshold; clicks select and drags do not.
-- The map panel now shows the lead signals and a few key facts, with a prominent
-  route to the full evidence. Tax details withheld by policy read as unavailable.
-  Vacancy remains a footprint screen; recorded sale amounts are labeled.
+- The old rclone build exposed the backup credential in debug output. The log
+  was redacted, the user rotated the backup secret, and a hidden-input helper
+  verified rejection of the old secret before encrypting and publishing the
+  replacement. Raw-archive and infrastructure credentials were kept separate.
+- Upstream rclone 1.75.1 is checksum-pinned in Ansible. It fixes false HTTP 501
+  errors from the older uploader; first-attempt uploads and download checks pass.
+- Empty `COUNTYIQ_COUNTY_CONFIG_DIR` now selects the bundled county directory.
+  Docker's empty value previously made Dagster parse `pyproject.toml` as a
+  county manifest. The deployed-environment import regression now passes.
+- The Tunnel token uses a read-only file mount. Its parent is root-only 0700;
+  the file is root-owned, group 65532, mode 0440. The container runs as UID/GID
+  65532. A real container check proved readable access and denied writes.
+- Public readiness allows six bounded attempts for transport/5xx startup
+  failures. Redirects, authentication failures and wrong response bodies still
+  fail immediately. This addresses the delay between container startup and
+  Cloudflare Tunnel registration.
 
-Screenshots and interaction records are under
-`output/playwright/production-*`. These are local evidence, not committed assets.
-Final map layers, drag, theme and navigation checks remain in progress.
+Cloudflare manages the edge TLS certificate for `countyiq.net` and
+`*.countyiq.net`; the inspected certificate is valid September 4–December 3,
+2026. Tunnel encrypts the route to the VPS; HTTP is confined to the private
+Docker hop. SOPS uses the Ed25519 SSH recipient in `.sops.yaml`. Its decryption
+key is the local `/home/jdaws/.ssh/jdawskey`, which is not copied to the VPS.
 
-## Verification
+## Customer experience reviewed
 
-Artifacts: `output/production-readiness-2026-09-05/`.
+The product is one York County investigation workspace for local developers
+and acquisition teams. The promise is “Follow local development. See the
+evidence.” The [product direction](../products/real-estate-intelligence.md)
+defines the pilot; $79/month is an unpublished hypothesis, not validated demand.
 
-- Pipeline unit/regression suite after changes: **1355 passed, 101 integration
-  tests deselected**. Definitions import also passed earlier in this review.
-- API unit tests: **120 passed**. API database integration: **108 passed** against
-  the isolated `countyiq_test` database. The real county database was not reset.
-- Frontend: **30 tests passed**, TypeScript and lint passed, production build
-  passed. The lazy map bundle still produces a size warning; the marketing entry
-  does not load it. The final frontend release build, TypeScript and lint also passed after the map panel edits.
-- Real host-preflight integration cases: **8 passed**.
-- Cloudflare configuration validates and its cost-policy check passes. The new
-  readiness service token is a reviewed Access credential, not a metered Worker.
-- Dirty-tree whitespace check passed. Existing staged/unstaged/untracked work
-  was preserved in `/tmp/countyiq-production-20260905/` before editing.
+Playwright reviewed the current source at `http://app.localhost:5180/` against
+the real API and county data. Port 5173 is an older built UI and 5175 is synthetic.
+The browser checks cover desktop and 390px phone widths:
 
-No commit, push or application release has been completed by this launch review
-as of this entry. Those remain required work, with exact SHA and receipts to be
-added below when verified.
+- Address search, property evidence, owner navigation, watch persistence and
+  useful empty states. Assessed value and recorded transfer amounts are labeled.
+- Map selection fits and highlights the parcel; clicks select, drags pan. The
+  light default, dark theme, optional layers, legend and mobile controls work.
+  Viewport requests cover the actual canvas, split at the API's span limit,
+  deduplicate parcels and refresh after a layer is re-enabled.
+- Property pages lead with separate opportunity, momentum and site scores.
+  The map panel gives key facts and a direct route to the evidence.
+- Nearby parcels show five initially, expand to forty and use readable mobile
+  cards. Print packets expand evidence and nearby parcels, then restore the UI.
+- Missing mapped structures are described as a vacancy screen requiring
+  verification, never established current use.
 
-## LLM evidence
+Screenshots and the final print packet are under `output/playwright/production-*`.
+These are local review artifacts, not marketing assets. Live authenticated
+workspace and cross-session persistence verification remain outstanding.
 
-The first finite evaluation made 59 calls for **$0.08241129**: Pass 1's eight
-partition cases, two Pass 2 trials across 20 source cases (59 signals per trial),
-four parcel-brief cases, and seven supplemental municipal/owner cases.
-Pass 1 passed 8/8. The supplemental cases passed 7/7.
+## LLM qualification and cost
 
-Source review found a real Pass 3 recommendation collapse: all four briefs said
-investigate. Updated parcel/owner instructions distinguish a specific activity
-requiring verification from a change to watch and static screening evidence.
-A subsequent four-case run has 4/4 source-consistent structured decisions and
-4/4 production citation gates. The seven supplemental cases also pass after
-the owner prompt change. Total for this launch review is **70 calls,
-$0.09453171**. All are evaluation-only; no serving data was written.
+The [model comparison](../research/model-comparison-2026-09-05.md) contains the
+current source reviews and preserved raw results: 156 evaluation-only calls,
+$0.234389645 total. None issued a quality receipt or wrote serving intelligence.
 
-The deterministic scorer also had defects. It treated explicit missing or
-unconfirmed evidence as prohibited assertions, mishandled decimal sentence
-boundaries and equivalent number wording, accepted substring matches inside
-larger numbers, and excluded factual anchors in the cited top-risk field.
-Regression tests cover these issues, including separate positive assertions
-that must still fail. Original provider results are preserved. Offline rescoring
-of the revised P3 outputs yields 4/4 strict passes; this is not a new paid run.
-The frozen source contexts and labels were not edited to obtain that result.
+The harness now uses explicit model-appropriate reasoning and sampling settings.
+Removing factual examples from the shared citation prompt materially improved
+DeepSeek's brief-format results. This confirms that earlier failures were not
+all model capability failures. Unknown references remain rejected.
 
-Pass 2 remains under source-level review. Under scoring version 2026-09-05.1,
-the two initial trials yield 54/59 and 56/59 grounded decisions, 170/178 facts
-in each, zero prohibited assertions, and 10/20 strict case passes each.
-Remaining issues include conservative vacancy dispositions, the significance of
-fragmented neighboring ownership, and fact wording/omissions. Neither a high
-format-gate rate nor a changed scorer is sufficient quality approval.
+GLM 5.3 Flash is the strongest lower-cost challenger so far. DeepSeek still has
+long/variable latency and unsupported interpretations. Luna is not qualified
+for full backfill merely because its format scores are higher. Pass 2 source
+semantics, including vacancy claims and an 11/12-neighbor counting discrepancy,
+still need resolution. Models and frozen labels have not been silently changed.
 
-The previous [Pass 0 readiness report](../research/pass0-readiness-2026-09-05.md)
-meets its final regression coverage/discovery criteria, but its holdout informed
-fixes. Six new source documents were selected with zero historical ID/text-hash overlap,
-read before generation, and evaluated with frozen expectations. The first six-call
-run cost **$0.02937440**. It retained 16/19 expected useful matters and surfaced
-7/19 for discovery. No unsupported approval, wrong-property association or false
-terminal status was found. Three valid additional capital projects were omitted
-from the source-first reference; raw frozen precision is 6/9, with all 9 candidates
-source-supported on subsequent review. The reference remains unchanged.
+The current harness uses synchronous OpenRouter Chat Completions. Parcel-level
+“batching” in Pass 2 is unrelated to the discounted provider Batch API. Direct
+Luna Batch pricing must be considered, but the user has only OpenRouter and no
+direct OpenAI billing/key. Eight identical P2/P3 cases are prepared, unsubmitted,
+with a $0.10 cap and conservative $0.050425 bound. No direct account was created.
+The offline transport prototype was not accepted or added to production.
 
-These results are not sufficient for release. Fixed explicit plan-review relevance,
-capital upgrades and bidding-stage exclusions, and unambiguous short Board authority.
-Added 21 regression cases; the complete pipeline suite passes 1338 tests. Prompt
-instructions now cover comprehensive-plan procurement/funding omissions, material
-project votes and exact project-reference passage selection. A second six-document
-run is capped at $0.30, with no retries or publication. It is regression evidence
-after source review, not an unseen holdout. Original outputs/projections and a
-source-by-source review are preserved under `pass0-new-canary/run1`.
+All paid passes, optional AI search, county narratives, judges and escalation
+remain disabled. Bounded canaries and source review must precede any request
+for full-backfill approval.
 
-Total completed launch evaluation spend before this repeat: **76 calls, $0.12390611**.
-Source-to-publication checks and exact-version receipts remain outstanding. Pass 4 and AI search stay
-off; they are outside the launch offer.
+## Validation and remaining release work
 
-## Infrastructure actually changed
+Recorded checks include 1,357 pipeline unit/regression tests, 104 database
+integration tests, 120 API unit tests, 108 API integration tests, and 30 frontend
+tests. TypeScript, lint and production build pass. Later startup fixes pass 19
+county-config tests, 21 deployment/account unit checks, five deployment recovery
+integration cases and eight HTTP readiness cases. Ansible syntax, targeted
+secret scanning and whitespace checks pass. These are actual local checks;
+GitHub Actions on the deployed commit passed pipeline, frontend and secret
+checks but exposed API import-path, Compose env-file and CodeQL permission
+configuration errors. Commit `da8be7286571bc8dda1047a6f8bbde591c6a4145` fixes
+those workflow settings; all six main CI jobs pass remotely. The separate
+CodeQL analyses ran, but GitHub rejected their result upload because code
+scanning is disabled for this private repository. No clean CodeQL result is
+claimed. Enabling a supported code-scanning setup remains an open operational
+item; no paid GitHub feature or subscription was enabled. The corrected API
+commands pass 120 unit and 108 integration tests locally.
 
-- VPS SSH now rejects password and keyboard-interactive authentication; a fresh
-  key session was verified. The effective configuration previously differed
-  from the intended hardening because cloud-init's earlier file took priority.
-- Corrected application UID traversal to `/var/lib/countyiq/cost-guard`; the
-  Ansible parent-directory mode now reflects the tested configuration.
-- Applied guarded `app.countyiq.net` DNS and its dedicated Access application,
-  and routed that hostname through the existing Tunnel to Caddy.
-- Published encrypted production configuration with the product Access audience,
-  verified-account workspace origins and private watch sync enabled. Inference
-  passes remain disabled.
-- The apex Access gate remains in place until the split origin is verified.
-
-The VPS does not yet run the application stack. The real local database remains
-on revision 061; migrations 062–064, protected migration backups, production
-restore/transfer, commit-addressed release, off-host restore drill and live
-customer authentication checks remain to be completed.
-
-The user added the requested Cloudflare token permission. A refreshed plan with
-**two additions, zero changes/deletions** was applied: one readiness service
-token and a separate Access application restricted to `app.countyiq.net/api/ready`.
-The token expires September 5, 2027. Its curl configuration was streamed directly
-to `/etc/countyiq/readiness.curl` on the VPS and verified root:root mode 0600.
-The encrypted production env points to that file and was republished. With this
-credential the readiness route reaches the undeployed origin (HTTP 530), while
-`/api/session` still receives the customer Access challenge (302). This verifies
-the Access boundary, **not application readiness**. End-to-end HTTP 200 remains
-required after deployment.
-
-## Customer contact
-
-No MX records exist for the domain. The intended contact is
-`hello@countyiq.net`; it is not published as a working address. The user uses
-Gmail/Proton. Proton custom-domain mail requires a paid plan and supplies the
-DNS records to configure in Cloudflare. Cloudflare forwarding is another option
-for receiving mail, but replies use the destination mailbox's address.
-Mailbox setup and a working pilot inquiry path remain launch dependencies.
-
-## Remaining acceptance order
-
-1. Finish browser interaction/coverage checks and fix observed problems.
-2. Review remaining Pass 2 differences; freeze and evaluate new Pass 0 canaries.
-3. Reconcile launch docs, release identities, source policies and source freshness.
-4. Commit/push the reviewed release, complete backups/migrations and deploy the
-   private app. Verify Cloudflare/identity boundaries and recovery.
-5. Complete a real source-to-event-to-property-to-watch canary in the deployed
-   environment; review every consequential output and rejection.
-6. Verify customer contact and public marketing, then present the full-backfill
-   estimate, exact versions, evidence and proposed limits for user approval.
-
-
-## September 5 follow-up: corrected inputs and model comparison
-
-The second six-document Pass 0 run completed for $0.03087060. Source review
-found all 19 expected useful matters retained and 18/19 surfaced for discovery;
-all 20 surfaced candidates were supported (including three valid capital
-projects absent from the frozen reference). Release is still withheld: bare
-vote-tally excerpts did not establish the voted action, and one meeting was
-mislabeled as a hearing. Those guards/prompts were corrected and regression
-tested. These are repeat-case results after fixes, not independent holdout data.
-
-Pass 2 supplied incomplete context: adjacent tax-claim years were omitted, and
-the precomputed delinquent count considered positive balances only. Both are
-corrected. Four targeted preserved cases were run twice for $0.01212522.
-Fragmented neighboring ownership now stays low significance and claim years
-are preserved. One output used exact display wrappers around valid evidence
-IDs. Bounded normalization fixes that parser issue; offline reparse of all eight
-saved outputs passes 8/8 evidence-reference gates (previously 7/8). Unknown IDs
-still fail. Case p2x-050 retains a fixture-level 11-versus-12 neighbor-count
-ambiguity; citation validity does not resolve that semantic issue.
-
-Before the new three-model comparison, completed evaluation totals were
-**90 calls, $0.16690193**. No serving writes or quality approvals were made.
-The full non-integration pipeline suite now passes **1355 tests**, with 101
-integration cases deselected. This includes corrected context, citation,
-municipal decision-scope and model-request tests.
-
-The user explicitly reopened GLM 5.3 Flash and DeepSeek V4 Flash 0731 selection.
-Audit confirmed that historical DeepSeek truncation and missing claim-year
-facts were harness/input defects; GLM also inherited generic sampling and its
-mandatory reasoning defaulted to max when omitted. GLM now has publisher
-sampling defaults and explicit bounded reasoning; DeepSeek V4 uses portable
-OpenRouter reasoning controls and omits ignored sampling parameters. Production
-model defaults are unchanged while the comparison is pending.
-
-The frozen comparison under `output/production-readiness-2026-09-05/fair-model-comparison/`
-allows 36 calls for at most $1.50, with six transport/semantic smoke calls before
-a 30-call continuation. All models get identical corrected evidence/prompts,
-explicit low effort for Passes 0/2/3 and high for Pass 1, the same output ceiling
-per pass, and no generation retries. Both open models require FP8 providers.
-Every request payload, original response, gate result, fallback, token count,
-elapsed time and provider-reported charge is preserved. This is a controlled
-screen; favorable regression results alone do not authorize a full backfill.
-
-The three-model comparison is complete: **36 calls, $0.046138529**, bringing
-completed launch evaluation to **126 calls, $0.213040459**. See the
-[model review](../research/model-comparison-2026-09-05.md) for source-level
-findings and the distinction between harness failures and substantive errors.
-GLM is a promising per-pass replacement; no model default was promoted yet.
-
-Final database contracts pass **101/101** on a new isolated PostGIS container
-migrated through 064. A reused API test database initially failed one fixed-seed
-policy-count assertion due to a synthetic municipality left by API fixtures;
-the real county DB was never reset. Dependencies have no known reported
-vulnerabilities, and definitions import passes. History secret scanning passes;
-working-tree scanning found only a public localStorage name and Docker image
-digest, now documented with line-specific false-positive annotations.
-
-Browser verification confirms map layer off/pan/on fetches fresh parcels, with
-no fetch while disabled and no mobile overflow. Property printing opens 11
-evidence sections then restores their previous state. Nearby parcels now show
-five initial results, expand to all 40, and retain all rows in print; mobile rows
-show labeled facts without a horizontally clipped table. Vacancy copy remains a
-screen requiring verification. A protected revision-061 database dump was
-created and its PostgreSQL restore listing verified before any migration.
+Remaining: verify the live customer sign-in/workspace flow, resolve the optional
+CodeQL upload configuration, complete the LLM canaries/source review,
+and establish a working pilot inquiry path. `hello@countyiq.net` is intended but
+not configured or published. The apex marketing Access gate stays in place until
+contact and live customer checks are complete. No billing or outreach was sent.
