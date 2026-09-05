@@ -36,6 +36,35 @@ def test_quality_receipts_fail_closed_on_bad_shape(tmp_path):
         assert not check_quality_release(2, path)["ok"]
 
 
+def test_quality_receipt_expires_when_spatial_source_rules_change(tmp_path, monkeypatch):
+    from datetime import date
+    import hashlib
+    from pathlib import Path
+
+    artifact = tmp_path / "reviewed.json"
+    artifact.write_text("reviewed source outputs")
+    paths = []
+    for pass_number in (2, 3):
+        path = tmp_path / f"pass{pass_number}.json"
+        path.write_text(json.dumps({
+            "identity": release_identity(pass_number), "decision": "approved",
+            "reviewer": "test reviewer", "reviewed_at": date.today().isoformat(),
+            "evaluation_record": {"path": artifact.name,
+                                  "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()},
+            "catastrophic_errors": 0,
+        }))
+        assert check_quality_release(pass_number, path)["ok"]
+        paths.append((pass_number, path))
+    original_read = Path.read_bytes
+
+    def changed_source(path):
+        contents = original_read(path)
+        return contents + b"\n-- changed spatial selection" if path.name == "066_parcel_spatial_facts.py" else contents
+
+    monkeypatch.setattr(Path, "read_bytes", changed_source)
+    assert all(not check_quality_release(number, path)["ok"] for number, path in paths)
+
+
 def test_pass3_contract_uses_investigation_actions_without_changing_original_gold():
     from pathlib import Path
     fixture_dir = Path(FIXTURE).parent

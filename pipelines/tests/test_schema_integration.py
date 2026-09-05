@@ -64,6 +64,124 @@ class _TransactionalDatabase:
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("kind", ["signals", "momentum"])
+@pytest.mark.parametrize("fail_publication", [False, True])
+def test_rebuild_keeps_old_snapshot_readable_and_rolls_back_failed_publication(monkeypatch, kind, fail_publication):
+    from countyiq.assets.enrichment import development_signals as signal_module
+    from countyiq.assets.enrichment import development_momentum as momentum_module
+    from countyiq.resources.database import DatabaseResource
+    from dagster import build_asset_context
+
+    writer = _connect()
+    reader = _connect()
+    reader.autocommit = True
+    pidn = "REFRESH000001"
+    resource = DatabaseResource(
+        host=writer.info.host, port=writer.info.port, dbname=writer.info.dbname,
+        user=writer.info.user, password=os.environ.get("DATABASE_PASSWORD", "localtest"),
+    )
+    resource.setup_for_execution(None)
+    module = signal_module if kind == "signals" else momentum_module
+    asset = module.development_signals if kind == "signals" else module.development_momentum
+    monkeypatch.setattr(module, "authorize_source_uses", lambda *args, **kwargs: None)
+    probed = []
+
+    class ProbeCursor:
+        def __init__(self, cursor):
+            self.cursor = cursor
+
+        def __getattr__(self, name):
+            return getattr(self.cursor, name)
+
+        def execute(self, query, params=None):
+            if "/* computation probe */" in query:
+                # This second real connection must see the old snapshot during
+                # the writer's potentially slow computation, without waiting.
+                with reader.cursor() as concurrent:
+                    concurrent.execute("SET statement_timeout = '500ms'")
+                    if kind == "signals":
+                        concurrent.execute("SELECT source_id FROM public.development_signals WHERE pidn=%s", (pidn,))
+                        assert concurrent.fetchall() == [("old-source",)]
+                    else:
+                        concurrent.execute("SELECT score FROM public.development_momentum WHERE pidn=%s", (pidn,))
+                        assert concurrent.fetchall() == [(7,)]
+                    probed.append(True)
+            return self.cursor.execute(query, params)
+
+    class ProbeDatabase:
+        def cursor(self):
+            return ProbeCursor(resource.cursor())
+
+        def execute(self, query, params=None):
+            return resource.execute(query, params)
+
+    if kind == "signals":
+        monkeypatch.setattr(module, "source_use_is_authorized", lambda *args, **kwargs: False)
+        monkeypatch.setattr(module, "_SIGNALS", [
+            ("active_subdivision", """
+                /* computation probe */
+                INSERT INTO public.development_signals
+                  (pidn,signal_key,signal_weight,source_table,source_id,evidence)
+                VALUES ('REFRESH000001','active_subdivision',0.3,'fixture','new-source','{}')
+            """),
+            ("nearby_subdivision", """
+                INSERT INTO public.development_signals
+                  (pidn,signal_key,signal_weight,source_table,evidence)
+                SELECT 'REFRESH000001','nearby_subdivision',0.08,'fixture','{}'
+                WHERE NOT EXISTS (SELECT 1 FROM public.development_signals
+                    WHERE pidn='REFRESH000001' AND signal_key='active_subdivision')
+            """),
+        ])
+        if fail_publication:
+            monkeypatch.setattr(module, "RETRACT_STALE_EVIDENCE_QUERY", "SELECT 1/0")
+    else:
+        original_build = module.build_rebuild_sql
+        monkeypatch.setattr(module, "build_rebuild_sql", lambda: "/* computation probe */\n" + original_build())
+        if fail_publication:
+            monkeypatch.setattr(module, "APPEND_HISTORY_SQL", "SELECT 1/0")
+    try:
+        with writer.cursor() as cur:
+            cur.execute("TRUNCATE public.development_signals, public.development_momentum")
+            cur.execute("DELETE FROM public.development_momentum_history WHERE pidn=%s", (pidn,))
+            cur.execute("""
+                INSERT INTO public.development_signals
+                  (pidn,signal_key,signal_weight,source_table,source_id,evidence)
+                VALUES (%s,'growth_area',0.02,'fixture','old-source','{}')
+            """, (pidn,))
+            cur.execute("INSERT INTO public.development_momentum (pidn,score) VALUES (%s,7)", (pidn,))
+            cur.execute("""
+                INSERT INTO public.development_momentum_history
+                  (pidn,computed_at,score,opportunity_score,site_readiness_score,signal_count,score_version)
+                VALUES (%s,NOW()-INTERVAL '2 days',5,0,50,1,7)
+            """, (pidn,))
+        writer.commit()
+        with build_asset_context() as context:
+            if fail_publication:
+                with pytest.raises(psycopg2.errors.DivisionByZero):
+                    asset.node_def.compute_fn.decorated_fn(context, ProbeDatabase())
+            else:
+                asset.node_def.compute_fn.decorated_fn(context, ProbeDatabase())
+        assert probed == [True]
+        with reader.cursor() as cur:
+            if kind == "signals":
+                cur.execute("SELECT source_id FROM public.development_signals WHERE pidn=%s", (pidn,))
+                assert cur.fetchall() == [("old-source" if fail_publication else "new-source",)]
+            else:
+                cur.execute("SELECT score,previous_score,is_new FROM public.development_momentum WHERE pidn=%s", (pidn,))
+                assert cur.fetchone() == ((7, None, False) if fail_publication else (2, 5, False))
+    finally:
+        resource.teardown_after_execution(None)
+        writer.rollback()
+        with writer.cursor() as cur:
+            cur.execute("DELETE FROM public.development_signals WHERE pidn=%s", (pidn,))
+            cur.execute("DELETE FROM public.development_momentum WHERE pidn=%s", (pidn,))
+            cur.execute("DELETE FROM public.development_momentum_history WHERE pidn=%s", (pidn,))
+        writer.commit()
+        writer.close()
+        reader.close()
+
+
+@pytest.mark.integration
 def test_retired_meta_tables_are_absent() -> None:
     connection = _connect()
     try:

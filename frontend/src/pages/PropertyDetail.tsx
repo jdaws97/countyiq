@@ -157,7 +157,7 @@ export default function PropertyDetail() {
           </div>
           <div className="property-badges">
             {p.class && <Badge color="var(--accent-blue)">{getPropertyClassLabel(p.class)}</Badge>}
-            {p.school_dis && <Badge color="var(--accent-purple)">{getSchoolDistrictLabel(p.school_dis)}</Badge>}
+            {p.municipality && <Badge color="var(--text-muted)">{formatLabel(p.municipality)}</Badge>}
             {tax.is_delinquent && <Badge color="var(--accent-red)">Tax Delinquent</Badge>}
             {report.zoning?.code && <Badge color="var(--accent-ink)">Zoned {report.zoning.code}</Badge>}
             {flood.in_flood_zone && <Badge color="var(--accent-cyan)">Flood Zone {flood.zone}</Badge>}
@@ -380,27 +380,32 @@ export default function PropertyDetail() {
                   </ul>
                 </div>
               )}
-              {report.soil_profile.units.map((unit) => (
-                <div key={unit.objectid} style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-panel)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                      {unit.map_unit_symbol || 'Soil unit'}: {unit.map_unit_name || 'Name unavailable'}
+              <details className="property-signal-details">
+                <summary>Review {report.soil_profile.units.length} mapped soil units</summary>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {report.soil_profile.units.map((unit) => (
+                    <div key={unit.source_record_ids.join(',')} style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-panel)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+                        <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                          {unit.map_unit_symbol || 'Soil unit'}: {unit.map_unit_name || 'Name unavailable'}
+                        </div>
+                        <Badge color="var(--accent-blue)">{unit.coverage_pct.toFixed(1)}% of parcel</Badge>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                        {(unit.slope_low != null || unit.slope_high != null) && (
+                          <Badge color={(unit.representative_slope ?? 0) >= 15 ? 'var(--accent-red)' : 'var(--text-muted)'}>
+                            Slope {unit.slope_low ?? '?'}–{unit.slope_high ?? '?'}%; representative {unit.representative_slope ?? '?'}%
+                          </Badge>
+                        )}
+                        {unit.drainage && <Badge color="var(--text-muted)">Drainage: {unit.drainage}</Badge>}
+                        {unit.septic_rating && <Badge color={unit.septic_rating === 'Very limited' ? 'var(--accent-gold)' : 'var(--text-muted)'}>On-lot septic: {unit.septic_rating}</Badge>}
+                        {unit.hydrologic_group && <Badge color={unit.hydrologic_group === 'D' ? 'var(--accent-red)' : 'var(--text-muted)'}>Hydrologic group {unit.hydrologic_group}</Badge>}
+                        {unit.hydric_rating && <Badge color="var(--text-muted)">{unit.hydric_rating}</Badge>}
+                      </div>
                     </div>
-                    <Badge color="var(--accent-blue)">{unit.coverage_pct.toFixed(1)}% of parcel</Badge>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-                    {(unit.slope_low != null || unit.slope_high != null) && (
-                      <Badge color={(unit.representative_slope ?? 0) >= 15 ? 'var(--accent-red)' : 'var(--text-muted)'}>
-                        Slope {unit.slope_low ?? '?'}–{unit.slope_high ?? '?'}%; representative {unit.representative_slope ?? '?'}%
-                      </Badge>
-                    )}
-                    {unit.drainage && <Badge color="var(--text-muted)">Drainage: {unit.drainage}</Badge>}
-                    {unit.septic_rating && <Badge color={unit.septic_rating === 'Very limited' ? 'var(--accent-gold)' : 'var(--text-muted)'}>On-lot septic: {unit.septic_rating}</Badge>}
-                    {unit.hydrologic_group && <Badge color={unit.hydrologic_group === 'D' ? 'var(--accent-red)' : 'var(--text-muted)'}>Hydrologic group {unit.hydrologic_group}</Badge>}
-                    {unit.hydric_rating && <Badge color="var(--text-muted)">{unit.hydric_rating}</Badge>}
-                  </div>
+                  ))}
                 </div>
-              ))}
+              </details>
               <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--text-muted)' }}>
                 Generalized mapped-soil screening only. Confirm grading, drainage, foundations, and wastewater design with parcel-specific professional review.
                 {report.soil_profile.source_url && (

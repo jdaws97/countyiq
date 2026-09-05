@@ -48,6 +48,10 @@ def release_identity(pass_number: int) -> dict:
         source_paths.extend(Path(__file__).with_name(name) for name in
                             ("signal_policy.py", "intelligence_common.py"))
         source_paths.append(Path(__file__).parents[2] / "eval/source_context_cases.py")
+        source_paths.extend([
+            Path(__file__).parents[1] / "assets/enrichment/development_signals.py",
+            Path(__file__).parents[2] / "alembic/versions/066_parcel_spatial_facts.py",
+        ])
     if pass_number == 2:
         source_paths.append(Path(__file__).with_name("pass2_signal_validation.py"))
     source_hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths}

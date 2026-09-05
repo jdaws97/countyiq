@@ -255,26 +255,41 @@ _SIGNALS: list[tuple[str, str]] = [
                 'source_url', f.source_url
             )
         FROM staging.parcels p
-        JOIN staging.zoning z
-            ON ST_Intersects(ST_Centroid(p.geom), z.geom) AND z.valid_to IS NULL
-        JOIN staging.future_landuse f
-            ON ST_Intersects(ST_Centroid(p.geom), f.geom) AND f.valid_to IS NULL
+        CROSS JOIN LATERAL public.parcel_center_zoning(p.geom) z
+        CROSS JOIN LATERAL (
+            SELECT f.* FROM staging.future_landuse f
+            WHERE f.valid_to IS NULL AND ST_Intersects(ST_Centroid(p.geom), f.geom)
+            ORDER BY f.adopt_date DESC NULLS LAST, f.globalid
+            LIMIT 1
+        ) f
         WHERE p.valid_to IS NULL
           AND f.future_lu IS NOT NULL AND f.future_lu != 'NO FUTURE LANDUSE'
+          -- Some source category codes contradict both district labels. Do
+          -- not infer a divergence from that code; the report still shows the
+          -- original zoning record. This is a label screen, not an ordinance.
+          AND CASE z.ztype
+              WHEN 'R' THEN CONCAT_WS(' ', z.zname, z.gen_zname) ~* 'residen'
+              WHEN 'C' THEN CONCAT_WS(' ', z.zname, z.gen_zname) ~* 'commer|business|office|shopping|retail|employment'
+              WHEN 'A' THEN CONCAT_WS(' ', z.zname, z.gen_zname) ~* 'agri|farm'
+              WHEN 'I' THEN CONCAT_WS(' ', z.zname, z.gen_zname) ~* 'industr|manufactur'
+              WHEN 'M' THEN CONCAT_WS(' ', z.zname, z.gen_zname) ~* 'mixed'
+              ELSE FALSE
+          END
           AND (
               (z.ztype = 'R' AND f.general_lu NOT ILIKE '%%resident%%')
-              OR (z.ztype = 'C' AND f.general_lu NOT ILIKE '%%commerc%%')
+              OR (z.ztype = 'C' AND f.general_lu NOT ILIKE '%%commer%%')
               OR (z.ztype = 'A' AND f.general_lu NOT ILIKE '%%agri%%')
               OR (z.ztype = 'I' AND f.general_lu NOT ILIKE '%%industr%%')
-              OR (z.ztype = 'M' AND f.general_lu NOT ILIKE '%%industr%%' AND f.general_lu NOT ILIKE '%%manufactur%%')
+              OR (z.ztype = 'M' AND f.general_lu NOT ILIKE '%%mixed use%%')
           )
           -- Exclude false mismatches where zoning name matches future use
           AND LOWER(REPLACE(z.zname, ' ', '')) != LOWER(REPLACE(f.future_lu, ' ', ''))
           AND f.future_lu NOT ILIKE '%%' || z.zname || '%%'
           AND z.zname NOT ILIKE '%%' || f.future_lu || '%%'
-        -- The county layer keeps a superseded district polygon alongside a
-        -- rezoning (7 parcels on 2026-09-03); the newest adoption is current.
-        ORDER BY p.pidn, z.adpt_date DESC NULLS LAST, z.zrecid DESC
+        -- Selection happens before the mismatch filter, as in property reports.
+        -- M is mixed use in the county layer, not manufacturing. Preserve its
+        -- original future-use spelling in evidence, including "Commerical".
+        ORDER BY p.pidn, f.adopt_date DESC NULLS LAST, f.globalid
         """,
     ),
     # 4. ownership_change — real market sale in the last 12 months. The weight
@@ -693,49 +708,33 @@ _SIGNALS: list[tuple[str, str]] = [
         INSERT INTO public.development_signals
             (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
         WITH soil_overlaps AS (
-            SELECT
-                p.pidn,
-                s.objectid,
-                s.map_unit_symbol,
-                s.map_unit_name,
-                s.drainage,
-                s.septic_rating,
-                s.slope_low,
-                s.slope_high,
-                s.representative_slope,
-                s.hydric_rating,
-                s.hydrologic_group,
-                s.source_url,
-                ROUND((
-                    100 * ST_Area(ST_Transform(ST_Intersection(ST_MakeValid(p.geom), ST_MakeValid(s.geom)), 32617))
-                    / NULLIF(ST_Area(ST_Transform(ST_MakeValid(p.geom), 32617)), 0)
-                )::numeric, 1) AS coverage_pct
+            SELECT p.pidn, s.*
             FROM staging.parcels p
-            JOIN staging.soils s
-              ON p.geom && s.geom
-             AND ST_Intersects(p.geom, s.geom)
-            WHERE p.valid_to IS NULL
-              AND s.valid_to IS NULL
-              AND p.geom IS NOT NULL
-              AND s.geom IS NOT NULL
+            CROSS JOIN LATERAL public.parcel_soil_units(p.geom) s
+            WHERE p.valid_to IS NULL AND p.geom IS NOT NULL
+        ), soil_sources AS (
+            SELECT o.pidn, ARRAY_AGG(DISTINCT source_id ORDER BY source_id) AS source_record_ids
+            FROM soil_overlaps o CROSS JOIN LATERAL unnest(o.source_record_ids) source_id
+            GROUP BY o.pidn
         )
         SELECT
             o.pidn,
             'soil_constraint',
             -0.08,
             'staging.soils',
-            STRING_AGG(DISTINCT o.objectid::text, ','),
+            ARRAY_TO_STRING(src.source_record_ids, ','),
             NULL,
             jsonb_build_object(
                 'screen_basis', 'parcel_overlap',
                 'minimum_trigger_coverage_pct', 5,
-                'source_record_ids', jsonb_agg(o.objectid ORDER BY o.coverage_pct DESC),
+                'source_record_ids', to_jsonb(src.source_record_ids),
                 'soil_units', jsonb_agg(
                     jsonb_build_object(
-                        'objectid', o.objectid,
+                        'source_record_ids', to_jsonb(o.source_record_ids),
+                        'map_unit_key', o.map_unit_key,
                         'map_unit_symbol', o.map_unit_symbol,
                         'map_unit_name', o.map_unit_name,
-                        'coverage_pct', o.coverage_pct,
+                        'coverage_pct', ROUND(o.coverage_pct, 1),
                         'drainage', o.drainage,
                         'septic_rating', o.septic_rating,
                         'slope_low', o.slope_low,
@@ -751,13 +750,14 @@ _SIGNALS: list[tuple[str, str]] = [
                             CASE WHEN o.hydrologic_group = 'D'
                                  THEN 'high_runoff_potential' END
                         ], NULL))
-                    ) ORDER BY o.coverage_pct DESC
+                    ) ORDER BY o.coverage_pct DESC, o.source_record_ids
                 ),
                 'source_url', MIN(o.source_url)
             )
         FROM soil_overlaps o
+        JOIN soil_sources src ON src.pidn = o.pidn
         WHERE o.coverage_pct > 0
-        GROUP BY o.pidn
+        GROUP BY o.pidn, src.source_record_ids
         HAVING BOOL_OR(
             o.coverage_pct >= 5
             AND (
@@ -1015,7 +1015,7 @@ def development_signals(
     context: AssetExecutionContext,
     database: DatabaseResource,
 ) -> MaterializeResult:
-    """Truncate and rebuild public.development_signals."""
+    """Compute privately, then publish signals and evidence retractions together."""
 
     county = get_county_config()
     source_keys = [county_open_data_source_key()]
@@ -1052,15 +1052,26 @@ def development_signals(
     total = 0
 
     try:
-        cur.execute("TRUNCATE public.development_signals RESTART IDENTITY")
-        context.log.info("Truncated public.development_signals")
+        # Serialize rebuilders before they acquire locks on the serving table.
+        # Long spatial calculations must not hold TRUNCATE's read-blocking lock.
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext('countyiq:development_signals'))")
+        cur.execute("""
+            CREATE TEMP TABLE countyiq_new_signals ON COMMIT DROP AS
+            SELECT pidn, signal_key, signal_weight, source_table, source_id,
+                   distance_m, evidence
+            FROM public.development_signals WITH NO DATA
+        """)
+        cur.execute("CREATE UNIQUE INDEX ON countyiq_new_signals (pidn, signal_key)")
+        context.log.info("Computing replacement signals while the current snapshot remains readable")
 
         for signal_key, sql in _SIGNALS:
             if signal_key == "tax_distress" and not include_tax_claims:
                 signal_counts[signal_key] = 0
                 context.log.info("  tax_distress: disabled by county capability or source policy")
                 continue
-            cur.execute(sql, signal_params)
+            # These are code-owned SQL constants. Internal references (such as
+            # nearby-plan exclusion) must also read this run's new signals.
+            cur.execute(sql.replace("public.development_signals", "pg_temp.countyiq_new_signals"), signal_params)
             count = cur.rowcount
             signal_counts[signal_key] = count
             total += count
@@ -1068,6 +1079,13 @@ def development_signals(
 
         # Publish source replacement and validation retraction atomically.
         # Waiting for the next paid-pass job leaves stale validations visible.
+        cur.execute("TRUNCATE public.development_signals RESTART IDENTITY")
+        cur.execute("""
+            INSERT INTO public.development_signals
+                (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
+            SELECT pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence
+            FROM pg_temp.countyiq_new_signals
+        """)
         cur.execute(RETRACT_STALE_EVIDENCE_QUERY, {"volatile": list(VOLATILE_EVIDENCE_KEYS)})
         evidence_retracted = cur.rowcount
         conn.commit()

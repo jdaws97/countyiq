@@ -32,7 +32,10 @@ def _soil_profile(rows: list[dict]) -> dict:
     units: list[dict] = []
     considerations: list[str] = []
     for row in rows:
-        unit = dict(row)
+        unit = {
+            key: value for key, value in row.items()
+            if key not in {"mapped_coverage_pct", "very_limited_coverage_pct"}
+        }
         for field in ("coverage_pct", "capability_class", "permeability", "representative_slope"):
             if unit.get(field) is not None:
                 unit[field] = float(unit[field])
@@ -58,16 +61,15 @@ def _soil_profile(rows: list[dict]) -> dict:
             considerations.append(
                 f"{symbol} covers {coverage:.1f}% and is hydrologic group D, the high-runoff-potential group."
             )
+        unit["coverage_pct"] = round(coverage, 1)
         units.append(unit)
 
-    very_limited = sum(
-        float(unit.get("coverage_pct") or 0)
-        for unit in units
-        if str(unit.get("septic_rating") or "").lower() == "very limited"
-    )
+    # Both totals come from geometric unions, including across unlike units.
+    # Summing rounded card percentages would double-count overlapping polygons.
+    very_limited = float(rows[0].get("very_limited_coverage_pct") or 0) if rows else 0
     if very_limited > 0:
         considerations.append(
-            f"{min(very_limited, 100):.1f}% of the mapped parcel area is rated “Very limited” "
+            f"{min(very_limited, 100):.1f}% of the parcel is mapped as “Very limited” "
             "for on-lot septic suitability; this matters primarily where public sewer is unavailable."
         )
     if any(unit.get("drainage") == "Well drained" for unit in units) and considerations:
@@ -75,10 +77,10 @@ def _soil_profile(rows: list[dict]) -> dict:
             "“Well drained” describes soil drainage only; it does not cancel separate slope, runoff, or septic limitations."
         )
 
-    source_ids = [unit.get("objectid") for unit in units if unit.get("objectid") is not None]
+    source_ids = sorted({source_id for unit in units for source_id in unit["source_record_ids"]})
     source_url = next((unit.get("source_url") for unit in units if unit.get("source_url")), None)
     return {
-        "mapped_coverage_pct": round(min(sum(float(unit.get("coverage_pct") or 0) for unit in units), 100), 1),
+        "mapped_coverage_pct": round(float(rows[0].get("mapped_coverage_pct") or 0), 1) if rows else 0,
         "units": units,
         "considerations": considerations,
         "source_record_ids": source_ids,
@@ -462,15 +464,9 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         cur.execute("""
             SELECT z.zrecid, z.zcode, z.zname, z.ztype, z.gen_zcode, z.gen_zname,
                    z.muni_name, z.muni_ord, z.adpt_date, z.source_url, z.valid_from
-            FROM staging.zoning z
-            WHERE z.valid_to IS NULL
-              AND z.geom IS NOT NULL
-              AND ST_Intersects(z.geom, (
-                  SELECT ST_Centroid(geom) FROM staging.parcels
-                  WHERE pidn = %(pidn)s AND valid_to IS NULL
-              ))
-            ORDER BY z.adpt_date DESC NULLS LAST, z.zrecid
-            LIMIT 1
+            FROM staging.parcels p
+            CROSS JOIN LATERAL public.parcel_center_zoning(p.geom) z
+            WHERE p.pidn = %(pidn)s AND p.valid_to IS NULL
         """, {"pidn": pidn})
         zoning_row = cur.fetchone()
 
@@ -525,39 +521,11 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         flood = cur.fetchone()
 
         cur.execute("""
-            WITH parcel AS (
-                SELECT geom, ST_Area(ST_Transform(ST_MakeValid(geom), 32617)) AS area_m2
-                FROM staging.parcels
-                WHERE pidn = %(pidn)s AND valid_to IS NULL
-            )
-            SELECT
-                s.objectid,
-                s.map_unit_symbol,
-                s.map_unit_name,
-                s.drainage,
-                s.capability_class,
-                s.permeability,
-                s.septic_rating,
-                s.slope_low,
-                s.slope_high,
-                s.representative_slope,
-                s.hydric_rating,
-                s.hydrologic_group,
-                s.relative_value,
-                s.source_url,
-                s.valid_from,
-                ROUND((
-                    100 * ST_Area(ST_Transform(ST_Intersection(ST_MakeValid(s.geom), ST_MakeValid(p.geom)), 32617))
-                    / NULLIF(p.area_m2, 0)
-                )::numeric, 1) AS coverage_pct
-            FROM staging.soils s
-            CROSS JOIN parcel p
-            WHERE s.valid_to IS NULL
-              AND s.geom IS NOT NULL
-              AND s.geom && p.geom
-              AND ST_Intersects(s.geom, p.geom)
-              AND ST_Area(ST_Transform(ST_Intersection(ST_MakeValid(s.geom), ST_MakeValid(p.geom)), 32617)) > 0
-            ORDER BY coverage_pct DESC, s.objectid
+            SELECT s.*
+            FROM staging.parcels p
+            CROSS JOIN LATERAL public.parcel_soil_units(p.geom) s
+            WHERE p.pidn = %(pidn)s AND p.valid_to IS NULL
+            ORDER BY s.coverage_pct DESC, s.source_record_ids
         """, {"pidn": pidn})
         soil_rows = cur.fetchall()
 
@@ -876,6 +844,8 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                     {
                         key: unit.get(key)
                         for key in (
+                            "source_record_ids",
+                            "map_unit_key",
                             "map_unit_symbol",
                             "map_unit_name",
                             "coverage_pct",
@@ -894,7 +864,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             },
             effective_at=max(soil_dates) if soil_dates else None,
             observed_at=max(soil_dates) if soil_dates else None,
-            method="CountyIQ intersects every current county soil polygon with the parcel and calculates each unit's share of parcel area.",
+            method="CountyIQ intersects current soil polygons with the parcel, groups matching map units and attributes, and unions their geometry before calculating coverage. Source IDs retain every contributing polygon.",
             caveat="Mapped soils are generalized screening data; site design, wastewater suitability, drainage, and foundations require parcel-specific professional review.",
         )
         soil["evidence"] = soil_receipt

@@ -233,7 +233,8 @@ export interface FloodZoneInfo {
 }
 
 export interface SoilUnit {
-  objectid: number
+  source_record_ids: number[]
+  map_unit_key: string | null
   map_unit_symbol: string | null
   map_unit_name: string | null
   drainage: string | null

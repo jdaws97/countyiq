@@ -480,12 +480,19 @@ def development_momentum(
         conn.autocommit = False
 
     try:
-        cur.execute("TRUNCATE public.development_momentum")
-        context.log.info("Truncated public.development_momentum")
-
-        cur.execute(build_rebuild_sql())
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext('countyiq:development_momentum'))")
+        cur.execute("""
+            CREATE TEMP TABLE countyiq_new_momentum
+            (LIKE public.development_momentum INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES)
+            ON COMMIT DROP
+        """)
+        cur.execute(build_rebuild_sql().replace("public.development_momentum", "pg_temp.countyiq_new_momentum"))
         rows_inserted = cur.rowcount
-        cur.execute(HISTORY_SQL)
+        # Match the table plus its separating space, leaving the separate
+        # public.development_momentum_history table unchanged.
+        cur.execute(HISTORY_SQL.replace("public.development_momentum ", "pg_temp.countyiq_new_momentum "))
+        cur.execute("TRUNCATE public.development_momentum")
+        cur.execute("INSERT INTO public.development_momentum SELECT * FROM pg_temp.countyiq_new_momentum")
         cur.execute(APPEND_HISTORY_SQL)
         history_rows = cur.rowcount
         cur.execute(PRUNE_HISTORY_SQL)

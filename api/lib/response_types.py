@@ -209,7 +209,8 @@ class EvidencePayload(TypedDict):
 
 
 class SoilUnitPayload(TypedDict):
-    objectid: int
+    source_record_ids: list[int]
+    map_unit_key: str | None
     map_unit_symbol: str | None
     map_unit_name: str | None
     drainage: str | None

@@ -4,6 +4,13 @@ Alembic is the sole authority for application table, index, view, function,
 and constraint changes. The ordered chain lives in
 `pipelines/alembic/versions/`; `alembic_version` records the deployed revision.
 
+Revision 066 adds shared read-only functions for parcel-center zoning selection
+and soil coverage. Reports and deterministic signals use the same newest-adoption
+zoning rule and combine matching soil fragments by geometric union, retaining
+all source IDs. It changes no source records. After deploying the corresponding
+code, rebuild `development_signals` and `development_momentum` from existing
+staging data to replace cached facts; these two assets make no LLM calls.
+
 ## Rules
 
 - Never edit a migration that may already have run. Add a new revision.

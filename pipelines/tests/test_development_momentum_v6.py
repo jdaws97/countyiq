@@ -76,7 +76,6 @@ def test_signal_definitions_include_new_deterministic_signals():
     assert "COALESCE(pp.status, '') NOT ILIKE '%%complete%%'" in sql["penndot_project"]
     assert "screen_basis', 'parcel_overlap'" in sql["soil_constraint"]
     assert "minimum_trigger_coverage_pct', 5" in sql["soil_constraint"]
-    assert "ST_Intersection(ST_MakeValid(p.geom), ST_MakeValid(s.geom))" in sql["soil_constraint"]
     assert "development_prohibition', FALSE" in sql["ag_security"]
 
 

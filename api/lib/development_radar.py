@@ -88,7 +88,7 @@ SIGNAL_INTERPRETATIONS: dict[str, str] = {
     "nearby_subdivision": "A recent county planning point is nearby and is treated as neighborhood activity, not this parcel's plan.",
     "economic_development_park": "The PIDN appears in the county's official business- or industrial-park parcel inventory.",
     "municipal_action": "A governed municipal record was linked to the parcel by PIDN or normalized address.",
-    "zoning_mismatch": "The zoning category and adopted future-land-use category differ at the parcel center point.",
+    "zoning_mismatch": "County zoning and future-land-use labels suggest different uses at the parcel center point.",
     "ownership_change": "The county parcel record shows a non-nominal sale within the scoring window.",
     "vacancy": "No county building footprint intersects the parcel and the parcel also passes low-value filters.",
     "tax_distress": "The PIDN appears with a positive balance in the current governed tax-claim listing.",
