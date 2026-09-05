@@ -1,7 +1,7 @@
 # Production launch record — September 5, 2026
 
 The private application is live at **https://app.countyiq.net** on commit
-`6b661c4adae1c7f84d64e6d6faa2aa83a23de88d`, deployed at 21:44:34 UTC. All six
+`f39b305fe929281df4ae3a97be09b5597187f208`, deployed at 22:51:22 UTC. All six
 services are running; authenticated public readiness returns HTTP 200 with
 `{"status":"ok"}`. The same service credential receives a customer challenge
 on `/api/session` (302), so it cannot access customer workspaces. **Full
@@ -9,8 +9,8 @@ backfill is not approved.** The user authorized product iteration, bounded canar
 pushes to main and deployment; full backfill remains a separate user decision.
 
 The immutable release receipt is
-`/var/lib/countyiq/releases/20260905T214434Z-6b661c4adae1c7f84d64e6d6faa2aa83a23de88d.env`.
-Its rollback backup is `20260905T214301Z-pre-deploy-6b661c4adae1`. PostgreSQL
+`/var/lib/countyiq/releases/20260905T225122Z-f39b305fe929281df4ae3a97be09b5597187f208.env`.
+Its rollback backup is `20260905T224949Z-pre-deploy-f39b305fe929`. PostgreSQL
 and the API have no host port; Dagster is bound only to loopback.
 
 ## Data and recovery
@@ -217,8 +217,8 @@ Public authenticated readiness passed during both attempts and after completion;
 the readiness credential still cannot access customer sessions. Evidence is
 under `output/production-readiness-2026-09-05/spatial-facts/`.
 
-The later ownership-context changes are committed on main as `50a28db` and
-are not yet in the deployed revision above. They remove unused generated
+The later ownership-context changes, committed as `50a28db`, are included in
+the deployed revision above. They remove unused generated
 portfolio arithmetic, defer oversized components before spending or graph writes,
 and make the estimate report context deferrals. Their nine matched canaries
 bring the total to **204 calls / $0.304713606**. Luna and GLM each pass the
@@ -238,3 +238,18 @@ zoning correction treated as an identity conflict remain qualification issues.
 The current [metadata cleanup plan](../research/proceeding-metadata-review-2026-09-05.md)
 is unapplied. Dispatch now requires current-version metadata; production paid
 passes remain disabled throughout this review.
+
+The 22:51:22 UTC release includes those ownership limits, the metadata/version
+guard, and the source-bound extraction corrections. All six main CI jobs pass
+in [run 33996877307](https://github.com/jdaws97/countyiq/actions/runs/33996877307).
+Local checks include 1,435 pipeline unit/regression tests and all 124 database
+integration tests. The ordinary deployment verified its rollback backup and
+left schema revision 066 unchanged. Post-deployment public readiness returns
+200 with the expected body; the readiness credential still receives a 302
+customer sign-in challenge on `/api/session`. The deployment log is
+`output/production-readiness-2026-09-05/metadata-v6/production-source-review-deploy.log`.
+
+Work stopped at the user's request after this verification. The proposed next
+step—removing repetitive proceeding commentary from the model request and event
+cards—has not been implemented. No further canary calls, metadata cleanup or
+full backfill were started.
