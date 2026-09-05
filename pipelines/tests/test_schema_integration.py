@@ -700,7 +700,10 @@ def test_wrong_county_sources_cannot_be_acquired_or_used_in_products():
 @pytest.mark.integration
 @pytest.mark.parametrize("policy", ["allowed", "paused", "expired", "denied", "unknown", "global_paused", "unreviewed", "review_required", "quarantined"])
 def test_retained_proceedings_context_obeys_current_policy(policy):
+    from psycopg2.extras import Json
+
     from countyiq.lib.intelligence_common import PROCEEDINGS_FOR_PARCEL_QUERY, PROCEEDINGS_FOR_ENTITY_QUERY
+    from countyiq.lib.proceeding_quality import VERSION
     connection = _connect()
     try:
         with connection.cursor() as cursor:
@@ -729,7 +732,8 @@ def test_retained_proceedings_context_obeys_current_policy(policy):
             """, (body,))
             proceeding_id = cursor.fetchone()[0]
             cursor.execute("UPDATE staging.public_proceedings SET metadata_quality=%s::jsonb WHERE id=%s",
-                           ('{"status":"' + (policy if policy in {"unreviewed", "review_required", "quarantined"} else "ready") + '"}', proceeding_id))
+                           (Json({"status": policy if policy in {"unreviewed", "review_required", "quarantined"} else "ready",
+                                  "version": VERSION}), proceeding_id))
             cursor.execute("""
                 INSERT INTO staging.proceeding_extractions
                     (proceeding_id,extraction_type,applicant_name,parcel_reference,decision,

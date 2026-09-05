@@ -50,8 +50,12 @@ also binds the metadata module and shared date parser. The future York City
 agenda 6710 remains an offline diagnostic candidate until its September 14
 meeting date; it was not included in the fresh paid test.
 
-Validation: 1,435 pipeline unit/regression tests pass, 124 integration tests
-deselected in that run. All eight metadata transaction/eligibility integration
+Validation: 1,435 pipeline unit/regression tests and all 124 database integration
 tests pass against `countyiq_test`; the Dagster definitions import passes.
+CI first caught an older source-policy fixture missing the required review
+version. That fixture now supplies the current version without weakening the
+dispatch guard. The full local run also exposed policy rows left by the API
+suite; removing its synthetic row and restoring Hanover's fixture jurisdiction
+returned the dedicated test database to the migration baseline.
 The tests preserve source history, reject stale/missing review versions,
 exercise real date/packet failures and retain conflicting-date controls.
