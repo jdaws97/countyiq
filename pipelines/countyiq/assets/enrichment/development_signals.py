@@ -1079,7 +1079,9 @@ def development_signals(
 
         # Publish source replacement and validation retraction atomically.
         # Waiting for the next paid-pass job leaves stale validations visible.
-        cur.execute("TRUNCATE public.development_signals RESTART IDENTITY")
+        # The pipeline has TRUNCATE/sequence USAGE, not sequence ownership.
+        # Keep allocating IDs across snapshots; resetting them is unnecessary.
+        cur.execute("TRUNCATE public.development_signals")
         cur.execute("""
             INSERT INTO public.development_signals
                 (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)

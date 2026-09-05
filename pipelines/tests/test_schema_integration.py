@@ -67,6 +67,7 @@ class _TransactionalDatabase:
 @pytest.mark.parametrize("kind", ["signals", "momentum"])
 @pytest.mark.parametrize("fail_publication", [False, True])
 def test_rebuild_keeps_old_snapshot_readable_and_rolls_back_failed_publication(monkeypatch, kind, fail_publication):
+    from psycopg2 import sql
     from countyiq.assets.enrichment import development_signals as signal_module
     from countyiq.assets.enrichment import development_momentum as momentum_module
     from countyiq.resources.database import DatabaseResource
@@ -81,6 +82,15 @@ def test_rebuild_keeps_old_snapshot_readable_and_rolls_back_failed_publication(m
         user=writer.info.user, password=os.environ.get("DATABASE_PASSWORD", "localtest"),
     )
     resource.setup_for_execution(None)
+    pipeline_role = os.environ.get("DATABASE_PIPELINE_USER", "countyiq_pipeline_test")
+    resource.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(pipeline_role)))
+    # Deployment grants writes, not ownership of administrator-created tables
+    # or sequences. Exercise publication under that same permission boundary.
+    owner = resource.execute("""
+        SELECT pg_get_userbyid(relowner) FROM pg_class
+        WHERE oid='public.development_signals_id_seq'::regclass
+    """)[0][0]
+    assert owner != pipeline_role
     module = signal_module if kind == "signals" else momentum_module
     asset = module.development_signals if kind == "signals" else module.development_momentum
     monkeypatch.setattr(module, "authorize_source_uses", lambda *args, **kwargs: None)

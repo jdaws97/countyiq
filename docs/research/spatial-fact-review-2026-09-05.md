@@ -55,6 +55,14 @@ publication, with the serving snapshot and history committed together. The
 short final replacement still requires a table lock; this change does not
 promise zero publication latency.
 
+The first production rebuild computed the replacement but rolled back at
+publication: `RESTART IDENTITY` requires ownership of the administrator-owned
+signal sequence. The runtime pipeline role has write, truncate and sequence
+usage privileges, so the refresh now keeps allocating IDs without resetting
+the sequence. The four real database publication/rollback cases now run under
+that restricted role. The original production snapshot remained readable and
+intact after the failed attempt; no broader permission was granted.
+
 The report keeps soil findings visible and puts detailed unit cards behind one
 expansion. Print expands those details and restores their prior state. The
 header identifies the municipality; school district remains in property facts.
