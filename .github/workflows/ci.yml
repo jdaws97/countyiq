@@ -68,7 +68,7 @@ jobs:
         run: uv sync --project api --locked
 
       - name: Run API unit tests
-        run: uv run --project api pytest api/unit_tests -q
+        run: uv run --project api python -m pytest api/unit_tests -q
 
       - name: Audit API dependencies
         run: uvx pip-audit --path api/.venv/lib/python3.11/site-packages
@@ -97,7 +97,7 @@ jobs:
       # The API fixture starts postgres-test, creates countyiq_test, migrates
       # from base, and provisions the read-only API role before contracts run.
       - name: Migrate fresh database and run API contracts
-        run: uv run --project api pytest api/tests -q
+        run: uv run --project api python -m pytest api/tests -q
 
       # Pipeline schema contracts verify migration seed state. API fixtures
       # deliberately rewrite municipality policies, so do not reuse their DB.
@@ -194,7 +194,7 @@ jobs:
           sed -i 's/CHANGE_ME_PIPELINE_PASSWORD/ci-pipeline-password-00000000000000000000000000000000000/g' .env
           sed -i 's/CHANGE_ME_API_PASSWORD/ci-api-password-00000000000000000000000000000000000000/g' .env
           printf 'CLOUDFLARE_TUNNEL_TOKEN=%0128d\n' 0 >> .env
-          docker compose -f docker/docker-compose.yml config --quiet
+          docker compose --env-file "$PWD/.env" -f docker/docker-compose.yml config --quiet
 
       - name: Enforce Cloudflare cost policy
         run: infra/cloudflare/check-cost-policy.sh
