@@ -1,8 +1,9 @@
 # Lower-cost model review — September 5, 2026
 
 **Decision: qualify the best route on the user's existing OpenRouter account;
-do not switch every pass yet.** Direct Luna Batch remains an untested option
-requiring a separate account and key, not a prerequisite for this work. GLM 5.3 Flash is the stronger
+do not switch every pass yet.** The user limits model calls to Luna,
+GLM 5.3 Flash and DeepSeek Flash. This applies to future comparisons and fallback
+choices; no expensive escalation or paid judge is authorized. GLM 5.3 Flash is the stronger
 current alternative model to investigate. The latest six-component ownership
 control set still finds source errors in its explanations despite correct groupings.
 After correcting the name-only co-owner instruction, Luna is the strongest Pass 1

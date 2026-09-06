@@ -1,7 +1,7 @@
 # Production launch record — September 5, 2026
 
 The private application is live at **https://app.countyiq.net** on commit
-`ee6c6eea4116496b91815ff34ca2f055b6bb6ac6`, deployed September 6 at 01:41:17 UTC
+`1260494b7b3270cfc8ee54b9a19364a1a9850a3d`, deployed September 6 at 02:22:03 UTC
 (September 5 locally). All six
 services are running; authenticated public readiness returns HTTP 200 with
 `{"status":"ok"}`. The same service credential receives a customer challenge
@@ -10,8 +10,8 @@ backfill is not approved.** The user authorized product iteration, bounded canar
 pushes to main and deployment; full backfill remains a separate user decision.
 
 The immutable release receipt is
-`/var/lib/countyiq/releases/20260906T014117Z-ee6c6eea4116496b91815ff34ca2f055b6bb6ac6.env`.
-Its rollback backup is `20260906T013941Z-pre-deploy-ee6c6eea4116`, which includes
+`/var/lib/countyiq/releases/20260906T022203Z-1260494b7b3270cfc8ee54b9a19364a1a9850a3d.env`.
+Its rollback backup is `20260906T022027Z-pre-deploy-1260494b7b32`, which includes
 the completed metadata cleanup. PostgreSQL
 and the API have no host port; Dagster is bound only to loopback.
 
@@ -450,7 +450,24 @@ the same group; its separate offline replay preserves all original artifacts.
 Validation passes: 144 focused ownership/integrity checks, 1,507 full local
 pipeline tests (including concurrent untracked Pass 0 experiment tests), frontend
 TypeScript and ESLint, and the pinned formatters for changed files. No API or
-database schema change is included. These changes are prepared for release;
-the live revision at the top of this document remains current until deployment
-verification is recorded. All paid passes and optional AI search remain disabled;
-no model-quality receipt or full backfill is approved.
+database schema change is included. All six release jobs pass in
+[CI run 34006009491](https://github.com/jdaws97/countyiq/actions/runs/34006009491).
+Both CodeQL jobs in [Security run 34006009464](https://github.com/jdaws97/countyiq/actions/runs/34006009464)
+failed during upload because repository code scanning is disabled; their logs
+were inspected and no clean CodeQL result is claimed.
+
+Deployment and independent verification completed successfully at the revision
+recorded at the top. The rollback backup was remotely verified, schema 066 is
+unchanged, all six services are running, exact application image tags match the
+release, and authenticated public readiness passes. The readiness service
+credential still receives a 302 customer-session challenge. All five paid passes
+and optional AI search remain false. Logs, release bundle and verification scripts
+are under `output/production-readiness-2026-09-05/project-discovery-release/`.
+
+Work is paused at the user's request after this verified release. Future model
+calls are limited to Luna, GLM 5.3 Flash and DeepSeek Flash on OpenRouter; current
+pass defaults are Luna and no production escalation model is configured. No
+model-quality receipt or full backfill is approved. Remaining work includes the
+other-pass source qualification, live customer sign-in and account persistence,
+pilot email destination, marketing access and pricing validation. Resume only
+when requested.
