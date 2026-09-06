@@ -357,10 +357,13 @@ RULES FOR NAMES, RELATIONSHIPS, AND CITATIONS:
 - One ref per bracket: write [Evidence: parcels:A] [Evidence: parcels:B],
   never [Evidence: parcels:A; parcels:B].
 - When two candidate names share a parcel address or a co-owner name and
-  differ only by a middle initial, nickname, or spelling variant, do not
+  differ only by a missing middle initial, nickname, or spelling variant, do not
   place them in separate entities with high confidence. Either merge them
   citing the shared address or co-owner evidence, or list them together
   under abstentions with the conflict stated.
+- Conflicting printed middle initials require additional source evidence that
+  resolves the conflict before merging. A matching address alone does not resolve
+  it. Otherwise keep the proposed identity match under abstentions.
 - An individual owner name and a joint owner name that includes that
   individual (for example "SMITH KAREN E" and "SMITH PERRY S & KAREN E") are
   separate owner-of-record groups. Keep their records separate. A repeated

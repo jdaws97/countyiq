@@ -3,10 +3,11 @@
 **Decision: qualify the best route on the user's existing OpenRouter account;
 do not switch every pass yet.** Direct Luna Batch remains an untested option
 requiring a separate account and key, not a prerequisite for this work. GLM 5.3 Flash is the stronger
-current alternative model to investigate. The latest strict-schema ownership
-repeat still finds source errors in its explanations despite correct groupings.
-Luna is more consistent on the tested source-ID/citation contract, but shares a
-prompt-induced relationship defect. DeepSeek V4 Flash 0731 needs more work on
+current alternative model to investigate. The latest six-component ownership
+control set still finds source errors in its explanations despite correct groupings.
+After correcting the name-only co-owner instruction, Luna is the strongest Pass 1
+candidate in these controls: its owner-group decisions remain bounded, with
+wording and comparison-citation limitations still recorded. DeepSeek V4 Flash 0731 needs more work on
 provider routing, reasoning allocation and the output contract before it is a
 dependable default.
 This review does not approve a quality receipt or a backfill.
@@ -701,3 +702,83 @@ including `source-review.md`, `results.json`, `protocol.json`, `reference.json`
 and `frozen-input-files/`. The next ownership evaluation must test the corrected
 relationship instruction on varied sources and review the selected aggregate's
 prose as well as its partition. A successful ID/citation gate is insufficient.
+
+## Pass 1: six new source controls
+
+The corrected prompt was tested on six previously unused complete components:
+Roth trust-name variants, individual/joint Wolfe records, two Baldwin joint-owner
+compositions, Jefferson Codorus sewer-authority abbreviations, Big D/Myers LLCs
+with different filing numbers at a shared address, and Benyou M/W initials at
+the same address. Together they contain 12 candidate names, 18 parcels, two
+registry entries and two negative CountyIQ lookup results. No source was
+truncated. These cases were excluded from earlier comparison fixtures and the
+previous full-component snapshot; selection is deliberate and small, not
+population-representative or independent human gold.
+
+Before dispatch, the prompt also clarified that a **missing** middle initial
+differs from **conflicting** printed initials. A shared address does not resolve
+an M/W conflict. Sources, source-specific merge/abstention criteria, the current
+production prompt/schema, endpoint listings and runner were frozen and archived.
+All models received high reasoning, thinking enabled and 16,384 output tokens;
+open models required FP8. Strict schema was requested, without assuming that
+every provider enforces it. Three trials per component/model produced 54 calls,
+with three concurrent requests, no generation retries and a $1 cap.
+
+| Model | Actual cost, 18 calls | Runtime ID/citation gate | Components reaching quorum | Median / worst latency |
+| --- | ---: | ---: | ---: | ---: |
+| Luna | $0.029827450 | 18/18 | 6/6 | 10.7 / 16.6 s |
+| GLM 5.3 Flash | $0.015916850 | 18/18 | 6/6 | 35.2 / 84.5 s |
+| DeepSeek V4 Flash 0731 | $0.007449129 | 5/18 | 1/6 | 46.5 / 103.6 s |
+
+All 54 calls are terminal as of September 6, 02:08:36 UTC, with no errors in the
+runner and no reserved spend. **Total: $0.053193429; cumulative comparison:
+303 calls, $0.483648131.** Parseable output was 18/18, 18/18 and 17/18 respectively.
+These are observed route/cache charges, not a full-backfill price forecast.
+Luna's 48,400 cached input tokens out of 53,559 materially affect this run's cost.
+All rejected outputs and reasoning tokens are included; DeepSeek's whitespace-only
+response was billed at zero, with its distinct upstream-cost metadata preserved.
+
+Every response and selected aggregate was reviewed against all source rows:
+
+- Luna made no unsupported identity merge, co-owner or control edge in these
+  controls. Benyou consistently remains unresolved; one Jefferson trial also
+  abstains. Third-round explanations still expand `TR` to a trustee abbreviation,
+  use “Pennsylvania LLC” without a formation-jurisdiction field, and cite only
+  one side of a cross-record comparison. Those wording/citation issues remain
+  recorded; 18 identifier passes are not 18 flawless customer explanations.
+- GLM's correct partitions conceal source errors: all Roth trials describe named
+  trustees without independent role evidence; one Baldwin explanation places
+  JOHN W in the wrong cross-record comparison; one Jefferson explanation assigns
+  the attention line to the wrong parcel. Many concluding factual sentences
+  lack their own source markers. The selected Roth trial also emits a
+  `same_person` relationship to an alias already in its own merged group.
+- DeepSeek repeats uncited reasoning, prefixed record IDs and combined citation
+  brackets. One Wolfe trial asserts same-person identity and a co-owner edge
+  from name overlap despite the corrected instruction. One Benyou trial claims
+  distinct people from the conflicting initials; the others also omit the
+  required abstention. One Jefferson trial invents `corporation` as legal form.
+  Its sole quorum component is Baldwin. One good Roth or Big D trial cannot meet
+  a configured two-of-three quorum.
+
+All Luna calls used OpenAI; all GLM calls used Reka. DeepSeek used Baidu for three
+calls and OpenInference for fifteen. Their runtime pass counts are 3/3 and 2/15,
+but the cases/routes are confounded and the Baidu sample is too small to infer a
+provider-caused quality difference. This suggests a future controlled route test,
+not a provider-quality claim or a reason to excuse source mistakes.
+
+After the paid run finished, validation was tightened to reject a relationship
+whose target is already a member of its own group, whether canonical name or
+alias. A separately saved offline replay of all 54 original outputs rejects
+GLM's Roth trial 1; its other two trials still reach quorum and select trial 2,
+whose trustee-role prose remains unsuitable. All other original gate outcomes
+are unchanged. Original results and references retain their bytes and original
+gate counts. The two self-relationship regressions and 144 focused checks pass;
+the full local pipeline suite passes 1,507 tests, including concurrent untracked
+Pass 0 experiment tests.
+
+Luna remains the leading Pass 1 candidate. No full-pass quality receipt, paid
+default, production intelligence or full backfill is approved by this run.
+Artifacts are under `fair-model-comparison/pass1-new-controls/`: the frozen
+protocol/source/reference/route files, raw transcripts, terminal results and
+summary, 54-row source review, bound-file snapshots, and the separately hashed
+offline gate replay.

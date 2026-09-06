@@ -3,7 +3,6 @@
 from unittest.mock import Mock
 
 import pytest
-
 from countyiq.lib.intelligence_integrity import (
     content_hash,
     inference_input_hash,
@@ -162,6 +161,22 @@ def test_relationship_targets_require_candidate_membership(candidate_target) -> 
         assert errors == [
             "entity 0 relationship target was not in the candidate cluster"
         ]
+
+
+@pytest.mark.parametrize("target", ["ACME LLC", "ACME HOLDINGS"])
+def test_relationship_cannot_target_its_own_canonical_name_or_alias(target) -> None:
+    parsed = _valid_entity_partition()
+    parsed["entities"][0]["relationships"] = [
+        {
+            "related_entity": target,
+            "relationship_type": "same_person",
+            "evidence": "These aliases were merged [Evidence: parcels:P1].",
+        }
+    ]
+
+    assert validate_entity_membership(
+        parsed, _entity_records(), ["ACME LLC", "ACME HOLDINGS"]
+    ) == ["entity 0 relationship target belongs to its own group"]
 
 
 def test_identity_membership_rejects_fabricated_id_and_overlap() -> None:
@@ -470,8 +485,8 @@ def test_brief_dependencies_bind_parcel_key_and_inference():
 
 
 def test_owner_context_tracks_municipalities_without_signal_order_churn():
-    from countyiq.lib.pass3_owner_briefs import owner_brief_context
     from countyiq.lib.intelligence_integrity import content_hash
+    from countyiq.lib.pass3_owner_briefs import owner_brief_context
 
     owner = {
         "owner_id": 1,

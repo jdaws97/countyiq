@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 import Badge from './Badge'
 import EvidencePanel from './EvidencePanel'
-import { Button } from './ui'
+import { Button, ButtonLink } from './ui'
 import { formatLabel, formatShortDate } from '../lib/format'
 import { openEvidenceReceipt } from '../lib/evidence'
 import type { TriageStatus } from '../lib/investigationState'
@@ -30,6 +30,7 @@ export default function IntelligenceEventCard({
   event,
   expandedByDefault = false,
   printEvidence = false,
+  currentProjectKey,
   expanded: controlledExpanded,
   onExpandedChange,
   showTriage = false,
@@ -40,6 +41,7 @@ export default function IntelligenceEventCard({
   event: IntelligenceEvent
   expandedByDefault?: boolean
   printEvidence?: boolean
+  currentProjectKey?: string
   expanded?: boolean
   onExpandedChange?: (expanded: boolean) => void
   showTriage?: boolean
@@ -54,6 +56,7 @@ export default function IntelligenceEventCard({
     onExpandedChange?.(!expanded)
   }
   const [, setWatchRevision] = useState(0)
+  const [showAllParcels, setShowAllParcels] = useState(false)
 
   useEffect(() => {
     const refresh = () => setWatchRevision((value) => value + 1)
@@ -83,7 +86,9 @@ export default function IntelligenceEventCard({
         Array.isArray(source.details?.supports) && source.details.supports.includes(marker),
     )
   const projectWatched = event.project ? isProjectWatched(event.project.key) : false
-  const pidns = event.related_pidns.slice(0, 8)
+  const showProject = event.project && event.project.key !== currentProjectKey
+  const pidns =
+    showAllParcels || printEvidence ? event.related_pidns : event.related_pidns.slice(0, 8)
   const entityLinks = event.entity_links ?? []
   const linkedEntityNames = new Set(entityLinks.map((entity) => entity.matched_name.toLowerCase()))
   const unresolvedEntities = event.related_entities.filter(
@@ -151,11 +156,25 @@ export default function IntelligenceEventCard({
         <span>
           {event.sources.length} evidence receipt{event.sources.length === 1 ? '' : 's'}
         </span>
+        {event.related_pidns.length > 0 && (
+          <span>
+            {event.related_pidns.length} linked propert
+            {event.related_pidns.length === 1 ? 'y' : 'ies'}
+          </span>
+        )}
         {event.interpretation.kind === 'deterministic' && <span>Recorded source change</span>}
         {event.interpretation.kind === 'llm' && <span>Extracted from record</span>}
       </div>
 
       <div className="intelligence-card-actions" data-print-hidden>
+        {event.project && showProject && (
+          <ButtonLink
+            to={`/project/${encodeURIComponent(event.project.key)}`}
+            aria-label={`Open project: ${event.project.name}`}
+          >
+            Open project →
+          </ButtonLink>
+        )}
         <Button tone="secondary" type="button" aria-expanded={expanded} onClick={toggleExpanded}>
           {expanded ? 'Hide details' : 'Review details & evidence'}
         </Button>
@@ -217,7 +236,7 @@ export default function IntelligenceEventCard({
             </div>
           )}
 
-          {event.project && (
+          {event.project && showProject && (
             <RelatedGroup label="Related project">
               <Link
                 to={`/project/${encodeURIComponent(event.project.key)}`}
@@ -277,10 +296,17 @@ export default function IntelligenceEventCard({
                   </span>
                 )
               })}
-              {event.related_pidns.length > pidns.length && (
-                <span className="unresolved-record">
-                  +{event.related_pidns.length - pidns.length} more
-                </span>
+              {event.related_pidns.length > 8 && !printEvidence && (
+                <Button
+                  tone="quiet"
+                  type="button"
+                  aria-expanded={showAllParcels}
+                  onClick={() => setShowAllParcels((current) => !current)}
+                >
+                  {showAllParcels
+                    ? 'Show fewer properties'
+                    : `Show all ${event.related_pidns.length} linked properties`}
+                </Button>
               )}
             </RelatedGroup>
           )}

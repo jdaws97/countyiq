@@ -169,6 +169,13 @@ export default function DevelopmentRadar() {
   const loading = resolvedKey !== requestKey
   const setMinScore = (value: string) => updateFilters({ min_score: value })
   const scoreOptions = scoreOptionsFor(view)
+  const municipalActivityParams = new URLSearchParams({
+    category: 'development',
+    sort: 'latest',
+  })
+  if (muniFilter) {
+    municipalActivityParams.set('municipality', muniFilter)
+  }
 
   const buildParams = (pageNum: number) => {
     const params = new URLSearchParams({
@@ -366,11 +373,14 @@ export default function DevelopmentRadar() {
           {view === 'opportunity'
             ? 'Build a shortlist from site characteristics, nearby plans and recorded ownership changes. Higher scores mean more matching signals; open a property to check the evidence.'
             : view === 'momentum'
-              ? 'Where development activity is already happening: plans on or beside the parcel, municipal matters, park designations, recent sales, and owners assembling sites.'
+              ? 'Properties with recorded plans, nearby municipal matters, park designations, recent sales or common ownership of neighboring parcels. A score does not establish a development proposal or an owner’s intent.'
               : view === 'movers'
                 ? 'What changed since the previous radar rebuild. Rising scores mean new evidence arrived; new parcels had no signals at all last time.'
                 : 'Parcel screening from public policy, infrastructure, physical constraints, and diligence records. Verify the linked evidence before relying on a score.'}
         </p>
+        <ButtonLink to={`/feed?${municipalActivityParams}`} tone="quiet">
+          Browse municipal activity →
+        </ButtonLink>
       </div>
 
       {view === 'readiness' && screeningCoverage && (

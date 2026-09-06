@@ -362,6 +362,7 @@ export default function ProjectCaseFile() {
             {events.map((event) => (
               <div key={event.event_key} id={`project-event-${event.event_key}`}>
                 <IntelligenceEventCard
+                  currentProjectKey={key}
                   event={event}
                   printEvidence
                   expanded={expandedEvents.has(event.event_key)}

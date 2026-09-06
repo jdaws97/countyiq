@@ -414,3 +414,43 @@ confirm the exact image tags, all six running services, authenticated public
 readiness, the service credential's 302 customer-session challenge, all five paid
 flags false and optional AI search false. Logs and the verification script are
 under `output/production-readiness-2026-09-05/owner-verification/`.
+
+## Project discovery and varied ownership controls
+
+Activity cards now expose an **Open project** link before expansion and show the
+number of linked properties. A working **Show all linked properties** control
+replaces the inactive `+N more` label after eight parcels. Project print content
+contains every linked parcel, and timeline cards avoid linking back to their own
+project. Radar links directly to municipal activity while preserving the selected
+municipality, allowing discovery independently of its property-score threshold.
+The momentum description describes recorded signals without inferring an owner's
+development intent. Activity also retains an active municipality in its selector
+when the options list has not loaded or does not contain that URL value.
+
+Playwright verified the Radar → Activity → project → watch path at desktop and
+390px phone widths using an explicitly synthetic 12-parcel browser fixture.
+It checked the collapsed project link, 8/12/8 property expansion, the twelfth
+property's target, project self-link suppression, watch/reload persistence,
+municipality query and selector preservation, no horizontal overflow, and all
+12 timeline parcel links under print media. Screenshots were inspected; fixture
+routes and the synthetic watch were removed, preserving the existing parcel
+watch. This proves browser-workspace persistence, not live customer sign-in or
+cross-session account storage. Artifacts are in
+`output/playwright/project-discovery/`.
+
+The [new ownership controls](../research/model-comparison-2026-09-05.md#pass-1-six-new-source-controls)
+contain six previously unused full components and 54 terminal OpenRouter calls,
+costing $0.053193429. Luna is the strongest ownership candidate in this set;
+source review still records wording/citation limits. GLM's source mistakes can
+pass identifier checks, and DeepSeek reaches quorum on only one of six components.
+The prompt now distinguishes missing initials from conflicting initials. A
+post-run validation fix rejects relationships to aliases already merged into
+the same group; its separate offline replay preserves all original artifacts.
+
+Validation passes: 144 focused ownership/integrity checks, 1,507 full local
+pipeline tests (including concurrent untracked Pass 0 experiment tests), frontend
+TypeScript and ESLint, and the pinned formatters for changed files. No API or
+database schema change is included. These changes are prepared for release;
+the live revision at the top of this document remains current until deployment
+verification is recorded. All paid passes and optional AI search remain disabled;
+no model-quality receipt or full backfill is approved.

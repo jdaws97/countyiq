@@ -528,6 +528,10 @@ def validate_entity_membership(
                 errors.append(
                     f"entity {entity_index} relationship target was not in the candidate cluster"
                 )
+            elif target in member_set:
+                errors.append(
+                    f"entity {entity_index} relationship target belongs to its own group"
+                )
             if isinstance(rel, dict):
                 validate_cited_text(
                     rel.get("evidence"), f"entity {entity_index} relationship evidence"
@@ -818,7 +822,6 @@ def validate_owner_brief_citations(
             "owner narrative uses parcel markers missing from parcel_citations"
         )
     recommendation = parsed.get("recommendation")
-    evidence_strength = parsed.get("evidence_strength")
     urgency = parsed.get("urgency")
     if (
         recommendation in {"investigate", "watch", "insufficient_evidence"}

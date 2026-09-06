@@ -292,6 +292,9 @@ export default function CountyFeed() {
             onChange={(event) => updateFilter('municipality', event.target.value, '')}
           >
             <option value="">All municipalities</option>
+            {municipality && !municipalities.includes(municipality) && (
+              <option value={municipality}>{municipality}</option>
+            )}
             {municipalities.map((value) => (
               <option key={value} value={value}>
                 {value}
