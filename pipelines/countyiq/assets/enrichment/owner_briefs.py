@@ -58,9 +58,9 @@ from countyiq.resources.database import DatabaseResource
 
 
 def _owner_subject_key(canonical_name: str) -> str:
-    return "owner_brief:" + hashlib.sha256(
-        canonical_name.encode("utf-8")
-    ).hexdigest()[:20]
+    return (
+        "owner_brief:" + hashlib.sha256(canonical_name.encode("utf-8")).hexdigest()[:20]
+    )
 
 
 @asset(
@@ -115,10 +115,12 @@ def owner_briefs(
             system_prompt=OWNER_ROLLUP_SYSTEM_PROMPT,
         )
     except PassHarnessUnavailable as exc:
-        return MaterializeResult(metadata={
-            "status": MetadataValue.text(f"skipped ({exc.reason})"),
-            "briefs_created": MetadataValue.int(0),
-        })
+        return MaterializeResult(
+            metadata={
+                "status": MetadataValue.text(f"skipped ({exc.reason})"),
+                "briefs_created": MetadataValue.int(0),
+            }
+        )
     item_budget = PassItemBudget(3)
     # Keep Pass 3 temperature low — narratives should be consistent with
     # the committed structured fields, per experiment C.
@@ -137,11 +139,13 @@ def owner_briefs(
     )
     if not owners_needing:
         log.info("No owners eligible for rollup briefs.")
-        return MaterializeResult(metadata={
-            "status": MetadataValue.text("complete"),
-            "owners_eligible": MetadataValue.int(0),
-            "briefs_created":  MetadataValue.int(0),
-        })
+        return MaterializeResult(
+            metadata={
+                "status": MetadataValue.text("complete"),
+                "owners_eligible": MetadataValue.int(0),
+                "briefs_created": MetadataValue.int(0),
+            }
+        )
 
     log.info(f"{len(owners_needing)} owners eligible for rollup briefs")
     briefs_created = 0
@@ -186,9 +190,15 @@ def owner_briefs(
                                 else row.get(key)
                             )
                             for key in (
-                                "pidn", "signal_key", "active_inference_id", "validation_status",
-                                "adjusted_significance", "validation_reasoning",
-                                "evidence_data", "confidence", "municipality",
+                                "pidn",
+                                "signal_key",
+                                "active_inference_id",
+                                "validation_status",
+                                "adjusted_significance",
+                                "validation_reasoning",
+                                "evidence_data",
+                                "confidence",
+                                "municipality",
                             )
                         }
                         for row in evidence_rows
@@ -215,7 +225,9 @@ def owner_briefs(
             prior_hash = None
             if existing:
                 row0 = existing[0]
-                prior_hash = row0.get("input_hash") if isinstance(row0, dict) else row0[0]
+                prior_hash = (
+                    row0.get("input_hash") if isinstance(row0, dict) else row0[0]
+                )
             if prior_hash == input_hash:
                 skipped_unchanged += 1
                 continue
@@ -224,7 +236,10 @@ def owner_briefs(
                 break
 
             result = invoke_with_retry(
-                config, prompt, archive_key=f"owner-{owner_id}", retries=1,
+                config,
+                prompt,
+                archive_key=f"owner-{owner_id}",
+                retries=1,
             )
             if not result.success:
                 _update_owner_pass_status(
@@ -248,7 +263,9 @@ def owner_briefs(
             }
             allowed_pidns = {row["pidn"] for row in evidence_rows if row.get("pidn")}
             citation_errors = validate_owner_brief_citations(
-                parsed, allowed_signal_keys, allowed_pidns,
+                parsed,
+                allowed_signal_keys,
+                allowed_pidns,
             )
             if citation_errors:
                 _update_owner_pass_status(
@@ -304,7 +321,9 @@ def owner_briefs(
                 if auto.resolved:
                     log.info(
                         "Contradiction %s auto-resolved (%s): %s",
-                        gate.contradiction_id, auto.resolution, auto.rationale,
+                        gate.contradiction_id,
+                        auto.resolution,
+                        auto.rationale,
                     )
                     continue
                 _update_owner_pass_status(
@@ -325,46 +344,46 @@ def owner_briefs(
 
             now = datetime.now(UTC).isoformat()
             pass_metadata = {
-                "model":       config.model_path,
-                "pass":        "3b-owner-rollup",
+                "model": config.model_path,
+                "pass": "3b-owner-rollup",
                 "temperature": config.temperature,
-                "thinking":    config.thinking,
+                "thinking": config.thinking,
             }
 
             database.execute(
                 UPSERT_OWNER_BRIEF,
                 {
-                    "canonical_name":       canonical_name,
-                    "owner_id":             owner_id,
-                    "brief_text":           parsed["brief_text"],
-                    "portfolio_strategy":   parsed["portfolio_strategy"],
-                    "concentration_notes":  parsed["concentration_notes"],
-                    "key_pattern":          parsed["key_pattern"],
-                    "recommendation":       parsed["recommendation"],
-                    "urgency":              parsed["urgency"],
-                    "top_risk":             parsed["top_risk"],
-                    "evidence_strength":    parsed["evidence_strength"],
-                    "citations":            json.dumps(parsed["citations"]),
-                    "parcel_citations":     json.dumps(parsed["parcel_citations"]),
-                    "n_parcels":            len({r["pidn"] for r in evidence_rows}),
-                    "model_version":        config.model_path,
-                    "prompt_version":       PROMPT_VERSION,
+                    "canonical_name": canonical_name,
+                    "owner_id": owner_id,
+                    "brief_text": parsed["brief_text"],
+                    "portfolio_strategy": parsed["portfolio_strategy"],
+                    "concentration_notes": parsed["concentration_notes"],
+                    "key_pattern": parsed["key_pattern"],
+                    "recommendation": parsed["recommendation"],
+                    "urgency": parsed["urgency"],
+                    "top_risk": parsed["top_risk"],
+                    "evidence_strength": parsed["evidence_strength"],
+                    "citations": json.dumps(parsed["citations"]),
+                    "parcel_citations": json.dumps(parsed["parcel_citations"]),
+                    "n_parcels": len({r["pidn"] for r in evidence_rows}),
+                    "model_version": config.model_path,
+                    "prompt_version": PROMPT_VERSION,
                     # A single unvoted sample has no agreement measurement;
                     # writing 1.0 here would read as "3/3 unanimous" in any UI.
-                    "n_trials":             1,
-                    "trial_agreement":      None,
-                    "confidence":           parsed["confidence"],
-                    "pass_metadata":        json.dumps(pass_metadata),
-                    "generated_at":         now,
-                    "active_inference_id":  gate.inference_id,
+                    "n_trials": 1,
+                    "trial_agreement": None,
+                    "confidence": parsed["confidence"],
+                    "pass_metadata": json.dumps(pass_metadata),
+                    "generated_at": now,
+                    "active_inference_id": gate.inference_id,
                 },
             )
-            _update_owner_pass_status(
-                database, subject_key, "complete", input_hash
-            )
+            _update_owner_pass_status(database, subject_key, "complete", input_hash)
             briefs_created += 1
             if i % 25 == 0:
-                log.info(f"  progress: {i}/{len(owners_needing)} owners, {briefs_created} briefs")
+                log.info(
+                    f"  progress: {i}/{len(owners_needing)} owners, {briefs_created} briefs"
+                )
 
         except PassSpendLimitExceeded as exc:
             spend_limit_reached = True
@@ -382,27 +401,31 @@ def owner_briefs(
             continue
 
     check_error_budget(
-        log, label="pass3b_owner_briefs",
-        errors=errors, total=briefs_created + errors,
+        log,
+        label="pass3b_owner_briefs",
+        errors=errors,
+        total=briefs_created + errors,
     )
 
-    return MaterializeResult(metadata={
-        "status":           MetadataValue.text("complete"),
-        "skipped_unchanged": MetadataValue.int(skipped_unchanged),
-        "owners_eligible":  MetadataValue.int(len(owners_needing)),
-        "briefs_created":   MetadataValue.int(briefs_created),
-        "budget_mode":      MetadataValue.text(item_budget.mode),
-        "item_limit":       (
-            MetadataValue.int(item_budget.limit)
-            if item_budget.limit is not None
-            else MetadataValue.text("cost-only")
-        ),
-        "items_claimed":    MetadataValue.int(item_budget.claimed),
-        "spend_limit_reached": MetadataValue.bool(spend_limit_reached),
-        "errors":           MetadataValue.int(errors),
-        "model":            MetadataValue.text(config.model_path),
-        "prompt_version":   MetadataValue.text(PROMPT_VERSION),
-    })
+    return MaterializeResult(
+        metadata={
+            "status": MetadataValue.text("complete"),
+            "skipped_unchanged": MetadataValue.int(skipped_unchanged),
+            "owners_eligible": MetadataValue.int(len(owners_needing)),
+            "briefs_created": MetadataValue.int(briefs_created),
+            "budget_mode": MetadataValue.text(item_budget.mode),
+            "item_limit": (
+                MetadataValue.int(item_budget.limit)
+                if item_budget.limit is not None
+                else MetadataValue.text("cost-only")
+            ),
+            "items_claimed": MetadataValue.int(item_budget.claimed),
+            "spend_limit_reached": MetadataValue.bool(spend_limit_reached),
+            "errors": MetadataValue.int(errors),
+            "model": MetadataValue.text(config.model_path),
+            "prompt_version": MetadataValue.text(PROMPT_VERSION),
+        }
+    )
 
 
 def _update_owner_pass_status(

@@ -455,8 +455,7 @@ def _get_intelligence_integrity_status(
         recent_rejections = int(row.get("rejections_last_24h") or 0)
         oldest = row["oldest_unresolved_at"]
         stale = bool(
-            oldest is not None
-            and now > oldest + timedelta(hours=max_age_hours)
+            oldest is not None and now > oldest + timedelta(hours=max_age_hours)
         )
         if mismatched:
             status, reason = "red", "projection_mismatch"

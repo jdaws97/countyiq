@@ -305,15 +305,29 @@ def main() -> None:
         action="store_true",
         help="Validate that regenerated fixtures match committed files.",
     )
-    parser.add_argument("--refresh-live", action="store_true", help="Refresh live selectors only; never rewrite frozen gold")
+    parser.add_argument(
+        "--refresh-live",
+        action="store_true",
+        help="Refresh live selectors only; never rewrite frozen gold",
+    )
     args = parser.parse_args()
     if args.check:
-        for name in ("p1_frozen.json", "p2_frozen.json", "p3_frozen.json", "p3_investigation_frozen.json", "p2_expanded_frozen.json", "p2_expanded_stability20.json", "feature_cases.json"):
+        for name in (
+            "p1_frozen.json",
+            "p2_frozen.json",
+            "p3_frozen.json",
+            "p3_investigation_frozen.json",
+            "p2_expanded_frozen.json",
+            "p2_expanded_stability20.json",
+            "feature_cases.json",
+        ):
             load_frozen_cases(FIXTURES / name)
         print("Frozen context hashes valid; live drift is checked separately.")
         return
     if not args.refresh_live:
-        parser.error("Use --check or --refresh-live. Frozen gold changes require explicit source and label review.")
+        parser.error(
+            "Use --check or --refresh-live. Frozen gold changes require explicit source and label review."
+        )
 
     conn = _db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -322,12 +336,17 @@ def main() -> None:
     shadow_rows = []
     for index, row in enumerate(selected, 1):
         shadow_rows.append(
-            {"pidn": row["pidn"], "signals": list(row["keys"]), "case_id": f"live-p2-{index:03d}"}
+            {
+                "pidn": row["pidn"],
+                "signals": list(row["keys"]),
+                "case_id": f"live-p2-{index:03d}",
+            }
         )
     cur.close()
     conn.close()
 
     from datetime import datetime, timezone
+
     shadow_payload = {
         "version": 1,
         "refreshed_at": datetime.now(timezone.utc).isoformat(),

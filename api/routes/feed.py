@@ -40,7 +40,9 @@ _ALLOWED_EVENT_TYPES = {
 def _csv_values(value: str | None, *, limit: int = 100) -> list[str]:
     if not value:
         return []
-    return list(dict.fromkeys(part.strip() for part in value.split(",") if part.strip()))[:limit]
+    return list(
+        dict.fromkeys(part.strip() for part in value.split(",") if part.strip())
+    )[:limit]
 
 
 def _csv_ints(value: str | None, *, limit: int = 100) -> list[int]:
@@ -168,7 +170,9 @@ def _display_event_copy(row: dict, *, allow_restricted_distress: bool) -> dict:
         "resolved": "A previously reported delinquency no longer appears in the current county listing.",
         "increased": "The reported delinquency increased since the prior county listing.",
         "decreased": "The reported delinquency decreased since the prior county listing.",
-    }.get(change_kind, "The reported delinquency changed since the prior county listing.")
+    }.get(
+        change_kind, "The reported delinquency changed since the prior county listing."
+    )
     safe_sources = [
         {
             **source,
@@ -243,8 +247,11 @@ def _resolve_entity_links(cur, rows: list[dict]) -> dict[str, dict]:
             name = str(candidate).strip().lower()
             if name in lower_names:
                 candidates.setdefault(name, {})[owner["owner_id"]] = link
-    return {name: next(iter(owners.values())) for name, owners in candidates.items()
-            if len(owners) == 1}
+    return {
+        name: next(iter(owners.values()))
+        for name, owners in candidates.items()
+        if len(owners) == 1
+    }
 
 
 @router.get("")
@@ -259,7 +266,9 @@ def intelligence_feed(
         description="Comma-separated municipality names; a value with % is used as an ILIKE pattern",
     ),
     since_days: int | None = Query(default=90, ge=1, le=3650),
-    pidns: str | None = Query(default=None, description="Comma-separated watched PIDNs"),
+    pidns: str | None = Query(
+        default=None, description="Comma-separated watched PIDNs"
+    ),
     project_keys: str | None = Query(
         default=None,
         description="Comma-separated locally watched project keys",
@@ -296,13 +305,23 @@ def intelligence_feed(
     sort: Literal["priority", "latest"] = Query(default="priority"),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    matter_category: Annotated[Literal["development", "minor_property", "landuse_policy", "public_works", "context_only"] | None, Query()] = None,
+    matter_category: Annotated[
+        Literal[
+            "development",
+            "minor_property",
+            "landuse_policy",
+            "public_works",
+            "context_only",
+        ]
+        | None,
+        Query(),
+    ] = None,
 ) -> IntelligenceFeedResponse:
     return fetch_feed(**locals())
 
 
 def fetch_feed(
-    category: Literal['parcel', 'development'] | None = None,
+    category: Literal["parcel", "development"] | None = None,
     event_type: str | None = None,
     municipality: str | None = None,
     since_days: int | None = 90,
@@ -316,7 +335,7 @@ def fetch_feed(
     boost_municipalities: str | None = None,
     near_pidns: str | None = None,
     near_radius_m: int = 400,
-    sort: Literal['priority', 'latest'] = 'priority',
+    sort: Literal["priority", "latest"] = "priority",
     limit: int = 50,
     offset: int = 0,
     event_keys: list[str] | None = None,
@@ -371,15 +390,21 @@ def fetch_feed(
                     * 0.10
             )
         )
-        """
+        """,
     ]
     if matter_category:
-        filters.append("source_evidence->0->'details'->>'matter_category' = %(matter_category)s")
+        filters.append(
+            "source_evidence->0->'details'->>'matter_category' = %(matter_category)s"
+        )
     elif not any((pidns, project_keys, entity_names, entity_ids, event_keys)):
         # Discovery suppresses context-only matters; explicit history stays complete.
-        filters.append("source_evidence->0->'details'->>'discovery_eligible' IS DISTINCT FROM 'false'")
+        filters.append(
+            "source_evidence->0->'details'->>'discovery_eligible' IS DISTINCT FROM 'false'"
+        )
     if text_query:
-        filters.append("(strpos(lower(COALESCE(project_name,'')), lower(%(text_query)s))>0 OR strpos(lower(title),lower(%(text_query)s))>0)")
+        filters.append(
+            "(strpos(lower(COALESCE(project_name,'')), lower(%(text_query)s))>0 OR strpos(lower(title),lower(%(text_query)s))>0)"
+        )
     params: dict[str, object] = {
         "text_query": text_query,
         "matter_category": matter_category,
@@ -400,7 +425,8 @@ def fetch_feed(
         params["category"] = category
 
     event_types = [
-        value for value in _csv_values(event_type, limit=len(_ALLOWED_EVENT_TYPES))
+        value
+        for value in _csv_values(event_type, limit=len(_ALLOWED_EVENT_TYPES))
         if value in _ALLOWED_EVENT_TYPES
     ]
     if event_types:
@@ -502,7 +528,7 @@ def fetch_feed(
                 ({_PRIORITY_SQL})::integer AS priority_score,
                 ({_WATCHED_MATCH_SQL}) AS watched_match
             FROM public.intelligence_events
-            WHERE {' AND '.join(filters)}
+            WHERE {" AND ".join(filters)}
             ORDER BY {order_clause}
             LIMIT %(fetch_limit)s OFFSET %(offset)s
             """,
@@ -521,9 +547,7 @@ def fetch_feed(
             allow_restricted_distress=allow_restricted_distress,
         )
         display_confidence = (
-            row.get("confidence")
-            if row["interpretation_kind"] == "llm"
-            else None
+            row.get("confidence") if row["interpretation_kind"] == "llm" else None
         )
         serialize_temporal_fields(
             row,
@@ -560,7 +584,8 @@ def fetch_feed(
                 # the customer to the parcel's own record, not the layer root.
                 record_query=(
                     ("PIDN", list(row.get("related_pidns") or [])[:1])
-                    if row.get("source_kind") == "parcel_event" and row.get("related_pidns")
+                    if row.get("source_kind") == "parcel_event"
+                    and row.get("related_pidns")
                     else None
                 ),
             )

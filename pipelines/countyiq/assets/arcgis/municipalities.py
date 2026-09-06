@@ -46,10 +46,18 @@ def municipalities_arcgis(
     """Fetch municipal boundaries, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="municipalities_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="municipalities_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS municipalities for {county.name}: {county.arcgis_municipalities_url}")
+    context.log.info(
+        f"Querying ArcGIS municipalities for {county.name}: {county.arcgis_municipalities_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_municipalities_url,
@@ -142,7 +150,11 @@ def municipalities_schema_drift(database: DatabaseResource) -> AssetCheckResult:
         return AssetCheckResult(
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
-            metadata={"missing_fields": MetadataValue.text(str(missing) if missing else "none")},
+            metadata={
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                )
+            },
         )
     except requests.exceptions.RequestException as e:
         return AssetCheckResult(

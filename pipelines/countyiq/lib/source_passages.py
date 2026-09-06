@@ -3,6 +3,7 @@
 No model calls or publication. Passage selection establishes source membership,
 not whether a claim follows from the selected source text.
 """
+
 from dataclasses import dataclass
 import hashlib
 
@@ -20,7 +21,9 @@ class PassageDocument:
     source_sha256: str
     passages: tuple[SourcePassage, ...]
 
-    def resolve(self, source_sha256: str, passage_ids: list[str]) -> tuple[SourcePassage, ...]:
+    def resolve(
+        self, source_sha256: str, passage_ids: list[str]
+    ) -> tuple[SourcePassage, ...]:
         """Resolve distinct IDs in source order; never concatenate disjoint quotes."""
         if source_sha256 != self.source_sha256:
             raise ValueError("Passage references belong to a different source")
@@ -33,10 +36,17 @@ class PassageDocument:
         by_id = {passage.passage_id: passage for passage in self.passages}
         if any(value not in by_id for value in passage_ids):
             raise ValueError("Unknown passage ID")
-        return tuple(sorted((by_id[value] for value in passage_ids), key=lambda passage: passage.start))
+        return tuple(
+            sorted(
+                (by_id[value] for value in passage_ids),
+                key=lambda passage: passage.start,
+            )
+        )
 
 
-def index_source_passages(source_text: str, *, max_chars: int = 1200) -> PassageDocument:
+def index_source_passages(
+    source_text: str, *, max_chars: int = 1200
+) -> PassageDocument:
     """Partition text exactly, preferring line/word boundaries in each chunk.
 
     Offsets are Python Unicode character offsets, not UTF-8 byte offsets. The

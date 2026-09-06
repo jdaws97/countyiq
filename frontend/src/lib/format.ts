@@ -19,7 +19,9 @@ export function formatCurrency(value: CurrencyValue): string {
 }
 
 export function formatShortDate(value: string | null | undefined): string | null {
-  if (!value) return null
+  if (!value) {
+    return null
+  }
   // ECMAScript parses YYYY-MM-DD as UTC. Rendering that instant in a US time
   // zone shifts county record dates back one day, so construct date-only
   // values in local time while preserving normal timestamp behavior.
@@ -27,7 +29,9 @@ export function formatShortDate(value: string | null | undefined): string | null
   const date = dateOnly
     ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
     : new Date(value)
-  if (Number.isNaN(date.getTime())) return value
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',

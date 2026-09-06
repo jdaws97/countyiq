@@ -34,7 +34,9 @@ def distressed_parcels(
 
     extra_where = ""
     if municipality:
-        extra_where += " AND UPPER(tc.tax_district_name) LIKE UPPER(%(municipality)s) || '%%'"
+        extra_where += (
+            " AND UPPER(tc.tax_district_name) LIKE UPPER(%(municipality)s) || '%%'"
+        )
         params["municipality"] = municipality
     if min_acres:
         extra_where += " AND p.acres::numeric >= %(min_acres)s"
@@ -52,7 +54,8 @@ def distressed_parcels(
             "fema_nfhl",
         ):
             require_source_use(cur, source_key, "derived_product", conceal=False)
-        cur.execute(f"""
+        cur.execute(
+            f"""
             WITH delinquency AS (
                 SELECT pidn,
                        COUNT(DISTINCT tax_year) AS years_delinquent,
@@ -189,16 +192,32 @@ def distressed_parcels(
             ) >= %(min_score)s
             ORDER BY distress_score DESC
             LIMIT %(limit)s
-        """, params)
+        """,
+            params,
+        )
         rows = cur.fetchall()
 
     results = []
     for r in rows:
         d = dict(r)
-        for k in ("total_owed", "acres", "aprtotal", "price", "distress_score",
-                  "delinquency_score", "acreage_score", "class_score", "hold_score",
-                  "vacant_score", "no_flood_score", "sheriff_score", "sheriff_judgment",
-                  "traffic_score", "sale_stage_score", "value_score"):
+        for k in (
+            "total_owed",
+            "acres",
+            "aprtotal",
+            "price",
+            "distress_score",
+            "delinquency_score",
+            "acreage_score",
+            "class_score",
+            "hold_score",
+            "vacant_score",
+            "no_flood_score",
+            "sheriff_score",
+            "sheriff_judgment",
+            "traffic_score",
+            "sale_stage_score",
+            "value_score",
+        ):
             if d.get(k) is not None:
                 d[k] = float(d[k])
         for sensitive_key in (
@@ -225,9 +244,12 @@ def assemblage_opportunities(
     vacant, or share fragmented ownership. Ranked by total cluster value.
     """
     with get_cursor() as cur:
-        require_source_use(cur, open_data_source_key(), "derived_product", conceal=False)
+        require_source_use(
+            cur, open_data_source_key(), "derived_product", conceal=False
+        )
         require_source_use(cur, "tax_claims", "derived_product", conceal=False)
-        cur.execute("""
+        cur.execute(
+            """
             WITH delinquent_parcels AS (
                 SELECT DISTINCT pidn
                 FROM staging.tax_claims
@@ -326,15 +348,24 @@ def assemblage_opportunities(
                 COUNT(*) DESC,
                 total_acres DESC
             LIMIT %(limit)s
-        """, {"min_parcels": min_parcels, "min_acres": min_acres, "limit": limit})
+        """,
+            {"min_parcels": min_parcels, "min_acres": min_acres, "limit": limit},
+        )
         rows = cur.fetchall()
 
     results = []
     for r in rows:
         d = dict(r)
-        for k in ("seed_acres", "seed_assessed", "total_neighbor_acres",
-                  "total_neighbor_assessed", "total_acres", "total_assessed",
-                  "lat", "lng"):
+        for k in (
+            "seed_acres",
+            "seed_assessed",
+            "total_neighbor_acres",
+            "total_neighbor_assessed",
+            "total_acres",
+            "total_assessed",
+            "lat",
+            "lng",
+        ):
             if d.get(k) is not None:
                 d[k] = float(d[k])
         d.pop("seed_owner", None)

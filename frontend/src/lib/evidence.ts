@@ -1,6 +1,8 @@
 export function openEvidenceReceipt(evidenceId: string) {
   const receipt = document.getElementById(evidenceId)
-  if (receipt instanceof HTMLDetailsElement) receipt.open = true
+  if (receipt instanceof HTMLDetailsElement) {
+    receipt.open = true
+  }
 }
 
 /**
@@ -9,7 +11,9 @@ export function openEvidenceReceipt(evidenceId: string) {
  * deep-links records where it can, and the label is honest when it cannot.
  */
 export function sourceLinkLabel(href: string): string {
-  if (/\.pdf(\?|#|$)/i.test(href)) return 'Open original document ↗'
+  if (/\.pdf(\?|#|$)/i.test(href)) {
+    return 'Open original document ↗'
+  }
   if (/\/rest\/services\//i.test(href)) {
     return /\/query\?/i.test(href) ? 'Open official GIS record ↗' : 'Open source GIS layer ↗'
   }

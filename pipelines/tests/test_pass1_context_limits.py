@@ -45,40 +45,69 @@ def _pairs(count: int) -> list[tuple[str, str]]:
 def _run_asset(monkeypatch, pairs, *, prompt, prior=None):
     calls = {"gather": 0, "invoke": 0, "record": 0, "replace": 0, "status": []}
     prior_hashes = (
-        {stable_cluster_key(cluster): "accepted-input-hash" for cluster in pass1._build_clusters(pairs)}
-        if prior else {}
+        {
+            stable_cluster_key(cluster): "accepted-input-hash"
+            for cluster in pass1._build_clusters(pairs)
+        }
+        if prior
+        else {}
     )
-    monkeypatch.setattr(pass1, "inference_input_hash", lambda *args, **kwargs: "accepted-input-hash")
+    monkeypatch.setattr(
+        pass1, "inference_input_hash", lambda *args, **kwargs: "accepted-input-hash"
+    )
     monkeypatch.setenv("COUNTYIQ_PASS1_TRIALS", "1")
     monkeypatch.setattr(
         pass1,
         "resolve_pass_harness",
         lambda *args, **kwargs: (
             SimpleNamespace(model_path="test/model", thinking=False),
-            lambda *args, **kwargs: calls.__setitem__("invoke", calls["invoke"] + 1)
-            or SimpleNamespace(success=True, parsed={}, metadata={}),
+            lambda *args, **kwargs: (
+                calls.__setitem__("invoke", calls["invoke"] + 1)
+                or SimpleNamespace(success=True, parsed={}, metadata={})
+            ),
         ),
     )
-    monkeypatch.setattr(pass1, "resolve_escalation_config", lambda *args, **kwargs: None)
-    monkeypatch.setattr(pass1, "fetch_reusable_pass_hashes", lambda *args, **kwargs: prior_hashes)
+    monkeypatch.setattr(
+        pass1, "resolve_escalation_config", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        pass1, "fetch_reusable_pass_hashes", lambda *args, **kwargs: prior_hashes
+    )
     monkeypatch.setattr(pass1, "fetch_prior_pass_attempts", lambda *args, **kwargs: {})
     monkeypatch.setattr(pass1, "check_error_budget", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         pass1,
         "gather_cluster_records",
-        lambda *args: calls.__setitem__("gather", calls["gather"] + 1)
-        or {"candidate_names": [], "parcels": [], "tax_claims": [], "corporate_entities": []},
+        lambda *args: (
+            calls.__setitem__("gather", calls["gather"] + 1)
+            or {
+                "candidate_names": [],
+                "parcels": [],
+                "tax_claims": [],
+                "corporate_entities": [],
+            }
+        ),
     )
     monkeypatch.setattr(pass1, "build_entity_cluster_prompt", lambda records: prompt)
-    monkeypatch.setattr(pass1, "build_deterministic_entity_resolution", lambda *args: None)
-    monkeypatch.setattr(pass1, "parse_entity_verification_output", lambda output: {"entities": [], "rejected_matches": [], "abstentions": []})
-    monkeypatch.setattr(pass1, "merge_entity_trial_partitions", lambda parsed, names: parsed[0])
+    monkeypatch.setattr(
+        pass1, "build_deterministic_entity_resolution", lambda *args: None
+    )
+    monkeypatch.setattr(
+        pass1,
+        "parse_entity_verification_output",
+        lambda output: {"entities": [], "rejected_matches": [], "abstentions": []},
+    )
+    monkeypatch.setattr(
+        pass1, "merge_entity_trial_partitions", lambda parsed, names: parsed[0]
+    )
     monkeypatch.setattr(pass1, "validate_entity_membership", lambda *args: [])
     monkeypatch.setattr(
         pass1,
         "record_inference_decision",
-        lambda *args, **kwargs: calls.__setitem__("record", calls["record"] + 1)
-        or SimpleNamespace(accepted=True, inference_id=1),
+        lambda *args, **kwargs: (
+            calls.__setitem__("record", calls["record"] + 1)
+            or SimpleNamespace(accepted=True, inference_id=1)
+        ),
     )
     monkeypatch.setattr(
         pass1,
@@ -99,11 +128,11 @@ def _run_asset(monkeypatch, pairs, *, prompt, prior=None):
 
 def test_over_name_limit_defers_before_gather_or_prior_hash_skip(monkeypatch):
     names = 41
-    calls, result = _run_asset(
-        monkeypatch, _pairs(names), prompt="unused", prior=True
-    )
+    calls, result = _run_asset(monkeypatch, _pairs(names), prompt="unused", prior=True)
 
-    assert calls["gather"] == calls["invoke"] == calls["record"] == calls["replace"] == 0
+    assert (
+        calls["gather"] == calls["invoke"] == calls["record"] == calls["replace"] == 0
+    )
     assert len(calls["status"]) == 1
     assert calls["status"][0][1:] == (
         stable_cluster_key([f"NAME {index}" for index in range(names)]),
@@ -142,5 +171,7 @@ def test_context_limits_are_inclusive_at_the_boundary(monkeypatch):
         prompt="x" * pass1.MAX_DYNAMIC_PROMPT_CHARACTERS,
     )
 
-    assert calls["gather"] == calls["invoke"] == calls["record"] == calls["replace"] == 1
+    assert (
+        calls["gather"] == calls["invoke"] == calls["record"] == calls["replace"] == 1
+    )
     assert result.metadata["clusters_deferred_context"].value == 0

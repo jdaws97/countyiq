@@ -38,6 +38,7 @@ def with_arcgis_layer(service_url: object, layer: int) -> str | None:
     match = _ARCGIS_SERVICE_RE.match(text)
     return f"{match.group(1)}/{layer}" if match else text
 
+
 # Signal key -> the source layer's record key field, for deterministic signals
 # whose ``source_id`` is that layer's key (see assets/enrichment/development_signals.py).
 SIGNAL_RECORD_FIELDS: dict[str, str] = {
@@ -56,7 +57,9 @@ SIGNAL_RECORD_FIELDS: dict[str, str] = {
 }
 
 
-def arcgis_record_url(layer_url: object, field: str, values: Iterable[object]) -> str | None:
+def arcgis_record_url(
+    layer_url: object, field: str, values: Iterable[object]
+) -> str | None:
     """Return an HTML deep link to specific records in an ArcGIS layer.
 
     Returns None when ``layer_url`` is not a bare layer endpoint, the field is
@@ -75,7 +78,11 @@ def arcgis_record_url(layer_url: object, field: str, values: Iterable[object]) -
         value if integer_field and value.isdigit() else f"'{value}'"
         for value in cleaned[:25]
     ]
-    where = f"{field}={literals[0]}" if len(literals) == 1 else f"{field} IN ({','.join(literals)})"
+    where = (
+        f"{field}={literals[0]}"
+        if len(literals) == 1
+        else f"{field} IN ({','.join(literals)})"
+    )
     query = urlencode({"where": where, "outFields": "*", "f": "html"})
     return f"{match.group(1)}/query?{query}"
 
@@ -200,18 +207,27 @@ def signal_evidence_items(
                 source_values = [first_record["objectid"]]
         record_query = (
             (record_field, source_values)
-            if record_field and not detail_url and any(value not in (None, "") for value in source_values)
+            if record_field
+            and not detail_url
+            and any(value not in (None, "") for value in source_values)
             else None
         )
-        internal_url = signal.get("internal_url") or (f"/property/{pidn}" if pidn else None)
-        validated = bool(signal.get("validation_status") or signal.get("validation_reasoning"))
+        internal_url = signal.get("internal_url") or (
+            f"/property/{pidn}" if pidn else None
+        )
+        validated = bool(
+            signal.get("validation_status") or signal.get("validation_reasoning")
+        )
         items.append(
             evidence_item(
                 scope=scope,
                 citation_key=f"signal:{key}",
-                label=format_signal_label(key, signal) if signal else key.replace("_", " ").title(),
+                label=format_signal_label(key, signal)
+                if signal
+                else key.replace("_", " ").title(),
                 source_kind="validated_signal" if validated else "derived_signal",
-                source_record_id=signal.get("source_id") or (f"{pidn}:{key}" if pidn else key),
+                source_record_id=signal.get("source_id")
+                or (f"{pidn}:{key}" if pidn else key),
                 url=source_url,
                 document_url=document_url,
                 internal_url=internal_url,

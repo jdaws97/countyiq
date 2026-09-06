@@ -56,7 +56,9 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state">
-      <div className="empty-state-mark" aria-hidden="true">◎</div>
+      <div className="empty-state-mark" aria-hidden="true">
+        ◎
+      </div>
       <h2>{title}</h2>
       <div className="empty-state-copy">{children}</div>
       {actions && <div className="empty-state-actions">{actions}</div>}
@@ -71,14 +73,33 @@ export function StatusMessage({
   children: ReactNode
   tone?: 'neutral' | 'error' | 'success'
 }) {
-  return <div role={tone === 'error' ? 'alert' : 'status'} className={`status-message status-message-${tone}`}>{children}</div>
+  return (
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      className={`status-message status-message-${tone}`}
+    >
+      {children}
+    </div>
+  )
 }
 
-export function Freshness({ value, label = 'Evidence current through' }: { value?: string | null; label?: string }) {
-  if (!value) return null
+export function Freshness({
+  value,
+  label = 'Evidence current through',
+}: {
+  value?: string | null
+  label?: string
+}) {
+  if (!value) {
+    return null
+  }
   const date = new Date(value)
   const rendered = Number.isNaN(date.getTime())
     ? value
     : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  return <span className="freshness-label">{label} {rendered}</span>
+  return (
+    <span className="freshness-label">
+      {label} {rendered}
+    </span>
+  )
 }

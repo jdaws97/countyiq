@@ -1,4 +1,5 @@
 """Require specific, unambiguous addresses for proceeding-to-parcel links."""
+
 from alembic import op
 
 revision = "060"

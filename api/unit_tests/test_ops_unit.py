@@ -254,9 +254,7 @@ def test_integrity_health_warns_for_new_unresolved_contradiction():
         }
     )
 
-    status = _get_intelligence_integrity_status(
-        cursor, now=now, max_age_hours=72
-    )
+    status = _get_intelligence_integrity_status(cursor, now=now, max_age_hours=72)
 
     assert status["status"] == "yellow"
     assert status["status_reason"] == "unresolved_contradictions"

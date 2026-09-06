@@ -47,16 +47,22 @@ def test_pass0_requires_source_text_and_exact_quote() -> None:
         "supporting_text": "The board approved the Acme application.",
     }
 
-    assert validate_pass0_extractions(
-        [extraction], "Minutes: The board approved the Acme application. Next item."
-    ) == []
-    assert "source text is unavailable" in validate_pass0_extractions(
-        [extraction], ""
-    )[0]
-    assert "not present in source" in validate_pass0_extractions(
-        [{**extraction, "supporting_text": "The board denied it."}],
-        "The board approved the Acme application.",
-    )[0]
+    assert (
+        validate_pass0_extractions(
+            [extraction], "Minutes: The board approved the Acme application. Next item."
+        )
+        == []
+    )
+    assert (
+        "source text is unavailable" in validate_pass0_extractions([extraction], "")[0]
+    )
+    assert (
+        "not present in source"
+        in validate_pass0_extractions(
+            [{**extraction, "supporting_text": "The board denied it."}],
+            "The board approved the Acme application.",
+        )[0]
+    )
 
 
 def test_pass0_rejects_duplicate_and_conflicting_matters() -> None:
@@ -94,43 +100,53 @@ def _entity_records() -> dict:
 
 def _valid_entity_partition() -> dict:
     return {
-        "entities": [{
-            "canonical_name": "ACME LLC",
-            "member_names": ["ACME LLC", "ACME HOLDINGS"],
-            "reasoning": "The candidate names are grouped [Evidence: candidate:ACME LLC].",
-            "linked_records": {
-                "parcels": ["P1"],
-                "tax_claims": [],
-                "plcb_licenses": [],
-                "corporate_entities": ["ACME HOLDINGS"],
-                "proceedings": [],
-            },
-            "relationships": [],
-        }],
+        "entities": [
+            {
+                "canonical_name": "ACME LLC",
+                "member_names": ["ACME LLC", "ACME HOLDINGS"],
+                "reasoning": "The candidate names are grouped [Evidence: candidate:ACME LLC].",
+                "linked_records": {
+                    "parcels": ["P1"],
+                    "tax_claims": [],
+                    "plcb_licenses": [],
+                    "corporate_entities": ["ACME HOLDINGS"],
+                    "proceedings": [],
+                },
+                "relationships": [],
+            }
+        ],
         "rejected_matches": [],
         "abstentions": [],
     }
 
 
 def test_identity_membership_accepts_exact_partition() -> None:
-    assert validate_entity_membership(
-        _valid_entity_partition(), _entity_records(), ["ACME LLC", "ACME HOLDINGS"]
-    ) == []
+    assert (
+        validate_entity_membership(
+            _valid_entity_partition(), _entity_records(), ["ACME LLC", "ACME HOLDINGS"]
+        )
+        == []
+    )
 
 
 def test_identity_membership_rejects_fabricated_id_and_overlap() -> None:
     parsed = _valid_entity_partition()
     parsed["entities"][0]["linked_records"]["parcels"] = ["MADE-UP"]
-    parsed["entities"].append({
-        "canonical_name": "ACME HOLDINGS",
-        "member_names": ["ACME HOLDINGS"],
-        "reasoning": "The candidate is separate [Evidence: candidate:ACME HOLDINGS].",
-        "linked_records": {
-            "parcels": [], "tax_claims": [], "plcb_licenses": [],
-            "corporate_entities": [], "proceedings": [],
-        },
-        "relationships": [],
-    })
+    parsed["entities"].append(
+        {
+            "canonical_name": "ACME HOLDINGS",
+            "member_names": ["ACME HOLDINGS"],
+            "reasoning": "The candidate is separate [Evidence: candidate:ACME HOLDINGS].",
+            "linked_records": {
+                "parcels": [],
+                "tax_claims": [],
+                "plcb_licenses": [],
+                "corporate_entities": [],
+                "proceedings": [],
+            },
+            "relationships": [],
+        }
+    )
 
     errors = validate_entity_membership(
         parsed, _entity_records(), ["ACME LLC", "ACME HOLDINGS"]
@@ -169,13 +185,16 @@ def _signal_validations() -> list[dict]:
 
 def test_pass2_requires_known_inline_evidence_refs() -> None:
     signals = [{"signal_key": "vacancy"}, {"signal_key": "assemblage"}]
-    assert validate_pass2_evidence_refs(
-        _signal_validations(),
-        signals,
-        cross_signal_insight=(
-            "The signals reinforce one another [Signal: vacancy] [Signal: assemblage]."
-        ),
-    ) == []
+    assert (
+        validate_pass2_evidence_refs(
+            _signal_validations(),
+            signals,
+            cross_signal_insight=(
+                "The signals reinforce one another [Signal: vacancy] [Signal: assemblage]."
+            ),
+        )
+        == []
+    )
 
     invalid = _signal_validations()
     invalid[0]["cross_references"] = ["signal:not-real"]
@@ -202,17 +221,16 @@ def _parcel_brief() -> dict:
 
 
 def test_parcel_brief_citations_are_bidirectional_and_consistent() -> None:
-    assert validate_parcel_brief_citations(
-        _parcel_brief(), {"vacancy", "assemblage"}
-    ) == []
+    assert (
+        validate_parcel_brief_citations(_parcel_brief(), {"vacancy", "assemblage"})
+        == []
+    )
 
     invalid = _parcel_brief()
     invalid["brief"] = "The site shows potential."
     invalid["recommendation"] = "pursue_now"
     invalid["assessment"] = "not_actionable"
-    errors = validate_parcel_brief_citations(
-        invalid, {"vacancy", "assemblage"}
-    )
+    errors = validate_parcel_brief_citations(invalid, {"vacancy", "assemblage"})
     assert any("uncited brief" in error for error in errors)
     assert any("contradicts assessment" in error for error in errors)
 
@@ -230,12 +248,12 @@ def test_parcel_brief_citations_are_bidirectional_and_consistent() -> None:
     decimal["citations"] = ["vacancy", "assemblage"]
     # assemblage remains used by top_risk, so decimal punctuation must not
     # create an artificial uncited sentence fragment.
-    assert validate_parcel_brief_citations(
-        decimal, {"vacancy", "assemblage"}
-    ) == []
+    assert validate_parcel_brief_citations(decimal, {"vacancy", "assemblage"}) == []
 
 
-def test_parcel_brief_cannot_hide_unsupported_parcel_markers_beside_valid_signals() -> None:
+def test_parcel_brief_cannot_hide_unsupported_parcel_markers_beside_valid_signals() -> (
+    None
+):
     for field in ("brief", "assessment_reasoning", "top_risk"):
         parsed = _parcel_brief()
         parsed[field] += " An unrelated property is approved [Parcel: NOT-IN-CONTEXT]."
@@ -255,25 +273,26 @@ def test_owner_brief_requires_known_signal_and_parcel_markers() -> None:
         "evidence_strength": "weak",
         "urgency": "long_term_12mo",
     }
-    assert validate_owner_brief_citations(
-        parsed, {"tax_distress"}, {"P1"}
-    ) == []
+    assert validate_owner_brief_citations(parsed, {"tax_distress"}, {"P1"}) == []
 
     parsed["brief_text"] = "An uncited portfolio assertion."
     assert any(
         "uncited owner brief_text" in error
-        for error in validate_owner_brief_citations(
-            parsed, {"tax_distress"}, {"P1"}
-        )
+        for error in validate_owner_brief_citations(parsed, {"tax_distress"}, {"P1"})
     )
 
-    parsed["brief_text"] = "Distress is concentrated [Signal: tax_distress] [Parcel: P1]."
+    parsed["brief_text"] = (
+        "Distress is concentrated [Signal: tax_distress] [Parcel: P1]."
+    )
     parsed["evidence_strength"] = "moderate"
     parsed["recommendation"] = "watch"
     parsed["urgency"] = "none"
     assert validate_owner_brief_citations(parsed, {"tax_distress"}, {"P1"}) == []
     parsed["urgency"] = "urgent_30d"
-    assert "investigation briefs must not invent urgency" in validate_owner_brief_citations(parsed, {"tax_distress"}, {"P1"})
+    assert (
+        "investigation briefs must not invent urgency"
+        in validate_owner_brief_citations(parsed, {"tax_distress"}, {"P1"})
+    )
 
 
 def test_input_hash_changes_with_model_or_prompt_but_source_hash_does_not() -> None:
@@ -326,6 +345,7 @@ def test_pass2_consequence_ignores_only_non_serving_flips() -> None:
 def test_brief_dependencies_bind_parcel_key_and_inference():
     import pytest
     from countyiq.lib.intelligence_integrity import signal_version_refs
+
     rows = [{"pidn": "123", "signal_key": "growth_area", "active_inference_id": 42}]
     assert signal_version_refs(rows + rows) == ["signal-version:123:growth_area:42"]
     assert signal_version_refs([dict(rows[0], pidn=None)], pidn="456") == [
@@ -339,13 +359,26 @@ def test_brief_dependencies_bind_parcel_key_and_inference():
 def test_owner_context_tracks_municipalities_without_signal_order_churn():
     from countyiq.lib.pass3_owner_briefs import owner_brief_context
     from countyiq.lib.intelligence_integrity import content_hash
-    owner = {"owner_id": 1, "canonical_name": "Example", "entity_type": "llc",
-             "pidns": ["1", "2"], "n_parcels": 2}
-    evidence = [{"pidn": "1", "municipality": "York"}, {"pidn": "2", "municipality": None}]
+
+    owner = {
+        "owner_id": 1,
+        "canonical_name": "Example",
+        "entity_type": "llc",
+        "pidns": ["1", "2"],
+        "n_parcels": 2,
+    }
+    evidence = [
+        {"pidn": "1", "municipality": "York"},
+        {"pidn": "2", "municipality": None},
+    ]
     before = owner_brief_context(owner, evidence)
     assert before["signal_municipalities"] == {"1": "York", "2": None}
-    assert content_hash(before) == content_hash(owner_brief_context(owner, list(reversed(evidence))))
-    assert content_hash(before) != content_hash(owner_brief_context(
-        owner, [dict(evidence[0], municipality="Hanover"), evidence[1]]
-    ))
+    assert content_hash(before) == content_hash(
+        owner_brief_context(owner, list(reversed(evidence)))
+    )
+    assert content_hash(before) != content_hash(
+        owner_brief_context(
+            owner, [dict(evidence[0], municipality="Hanover"), evidence[1]]
+        )
+    )
     assert "signal_municipalities" not in owner

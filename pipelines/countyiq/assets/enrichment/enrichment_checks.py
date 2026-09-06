@@ -22,7 +22,9 @@ from countyiq.assets.enrichment.development_signals import development_signals
 from countyiq.assets.enrichment.entity_verification import entity_verification
 from countyiq.assets.enrichment.owner_briefs import owner_briefs
 from countyiq.assets.enrichment.owners import owner_resolution
-from countyiq.assets.enrichment.signal_validation_batched import signal_validation_batched
+from countyiq.assets.enrichment.signal_validation_batched import (
+    signal_validation_batched,
+)
 from countyiq.lib.checks import make_row_count_check
 
 development_signals_nonempty = make_row_count_check(

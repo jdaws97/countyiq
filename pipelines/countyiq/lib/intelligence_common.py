@@ -222,6 +222,7 @@ PORTFOLIO_QUERY = """
 # PRIVATE HELPERS
 # =============================================================================
 
+
 def _format_date(val: object) -> str:
     """Convert a date or datetime to ISO-format string.
 
@@ -265,6 +266,7 @@ def _num(val: object) -> float | int:
 # =============================================================================
 # FORMATTER FUNCTIONS
 # =============================================================================
+
 
 def format_parcel_context(row: dict) -> dict:
     """Format a staging.parcels row dict into a clean context dict.
@@ -489,7 +491,9 @@ def strip_volatile_evidence(evidence: object) -> object:
     if not isinstance(evidence, dict):
         return evidence
     return {
-        key: value for key, value in evidence.items() if key not in VOLATILE_EVIDENCE_KEYS
+        key: value
+        for key, value in evidence.items()
+        if key not in VOLATILE_EVIDENCE_KEYS
     }
 
 
@@ -524,15 +528,18 @@ def fetch_prior_pass_hashes(database, pass_number: int) -> dict[str, str]:
     Returns:
         Dict mapping key -> input_hash for rows with status='complete'.
     """
-    rows = database.execute(
-        """
+    rows = (
+        database.execute(
+            """
         SELECT pidn, input_hash
         FROM meta.intelligence_passes
         WHERE pass_number = %(pass_number)s
           AND status = 'complete'
         """,
-        {"pass_number": pass_number},
-    ) or []
+            {"pass_number": pass_number},
+        )
+        or []
+    )
     hashes: dict[str, str] = {}
     for row in rows:
         if isinstance(row, dict):
@@ -604,8 +611,9 @@ def fetch_reusable_pass_hashes(
             "reusable projection hashes are defined only for Passes 1 and 2"
         )
 
-    rows = database.execute(
-        f"""
+    rows = (
+        database.execute(
+            f"""
         WITH latest AS (
             SELECT DISTINCT ON (subject_key)
                 subject_key, input_hash, inference_id, payload
@@ -627,8 +635,10 @@ def fetch_reusable_pass_hashes(
           ON projected.active_inference_id = latest.inference_id
         WHERE {projection_clause}
         """,
-        {"pass_number": pass_number, "output_kind": output_kind},
-    ) or []
+            {"pass_number": pass_number, "output_kind": output_kind},
+        )
+        or []
+    )
     hashes: dict[str, str] = {}
     for row in rows:
         if isinstance(row, dict):
@@ -642,14 +652,17 @@ def fetch_reusable_pass_hashes(
 
 def fetch_prior_pass_attempts(database, pass_number: int) -> dict[str, object]:
     """Fetch last-attempt timestamps used to rotate capped work fairly."""
-    rows = database.execute(
-        """
+    rows = (
+        database.execute(
+            """
         SELECT pidn, last_run_at
         FROM meta.intelligence_passes
         WHERE pass_number = %(pass_number)s
         """,
-        {"pass_number": pass_number},
-    ) or []
+            {"pass_number": pass_number},
+        )
+        or []
+    )
     attempts: dict[str, object] = {}
     for row in rows:
         if isinstance(row, dict):

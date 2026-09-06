@@ -39,10 +39,18 @@ def growth_areas_arcgis(
     """Fetch growth area polygons, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="growth_areas_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="growth_areas_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS growth areas for {county.name}: {county.arcgis_growth_areas_url}")
+    context.log.info(
+        f"Querying ArcGIS growth areas for {county.name}: {county.arcgis_growth_areas_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_growth_areas_url,
@@ -99,12 +107,14 @@ def _parse(raw_features: list[dict]) -> list[dict]:
         globalid = a.get("GlobalID")
         if not globalid:
             continue
-        records.append({
-            "globalid": str(globalid).strip(),
-            "ga_type": a.get("GA_TYPE"),
-            "district": a.get("DISTRICT"),
-            "ga_status": a.get("GA_STATUS"),
-        })
+        records.append(
+            {
+                "globalid": str(globalid).strip(),
+                "ga_type": a.get("GA_TYPE"),
+                "district": a.get("DISTRICT"),
+                "ga_status": a.get("GA_STATUS"),
+            }
+        )
     return records
 
 

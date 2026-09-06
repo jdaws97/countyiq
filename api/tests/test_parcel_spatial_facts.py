@@ -40,8 +40,14 @@ def spatial_fact_rows() -> Iterator[None]:
     finally:
         with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM staging.soils WHERE objectid = ANY(%s)", (list(SOIL_IDS),))
-                cur.execute("DELETE FROM staging.zoning WHERE zrecid = ANY(%s)", (list(ZONING_IDS),))
+                cur.execute(
+                    "DELETE FROM staging.soils WHERE objectid = ANY(%s)",
+                    (list(SOIL_IDS),),
+                )
+                cur.execute(
+                    "DELETE FROM staging.zoning WHERE zrecid = ANY(%s)",
+                    (list(ZONING_IDS),),
+                )
 
 
 def _insert_soils() -> None:
@@ -70,7 +76,9 @@ def _insert_soils() -> None:
                 )
 
 
-def test_parcel_soils_group_fragments_and_preserve_source_receipt(client, spatial_fact_rows):
+def test_parcel_soils_group_fragments_and_preserve_source_receipt(
+    client, spatial_fact_rows
+):
     _insert_soils()
 
     response = client.get(f"/api/parcels/{TEST_PIDN}")
@@ -92,7 +100,11 @@ def test_parcel_soils_group_fragments_and_preserve_source_receipt(client, spatia
 
     for source_id in SOIL_IDS[:2]:
         assert str(source_id) in soil_profile["source_url"]
-    receipt = next(item for item in payload["evidence"] if item["source_kind"] == "official_soil_layer")
+    receipt = next(
+        item
+        for item in payload["evidence"]
+        if item["source_kind"] == "official_soil_layer"
+    )
     assert receipt["source_record_id"] == ",".join(str(value) for value in SOIL_IDS)
     assert all(str(source_id) in receipt["url"] for source_id in SOIL_IDS)
     receipt_units = {unit["drainage"]: unit for unit in receipt["details"]["map_units"]}
@@ -100,7 +112,9 @@ def test_parcel_soils_group_fragments_and_preserve_source_receipt(client, spatia
     assert receipt_units["Well drained"]["map_unit_key"] == "same-map-unit"
 
 
-def test_parcel_zoning_prefers_newest_adoption_then_highest_record_id(client, spatial_fact_rows):
+def test_parcel_zoning_prefers_newest_adoption_then_highest_record_id(
+    client, spatial_fact_rows
+):
     with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn:
         with conn.cursor() as cur:
             for zrecid, code, adopted in (
@@ -134,6 +148,10 @@ def test_parcel_zoning_prefers_newest_adoption_then_highest_record_id(client, sp
     assert response.status_code == 200
     payload = response.json()
     assert payload["zoning"]["code"] == "HIGH"
-    receipt = next(item for item in payload["evidence"] if item["source_kind"] == "official_zoning_layer")
+    receipt = next(
+        item
+        for item in payload["evidence"]
+        if item["source_kind"] == "official_zoning_layer"
+    )
     assert receipt["source_record_id"] == str(ZONING_IDS[2])
     assert receipt["details"]["code"] == "HIGH"

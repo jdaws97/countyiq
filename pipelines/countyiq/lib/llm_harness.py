@@ -102,54 +102,102 @@ class HarnessResult:
 
 MODEL_PRESETS = {
     "qwen_thinking": {
-        "temperature": 1.0, "top_p": 0.95, "top_k": 20,
-        "min_p": 0.0, "presence_penalty": 1.5, "repeat_penalty": 1.0,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0,
     },
     "qwen_nothink_reasoning": {
-        "temperature": 1.0, "top_p": 0.95, "top_k": 20,
-        "min_p": 0.0, "presence_penalty": 1.5, "repeat_penalty": 1.0,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0,
     },
     "qwen_nothink_general": {
-        "temperature": 0.7, "top_p": 0.8, "top_k": 20,
-        "min_p": 0.0, "presence_penalty": 1.5, "repeat_penalty": 1.0,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0,
     },
     "gemma": {
-        "temperature": 1.0, "top_p": 0.95, "top_k": 64,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 64,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     "ministral_instruct": {
-        "temperature": 0.05, "top_p": 1.0, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 0.05,
+        "top_p": 1.0,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     "ministral_reasoning": {
-        "temperature": 0.05, "top_p": 1.0, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 0.05,
+        "top_p": 1.0,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     "deepseek": {
-        "temperature": 1.0, "top_p": 0.95, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     # GLM-5.3-Flash publisher/OpenRouter defaults, verified 2026-09-05.
     # Do not impose the generic family's unvalidated top-k/temperature.
     "glm_flash": {
-        "temperature": 1.0, "top_p": 0.95, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     "mimo": {
-        "temperature": 0.8, "top_p": 0.95, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 0.8,
+        "top_p": 0.95,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     "grok": {
-        "temperature": 0.7, "top_p": 0.95, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     "gpt_oss": {
-        "temperature": 0.3, "top_p": 0.95, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 0.3,
+        "top_p": 0.95,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     "mercury": {
-        "temperature": 0.75, "top_p": 0.95, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 0.75,
+        "top_p": 0.95,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     # OpenAI reasoning endpoints (gpt-5.x) accept NO sampling parameters —
     # the OpenRouter listing for gpt-5.6-luna exposes only max_tokens,
@@ -157,12 +205,20 @@ MODEL_PRESETS = {
     # 2026-08-06). Neutral values here; build_openrouter_payload omits
     # temperature/top_p entirely for this family.
     "openai": {
-        "temperature": 1.0, "top_p": 1.0, "top_k": -1,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "top_k": -1,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
     "generic": {
-        "temperature": 0.1, "top_p": 0.95, "top_k": 40,
-        "min_p": 0.0, "presence_penalty": 0.0, "repeat_penalty": 1.0,
+        "temperature": 0.1,
+        "top_p": 0.95,
+        "top_k": 40,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repeat_penalty": 1.0,
     },
 }
 
@@ -179,7 +235,9 @@ def _int_env(name: str, default: int) -> int:
 
 def inline_pdf_max_bytes() -> int:
     """Return the max raw PDF size allowed for inline OpenRouter uploads."""
-    return max(_int_env("COUNTYIQ_PASS0_MAX_PDF_BYTES", _DEFAULT_INLINE_PDF_MAX_BYTES), 0)
+    return max(
+        _int_env("COUNTYIQ_PASS0_MAX_PDF_BYTES", _DEFAULT_INLINE_PDF_MAX_BYTES), 0
+    )
 
 
 def validate_inline_pdf_size(pdf_bytes: bytes | None) -> None:
@@ -237,7 +295,9 @@ def get_preset_for_model(
     if family == "qwen":
         if thinking:
             return MODEL_PRESETS["qwen_thinking"]
-        return MODEL_PRESETS["qwen_nothink_reasoning" if reasoning_task else "qwen_nothink_general"]
+        return MODEL_PRESETS[
+            "qwen_nothink_reasoning" if reasoning_task else "qwen_nothink_general"
+        ]
     if family == "gemma":
         return MODEL_PRESETS["gemma"]
     if family == "mistral":
@@ -272,7 +332,10 @@ def llm_archive_strict() -> bool:
     """Return whether transcript archival failures must abort inference."""
 
     return os.environ.get("COUNTYIQ_ARCHIVE_STRICT", "").strip().lower() in {
-        "1", "true", "yes", "on",
+        "1",
+        "true",
+        "yes",
+        "on",
     }
 
 
@@ -474,7 +537,11 @@ def _build_messages(
     pdf_bytes: bytes | None = None,
 ) -> list[dict]:
     """Build OpenRouter messages with family-specific thinking controls."""
-    family = config.model_family if config.model_family != "auto" else detect_model_family(config.model_path)
+    family = (
+        config.model_family
+        if config.model_family != "auto"
+        else detect_model_family(config.model_path)
+    )
     messages: list[dict] = []
     user_prompt = prompt
 
@@ -565,7 +632,11 @@ def build_openrouter_payload(
     is unit-testable without a network call — the effort setting silently
     ran at "high" for months because nothing asserted on the payload.
     """
-    family = config.model_family if config.model_family != "auto" else detect_model_family(config.model_path)
+    family = (
+        config.model_family
+        if config.model_family != "auto"
+        else detect_model_family(config.model_path)
+    )
     if config.json_schema:
         response_format: dict = {
             "type": "json_schema",
@@ -656,13 +727,21 @@ def build_openrouter_payload(
         payload.pop("reasoning_effort", None)
         payload["reasoning"] = {"effort": config.reasoning_effort}
 
-    if family == "deepseek" and "deepseek-v4" in config.model_path.lower() and (
-        config.thinking or config.reasoning_effort not in (None, "", "none")
+    if (
+        family == "deepseek"
+        and "deepseek-v4" in config.model_path.lower()
+        and (config.thinking or config.reasoning_effort not in (None, "", "none"))
     ):
         # DeepSeek thinking ignores sampling controls. Omitting them also
         # avoids excluding otherwise compatible strict-schema providers.
-        for key in ("temperature", "top_p", "top_k", "min_p",
-                    "presence_penalty", "frequency_penalty"):
+        for key in (
+            "temperature",
+            "top_p",
+            "top_k",
+            "min_p",
+            "presence_penalty",
+            "frequency_penalty",
+        ):
             payload.pop(key, None)
 
     return payload
@@ -703,7 +782,9 @@ def _invoke_openrouter(
             "prompt_tokens": usage.get("prompt_tokens"),
             "completion_tokens": usage.get("completion_tokens"),
             "reasoning_tokens": details.get("reasoning_tokens"),
-            "cached_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+            "cached_tokens": (usage.get("prompt_tokens_details") or {}).get(
+                "cached_tokens"
+            ),
             # OpenRouter reports the actual routed-call charge when usage
             # accounting is available. Persist it instead of estimating from
             # a model price sheet that may not match the selected provider.
@@ -722,10 +803,14 @@ def _invoke_openrouter(
             raw_output = message["reasoning_content"] or ""
 
         if finish == "length":
-            return raw_output, (
-                f"Response truncated at max_tokens={config.max_tokens} "
-                f"(finish_reason=length)"
-            ), meta
+            return (
+                raw_output,
+                (
+                    f"Response truncated at max_tokens={config.max_tokens} "
+                    f"(finish_reason=length)"
+                ),
+                meta,
+            )
         if not raw_output:
             return "", f"Empty response content (finish_reason={finish})", meta
         return raw_output, None, meta
@@ -944,7 +1029,9 @@ def invoke_with_retry(
                 attempt_config.max_tokens,
                 stepped_effort,
             )
-        result = invoke(attempt_config, prompt, archive_key=archive_key, pdf_bytes=pdf_bytes)
+        result = invoke(
+            attempt_config, prompt, archive_key=archive_key, pdf_bytes=pdf_bytes
+        )
         attempt_metadata.append(result.metadata)
         if result.success:
             return _with_attempt_metadata(result, attempt_metadata)

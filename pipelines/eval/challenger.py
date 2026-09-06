@@ -191,7 +191,8 @@ def run_pass0(cfg, ledger, on_progress=None) -> list[dict]:
         fname = fixture["file"]
         pdf = (FIXTURES / "p0_pdfs" / fname).read_bytes()
         source_text = extract_text_from_pdf_bytes(pdf)
-        prompt = document_prompt(source_text,
+        prompt = document_prompt(
+            source_text,
             body_name=fixture["body_name"],
             county_name="York County",
             state="PA",
@@ -208,11 +209,17 @@ def run_pass0(cfg, ledger, on_progress=None) -> list[dict]:
         )
         parsed = res.parsed or _parse(res.raw_output)
         try:
-            hydrated = hydrate_claims(parsed, source_text, meeting_date=fixture.get("meeting_date"))
-            errors = validate_pass0_extractions(hydrated, source_text, require_contract=True)
+            hydrated = hydrate_claims(
+                parsed, source_text, meeting_date=fixture.get("meeting_date")
+            )
+            errors = validate_pass0_extractions(
+                hydrated, source_text, require_contract=True
+            )
         except ValueError as exc:
             hydrated, errors = [], [str(exc)]
-        score = enforce_production_gate(score_pass0({"extractions": hydrated}, fixture), errors)
+        score = enforce_production_gate(
+            score_pass0({"extractions": hydrated}, fixture), errors
+        )
         rows.append(
             {
                 "doc": fname,
@@ -485,12 +492,8 @@ def run_pass2_live(
         if not context.get("signals"):
             continue
         prompt = build_batched_signal_prompt(context)
-        challenger = _pass2_prompt_one(
-            cfg_challenger, prompt, context, pidn, ledger
-        )
-        incumbent = _pass2_prompt_one(
-            cfg_incumbent, prompt, context, pidn, ledger
-        )
+        challenger = _pass2_prompt_one(cfg_challenger, prompt, context, pidn, ledger)
+        incumbent = _pass2_prompt_one(cfg_incumbent, prompt, context, pidn, ledger)
         row = {
             "pidn": pidn,
             "context_sha256": canonical_context_hash(context),

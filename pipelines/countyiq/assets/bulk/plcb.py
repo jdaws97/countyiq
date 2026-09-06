@@ -89,9 +89,7 @@ def plcb_licenses(
 
     if not records:
         context.log.warning(f"No {county.name} records found — skipping upsert")
-        return MaterializeResult(
-            metadata={"record_count": MetadataValue.int(0)}
-        )
+        return MaterializeResult(metadata={"record_count": MetadataValue.int(0)})
 
     # 3b. Guard against truncated downloads
     if len(records) < county.plcb_min_records:
@@ -125,9 +123,7 @@ def plcb_licenses(
     )
 
 
-plcb_record_count_nonzero = make_row_count_check(
-    plcb_licenses, table="plcb_licenses"
-)
+plcb_record_count_nonzero = make_row_count_check(plcb_licenses, table="plcb_licenses")
 
 
 @asset_check(asset=plcb_licenses)
@@ -153,7 +149,9 @@ def plcb_no_schema_drift(database: DatabaseResource) -> AssetCheckResult:
             passed=passed,
             severity=AssetCheckSeverity.WARN,
             metadata={
-                "missing_headers": MetadataValue.text(str(missing) if missing else "none"),
+                "missing_headers": MetadataValue.text(
+                    str(missing) if missing else "none"
+                ),
                 "extra_headers": MetadataValue.text(str(extra) if extra else "none"),
             },
         )
@@ -167,5 +165,7 @@ def plcb_no_schema_drift(database: DatabaseResource) -> AssetCheckResult:
         return AssetCheckResult(
             passed=False,
             severity=AssetCheckSeverity.WARN,
-            metadata={"error": MetadataValue.text("Empty response from PLCB CSV endpoint")},
+            metadata={
+                "error": MetadataValue.text("Empty response from PLCB CSV endpoint")
+            },
         )

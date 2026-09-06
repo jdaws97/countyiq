@@ -104,14 +104,16 @@ def resolve_brief_rank_limit() -> int:
         return 500
 
 
-def _retract_unservable_briefs(
-    database: DatabaseResource, *, rank_limit: int
-) -> int:
-    rows = database.execute(
-        RETRACT_UNSERVABLE_BRIEFS_QUERY,
-        {"rank_limit": rank_limit},
-    ) or []
+def _retract_unservable_briefs(database: DatabaseResource, *, rank_limit: int) -> int:
+    rows = (
+        database.execute(
+            RETRACT_UNSERVABLE_BRIEFS_QUERY,
+            {"rank_limit": rank_limit},
+        )
+        or []
+    )
     return len(rows)
+
 
 UPSERT_BRIEF_QUERY = """
     INSERT INTO public.parcel_briefs
@@ -146,6 +148,7 @@ UPSERT_BRIEF_QUERY = """
         active_inference_id = EXCLUDED.active_inference_id
 """
 
+
 @asset(
     group_name="enrichment",
     description=(
@@ -161,9 +164,7 @@ def brief_generation(
 ) -> MaterializeResult:
     log = context.log
     rank_limit = resolve_brief_rank_limit()
-    briefs_retracted = _retract_unservable_briefs(
-        database, rank_limit=rank_limit
-    )
+    briefs_retracted = _retract_unservable_briefs(database, rank_limit=rank_limit)
     if briefs_retracted:
         log.info(
             "Retracted %d parcel brief(s) outside the current serving set",
@@ -188,9 +189,7 @@ def brief_generation(
     config = replace(config, temperature=min(config.temperature, 0.3))
 
     log.info("Querying parcels eligible for brief generation")
-    rows = database.execute(
-        PARCELS_NEEDING_BRIEFS_QUERY, {"rank_limit": rank_limit}
-    )
+    rows = database.execute(PARCELS_NEEDING_BRIEFS_QUERY, {"rank_limit": rank_limit})
 
     if not rows:
         log.info("No parcels eligible for brief generation.")
@@ -217,9 +216,7 @@ def brief_generation(
     # inside the loop.
     prior_hashes = fetch_prior_pass_hashes(database, pass_number=3)
     prior_attempts = fetch_prior_pass_attempts(database, pass_number=3)
-    current_brief_rows = database.execute(
-        "SELECT pidn FROM public.parcel_briefs"
-    ) or []
+    current_brief_rows = database.execute("SELECT pidn FROM public.parcel_briefs") or []
     current_brief_pidns = {
         (row.get("pidn") if isinstance(row, dict) else row[0])
         for row in current_brief_rows
@@ -242,7 +239,10 @@ def brief_generation(
 
             validated_signals = ctx.get("validated_signals", [])
             if not should_generate_brief(validated_signals):
-                log.debug("Parcel %s has no medium+ signals after context gather, skipping", pidn)
+                log.debug(
+                    "Parcel %s has no medium+ signals after context gather, skipping",
+                    pidn,
+                )
                 skipped += 1
                 continue
 
@@ -254,11 +254,10 @@ def brief_generation(
                 prompt_version=PROMPT_VERSION,
             )
 
-            if (
-                pidn in current_brief_pidns
-                and prior_hashes.get(pidn) == input_hash
-            ):
-                log.debug("Parcel %s context unchanged, skipping brief generation", pidn)
+            if pidn in current_brief_pidns and prior_hashes.get(pidn) == input_hash:
+                log.debug(
+                    "Parcel %s context unchanged, skipping brief generation", pidn
+                )
                 skipped += 1
                 continue
 
@@ -270,10 +269,17 @@ def brief_generation(
 
             if not result.success:
                 log.warning(
-                    "LLM failed for brief on %s: %s", pidn, result.error,
+                    "LLM failed for brief on %s: %s",
+                    pidn,
+                    result.error,
                 )
                 _update_pass_status(
-                    database, pidn, 3, "error", input_hash, result.error,
+                    database,
+                    pidn,
+                    3,
+                    "error",
+                    input_hash,
+                    result.error,
                 )
                 errors += 1
                 continue
@@ -281,10 +287,17 @@ def brief_generation(
             parsed = parse_brief_output(result.parsed or {})
             if "error" in parsed:
                 log.warning(
-                    "Invalid LLM brief output for %s: %s", pidn, parsed["error"],
+                    "Invalid LLM brief output for %s: %s",
+                    pidn,
+                    parsed["error"],
                 )
                 _update_pass_status(
-                    database, pidn, 3, "error", input_hash, parsed["error"],
+                    database,
+                    pidn,
+                    3,
+                    "error",
+                    input_hash,
+                    parsed["error"],
                 )
                 errors += 1
                 continue
@@ -295,7 +308,8 @@ def brief_generation(
                 if signal.get("signal_key")
             }
             citation_errors = validate_parcel_brief_citations(
-                parsed, allowed_signal_keys,
+                parsed,
+                allowed_signal_keys,
             )
             if citation_errors:
                 record_validation_rejection(
@@ -310,9 +324,16 @@ def brief_generation(
                     errors=citation_errors,
                 )
                 message = "; ".join(citation_errors)
-                log.warning("Brief for %s failed citation validation: %s", pidn, message)
+                log.warning(
+                    "Brief for %s failed citation validation: %s", pidn, message
+                )
                 _update_pass_status(
-                    database, pidn, 3, "error", input_hash, message,
+                    database,
+                    pidn,
+                    3,
+                    "error",
+                    input_hash,
+                    message,
                 )
                 errors += 1
                 continue
@@ -332,16 +353,18 @@ def brief_generation(
                 payload=parsed,
                 semantic_decision=parcel_brief_semantic_decision(parsed),
                 citations=parsed.get("citations", []),
-                evidence_refs=[
-                    f"signal:{key}" for key in parsed.get("citations", [])
-                ] + signal_dependencies + ["parcel-context:v1:" + ctx["source_fingerprint"]],
+                evidence_refs=[f"signal:{key}" for key in parsed.get("citations", [])]
+                + signal_dependencies
+                + ["parcel-context:v1:" + ctx["source_fingerprint"]],
             )
             if not gate.accepted:
                 auto = auto_resolve_contradiction(database, gate.contradiction_id, log)
                 if auto.resolved:
                     log.info(
                         "Contradiction %s auto-resolved (%s): %s",
-                        gate.contradiction_id, auto.resolution, auto.rationale,
+                        gate.contradiction_id,
+                        auto.resolution,
+                        auto.rationale,
                     )
                     continue
                 message = (
@@ -350,7 +373,12 @@ def brief_generation(
                 )
                 log.warning("Brief for %s %s", pidn, message)
                 _update_pass_status(
-                    database, pidn, 3, "error", input_hash, message,
+                    database,
+                    pidn,
+                    3,
+                    "error",
+                    input_hash,
+                    message,
                 )
                 errors += 1
                 continue
@@ -364,11 +392,11 @@ def brief_generation(
                 # Structured-first fields (experiment C). Persisted in JSONB
                 # so the front-end can render recommendation + urgency
                 # badges without a schema change per new field.
-                "recommendation":    parsed.get("recommendation"),
-                "urgency":           parsed.get("urgency"),
+                "recommendation": parsed.get("recommendation"),
+                "urgency": parsed.get("urgency"),
                 "evidence_strength": parsed.get("evidence_strength"),
-                "top_signal_key":    parsed.get("top_signal_key"),
-                "top_risk":          parsed.get("top_risk"),
+                "top_signal_key": parsed.get("top_signal_key"),
+                "top_risk": parsed.get("top_risk"),
             }
 
             # Postgres accepts Python lists directly for text[] parameters.
@@ -411,7 +439,8 @@ def brief_generation(
 
             log.info(
                 "Generated brief for %s: assessment=%s",
-                pidn, parsed["assessment"],
+                pidn,
+                parsed["assessment"],
             )
 
         except PassSpendLimitExceeded as exc:
@@ -435,11 +464,16 @@ def brief_generation(
 
     log.info(
         "Pass 3 complete: %d eligible, %d briefs created, %d skipped, %d errors",
-        parcels_eligible, briefs_created, skipped, errors,
+        parcels_eligible,
+        briefs_created,
+        skipped,
+        errors,
     )
     check_error_budget(
-        log, label="pass3_brief_generation",
-        errors=errors, total=briefs_created + errors,
+        log,
+        label="pass3_brief_generation",
+        errors=errors,
+        total=briefs_created + errors,
     )
 
     return MaterializeResult(
@@ -460,6 +494,7 @@ def brief_generation(
             "errors": MetadataValue.int(errors),
         }
     )
+
 
 def _update_pass_status(
     database: DatabaseResource,

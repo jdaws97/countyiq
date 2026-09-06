@@ -91,7 +91,9 @@ def _parcel_filters(
         clauses += " AND p.acres <= %(max_acres)s"
         params["max_acres"] = max_acres
     if parcel_class:
-        codes = [code.strip().upper() for code in parcel_class.split(",") if code.strip()]
+        codes = [
+            code.strip().upper() for code in parcel_class.split(",") if code.strip()
+        ]
         codes = [code for code in codes if code in PARCEL_CLASS_CODES]
         if codes:
             clauses += " AND UPPER(p.class) = ANY(%(parcel_classes)s)"
@@ -136,7 +138,9 @@ def _serialize_radar_row(
 
 @router.get("/municipalities")
 def radar_municipalities(
-    view: str = Query(default="opportunity", pattern="^(opportunity|momentum|readiness)$"),
+    view: str = Query(
+        default="opportunity", pattern="^(opportunity|momentum|readiness)$"
+    ),
     min_score: int | None = Query(default=None, ge=0, le=100),
 ) -> RadarMunicipalitiesResponse:
     """Distinct municipalities available for the current radar cohort."""
@@ -146,7 +150,8 @@ def radar_municipalities(
 
     with get_cursor() as cur:
         _require_radar_sources(cur, include_tax_claims=view != "readiness")
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT DISTINCT p.municipality
             FROM public.development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
@@ -155,7 +160,9 @@ def radar_municipalities(
               AND {score_column} >= %(min_score)s
               AND p.municipality IS NOT NULL
             ORDER BY p.municipality
-        """, {"min_score": threshold})
+        """,
+            {"min_score": threshold},
+        )
         rows = cur.fetchall()
 
     return {"municipalities": [r["municipality"] for r in rows]}
@@ -190,7 +197,8 @@ def _list_view(
 
     with get_cursor() as cur:
         _require_radar_sources(cur, include_tax_claims=view != "readiness")
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT {RADAR_ROW_COLUMNS}
             FROM public.development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
@@ -200,7 +208,9 @@ def _list_view(
               {extra_where}
             ORDER BY {score_column} DESC, dm.signal_count DESC, dm.pidn
             LIMIT %(limit)s OFFSET %(offset)s
-        """, params)
+        """,
+            params,
+        )
         rows = cur.fetchall()
         coverage_row = None
         if view == "readiness":
@@ -235,7 +245,9 @@ def _list_view(
             "loaded_count": len(loaded_layers),
             "total_count": len(coverage_row),
             "loaded_layers": loaded_layers,
-            "missing_layers": [key for key, loaded in coverage_row.items() if not loaded],
+            "missing_layers": [
+                key for key, loaded in coverage_row.items() if not loaded
+            ],
         }
     return response
 
@@ -328,9 +340,18 @@ def radar_movers(
     This is the change loop the radar lacked: a stateless weekly snapshot could
     never say "this parcel rose 18 points since last week".
     """
-    params: dict = {"min_delta": min_delta, "min_score": min_score, "limit": limit, "offset": offset}
+    params: dict = {
+        "min_delta": min_delta,
+        "min_score": min_score,
+        "limit": limit,
+        "offset": offset,
+    }
     extra_where = _parcel_filters(
-        params, municipality=municipality, min_acres=None, max_acres=None, parcel_class=None
+        params,
+        municipality=municipality,
+        min_acres=None,
+        max_acres=None,
+        parcel_class=None,
     )
     score_column = VIEW_SCORE_COLUMN[view]
     delta_column = "dm.opportunity_delta" if view == "opportunity" else "dm.score_delta"
@@ -349,7 +370,8 @@ def radar_movers(
 
     with get_cursor() as cur:
         _require_radar_sources(cur)
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT {RADAR_ROW_COLUMNS}
             FROM public.development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
@@ -359,7 +381,9 @@ def radar_movers(
               {extra_where}
             ORDER BY {order}
             LIMIT %(limit)s OFFSET %(offset)s
-        """, params)
+        """,
+            params,
+        )
         rows = cur.fetchall()
         cur.execute(
             "SELECT MAX(previous_computed_at) AS previous_computed_at FROM public.development_momentum"
@@ -399,7 +423,8 @@ def development_bbox(
     plan_clause = " AND dm.has_active_plan = FALSE" if view == "opportunity" else ""
     with get_cursor() as cur:
         _require_radar_sources(cur)
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT dm.pidn, {score_column} AS score, dm.eligible, dm.top_signal,
                    ST_X(ST_Centroid(p.geom)) AS lng,
                    ST_Y(ST_Centroid(p.geom)) AS lat
@@ -410,14 +435,16 @@ def development_bbox(
               AND p.geom && ST_MakeEnvelope(%(west)s, %(south)s, %(east)s, %(north)s, 4326)
             ORDER BY {score_column} DESC, dm.pidn
             LIMIT %(fetch_limit)s
-        """, {
-            "min_score": min_score,
-            "west": west,
-            "south": south,
-            "east": east,
-            "north": north,
-            "fetch_limit": limit + 1,
-        })
+        """,
+            {
+                "min_score": min_score,
+                "west": west,
+                "south": south,
+                "east": east,
+                "north": north,
+                "fetch_limit": limit + 1,
+            },
+        )
         rows = cur.fetchall()
 
     truncated = len(rows) > limit

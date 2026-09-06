@@ -1,4 +1,5 @@
 """Quarantine additional wrong-county sources and record metadata review provenance."""
+
 from alembic import op
 
 revision = "058"
@@ -57,4 +58,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("Metadata history and wrong-county source protections require a forward migration.")
+    raise RuntimeError(
+        "Metadata history and wrong-county source protections require a forward migration."
+    )

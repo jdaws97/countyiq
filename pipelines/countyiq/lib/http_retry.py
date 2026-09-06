@@ -52,37 +52,58 @@ def get_with_retry(
     last_exc: Exception | None = None
     for attempt in range(retries):
         try:
-            resp = requests.get(url, timeout=timeout, headers=request_headers, allow_redirects=True)
+            resp = requests.get(
+                url, timeout=timeout, headers=request_headers, allow_redirects=True
+            )
             if resp.status_code in _TRANSIENT_STATUSES:
                 resp_after = resp.headers.get("Retry-After")
                 wait = _retry_wait(attempt, backoff_base, backoff_cap, resp_after)
                 _log.warning(
                     "GET %s -> %d (transient), attempt %d/%d, retrying in %.1fs",
-                    url, resp.status_code, attempt + 1, retries, wait,
+                    url,
+                    resp.status_code,
+                    attempt + 1,
+                    retries,
+                    wait,
                 )
-                last_exc = requests.exceptions.HTTPError(f"{resp.status_code} for {url}")
+                last_exc = requests.exceptions.HTTPError(
+                    f"{resp.status_code} for {url}"
+                )
                 if attempt < retries - 1:
                     time.sleep(wait)
                     continue
                 resp.raise_for_status()
             resp.raise_for_status()  # non-transient 4xx raises here immediately
             return resp
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+        ) as exc:
             last_exc = exc
             wait = _retry_wait(attempt, backoff_base, backoff_cap, None)
             _log.warning(
                 "GET %s network error (%s), attempt %d/%d, retrying in %.1fs",
-                url, exc, attempt + 1, retries, wait,
+                url,
+                exc,
+                attempt + 1,
+                retries,
+                wait,
             )
             if attempt < retries - 1:
                 time.sleep(wait)
-    raise last_exc if last_exc else RuntimeError(f"GET {url} failed with no captured error")
+    raise (
+        last_exc
+        if last_exc
+        else RuntimeError(f"GET {url} failed with no captured error")
+    )
 
 
-def _retry_wait(attempt: int, base: float, cap: float, retry_after: str | None) -> float:
+def _retry_wait(
+    attempt: int, base: float, cap: float, retry_after: str | None
+) -> float:
     if retry_after:
         try:
             return float(retry_after)  # honor server-specified minimum verbatim
         except ValueError:
             pass
-    return min(cap, base ** attempt) + random.uniform(0, 1)
+    return min(cap, base**attempt) + random.uniform(0, 1)

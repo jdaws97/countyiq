@@ -3,7 +3,10 @@
 import json
 import pathlib
 
-from countyiq.lib.parsers.penndot_projects import parse_penndot_projects_features, _parse_date
+from countyiq.lib.parsers.penndot_projects import (
+    parse_penndot_projects_features,
+    _parse_date,
+)
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "penndot_projects_sample.json"
 

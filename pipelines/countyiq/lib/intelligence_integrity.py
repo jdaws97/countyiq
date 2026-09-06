@@ -116,12 +116,12 @@ def record_inference_decision(
 
     output_hash = content_hash(payload)
     decision_fingerprint = content_hash(semantic_decision)
-    lock_key = "\x1f".join(
-        [str(pass_number), output_kind, subject_key, decision_key]
-    )
+    lock_key = "\x1f".join([str(pass_number), output_kind, subject_key, decision_key])
 
     with database.transaction() as cur:
-        cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (lock_key,))
+        cur.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (lock_key,)
+        )
         cur.execute(
             """
             SELECT inference_id, source_hash, decision_fingerprint, payload
@@ -155,8 +155,7 @@ def record_inference_decision(
             else []
         )
         same_serving_consequence = bool(
-            latest_consequence
-            and latest_consequence == proposed_consequence
+            latest_consequence and latest_consequence == proposed_consequence
         )
 
         contradicted = bool(
@@ -270,8 +269,14 @@ def record_validation_rejection(
         RETURNING rejection_id
         """,
         (
-            subject_key, pass_number, output_kind, source_hash, input_hash,
-            requested_model, prompt_version, canonical_json(normalized),
+            subject_key,
+            pass_number,
+            output_kind,
+            source_hash,
+            input_hash,
+            requested_model,
+            prompt_version,
+            canonical_json(normalized),
         ),
     )
     if not rows:
@@ -293,7 +298,9 @@ def _compact_text(value: str) -> str:
     return "".join(_normalized_source_text(value).split())
 
 
-def validate_pass0_extractions(extractions: Any, source_text: str, *, meeting_date=None, require_contract=False) -> list[str]:
+def validate_pass0_extractions(
+    extractions: Any, source_text: str, *, meeting_date=None, require_contract=False
+) -> list[str]:
     errors: list[str] = []
     if not isinstance(extractions, list):
         return ["extractions must be a list"]
@@ -308,10 +315,16 @@ def validate_pass0_extractions(extractions: Any, source_text: str, *, meeting_da
             errors.append(f"extraction {index} is not an object")
             continue
         if require_contract and "evidence_spans" not in extraction:
-            errors.append(f"extraction {index} is missing the current evidence contract")
+            errors.append(
+                f"extraction {index} is missing the current evidence contract"
+            )
         if "evidence_spans" in extraction:
             from countyiq.lib.proceeding_contract import contract_errors
-            errors.extend(f"extraction {index} {error}" for error in contract_errors(extraction, source_text, meeting_date))
+
+            errors.extend(
+                f"extraction {index} {error}"
+                for error in contract_errors(extraction, source_text, meeting_date)
+            )
         quote = extraction.get("supporting_text")
         if not isinstance(quote, str) or not quote.strip():
             errors.append(f"extraction {index} has no supporting_text")
@@ -319,7 +332,9 @@ def validate_pass0_extractions(extractions: Any, source_text: str, *, meeting_da
             _normalized_source_text(quote) not in normalized_source
             and _compact_text(quote) not in compact_source
         ):
-            errors.append(f"extraction {index} supporting_text is not present in source")
+            errors.append(
+                f"extraction {index} supporting_text is not present in source"
+            )
 
         matter_key = tuple(
             str(extraction.get(key) or "").strip().casefold()
@@ -332,7 +347,9 @@ def validate_pass0_extractions(extractions: Any, source_text: str, *, meeting_da
         )
         decision = extraction.get("decision")
         if matter_key in matters and matters[matter_key] != decision:
-            errors.append(f"extraction {index} conflicts with another decision for the same matter")
+            errors.append(
+                f"extraction {index} conflicts with another decision for the same matter"
+            )
         elif matter_key in matters:
             errors.append(f"extraction {index} duplicates the same matter")
         else:
@@ -350,11 +367,24 @@ def pass0_semantic_decision(extractions: Iterable[dict]) -> list[dict]:
                 "parcel_reference",
                 "project_name",
                 "decision",
-                "record_status", "event_date", "event_date_text", "upcoming_date",
-                "upcoming_date_iso", "application_ids", "project_reference",
-                "parcel_references", "matter_category", "conditions",
-                "decision_scope", "decision_authority", "decision_outcome", "milestones",
-                "identity_status", "identity_conflicts", "relevance_scope", "discovery_eligible",
+                "record_status",
+                "event_date",
+                "event_date_text",
+                "upcoming_date",
+                "upcoming_date_iso",
+                "application_ids",
+                "project_reference",
+                "parcel_references",
+                "matter_category",
+                "conditions",
+                "decision_scope",
+                "decision_authority",
+                "decision_outcome",
+                "milestones",
+                "identity_status",
+                "identity_conflicts",
+                "relevance_scope",
+                "discovery_eligible",
             )
         }
         for extraction in extractions
@@ -417,7 +447,9 @@ def validate_entity_membership(
     allowed_evidence_refs = {"trial:voting"}
     allowed_evidence_refs.update(f"candidate:{name}" for name in cluster_set)
     for key, identifiers in allowed_by_key.items():
-        allowed_evidence_refs.update(f"{key}:{identifier}" for identifier in identifiers)
+        allowed_evidence_refs.update(
+            f"{key}:{identifier}" for identifier in identifiers
+        )
 
     def validate_cited_text(text: Any, label: str) -> None:
         # Citation is enforced per field, not per sentence: models routinely
@@ -437,7 +469,9 @@ def validate_entity_membership(
     for entity_index, entity in enumerate(parsed.get("entities", [])):
         canonical = str(entity.get("canonical_name") or "").strip()
         if not canonical or canonical not in known_names:
-            errors.append(f"entity {entity_index} canonical_name was not present in the input")
+            errors.append(
+                f"entity {entity_index} canonical_name was not present in the input"
+            )
         validate_cited_text(entity.get("reasoning"), f"entity {entity_index} reasoning")
 
         members = entity.get("member_names") or []
@@ -446,7 +480,9 @@ def validate_entity_membership(
             members = []
         for member in members:
             if not isinstance(member, str) or member not in cluster_set:
-                errors.append(f"entity {entity_index} member name was not in the candidate cluster: {member!r}")
+                errors.append(
+                    f"entity {entity_index} member name was not in the candidate cluster: {member!r}"
+                )
                 continue
             if member in claimed_by:
                 errors.append(
@@ -462,11 +498,15 @@ def validate_entity_membership(
             continue
         unexpected = set(linked) - set(_LINKED_RECORD_KEYS)
         if unexpected:
-            errors.append(f"entity {entity_index} has unexpected linked record groups: {sorted(unexpected)}")
+            errors.append(
+                f"entity {entity_index} has unexpected linked record groups: {sorted(unexpected)}"
+            )
         for key, allowed in allowed_by_key.items():
             values = linked.get(key, []) or []
             if not isinstance(values, list):
-                errors.append(f"entity {entity_index} linked_records.{key} is not a list")
+                errors.append(
+                    f"entity {entity_index} linked_records.{key} is not a list"
+                )
                 continue
             fabricated = {
                 str(value).strip() for value in values if str(value).strip()
@@ -478,8 +518,13 @@ def validate_entity_membership(
 
         for rel in entity.get("relationships", []) or []:
             target = rel.get("related_entity") if isinstance(rel, dict) else None
-            if not isinstance(target, str) or target.strip() not in known_names | entity_canonicals:
-                errors.append(f"entity {entity_index} relationship target was not present in the input")
+            if (
+                not isinstance(target, str)
+                or target.strip() not in known_names | entity_canonicals
+            ):
+                errors.append(
+                    f"entity {entity_index} relationship target was not present in the input"
+                )
             if isinstance(rel, dict):
                 validate_cited_text(
                     rel.get("evidence"), f"entity {entity_index} relationship evidence"
@@ -530,7 +575,9 @@ def entity_semantic_decision(parsed: dict) -> dict:
     }
 
 
-def allowed_signal_refs(signals: Iterable[dict], context_signals: Iterable[dict] = ()) -> set[str]:
+def allowed_signal_refs(
+    signals: Iterable[dict], context_signals: Iterable[dict] = ()
+) -> set[str]:
     refs = {f"signal:{signal['signal_key']}" for signal in signals}
     refs.update(f"context:{signal['signal_key']}" for signal in context_signals)
     return refs
@@ -569,10 +616,14 @@ def validate_pass2_evidence_refs(
         if len(refs) != len(set(refs)):
             errors.append(f"{key} contains duplicate evidence references")
         if f"signal:{key}" not in refs:
-            errors.append(f"{key} is missing its required signal:{key} evidence reference")
+            errors.append(
+                f"{key} is missing its required signal:{key} evidence reference"
+            )
         unknown = {ref for ref in refs if ref not in allowed}
         if unknown:
-            errors.append(f"{key} contains unknown evidence references: {sorted(unknown)}")
+            errors.append(
+                f"{key} contains unknown evidence references: {sorted(unknown)}"
+            )
         reasoning_text = str(validation.get("reasoning") or "")
         reasoning_markers = {
             marker.strip() for marker in _EVIDENCE_MARKER.findall(reasoning_text)
@@ -595,7 +646,8 @@ def validate_pass2_evidence_refs(
             ref.split(":", 1)[1] for ref in allowed if ref.startswith("signal:")
         }
         markers = {
-            marker.strip() for marker in _SIGNAL_MARKER.findall(str(cross_signal_insight))
+            marker.strip()
+            for marker in _SIGNAL_MARKER.findall(str(cross_signal_insight))
         }
         if not markers:
             errors.append("uncited cross_signal_insight: no [Signal: key] marker")
@@ -622,10 +674,16 @@ def pass2_semantic_decision(validations: Iterable[dict]) -> list[dict]:
 
 
 def _sentences(text: str) -> list[str]:
-    return [match.group(0).strip() for match in _SENTENCE.finditer(text or "") if match.group(0).strip()]
+    return [
+        match.group(0).strip()
+        for match in _SENTENCE.finditer(text or "")
+        if match.group(0).strip()
+    ]
 
 
-def validate_parcel_brief_citations(parsed: dict, allowed_signal_keys: Iterable[str]) -> list[str]:
+def validate_parcel_brief_citations(
+    parsed: dict, allowed_signal_keys: Iterable[str]
+) -> list[str]:
     errors: list[str] = []
     allowed = set(allowed_signal_keys)
     citations = parsed.get("citations") or []
@@ -647,7 +705,9 @@ def validate_parcel_brief_citations(parsed: dict, allowed_signal_keys: Iterable[
             continue
         markers = {marker.strip() for marker in _SIGNAL_MARKER.findall(text)}
         if _PARCEL_MARKER.search(text):
-            errors.append(f"{field} uses [Parcel: PIDN] markers; parcel briefs require [Signal: key] citations")
+            errors.append(
+                f"{field} uses [Parcel: PIDN] markers; parcel briefs require [Signal: key] citations"
+            )
         if not markers:
             errors.append(f"uncited {field}: no [Signal: key] marker")
         unknown = markers - allowed
@@ -672,10 +732,18 @@ def validate_parcel_brief_citations(parsed: dict, allowed_signal_keys: Iterable[
     }
     recommendation = parsed.get("recommendation")
     assessment = parsed.get("assessment")
-    if recommendation in allowed_assessments and assessment not in allowed_assessments[recommendation]:
-        errors.append(f"recommendation {recommendation!r} contradicts assessment {assessment!r}")
+    if (
+        recommendation in allowed_assessments
+        and assessment not in allowed_assessments[recommendation]
+    ):
+        errors.append(
+            f"recommendation {recommendation!r} contradicts assessment {assessment!r}"
+        )
     urgency = parsed.get("urgency")
-    if recommendation in {"investigate", "watch", "insufficient_evidence"} and urgency != "none":
+    if (
+        recommendation in {"investigate", "watch", "insufficient_evidence"}
+        and urgency != "none"
+    ):
         errors.append("investigation briefs must not invent urgency")
     if recommendation == "pass" and urgency != "none":
         errors.append("pass recommendation must have urgency 'none'")
@@ -701,24 +769,41 @@ def validate_owner_brief_citations(
     if not citations or not parcel_citations:
         errors.append("owner brief requires both signal and parcel citations")
     if citations - allowed_signals:
-        errors.append(f"unknown signal citations: {sorted(citations - allowed_signals)}")
+        errors.append(
+            f"unknown signal citations: {sorted(citations - allowed_signals)}"
+        )
     if parcel_citations - allowed_parcels:
-        errors.append(f"unknown parcel citations: {sorted(parcel_citations - allowed_parcels)}")
+        errors.append(
+            f"unknown parcel citations: {sorted(parcel_citations - allowed_parcels)}"
+        )
 
     narrative_fields = (
-        "brief_text", "concentration_notes", "key_pattern", "top_risk",
+        "brief_text",
+        "concentration_notes",
+        "key_pattern",
+        "top_risk",
     )
     narrative = "\n".join(str(parsed.get(field) or "") for field in narrative_fields)
     signal_markers = {item.strip() for item in _SIGNAL_MARKER.findall(narrative)}
     parcel_markers = {item.strip() for item in _PARCEL_MARKER.findall(narrative)}
     for field in narrative_fields:
         text = str(parsed.get(field) or "")
-        if _sentences(text) and not _SIGNAL_MARKER.search(text) and not _PARCEL_MARKER.search(text):
-            errors.append(f"uncited owner {field}: no [Signal: key] or [Parcel: PIDN] marker")
+        if (
+            _sentences(text)
+            and not _SIGNAL_MARKER.search(text)
+            and not _PARCEL_MARKER.search(text)
+        ):
+            errors.append(
+                f"uncited owner {field}: no [Signal: key] or [Parcel: PIDN] marker"
+            )
     if signal_markers - allowed_signals:
-        errors.append(f"unknown signal markers: {sorted(signal_markers - allowed_signals)}")
+        errors.append(
+            f"unknown signal markers: {sorted(signal_markers - allowed_signals)}"
+        )
     if parcel_markers - allowed_parcels:
-        errors.append(f"unknown parcel markers: {sorted(parcel_markers - allowed_parcels)}")
+        errors.append(
+            f"unknown parcel markers: {sorted(parcel_markers - allowed_parcels)}"
+        )
     if citations - signal_markers:
         errors.append("signal citation array contains keys not used in the narrative")
     if parcel_citations - parcel_markers:
@@ -726,11 +811,16 @@ def validate_owner_brief_citations(
     if signal_markers - citations:
         errors.append("owner narrative uses signal markers missing from citations")
     if parcel_markers - parcel_citations:
-        errors.append("owner narrative uses parcel markers missing from parcel_citations")
+        errors.append(
+            "owner narrative uses parcel markers missing from parcel_citations"
+        )
     recommendation = parsed.get("recommendation")
     evidence_strength = parsed.get("evidence_strength")
     urgency = parsed.get("urgency")
-    if recommendation in {"investigate", "watch", "insufficient_evidence"} and urgency != "none":
+    if (
+        recommendation in {"investigate", "watch", "insufficient_evidence"}
+        and urgency != "none"
+    ):
         errors.append("investigation briefs must not invent urgency")
     if recommendation == "none" and urgency != "none":
         errors.append("none recommendation must have urgency 'none'")
@@ -774,10 +864,18 @@ def signal_version_refs(rows: Iterable[dict], *, pidn: str | None = None) -> lis
         key = row.get("signal_key")
         version = row.get("active_inference_id")
         if (
-            not isinstance(parcel, str) or not parcel or ":" in parcel
-            or not isinstance(key, str) or not key or ":" in key
-            or not isinstance(version, int) or isinstance(version, bool) or version <= 0
+            not isinstance(parcel, str)
+            or not parcel
+            or ":" in parcel
+            or not isinstance(key, str)
+            or not key
+            or ":" in key
+            or not isinstance(version, int)
+            or isinstance(version, bool)
+            or version <= 0
         ):
-            raise ValueError("Brief signal context requires a parcel, signal key and inference version")
+            raise ValueError(
+                "Brief signal context requires a parcel, signal key and inference version"
+            )
         refs.add(f"signal-version:{parcel}:{key}:{version}")
     return sorted(refs)

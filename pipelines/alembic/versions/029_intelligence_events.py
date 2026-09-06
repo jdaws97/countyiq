@@ -64,7 +64,9 @@ def upgrade() -> None:
     )
     op.add_column(
         "proceeding_extractions",
-        sa.Column("interpretation_generated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "interpretation_generated_at", sa.DateTime(timezone=True), nullable=True
+        ),
         schema="staging",
     )
 
@@ -111,7 +113,9 @@ def upgrade() -> None:
         ),
         sa.Column("interpretation_kind", sa.Text, nullable=False),
         sa.Column("interpretation_model", sa.Text, nullable=True),
-        sa.Column("interpretation_generated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "interpretation_generated_at", sa.DateTime(timezone=True), nullable=True
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

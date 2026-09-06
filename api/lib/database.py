@@ -72,7 +72,9 @@ def close_pool() -> None:
 
 
 @contextmanager
-def get_cursor(*, write: bool = False, snapshot: bool = False) -> Iterator[RealDictCursor]:
+def get_cursor(
+    *, write: bool = False, snapshot: bool = False
+) -> Iterator[RealDictCursor]:
     """Yield a pooled cursor; snapshot reads keep related queries consistent."""
     if snapshot and write:
         raise ValueError("Snapshot cursors are read-only")
@@ -90,13 +92,13 @@ def get_cursor(*, write: bool = False, snapshot: bool = False) -> Iterator[RealD
         try:
             conn = pool.getconn()
         except PoolError as exc:
-            raise DatabasePoolExhausted(
-                "database connection pool is busy"
-            ) from exc
+            raise DatabasePoolExhausted("database connection pool is busy") from exc
         with conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 if snapshot:
-                    cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+                    cur.execute(
+                        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+                    )
                 elif write:
                     cur.execute("SET TRANSACTION READ WRITE")
                 yield cur

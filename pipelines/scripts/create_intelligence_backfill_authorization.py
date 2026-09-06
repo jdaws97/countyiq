@@ -41,13 +41,9 @@ def main() -> int:
             args.output,
             pass_number=pass_number,
             model=resolve_pass_model(pass_number) or "",
-            max_cost_usd=_positive_env(
-                f"COUNTYIQ_PASS{pass_number}_MAX_COST_USD"
-            ),
+            max_cost_usd=_positive_env(f"COUNTYIQ_PASS{pass_number}_MAX_COST_USD"),
             max_price_prompt=_positive_env("COUNTYIQ_MAX_PRICE_PROMPT"),
-            max_price_completion=_positive_env(
-                "COUNTYIQ_MAX_PRICE_COMPLETION"
-            ),
+            max_price_completion=_positive_env("COUNTYIQ_MAX_PRICE_COMPLETION"),
         )
     except BackfillAuthorizationError as exc:
         parser.error(str(exc))

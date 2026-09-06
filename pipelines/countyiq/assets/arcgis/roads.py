@@ -29,17 +29,45 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["rcl_nguid"]
 VALUE_COLUMNS = [
-    "street_name", "st_pre_dir", "st_pre_typ", "st_pos_typ", "st_pos_dir",
-    "road_class", "speed_limit", "one_way", "rte_num",
-    "from_addr_l", "to_addr_l", "from_addr_r", "to_addr_r",
-    "inc_muni_l", "inc_muni_r", "post_code_l", "post_code_r", "source_url",
+    "street_name",
+    "st_pre_dir",
+    "st_pre_typ",
+    "st_pos_typ",
+    "st_pos_dir",
+    "road_class",
+    "speed_limit",
+    "one_way",
+    "rte_num",
+    "from_addr_l",
+    "to_addr_l",
+    "from_addr_r",
+    "to_addr_r",
+    "inc_muni_l",
+    "inc_muni_r",
+    "post_code_l",
+    "post_code_r",
+    "source_url",
 ]
 
 EXPECTED_FIELDS = {
-    "RCL_NGUID", "StreetName", "St_PreDir", "St_PreTyp", "St_PosTyp",
-    "St_PosDir", "RoadClass", "SpeedLimit", "OneWay", "RTE_NUM",
-    "FromAddr_L", "ToAddr_L", "FromAddr_R", "ToAddr_R",
-    "IncMuni_L", "IncMuni_R", "PostCode_L", "PostCode_R",
+    "RCL_NGUID",
+    "StreetName",
+    "St_PreDir",
+    "St_PreTyp",
+    "St_PosTyp",
+    "St_PosDir",
+    "RoadClass",
+    "SpeedLimit",
+    "OneWay",
+    "RTE_NUM",
+    "FromAddr_L",
+    "ToAddr_L",
+    "FromAddr_R",
+    "ToAddr_R",
+    "IncMuni_L",
+    "IncMuni_R",
+    "PostCode_L",
+    "PostCode_R",
 }
 
 
@@ -56,10 +84,18 @@ def roads_arcgis(
     """Fetch road centerlines, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="roads_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="roads_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS roads for {county.name}: {county.arcgis_roads_url}")
+    context.log.info(
+        f"Querying ArcGIS roads for {county.name}: {county.arcgis_roads_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_roads_url,
@@ -151,7 +187,9 @@ def roads_schema_drift(database: DatabaseResource) -> AssetCheckResult:
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
             metadata={
-                "missing_fields": MetadataValue.text(str(missing) if missing else "none"),
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                ),
             },
         )
     except requests.exceptions.RequestException as e:

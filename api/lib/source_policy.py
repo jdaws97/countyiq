@@ -19,6 +19,7 @@ _USE_COLUMNS: dict[SourceUse, str] = {
     "raw_export": "raw_export_allowed",
 }
 
+
 def source_use_allowed(cur, source_key: str, use: SourceUse) -> bool:
     """Return whether a current policy permits one response-layer use."""
 

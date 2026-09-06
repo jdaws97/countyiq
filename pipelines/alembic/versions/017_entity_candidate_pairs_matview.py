@@ -11,6 +11,7 @@ and takes 30+ minutes across all 72 municipalities.
 This migration creates a materialized view that pre-computes the pairs.
 Pass 1 reads from the view (instant) and a Dagster job refreshes it weekly.
 """
+
 from alembic import op
 
 revision = "017"

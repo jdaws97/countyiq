@@ -20,7 +20,9 @@ from dagster import (
 from countyiq.lib.arcgis_client import iterate_feature_pages
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import county_open_data_source_key, get_county_config
-from countyiq.lib.parsers.planning_subdivisions import parse_planning_subdivision_features
+from countyiq.lib.parsers.planning_subdivisions import (
+    parse_planning_subdivision_features,
+)
 from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
@@ -28,14 +30,41 @@ from countyiq.resources.storage import S3StorageResource
 KEY_COLUMNS = ["sequ_num"]
 
 VALUE_COLUMNS = [
-    "mcd", "date_rcvd", "plan_title", "pt_prelim", "pt_final",
-    "pt_land_dev", "pt_subdiv", "pt_bldg_add", "cap", "com",
-    "st_length", "water", "sewer", "ag_use", "com_use",
-    "ind_use", "mf_use", "mhp_use", "sr_use", "sf_use",
-    "other_use", "total_acres", "exist_lots", "prop_lots",
-    "bldg_lots", "dev_lots", "exist_du", "prop_du",
-    "prop_bldg_add_sqft", "prop_new_bldg_sqft", "watershed",
-    "consistent", "notes", "engineer", "source_url",
+    "mcd",
+    "date_rcvd",
+    "plan_title",
+    "pt_prelim",
+    "pt_final",
+    "pt_land_dev",
+    "pt_subdiv",
+    "pt_bldg_add",
+    "cap",
+    "com",
+    "st_length",
+    "water",
+    "sewer",
+    "ag_use",
+    "com_use",
+    "ind_use",
+    "mf_use",
+    "mhp_use",
+    "sr_use",
+    "sf_use",
+    "other_use",
+    "total_acres",
+    "exist_lots",
+    "prop_lots",
+    "bldg_lots",
+    "dev_lots",
+    "exist_du",
+    "prop_du",
+    "prop_bldg_add_sqft",
+    "prop_new_bldg_sqft",
+    "watershed",
+    "consistent",
+    "notes",
+    "engineer",
+    "source_url",
 ]
 
 ALL_COLUMNS = KEY_COLUMNS + VALUE_COLUMNS
@@ -53,10 +82,18 @@ def planning_subdivisions_arcgis(
 ) -> MaterializeResult:
     """Stream planning subdivision pages from ArcGIS directly into DB. Memory-efficient."""
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="planning_subdivisions_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="planning_subdivisions_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS planning subdivisions for {county.name}: {county.arcgis_planning_subdivisions_url}")
+    context.log.info(
+        f"Querying ArcGIS planning subdivisions for {county.name}: {county.arcgis_planning_subdivisions_url}"
+    )
 
     cur = database.cursor()
     conn = cur.connection
@@ -66,7 +103,9 @@ def planning_subdivisions_arcgis(
 
     try:
         cur.execute("DROP TABLE IF EXISTS _tmp_planning_subdivisions")
-        cur.execute("CREATE TEMP TABLE _tmp_planning_subdivisions (LIKE staging.planning_subdivisions INCLUDING DEFAULTS)")
+        cur.execute(
+            "CREATE TEMP TABLE _tmp_planning_subdivisions (LIKE staging.planning_subdivisions INCLUDING DEFAULTS)"
+        )
 
         # Stream pages into temp table with geometry
         total_staged = 0
@@ -74,8 +113,8 @@ def planning_subdivisions_arcgis(
         all_raw_features = []
 
         insert_sql = f"""
-            INSERT INTO _tmp_planning_subdivisions ({', '.join(ALL_COLUMNS)}, geom)
-            VALUES ({', '.join(['%s'] * len(ALL_COLUMNS))},
+            INSERT INTO _tmp_planning_subdivisions ({", ".join(ALL_COLUMNS)}, geom)
+            VALUES ({", ".join(["%s"] * len(ALL_COLUMNS))},
                     CASE WHEN %s IS NOT NULL
                          THEN ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)
                          ELSE NULL END)
@@ -104,14 +143,18 @@ def planning_subdivisions_arcgis(
                 if feat_match:
                     geom = feat_match.get("geometry")
                     if geom and geom.get("x") is not None and geom.get("y") is not None:
-                        geom_json = json.dumps({"type": "Point", "coordinates": [geom["x"], geom["y"]]})
+                        geom_json = json.dumps(
+                            {"type": "Point", "coordinates": [geom["x"], geom["y"]]}
+                        )
 
                 row.extend([geom_json, geom_json])
                 batch.append(row)
 
             execute_batch(cur, insert_sql, batch, page_size=500)
             total_staged += len(batch)
-            context.log.info(f"  Staged {total_staged} records ({raw_feature_count} raw features)")
+            context.log.info(
+                f"  Staged {total_staged} records ({raw_feature_count} raw features)"
+            )
 
         context.log.info(f"Total staged: {total_staged}")
 
@@ -137,7 +180,9 @@ def planning_subdivisions_arcgis(
 
         # SCD2 expire + insert
         key_join = "c.sequ_num = t.sequ_num"
-        value_diff = " OR ".join(f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS)
+        value_diff = " OR ".join(
+            f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS
+        )
 
         # Expire changed/deleted
         cur.execute(f"""
@@ -152,10 +197,10 @@ def planning_subdivisions_arcgis(
         context.log.info(f"Expired {expired} records")
 
         # Insert new/changed
-        col_list = ', '.join(ALL_COLUMNS)
+        col_list = ", ".join(ALL_COLUMNS)
         cur.execute(f"""
             INSERT INTO staging.planning_subdivisions ({col_list}, geom, valid_from)
-            SELECT {', '.join(f't.{c}' for c in ALL_COLUMNS)}, t.geom, NOW()
+            SELECT {", ".join(f"t.{c}" for c in ALL_COLUMNS)}, t.geom, NOW()
             FROM _tmp_planning_subdivisions t
             WHERE NOT EXISTS (
                 SELECT 1 FROM staging.planning_subdivisions c WHERE c.valid_to IS NULL AND {key_join}

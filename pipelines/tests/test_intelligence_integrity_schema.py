@@ -81,14 +81,16 @@ def test_intelligence_integrity_schema_and_projection_links_exist() -> None:
                 FROM unnest(%s::text[]) AS names(name)
                 ORDER BY name
                 """,
-                ([
-                    "meta.intelligence_contradiction_resolutions",
-                    "meta.intelligence_contradictions",
-                    "meta.intelligence_integrity_status",
-                    "meta.intelligence_inference_history",
-                    "meta.intelligence_validation_rejections",
-                    "meta.intelligence_validation_rejection_status",
-                ],),
+                (
+                    [
+                        "meta.intelligence_contradiction_resolutions",
+                        "meta.intelligence_contradictions",
+                        "meta.intelligence_integrity_status",
+                        "meta.intelligence_inference_history",
+                        "meta.intelligence_validation_rejections",
+                        "meta.intelligence_validation_rejection_status",
+                    ],
+                ),
             )
             assert all(row[0] is not None for row in cursor.fetchall())
 
@@ -201,7 +203,9 @@ def test_auto_resolution_audit_ledgers_reject_truncate(table_name: str) -> None:
 
 
 @pytest.mark.integration
-def test_same_evidence_semantic_flip_is_quarantined_and_history_is_append_only() -> None:
+def test_same_evidence_semantic_flip_is_quarantined_and_history_is_append_only() -> (
+    None
+):
     connection = _connect()
     database = _DatabaseAdapter(connection)
     subject = f"integrity-test:{uuid.uuid4()}"
@@ -216,16 +220,20 @@ def test_same_evidence_semantic_flip_is_quarantined_and_history_is_append_only()
         "prompt_version": "test-prompt",
         "evidence_refs": ["signal:vacancy"],
     }
-    confirmed = [{
-        "signal_key": "vacancy",
-        "validation_status": "confirmed",
-        "adjusted_significance": "high",
-    }]
-    irrelevant = [{
-        "signal_key": "vacancy",
-        "validation_status": "irrelevant",
-        "adjusted_significance": "none",
-    }]
+    confirmed = [
+        {
+            "signal_key": "vacancy",
+            "validation_status": "confirmed",
+            "adjusted_significance": "high",
+        }
+    ]
+    irrelevant = [
+        {
+            "signal_key": "vacancy",
+            "validation_status": "irrelevant",
+            "adjusted_significance": "none",
+        }
+    ]
     try:
         first = record_inference_decision(
             database,
@@ -271,7 +279,10 @@ def test_same_evidence_semantic_flip_is_quarantined_and_history_is_append_only()
                 (subject,),
             )
             assert [row[0] for row in cursor.fetchall()] == [
-                "accepted", "accepted", "quarantined", "accepted",
+                "accepted",
+                "accepted",
+                "quarantined",
+                "accepted",
             ]
 
         with (
@@ -330,18 +341,23 @@ def test_entity_projection_replacement_removes_stale_cluster_membership() -> Non
 
         inserted = _replace_cluster_entities(
             database,
-            [{
-                "canonical_name": name_a,
-                "member_names": [name_a],
-                "entity_type": "llc",
-                "confidence": 0.9,
-                "reasoning": "test",
-                "linked_records": {
-                    "parcels": [], "tax_claims": [], "plcb_licenses": [],
-                    "corporate_entities": [], "proceedings": [],
-                },
-                "relationships": [],
-            }],
+            [
+                {
+                    "canonical_name": name_a,
+                    "member_names": [name_a],
+                    "entity_type": "llc",
+                    "confidence": 0.9,
+                    "reasoning": "test",
+                    "linked_records": {
+                        "parcels": [],
+                        "tax_claims": [],
+                        "plcb_licenses": [],
+                        "corporate_entities": [],
+                        "proceedings": [],
+                    },
+                    "relationships": [],
+                }
+            ],
             [name_a, name_b],
             inference_id=gate.inference_id,
         )
@@ -408,17 +424,19 @@ def test_proceeding_projection_points_to_immutable_inference() -> None:
         _, inserted = _write_proceeding_extractions(
             database,
             proceeding_id=proceeding_id,
-            extractions=[{
-                "extraction_type": "rezoning_application",
-                "applicant_name": "Acme",
-                "parcel_reference": "P1",
-                "decision": "approved",
-                "conditions": [],
-                "supporting_text": "The board approved Acme.",
-                "confidence": "high",
-                "event_tags": ["approval"],
-                "related_entities": [],
-            }],
+            extractions=[
+                {
+                    "extraction_type": "rezoning_application",
+                    "applicant_name": "Acme",
+                    "parcel_reference": "P1",
+                    "decision": "approved",
+                    "conditions": [],
+                    "supporting_text": "The board approved Acme.",
+                    "confidence": "high",
+                    "event_tags": ["approval"],
+                    "related_entities": [],
+                }
+            ],
             model_used="test-model",
             inference_id=gate.inference_id,
         )
@@ -478,18 +496,22 @@ def test_human_resolution_promotes_challenger_and_projection_atomically() -> Non
             )
             proceeding_id = cursor.fetchone()[0]
 
-        source_version = content_hash({
-            "document_content_hash": content_version,
-            "raw_text_hash": content_hash(raw_text),
-        })
-        source_hash = content_hash({
-            "proceeding_id": proceeding_id,
-            "body_name": body_name,
-            "meeting_date": meeting_date,
-            "proceeding_type": "planning",
-            "document_url": document_url,
-            "source_version": source_version,
-        })
+        source_version = content_hash(
+            {
+                "document_content_hash": content_version,
+                "raw_text_hash": content_hash(raw_text),
+            }
+        )
+        source_hash = content_hash(
+            {
+                "proceeding_id": proceeding_id,
+                "body_name": body_name,
+                "meeting_date": meeting_date,
+                "proceeding_type": "planning",
+                "document_url": document_url,
+                "source_version": source_version,
+            }
+        )
         prior_extraction = {
             "extraction_type": "rezoning_application",
             "applicant_name": "Acme",
@@ -627,65 +649,74 @@ def test_evidence_and_brief_upserts_preserve_active_provenance() -> None:
             )
 
         with connection.cursor() as cursor:
-            cursor.execute(UPSERT_EVIDENCE_QUERY, {
-                "pidn": pidn,
-                "signal_key": "vacancy",
-                "claim": "vacancy classified confirmed with high significance",
-                "evidence_data": "{}",
-                "source_url": None,
-                "internal_url": f"/property/{pidn}",
-                "validation_status": "confirmed",
-                "adjusted_significance": "high",
-                "validation_reasoning": "Grounded [Evidence: signal:vacancy].",
-                "cross_references": '["signal:vacancy"]',
-                "validated_at": now,
-                "model_version": "test/model",
-                "prompt_version": "test-prompt",
-                "n_trials": 1,
-                "trial_agreement": None,
-                "confidence": None,
-                "active_inference_id": gates["evidence"].inference_id,
-            })
-            cursor.execute(UPSERT_BRIEF_QUERY, {
-                "pidn": pidn,
-                "brief_text": "Grounded [Signal: vacancy].",
-                "assessment": "emerging",
-                "assessment_reasoning": "Grounded [Signal: vacancy].",
-                "key_questions": [],
-                "signal_count": 1,
-                "citations": '["vacancy"]',
-                "pass_metadata": "{}",
-                "generated_at": now,
-                "model_version": "test/model",
-                "prompt_version": "test-prompt",
-                "n_trials": 1,
-                "trial_agreement": None,
-                "confidence": None,
-                "active_inference_id": gates["parcel"].inference_id,
-            })
-            cursor.execute(UPSERT_OWNER_BRIEF, {
-                "canonical_name": canonical_name,
-                "owner_id": None,
-                "brief_text": f"Grounded [Signal: vacancy] [Parcel: {pidn}].",
-                "portfolio_strategy": "holder",
-                "concentration_notes": f"Grounded [Parcel: {pidn}].",
-                "key_pattern": "Grounded [Signal: vacancy].",
-                "recommendation": "monitor",
-                "urgency": "long_term_12mo",
-                "top_risk": f"Grounded [Parcel: {pidn}].",
-                "evidence_strength": "weak",
-                "citations": '["vacancy"]',
-                "parcel_citations": f'["{pidn}"]',
-                "n_parcels": 3,
-                "model_version": "test/model",
-                "prompt_version": "test-prompt",
-                "n_trials": 1,
-                "trial_agreement": None,
-                "confidence": None,
-                "pass_metadata": "{}",
-                "generated_at": now,
-                "active_inference_id": gates["owner"].inference_id,
-            })
+            cursor.execute(
+                UPSERT_EVIDENCE_QUERY,
+                {
+                    "pidn": pidn,
+                    "signal_key": "vacancy",
+                    "claim": "vacancy classified confirmed with high significance",
+                    "evidence_data": "{}",
+                    "source_url": None,
+                    "internal_url": f"/property/{pidn}",
+                    "validation_status": "confirmed",
+                    "adjusted_significance": "high",
+                    "validation_reasoning": "Grounded [Evidence: signal:vacancy].",
+                    "cross_references": '["signal:vacancy"]',
+                    "validated_at": now,
+                    "model_version": "test/model",
+                    "prompt_version": "test-prompt",
+                    "n_trials": 1,
+                    "trial_agreement": None,
+                    "confidence": None,
+                    "active_inference_id": gates["evidence"].inference_id,
+                },
+            )
+            cursor.execute(
+                UPSERT_BRIEF_QUERY,
+                {
+                    "pidn": pidn,
+                    "brief_text": "Grounded [Signal: vacancy].",
+                    "assessment": "emerging",
+                    "assessment_reasoning": "Grounded [Signal: vacancy].",
+                    "key_questions": [],
+                    "signal_count": 1,
+                    "citations": '["vacancy"]',
+                    "pass_metadata": "{}",
+                    "generated_at": now,
+                    "model_version": "test/model",
+                    "prompt_version": "test-prompt",
+                    "n_trials": 1,
+                    "trial_agreement": None,
+                    "confidence": None,
+                    "active_inference_id": gates["parcel"].inference_id,
+                },
+            )
+            cursor.execute(
+                UPSERT_OWNER_BRIEF,
+                {
+                    "canonical_name": canonical_name,
+                    "owner_id": None,
+                    "brief_text": f"Grounded [Signal: vacancy] [Parcel: {pidn}].",
+                    "portfolio_strategy": "holder",
+                    "concentration_notes": f"Grounded [Parcel: {pidn}].",
+                    "key_pattern": "Grounded [Signal: vacancy].",
+                    "recommendation": "monitor",
+                    "urgency": "long_term_12mo",
+                    "top_risk": f"Grounded [Parcel: {pidn}].",
+                    "evidence_strength": "weak",
+                    "citations": '["vacancy"]',
+                    "parcel_citations": f'["{pidn}"]',
+                    "n_parcels": 3,
+                    "model_version": "test/model",
+                    "prompt_version": "test-prompt",
+                    "n_trials": 1,
+                    "trial_agreement": None,
+                    "confidence": None,
+                    "pass_metadata": "{}",
+                    "generated_at": now,
+                    "active_inference_id": gates["owner"].inference_id,
+                },
+            )
             cursor.execute(
                 """
                 SELECT
@@ -703,7 +734,10 @@ def test_evidence_and_brief_upserts_preserve_active_provenance() -> None:
                 gates["parcel"].inference_id,
                 gates["owner"].inference_id,
             )
-            cursor.execute("DELETE FROM public.owner_briefs WHERE canonical_name = %s", (canonical_name,))
+            cursor.execute(
+                "DELETE FROM public.owner_briefs WHERE canonical_name = %s",
+                (canonical_name,),
+            )
             cursor.execute("DELETE FROM public.parcel_briefs WHERE pidn = %s", (pidn,))
             cursor.execute("DELETE FROM public.evidence WHERE pidn = %s", (pidn,))
     finally:
@@ -724,31 +758,45 @@ def test_routine_same_version_flip_auto_resolves_to_incumbent(monkeypatch) -> No
     pidn = f"auto-{uuid.uuid4().hex[:12]}"
     source_hash = content_hash({"pidn": pidn, "evidence": "same"})
     monkeypatch.setattr(
-        intelligence_resolution, "_current_source_hash",
+        intelligence_resolution,
+        "_current_source_hash",
         lambda cur, contradiction, prior, challenger: contradiction["source_hash"],
     )
 
     def brief(recommendation: str) -> dict:
         return {
-            "recommendation": recommendation, "urgency": "none", "top_signal_key": "vacancy",
-            "evidence_strength": "moderate", "assessment": "speculative",
-            "brief": "Vacant parcel [Signal: vacancy].", "citations": ["vacancy"],
+            "recommendation": recommendation,
+            "urgency": "none",
+            "top_signal_key": "vacancy",
+            "evidence_strength": "moderate",
+            "assessment": "speculative",
+            "brief": "Vacant parcel [Signal: vacancy].",
+            "citations": ["vacancy"],
         }
 
     common = dict(
-        subject_key=pidn, pass_number=3, output_kind="parcel_brief", decision_key="brief",
-        source_hash=source_hash, input_hash="same-model-same-prompt",
-        requested_model="test/model", prompt_version="test-prompt",
+        subject_key=pidn,
+        pass_number=3,
+        output_kind="parcel_brief",
+        decision_key="brief",
+        source_hash=source_hash,
+        input_hash="same-model-same-prompt",
+        requested_model="test/model",
+        prompt_version="test-prompt",
     )
     try:
         first = record_inference_decision(
-            database, payload=brief("watchlist"),
-            semantic_decision=parcel_brief_semantic_decision(brief("watchlist")), **common,
+            database,
+            payload=brief("watchlist"),
+            semantic_decision=parcel_brief_semantic_decision(brief("watchlist")),
+            **common,
         )
         assert first.accepted
         second = record_inference_decision(
-            database, payload=brief("pass"),
-            semantic_decision=parcel_brief_semantic_decision(brief("pass")), **common,
+            database,
+            payload=brief("pass"),
+            semantic_decision=parcel_brief_semantic_decision(brief("pass")),
+            **common,
         )
         assert not second.accepted and second.contradiction_id
 
@@ -772,29 +820,43 @@ def test_routine_same_version_flip_auto_resolves_to_incumbent(monkeypatch) -> No
                 (pidn,),
             )
             assert cursor.fetchone()[0] == 1
-            cursor.execute("SELECT COUNT(*) FROM meta.intelligence_review_queue WHERE subject_key = %s", (pidn,))
+            cursor.execute(
+                "SELECT COUNT(*) FROM meta.intelligence_review_queue WHERE subject_key = %s",
+                (pidn,),
+            )
             assert cursor.fetchone()[0] == 0
 
         # A pursue_now -> pass flip on a fresh parcel is consequential and must
         # wait for a person (the auto-resolved parcel above now serves the
         # incumbent "watchlist", so its next flip would be routine again).
         pidn2 = f"auto-{uuid.uuid4().hex[:12]}"
-        common2 = {**common, "subject_key": pidn2, "source_hash": content_hash({"pidn": pidn2})}
+        common2 = {
+            **common,
+            "subject_key": pidn2,
+            "source_hash": content_hash({"pidn": pidn2}),
+        }
         pursue = record_inference_decision(
-            database, payload=brief("pursue_now"),
-            semantic_decision=parcel_brief_semantic_decision(brief("pursue_now")), **common2,
+            database,
+            payload=brief("pursue_now"),
+            semantic_decision=parcel_brief_semantic_decision(brief("pursue_now")),
+            **common2,
         )
         assert pursue.accepted
         third = record_inference_decision(
-            database, payload=brief("pass"),
-            semantic_decision=parcel_brief_semantic_decision(brief("pass")), **common2,
+            database,
+            payload=brief("pass"),
+            semantic_decision=parcel_brief_semantic_decision(brief("pass")),
+            **common2,
         )
         assert not third.accepted
         queued = auto_resolve_contradiction(database, third.contradiction_id)
         assert queued.outcome == "queued_consequential"
         assert "recommendation flipped pursue_now -> pass" in queued.rationale
         with connection.cursor() as cursor:
-            cursor.execute("SELECT queue_reason FROM meta.intelligence_review_queue WHERE subject_key = %s", (pidn2,))
+            cursor.execute(
+                "SELECT queue_reason FROM meta.intelligence_review_queue WHERE subject_key = %s",
+                (pidn2,),
+            )
             assert cursor.fetchone() == ("queued_consequential",)
     finally:
         connection.close()

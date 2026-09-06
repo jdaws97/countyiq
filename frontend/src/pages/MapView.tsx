@@ -26,7 +26,12 @@ import type {
 type RadarBasis = 'opportunity' | 'momentum'
 type ParcelFilter = 'all' | 'delinquent' | 'vacant' | 'vacant_delinquent' | 'radar'
 interface RadarPoint {
-  properties: { pidn: string; radar_score: number; top_signal: string | null; radar_basis: RadarBasis }
+  properties: {
+    pidn: string
+    radar_score: number
+    top_signal: string | null
+    radar_basis: RadarBasis
+  }
   lng: number
   lat: number
 }
@@ -48,16 +53,16 @@ type TooltipProperties =
   | FloodZoneProperties
 
 const ZONING_COLORS: Record<string, [number, number, number, number]> = {
-  'LDR':   [72, 187, 120, 100],   // green — low density residential
-  'MDR':   [129, 178, 210, 100],   // light blue — medium density
-  'HDR':   [66, 135, 245, 100],    // blue — high density
-  'R':     [104, 159, 56, 100],    // olive — rural
-  'RP':    [56, 142, 60, 100],     // dark green — resource protection
-  'Cv/OS': [27, 94, 32, 100],      // forest green — conservation
-  'I':     [158, 118, 66, 120],    // brown — industrial
-  'HC':    [255, 152, 0, 100],     // orange — highway commercial
-  'NC':    [255, 193, 7, 100],     // yellow — neighborhood commercial
-  'MU':    [171, 71, 188, 100],    // purple — mixed use
+  LDR: [72, 187, 120, 100], // green — low density residential
+  MDR: [129, 178, 210, 100], // light blue — medium density
+  HDR: [66, 135, 245, 100], // blue — high density
+  R: [104, 159, 56, 100], // olive — rural
+  RP: [56, 142, 60, 100], // dark green — resource protection
+  'Cv/OS': [27, 94, 32, 100], // forest green — conservation
+  I: [158, 118, 66, 120], // brown — industrial
+  HC: [255, 152, 0, 100], // orange — highway commercial
+  NC: [255, 193, 7, 100], // yellow — neighborhood commercial
+  MU: [171, 71, 188, 100], // purple — mixed use
 }
 const ZONING_DEFAULT: [number, number, number, number] = [124, 92, 191, 50]
 
@@ -96,9 +101,15 @@ const URL_LAYER_MAP: Record<string, string> = {
 
 const RADAR_MIN_ZOOM = 11
 function radarColor(score: number): [number, number, number, number] {
-  if (score >= 60) return [61, 189, 111, 220]
-  if (score >= 40) return [232, 181, 60, 220]
-  if (score >= 20) return [96, 165, 250, 200]
+  if (score >= 60) {
+    return [61, 189, 111, 220]
+  }
+  if (score >= 40) {
+    return [232, 181, 60, 220]
+  }
+  if (score >= 20) {
+    return [96, 165, 250, 200]
+  }
   return [148, 163, 184, 160]
 }
 
@@ -109,14 +120,19 @@ export default function MapView() {
     const update = () => setDarkMap(document.documentElement.dataset.theme === 'dark')
     update()
     const observer = new MutationObserver(update)
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
     return () => observer.disconnect()
   }, [])
 
   const initialViewState = useMemo(() => {
     const layer = searchParams.get('layer')
     const linkedView = urlView(searchParams, DEFAULT_VIEW)
-    if (linkedView !== DEFAULT_VIEW) return linkedView
+    if (linkedView !== DEFAULT_VIEW) {
+      return linkedView
+    }
     if (layer === 'vacant' || layer === 'delinquent') {
       return { ...DEFAULT_VIEW, zoom: 14 }
     }
@@ -140,28 +156,39 @@ export default function MapView() {
     }))
   })
 
-  const [highlightPidn, setHighlightPidn] = useState<string | null>(
-    () => searchParams.get('highlight')
+  const [highlightPidn, setHighlightPidn] = useState<string | null>(() =>
+    searchParams.get('highlight'),
   )
   const parcelsEnabled = layers.find((layer) => layer.id === 'parcels')?.enabled
-  const [parcelFilter, setParcelFilter] = useState<ParcelFilter>(
-    () => {
-      const layer = searchParams.get('layer')
-      if (layer === 'vacant') return 'vacant'
-      if (layer === 'delinquent') return 'delinquent'
-      if (layer === 'radar') return 'radar'
-      return 'all'
+  const [parcelFilter, setParcelFilter] = useState<ParcelFilter>(() => {
+    const layer = searchParams.get('layer')
+    if (layer === 'vacant') {
+      return 'vacant'
     }
+    if (layer === 'delinquent') {
+      return 'delinquent'
+    }
+    if (layer === 'radar') {
+      return 'radar'
+    }
+    return 'all'
+  })
+  const [radarBasis] = useState<RadarBasis>(() =>
+    searchParams.get('radar') === 'momentum' ? 'momentum' : 'opportunity',
   )
-  const [radarBasis] = useState<RadarBasis>(() => (searchParams.get('radar') === 'momentum' ? 'momentum' : 'opportunity'))
   const [radarData, setRadarData] = useState<RadarPoint[] | null>(null)
   const [radarTruncated, setRadarTruncated] = useState(false)
   const [radarStatus, setRadarStatus] = useState<LoadStatus>('idle')
 
   const [geoData, setGeoData] = useState<Record<string, GeoJSON.FeatureCollection>>({})
-  const [layerAvailability, setLayerAvailability] = useState<Record<string, Exclude<LoadStatus, 'idle'>>>({})
+  const [layerAvailability, setLayerAvailability] = useState<
+    Record<string, Exclude<LoadStatus, 'idle'>>
+  >({})
   const loadedLayers = useRef(new Set<string>())
-  const enabledStaticLayers = layers.filter(layer => layer.enabled && STATIC_LAYER_IDS.includes(layer.id)).map(layer => layer.id).join(',')
+  const enabledStaticLayers = layers
+    .filter((layer) => layer.enabled && STATIC_LAYER_IDS.includes(layer.id))
+    .map((layer) => layer.id)
+    .join(',')
   const [parcelData, setParcelData] = useState<ParcelMapData | null>(null)
   const [parcelStatus, setParcelStatus] = useState<LoadStatus>('idle')
   const [currentZoom, setCurrentZoom] = useState(initialViewState.zoom)
@@ -187,189 +214,257 @@ export default function MapView() {
 
   useEffect(() => {
     const controller = new AbortController()
-    enabledStaticLayers.split(',').filter(Boolean).forEach((id) => {
-      if (loadedLayers.current.has(id)) return
-      setLayerAvailability((prev) => ({ ...prev, [id]: 'loading' }))
-      fetch(`/api/layers/${id}`, { signal: controller.signal })
-        .then((r) => {
-          if (!r.ok) throw new Error(`${r.status}`)
-          return r.json()
-        })
-        .then((data) => {
-          if (controller.signal.aborted) return
-          loadedLayers.current.add(id)
-          setGeoData((prev) => ({ ...prev, [id]: data }))
-          setLayerAvailability((prev) => ({ ...prev, [id]: 'ready' }))
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) {
-            setLayerAvailability((prev) => ({ ...prev, [id]: 'error' }))
-            setLayers((prev) => prev.map((layer) => (
-              layer.id === id ? { ...layer, enabled: false } : layer
-            )))
-          }
-        })
-    })
+    enabledStaticLayers
+      .split(',')
+      .filter(Boolean)
+      .forEach((id) => {
+        if (loadedLayers.current.has(id)) {
+          return
+        }
+        setLayerAvailability((prev) => ({ ...prev, [id]: 'loading' }))
+        fetch(`/api/layers/${id}`, { signal: controller.signal })
+          .then((r) => {
+            if (!r.ok) {
+              throw new Error(`${r.status}`)
+            }
+            return r.json()
+          })
+          .then((data) => {
+            if (controller.signal.aborted) {
+              return
+            }
+            loadedLayers.current.add(id)
+            setGeoData((prev) => ({ ...prev, [id]: data }))
+            setLayerAvailability((prev) => ({ ...prev, [id]: 'ready' }))
+          })
+          .catch(() => {
+            if (!controller.signal.aborted) {
+              setLayerAvailability((prev) => ({ ...prev, [id]: 'error' }))
+              setLayers((prev) =>
+                prev.map((layer) => (layer.id === id ? { ...layer, enabled: false } : layer)),
+              )
+            }
+          })
+      })
     return () => {
       controller.abort()
     }
   }, [enabledStaticLayers])
 
-  const fetchRadar = useCallback((vs: MapViewState) => {
-    if (mapSize.width < 2 || mapSize.height < 2) return
-    if (!vs || vs.zoom < RADAR_MIN_ZOOM) {
-      ++radarRequestRef.current
-      radarPendingKeyRef.current = null
+  const fetchRadar = useCallback(
+    (vs: MapViewState) => {
+      if (mapSize.width < 2 || mapSize.height < 2) {
+        return
+      }
+      if (!vs || vs.zoom < RADAR_MIN_ZOOM) {
+        ++radarRequestRef.current
+        radarPendingKeyRef.current = null
+        radarLoadedKeyRef.current = null
+        setRadarData(null)
+        setRadarTruncated(false)
+        setRadarStatus('idle')
+        return
+      }
+      const bounds = visibleBounds(vs, mapSize)
+      const requestKey = [radarBasis, bounds.west, bounds.south, bounds.east, bounds.north]
+        .map((value) => (typeof value === 'number' ? value.toFixed(6) : value))
+        .join(':')
+      if (radarPendingKeyRef.current === requestKey || radarLoadedKeyRef.current === requestKey) {
+        return
+      }
+      const requestId = ++radarRequestRef.current
+      radarPendingKeyRef.current = requestKey
       radarLoadedKeyRef.current = null
-      setRadarData(null)
-      setRadarTruncated(false)
-      setRadarStatus('idle')
-      return
-    }
-    const bounds = visibleBounds(vs, mapSize)
-    const requestKey = [radarBasis, bounds.west, bounds.south, bounds.east, bounds.north]
-      .map((value) => typeof value === 'number' ? value.toFixed(6) : value)
-      .join(':')
-    if (radarPendingKeyRef.current === requestKey || radarLoadedKeyRef.current === requestKey) return
-    const requestId = ++radarRequestRef.current
-    radarPendingKeyRef.current = requestKey
-    radarLoadedKeyRef.current = null
-    setRadarStatus('loading')
-    const requests = splitBounds(bounds).map((bounds) => {
-      const params = new URLSearchParams({
-        west: bounds.west.toFixed(6),
-        south: bounds.south.toFixed(6),
-        east: bounds.east.toFixed(6),
-        north: bounds.north.toFixed(6),
-        view: radarBasis,
-        min_score: '10',
+      setRadarStatus('loading')
+      const requests = splitBounds(bounds).map((bounds) => {
+        const params = new URLSearchParams({
+          west: bounds.west.toFixed(6),
+          south: bounds.south.toFixed(6),
+          east: bounds.east.toFixed(6),
+          north: bounds.north.toFixed(6),
+          view: radarBasis,
+          min_score: '10',
+        })
+        return fetch(`/api/radar/development/bbox?${params}`).then((response) => {
+          if (!response.ok) {
+            throw new Error(`${response.status}`)
+          }
+          return response.json() as Promise<RadarBboxResponse>
+        })
       })
-      return fetch(`/api/radar/development/bbox?${params}`).then((response) => {
-        if (!response.ok) throw new Error(`${response.status}`)
-        return response.json() as Promise<RadarBboxResponse>
-      })
-    })
 
-    Promise.all(requests)
-      .then((responses) => {
-        if (requestId !== radarRequestRef.current) return
-        const seen = new Set<string>()
-        setRadarData(
-          responses.flatMap((response) => response.parcels || [])
-            .filter((item: RadarBboxItem) => item.lng != null && item.lat != null)
-            .filter((item: RadarBboxItem) => {
-              if (seen.has(item.pidn)) return false
-              seen.add(item.pidn)
-              return true
-            })
-            .map((item: RadarBboxItem) => ({
-              properties: { pidn: item.pidn, radar_score: Number(item.score), top_signal: item.top_signal, radar_basis: radarBasis },
-              lng: Number(item.lng),
-              lat: Number(item.lat),
-            }))
-        )
-        setRadarTruncated(responses.some((response) => response.truncated))
-        radarLoadedKeyRef.current = requestKey
-        setRadarStatus('ready')
-      })
-      .catch(() => {
-        if (requestId === radarRequestRef.current) {
-          setRadarData(null)
-          setRadarTruncated(false)
-          setRadarStatus('error')
-        }
-      })
-      .finally(() => {
-        if (requestId === radarRequestRef.current) radarPendingKeyRef.current = null
-      })
-  }, [radarBasis, mapSize])
+      Promise.all(requests)
+        .then((responses) => {
+          if (requestId !== radarRequestRef.current) {
+            return
+          }
+          const seen = new Set<string>()
+          setRadarData(
+            responses
+              .flatMap((response) => response.parcels || [])
+              .filter((item: RadarBboxItem) => item.lng != null && item.lat != null)
+              .filter((item: RadarBboxItem) => {
+                if (seen.has(item.pidn)) {
+                  return false
+                }
+                seen.add(item.pidn)
+                return true
+              })
+              .map((item: RadarBboxItem) => ({
+                properties: {
+                  pidn: item.pidn,
+                  radar_score: Number(item.score),
+                  top_signal: item.top_signal,
+                  radar_basis: radarBasis,
+                },
+                lng: Number(item.lng),
+                lat: Number(item.lat),
+              })),
+          )
+          setRadarTruncated(responses.some((response) => response.truncated))
+          radarLoadedKeyRef.current = requestKey
+          setRadarStatus('ready')
+        })
+        .catch(() => {
+          if (requestId === radarRequestRef.current) {
+            setRadarData(null)
+            setRadarTruncated(false)
+            setRadarStatus('error')
+          }
+        })
+        .finally(() => {
+          if (requestId === radarRequestRef.current) {
+            radarPendingKeyRef.current = null
+          }
+        })
+    },
+    [radarBasis, mapSize],
+  )
 
-  const fetchParcels = useCallback((vs: MapViewState) => {
-    if (mapSize.width < 2 || mapSize.height < 2) return
-    if (parcelFilter === 'radar') fetchRadar(vs)
-    else {
-      ++radarRequestRef.current
-      radarPendingKeyRef.current = null
-      radarLoadedKeyRef.current = null
-      setRadarData(null)
-      setRadarTruncated(false)
-      setRadarStatus('idle')
-    }
-    if (!vs || vs.zoom < MIN_PARCEL_ZOOM) {
-      ++parcelRequestRef.current
-      parcelPendingKeyRef.current = null
-      parcelLoadedKeyRef.current = null
-      setParcelData(null)
-      setParcelStatus('idle')
-      return
-    }
-
-    const bounds = visibleBounds(vs, mapSize)
-    const requestKey = [parcelFilter, bounds.west, bounds.south, bounds.east, bounds.north]
-      .map((value) => typeof value === 'number' ? value.toFixed(6) : value)
-      .join(':')
-    if (parcelPendingKeyRef.current === requestKey || parcelLoadedKeyRef.current === requestKey) return
-    const requestId = ++parcelRequestRef.current
-    parcelPendingKeyRef.current = requestKey
-    parcelLoadedKeyRef.current = null
-    setParcelStatus('loading')
-
-    const bboxLayer = parcelFilter === 'delinquent'
-      ? 'delinquent'
-      : parcelFilter === 'vacant'
-        ? 'vacant'
-        : parcelFilter === 'vacant_delinquent'
-          ? 'vacant_delinquent'
-          : null
-    Promise.all(splitBounds(bounds).map((part) => {
-      const params = new URLSearchParams({ west: part.west.toFixed(6), south: part.south.toFixed(6), east: part.east.toFixed(6), north: part.north.toFixed(6) })
-      if (bboxLayer) params.set('layer', bboxLayer)
-      return fetch(`/api/parcels/bbox?${params}`).then((r) => {
-        if (!r.ok) throw new Error(`${r.status}`)
-        return r.json() as Promise<ParcelMapData>
-      })
-    }))
-      .then((responses) => {
-        if (requestId !== parcelRequestRef.current) return
-        const seen = new Set<string>()
-        const data: ParcelMapData = {
-          type: 'FeatureCollection',
-          features: responses.flatMap((response) => response.features).filter((feature) => {
-            const pidn = feature.properties?.pidn
-            if (!pidn || seen.has(pidn)) return false
-            seen.add(pidn)
-            return true
-          }),
-          truncated: responses.some((response) => response.truncated),
-        }
-        if (parcelFilter === 'delinquent' || parcelFilter === 'vacant_delinquent') {
-          setParcelData({
-            ...data,
-            features: data.features.filter(
-              (feature) => feature.properties?.has_tax_delinquency === true
-            ),
-          })
-        } else {
-          setParcelData(data)
-        }
-        parcelLoadedKeyRef.current = requestKey
-        setParcelStatus('ready')
-      })
-      .catch(() => {
-        if (requestId !== parcelRequestRef.current) return
+  const fetchParcels = useCallback(
+    (vs: MapViewState) => {
+      if (mapSize.width < 2 || mapSize.height < 2) {
+        return
+      }
+      if (parcelFilter === 'radar') {
+        fetchRadar(vs)
+      } else {
+        ++radarRequestRef.current
+        radarPendingKeyRef.current = null
+        radarLoadedKeyRef.current = null
+        setRadarData(null)
+        setRadarTruncated(false)
+        setRadarStatus('idle')
+      }
+      if (!vs || vs.zoom < MIN_PARCEL_ZOOM) {
+        ++parcelRequestRef.current
+        parcelPendingKeyRef.current = null
+        parcelLoadedKeyRef.current = null
         setParcelData(null)
-        setParcelStatus('error')
-      })
-      .finally(() => {
-        if (requestId === parcelRequestRef.current) parcelPendingKeyRef.current = null
-      })
-  }, [parcelFilter, fetchRadar, mapSize])
+        setParcelStatus('idle')
+        return
+      }
+
+      const bounds = visibleBounds(vs, mapSize)
+      const requestKey = [parcelFilter, bounds.west, bounds.south, bounds.east, bounds.north]
+        .map((value) => (typeof value === 'number' ? value.toFixed(6) : value))
+        .join(':')
+      if (parcelPendingKeyRef.current === requestKey || parcelLoadedKeyRef.current === requestKey) {
+        return
+      }
+      const requestId = ++parcelRequestRef.current
+      parcelPendingKeyRef.current = requestKey
+      parcelLoadedKeyRef.current = null
+      setParcelStatus('loading')
+
+      const bboxLayer =
+        parcelFilter === 'delinquent'
+          ? 'delinquent'
+          : parcelFilter === 'vacant'
+            ? 'vacant'
+            : parcelFilter === 'vacant_delinquent'
+              ? 'vacant_delinquent'
+              : null
+      Promise.all(
+        splitBounds(bounds).map((part) => {
+          const params = new URLSearchParams({
+            west: part.west.toFixed(6),
+            south: part.south.toFixed(6),
+            east: part.east.toFixed(6),
+            north: part.north.toFixed(6),
+          })
+          if (bboxLayer) {
+            params.set('layer', bboxLayer)
+          }
+          return fetch(`/api/parcels/bbox?${params}`).then((r) => {
+            if (!r.ok) {
+              throw new Error(`${r.status}`)
+            }
+            return r.json() as Promise<ParcelMapData>
+          })
+        }),
+      )
+        .then((responses) => {
+          if (requestId !== parcelRequestRef.current) {
+            return
+          }
+          const seen = new Set<string>()
+          const data: ParcelMapData = {
+            type: 'FeatureCollection',
+            features: responses
+              .flatMap((response) => response.features)
+              .filter((feature) => {
+                const pidn = feature.properties?.pidn
+                if (!pidn || seen.has(pidn)) {
+                  return false
+                }
+                seen.add(pidn)
+                return true
+              }),
+            truncated: responses.some((response) => response.truncated),
+          }
+          if (parcelFilter === 'delinquent' || parcelFilter === 'vacant_delinquent') {
+            setParcelData({
+              ...data,
+              features: data.features.filter(
+                (feature) => feature.properties?.has_tax_delinquency === true,
+              ),
+            })
+          } else {
+            setParcelData(data)
+          }
+          parcelLoadedKeyRef.current = requestKey
+          setParcelStatus('ready')
+        })
+        .catch(() => {
+          if (requestId !== parcelRequestRef.current) {
+            return
+          }
+          setParcelData(null)
+          setParcelStatus('error')
+        })
+        .finally(() => {
+          if (requestId === parcelRequestRef.current) {
+            parcelPendingKeyRef.current = null
+          }
+        })
+    },
+    [parcelFilter, fetchRadar, mapSize],
+  )
 
   const onViewStateChange = useCallback(
-    ({ viewState, interactionState }: { viewState: MapViewState; interactionState?: Record<string, boolean> }) => {
+    ({
+      viewState,
+      interactionState,
+    }: {
+      viewState: MapViewState
+      interactionState?: Record<string, boolean>
+    }) => {
       viewStateRef.current = viewState
       setViewState(viewState)
-      if (interactionState && Object.values(interactionState).some(Boolean)) userNavigatedRef.current = true
+      if (interactionState && Object.values(interactionState).some(Boolean)) {
+        userNavigatedRef.current = true
+      }
       setCurrentZoom(viewState.zoom)
 
       if (viewState.zoom < MIN_PARCEL_ZOOM) {
@@ -385,7 +480,9 @@ export default function MapView() {
         setReportFailed(false)
       }
 
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
       debounceRef.current = setTimeout(() => {
         const parcelsEnabled = layers.find((l) => l.id === 'parcels')?.enabled
         if (parcelsEnabled && viewStateRef.current) {
@@ -393,23 +490,30 @@ export default function MapView() {
         }
       }, 300)
     },
-    [fetchParcels, layers]
+    [fetchParcels, layers],
   )
 
-  useEffect(() => () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    ++parcelRequestRef.current
-    ++radarRequestRef.current
-    parcelPendingKeyRef.current = null
-    radarPendingKeyRef.current = null
-    parcelLoadedKeyRef.current = null
-    radarLoadedKeyRef.current = null
-  }, [])
+  useEffect(
+    () => () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+      ++parcelRequestRef.current
+      ++radarRequestRef.current
+      parcelPendingKeyRef.current = null
+      radarPendingKeyRef.current = null
+      parcelLoadedKeyRef.current = null
+      radarLoadedKeyRef.current = null
+    },
+    [],
+  )
 
   useEffect(() => {
     const vs = viewStateRef.current || initialViewState
     const minZoom = parcelFilter === 'radar' ? RADAR_MIN_ZOOM : MIN_PARCEL_ZOOM
-    if (!parcelsEnabled || (vs.zoom ?? 0) < minZoom) return
+    if (!parcelsEnabled || (vs.zoom ?? 0) < minZoom) {
+      return
+    }
     // Deferred a tick: fetchParcels sets state, which must not happen
     // synchronously inside the effect; the timer also coalesces rapid
     // filter flips.
@@ -419,7 +523,9 @@ export default function MapView() {
 
   useEffect(() => {
     const canvas = mapCanvasRef.current
-    if (!canvas) return
+    if (!canvas) {
+      return
+    }
     const update = () => setMapSize({ width: canvas.clientWidth, height: canvas.clientHeight })
     update()
     const observer = new ResizeObserver(update)
@@ -428,14 +534,29 @@ export default function MapView() {
   }, [])
 
   useEffect(() => {
-    if (!highlightPidn || userNavigatedRef.current || fittedHighlightRef.current === highlightPidn || !parcelData) return
-    if (mapSize.width < 2 || mapSize.height < 2) return
+    if (
+      !highlightPidn ||
+      userNavigatedRef.current ||
+      fittedHighlightRef.current === highlightPidn ||
+      !parcelData
+    ) {
+      return
+    }
+    if (mapSize.width < 2 || mapSize.height < 2) {
+      return
+    }
     const feature = parcelData.features.find((item) => item.properties?.pidn === highlightPidn)
-    if (!feature?.geometry) return
+    if (!feature?.geometry) {
+      return
+    }
     const fitted = fitGeometry(viewStateRef.current || viewState, mapSize, feature.geometry)
-    if (!fitted) return
+    if (!fitted) {
+      return
+    }
     const timer = window.setTimeout(() => {
-      if (userNavigatedRef.current) return
+      if (userNavigatedRef.current) {
+        return
+      }
       fittedHighlightRef.current = highlightPidn
       viewStateRef.current = fitted
       setViewState(fitted)
@@ -446,15 +567,21 @@ export default function MapView() {
   }, [highlightPidn, parcelData, mapSize, viewState, fetchParcels])
 
   useEffect(() => {
-    if (!selectedPidn) return
+    if (!selectedPidn) {
+      return
+    }
     let cancelled = false
     fetch(`/api/parcels/${encodeURIComponent(selectedPidn)}`)
       .then((r) => {
-        if (!r.ok) throw new Error(`${r.status}`)
+        if (!r.ok) {
+          throw new Error(`${r.status}`)
+        }
         return r.json()
       })
       .then((data: PropertyReport) => {
-        if (!cancelled) setPropertyReport(data)
+        if (!cancelled) {
+          setPropertyReport(data)
+        }
       })
       .catch(() => {
         if (!cancelled) {
@@ -463,7 +590,9 @@ export default function MapView() {
         }
       })
       .finally(() => {
-        if (!cancelled) setReportLoading(false)
+        if (!cancelled) {
+          setReportLoading(false)
+        }
       })
     return () => {
       cancelled = true
@@ -471,25 +600,33 @@ export default function MapView() {
   }, [selectedPidn])
 
   const handleToggle = useCallback((id: string) => {
-    setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l))
-    )
+    setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)))
   }, [])
 
-  const selectParcel = useCallback((pidn: string) => {
-    if (pidn === selectedPidn) return
-    setHighlightPidn(null)
-    setSelectedPidn(pidn)
-    setPropertyReport(null)
-    setReportFailed(false)
-    setReportLoading(true)
-    setHoverInfo(null)
-  }, [selectedPidn])
+  const selectParcel = useCallback(
+    (pidn: string) => {
+      if (pidn === selectedPidn) {
+        return
+      }
+      setHighlightPidn(null)
+      setSelectedPidn(pidn)
+      setPropertyReport(null)
+      setReportFailed(false)
+      setReportLoading(true)
+      setHoverInfo(null)
+    },
+    [selectedPidn],
+  )
 
-  const handleParcelClick = useCallback((info: PickingInfo) => {
-    const pidn = info.object?.properties?.pidn
-    if (pidn) selectParcel(pidn)
-  }, [selectParcel])
+  const handleParcelClick = useCallback(
+    (info: PickingInfo) => {
+      const pidn = info.object?.properties?.pidn
+      if (pidn) {
+        selectParcel(pidn)
+      }
+    },
+    [selectParcel],
+  )
 
   const closePanel = useCallback(() => {
     setSelectedPidn(null)
@@ -499,9 +636,13 @@ export default function MapView() {
   }, [])
 
   useEffect(() => {
-    if (!panelOpen) return
+    if (!panelOpen) {
+      return
+    }
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closePanel()
+      if (event.key === 'Escape') {
+        closePanel()
+      }
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
@@ -521,25 +662,47 @@ export default function MapView() {
           filled: true,
           getFillColor: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
-            if (selectedPidn && pidn === selectedPidn) return [15, 91, 98, 65]
-            if (highlightPidn && pidn === highlightPidn) return [216, 169, 75, 65]
-            if (parcelFilter === 'vacant_delinquent') return [216, 169, 75, 150]
-            if (parcelFilter === 'vacant') return [61, 189, 111, 120]
-            if (parcelFilter === 'delinquent') return [224, 82, 82, 120]
+            if (selectedPidn && pidn === selectedPidn) {
+              return [15, 91, 98, 65]
+            }
+            if (highlightPidn && pidn === highlightPidn) {
+              return [216, 169, 75, 65]
+            }
+            if (parcelFilter === 'vacant_delinquent') {
+              return [216, 169, 75, 150]
+            }
+            if (parcelFilter === 'vacant') {
+              return [61, 189, 111, 120]
+            }
+            if (parcelFilter === 'delinquent') {
+              return [224, 82, 82, 120]
+            }
             return [96, 165, 250, 40]
           },
           getLineColor: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
-            if (selectedPidn && pidn === selectedPidn) return [15, 91, 98, 255]
-            if (highlightPidn && pidn === highlightPidn) return [174, 115, 19, 255]
-            if (parcelFilter === 'vacant_delinquent') return [216, 169, 75, 230]
-            if (parcelFilter === 'vacant') return [61, 189, 111, 150]
+            if (selectedPidn && pidn === selectedPidn) {
+              return [15, 91, 98, 255]
+            }
+            if (highlightPidn && pidn === highlightPidn) {
+              return [174, 115, 19, 255]
+            }
+            if (parcelFilter === 'vacant_delinquent') {
+              return [216, 169, 75, 230]
+            }
+            if (parcelFilter === 'vacant') {
+              return [61, 189, 111, 150]
+            }
             return [96, 165, 250, 100]
           },
           getLineWidth: (f: ParcelFeature) => {
             const pidn = f.properties?.pidn
-            if (selectedPidn && pidn === selectedPidn) return 3
-            if (highlightPidn && pidn === highlightPidn) return 3
+            if (selectedPidn && pidn === selectedPidn) {
+              return 3
+            }
+            if (highlightPidn && pidn === highlightPidn) {
+              return 3
+            }
             return 1
           },
           lineWidthUnits: 'pixels' as const,
@@ -553,11 +716,16 @@ export default function MapView() {
             getLineColor: [parcelFilter, highlightPidn, selectedPidn],
             getLineWidth: [highlightPidn, selectedPidn],
           },
-        })
+        }),
       )
     }
 
-    if (parcelsLayer?.enabled && parcelFilter === 'radar' && radarData && currentZoom >= RADAR_MIN_ZOOM) {
+    if (
+      parcelsLayer?.enabled &&
+      parcelFilter === 'radar' &&
+      radarData &&
+      currentZoom >= RADAR_MIN_ZOOM
+    ) {
       foregroundLayers.push(
         new ScatterplotLayer<RadarPoint>({
           id: 'radar-points',
@@ -575,9 +743,11 @@ export default function MapView() {
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
           onClick: (info: PickingInfo) => {
             const pidn = (info.object as RadarPoint | undefined)?.properties?.pidn
-            if (pidn) selectParcel(pidn)
+            if (pidn) {
+              selectParcel(pidn)
+            }
           },
-        })
+        }),
       )
     }
 
@@ -597,7 +767,7 @@ export default function MapView() {
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
           autoHighlight: true,
           highlightColor: [61, 189, 111, 60],
-        })
+        }),
       )
     }
 
@@ -614,7 +784,7 @@ export default function MapView() {
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
           autoHighlight: true,
           highlightColor: [74, 127, 255, 120],
-        })
+        }),
       )
     }
 
@@ -637,7 +807,7 @@ export default function MapView() {
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
           autoHighlight: true,
           highlightColor: [255, 255, 255, 40],
-        })
+        }),
       )
     }
 
@@ -659,33 +829,57 @@ export default function MapView() {
           onHover: (info: PickingInfo) => setHoverInfo(info.object ? info : null),
           autoHighlight: true,
           highlightColor: [255, 200, 50, 100],
-        })
+        }),
       )
     }
 
     // Reference polygons remain visible underneath parcels without intercepting
     // parcel picking. Deck.gl resolves pointer hits from the last drawn layer.
     return [...result, ...foregroundLayers]
-  }, [layers, geoData, parcelData, radarData, currentZoom, handleParcelClick, parcelFilter, highlightPidn, selectedPidn, selectParcel, darkMap])
+  }, [
+    layers,
+    geoData,
+    parcelData,
+    radarData,
+    currentZoom,
+    handleParcelClick,
+    parcelFilter,
+    highlightPidn,
+    selectedPidn,
+    selectParcel,
+    darkMap,
+  ])
 
-  const showRadarZoomHint = parcelsEnabled && parcelFilter === 'radar'
-    && currentZoom >= RADAR_MIN_ZOOM && currentZoom < MIN_PARCEL_ZOOM
+  const showRadarZoomHint =
+    parcelsEnabled &&
+    parcelFilter === 'radar' &&
+    currentZoom >= RADAR_MIN_ZOOM &&
+    currentZoom < MIN_PARCEL_ZOOM
   const showZoomMessage = parcelsEnabled && currentZoom < MIN_PARCEL_ZOOM && !showRadarZoomHint
   const parcelCount = parcelData?.features.length ?? 0
-  const mapStatus: LoadStatus = parcelStatus === 'error' || (parcelFilter === 'radar' && radarStatus === 'error')
-    ? 'error'
-    : parcelStatus === 'loading' || (parcelFilter === 'radar' && radarStatus === 'loading')
-      ? 'loading'
-      : parcelStatus
+  const mapStatus: LoadStatus =
+    parcelStatus === 'error' || (parcelFilter === 'radar' && radarStatus === 'error')
+      ? 'error'
+      : parcelStatus === 'loading' || (parcelFilter === 'radar' && radarStatus === 'loading')
+        ? 'loading'
+        : parcelStatus
   const retryParcels = () => {
     const viewState = viewStateRef.current || initialViewState
     fetchParcels(viewState as MapViewState)
   }
 
   return (
-    <div className="map-shell" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div
+      className="map-shell"
+      style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
+    >
       <Nav />
-      <div ref={mapCanvasRef} className="map-canvas" data-panel-open={panelOpen} style={{ position: 'relative', flex: 1 }}>
+      <div
+        ref={mapCanvasRef}
+        className="map-canvas"
+        data-panel-open={panelOpen}
+        style={{ position: 'relative', flex: 1 }}
+      >
         <Link
           className="map-back-link"
           to="/search"
@@ -732,17 +926,27 @@ export default function MapView() {
 
         {parcelsEnabled && currentZoom >= MIN_PARCEL_ZOOM && mapStatus !== 'idle' && (
           <div className="map-data-status" data-state={mapStatus} role="status" aria-live="polite">
-            {mapStatus === 'loading' && <span>{parcelFilter === 'radar' ? 'Loading map data…' : 'Loading parcels…'}</span>}
+            {mapStatus === 'loading' && (
+              <span>{parcelFilter === 'radar' ? 'Loading map data…' : 'Loading parcels…'}</span>
+            )}
             {mapStatus === 'error' && (
               <>
-                <span>{radarStatus === 'error' ? 'Radar data unavailable' : 'Parcel data unavailable'}</span>
-                <button type="button" onClick={retryParcels}>Retry</button>
+                <span>
+                  {radarStatus === 'error' ? 'Radar data unavailable' : 'Parcel data unavailable'}
+                </span>
+                <button type="button" onClick={retryParcels}>
+                  Retry
+                </button>
               </>
             )}
             {mapStatus === 'ready' && (
               <span>
-                {parcelCount === 0 ? 'No parcels in this view' : `${parcelCount.toLocaleString()} parcel${parcelCount === 1 ? '' : 's'} in view`}
-                {parcelFilter === 'radar' && radarData ? ` · ${radarData.length.toLocaleString()}${radarTruncated ? '+' : ''} radar results` : ''}
+                {parcelCount === 0
+                  ? 'No parcels in this view'
+                  : `${parcelCount.toLocaleString()} parcel${parcelCount === 1 ? '' : 's'} in view`}
+                {parcelFilter === 'radar' && radarData
+                  ? ` · ${radarData.length.toLocaleString()}${radarTruncated ? '+' : ''} radar results`
+                  : ''}
                 {parcelData?.truncated ? ' · zoom in for the complete set' : ''}
               </span>
             )}
@@ -750,22 +954,48 @@ export default function MapView() {
         )}
 
         {showRadarZoomHint && (
-          <div className="map-filter-bar" style={{
-            position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 10, display: 'flex', gap: 8, alignItems: 'center',
-            background: 'var(--bg-panel)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-            fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)',
-          }}>
-            <button type="button" aria-pressed={parcelFilter === 'radar'} onClick={() => {
-              if (radarStatus === 'error') retryParcels()
-            }} style={{
-              padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-              fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 0.5,
-              background: parcelFilter === 'radar' ? 'var(--accent-cyan)' : 'transparent',
-              color: parcelFilter === 'radar' ? '#0a0e1a' : 'var(--text-secondary)',
-              fontWeight: parcelFilter === 'radar' ? 700 : 400,
-            }}>
+          <div
+            className="map-filter-bar"
+            style={{
+              position: 'absolute',
+              bottom: 24,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 10,
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: '6px 10px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <button
+              type="button"
+              aria-pressed={parcelFilter === 'radar'}
+              onClick={() => {
+                if (radarStatus === 'error') {
+                  retryParcels()
+                }
+              }}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 6,
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                letterSpacing: 0.5,
+                background: parcelFilter === 'radar' ? 'var(--accent-cyan)' : 'transparent',
+                color: parcelFilter === 'radar' ? '#0a0e1a' : 'var(--text-secondary)',
+                fontWeight: parcelFilter === 'radar' ? 700 : 400,
+              }}
+            >
               Radar ({radarBasis})
             </button>
             <span>
@@ -779,36 +1009,70 @@ export default function MapView() {
         )}
 
         {currentZoom >= MIN_PARCEL_ZOOM && (
-          <div className="map-filter-bar" style={{
-            position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 10, display: 'flex', gap: 2,
-            background: 'var(--bg-panel)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-          }}>
-            {([
-              { key: 'all', label: 'All Parcels', color: 'var(--accent-blue)' },
-              { key: 'delinquent', label: 'Delinquent', color: 'var(--accent-red)' },
-              { key: 'vacant', label: 'Vacancy screen', color: 'var(--accent-green)' },
-              { key: 'vacant_delinquent', label: 'Vacancy + tax signal', color: 'var(--accent-gold)' },
-              { key: 'radar', label: 'Radar', color: 'var(--accent-cyan)' },
-            ] as const).map(f => (
-              <button key={f.key} type="button" aria-pressed={parcelFilter === f.key} onClick={() => { if (parcelFilter !== f.key) { setParcelFilter(f.key); setParcelData(null) } }} style={{
-                padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 0.5,
-                background: parcelFilter === f.key ? f.color : 'transparent',
-                color: parcelFilter === f.key ? '#0a0e1a' : 'var(--text-secondary)',
-                fontWeight: parcelFilter === f.key ? 700 : 400,
-                transition: 'all 0.15s',
-              }}>
+          <div
+            className="map-filter-bar"
+            style={{
+              position: 'absolute',
+              bottom: 24,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 10,
+              display: 'flex',
+              gap: 2,
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: 4,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            }}
+          >
+            {(
+              [
+                { key: 'all', label: 'All Parcels', color: 'var(--accent-blue)' },
+                { key: 'delinquent', label: 'Delinquent', color: 'var(--accent-red)' },
+                { key: 'vacant', label: 'Vacancy screen', color: 'var(--accent-green)' },
+                {
+                  key: 'vacant_delinquent',
+                  label: 'Vacancy + tax signal',
+                  color: 'var(--accent-gold)',
+                },
+                { key: 'radar', label: 'Radar', color: 'var(--accent-cyan)' },
+              ] as const
+            ).map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={parcelFilter === f.key}
+                onClick={() => {
+                  if (parcelFilter !== f.key) {
+                    setParcelFilter(f.key)
+                    setParcelData(null)
+                  }
+                }}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 6,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                  background: parcelFilter === f.key ? f.color : 'transparent',
+                  color: parcelFilter === f.key ? '#0a0e1a' : 'var(--text-secondary)',
+                  fontWeight: parcelFilter === f.key ? 700 : 400,
+                  transition: 'all 0.15s',
+                }}
+              >
                 {f.label}
               </button>
             ))}
           </div>
         )}
 
-        {parcelsEnabled && currentZoom >= (parcelFilter === 'radar' ? RADAR_MIN_ZOOM : MIN_PARCEL_ZOOM) && (
-          <MapLegend filter={parcelFilter} />
-        )}
+        {parcelsEnabled &&
+          currentZoom >= (parcelFilter === 'radar' ? RADAR_MIN_ZOOM : MIN_PARCEL_ZOOM) && (
+            <MapLegend filter={parcelFilter} />
+          )}
 
         {showZoomMessage && (
           <div
@@ -842,9 +1106,9 @@ export default function MapView() {
           eventRecognizerOptions={{ click: { time: 1000 } }}
           layers={deckLayers}
           onViewStateChange={onViewStateChange as never}
-          getCursor={({ isDragging, isHovering }) => (
+          getCursor={({ isDragging, isHovering }) =>
             isDragging ? 'grabbing' : isHovering ? 'pointer' : 'grab'
-          )}
+          }
           style={{ position: 'absolute', inset: '0' }}
         >
           <Map
@@ -913,20 +1177,21 @@ export default function MapView() {
 }
 
 function MapLegend({ filter }: { filter: ParcelFilter }) {
-  const items = filter === 'radar'
-    ? [
-        { label: 'High score · 60+', color: 'rgba(61,189,111,0.86)' },
-        { label: 'Medium · 40–59', color: 'rgba(232,181,60,0.86)' },
-        { label: 'Lower · 20–39', color: 'rgba(96,165,250,0.78)' },
-        { label: 'Under 20', color: 'rgba(148,163,184,0.63)' },
-      ]
-    : filter === 'vacant'
-      ? [{ label: 'Vacancy screen · verify current use', color: 'rgba(61,189,111,0.72)' }]
-      : filter === 'vacant_delinquent'
-        ? [{ label: 'Vacancy screen + tax delinquency signal', color: 'rgba(216,169,75,0.82)' }]
-        : filter === 'delinquent'
-          ? [{ label: 'Tax delinquency signal', color: 'rgba(224,82,82,0.78)' }]
-          : [{ label: 'Parcel', color: 'rgba(96,165,250,0.55)' }]
+  const items =
+    filter === 'radar'
+      ? [
+          { label: 'High score · 60+', color: 'rgba(61,189,111,0.86)' },
+          { label: 'Medium · 40–59', color: 'rgba(232,181,60,0.86)' },
+          { label: 'Lower · 20–39', color: 'rgba(96,165,250,0.78)' },
+          { label: 'Under 20', color: 'rgba(148,163,184,0.63)' },
+        ]
+      : filter === 'vacant'
+        ? [{ label: 'Vacancy screen · verify current use', color: 'rgba(61,189,111,0.72)' }]
+        : filter === 'vacant_delinquent'
+          ? [{ label: 'Vacancy screen + tax delinquency signal', color: 'rgba(216,169,75,0.82)' }]
+          : filter === 'delinquent'
+            ? [{ label: 'Tax delinquency signal', color: 'rgba(224,82,82,0.78)' }]
+            : [{ label: 'Parcel', color: 'rgba(96,165,250,0.55)' }]
 
   return (
     <div className="map-legend" aria-label="Map legend">
@@ -994,27 +1259,52 @@ function PropertyPanel({
     )
   }
 
-  const { parcel: p, tax_delinquency: tax, flood_zone: flood, structures, development_momentum: radar } = report
+  const {
+    parcel: p,
+    tax_delinquency: tax,
+    flood_zone: flood,
+    structures,
+    development_momentum: radar,
+  } = report
 
   return (
     <div className="map-parcel-summary">
       <div className="map-parcel-heading">
         <div>
           <h2>{p.propadr || 'Address unavailable'}</h2>
-          {p.owner_id ? <Link to={`/entity/${p.owner_id}`}>{p.owner_full || 'Recorded owner'}</Link> : <p>{p.owner_full || 'Owner not displayed'}</p>}
-          <p className="map-parcel-location">{p.municipality} · {getPropertyClassLabel(p.class) || 'Property'}</p>
+          {p.owner_id ? (
+            <Link to={`/entity/${p.owner_id}`}>{p.owner_full || 'Recorded owner'}</Link>
+          ) : (
+            <p>{p.owner_full || 'Owner not displayed'}</p>
+          )}
+          <p className="map-parcel-location">
+            {p.municipality} · {getPropertyClassLabel(p.class) || 'Property'}
+          </p>
         </div>
         <CloseButton onClick={onClose} />
       </div>
-      <ButtonLink className="map-parcel-report" tone="primary" to={`/property/${p.pidn}`}>Open property & evidence →</ButtonLink>
-      {radar && <div className="map-parcel-signals">
-        <div className="property-radar-scores">
-          <div><span>Opportunity</span><strong>{radar.opportunity_score}</strong></div>
-          <div><span>Momentum</span><strong>{radar.score}</strong></div>
-          <div><span>Site</span><strong>{radar.site_readiness_score}</strong></div>
+      <ButtonLink className="map-parcel-report" tone="primary" to={`/property/${p.pidn}`}>
+        Open property & evidence →
+      </ButtonLink>
+      {radar && (
+        <div className="map-parcel-signals">
+          <div className="property-radar-scores">
+            <div>
+              <span>Opportunity</span>
+              <strong>{radar.opportunity_score}</strong>
+            </div>
+            <div>
+              <span>Momentum</span>
+              <strong>{radar.score}</strong>
+            </div>
+            <div>
+              <span>Site</span>
+              <strong>{radar.site_readiness_score}</strong>
+            </div>
+          </div>
+          {radar.top_signal && <p>{radar.top_signal}</p>}
         </div>
-        {radar.top_signal && <p>{radar.top_signal}</p>}
-      </div>}
+      )}
       <div className="map-parcel-facts">
         <DataField label="Acres" value={p.acres != null ? Number(p.acres).toFixed(2) : '—'} />
         <DataField label="Assessed value" value={formatCurrency(p.aprtotal)} />
@@ -1022,9 +1312,23 @@ function PropertyPanel({
         <DataField label="Sale date" value={p.saledt || '—'} />
       </div>
       <ul className="map-parcel-context">
-        <li>{tax.is_delinquent ? 'Delinquency signal detected; review the tax records.' : tax.detail_available ? 'No delinquency found in loaded records.' : 'Detailed tax records are unavailable.'}</li>
-        <li>{flood.in_flood_zone ? `Mapped FEMA flood hazard overlap${flood.zone ? ` · Zone ${flood.zone}` : ''}.` : 'No mapped FEMA flood hazard overlap.'}</li>
-        <li>{structures.likely_vacant ? 'Vacancy screen: no mapped building footprint. Verify current use.' : `${structures.count} mapped building ${structures.count === 1 ? 'footprint' : 'footprints'}.`}</li>
+        <li>
+          {tax.is_delinquent
+            ? 'Delinquency signal detected; review the tax records.'
+            : tax.detail_available
+              ? 'No delinquency found in loaded records.'
+              : 'Detailed tax records are unavailable.'}
+        </li>
+        <li>
+          {flood.in_flood_zone
+            ? `Mapped FEMA flood hazard overlap${flood.zone ? ` · Zone ${flood.zone}` : ''}.`
+            : 'No mapped FEMA flood hazard overlap.'}
+        </li>
+        <li>
+          {structures.likely_vacant
+            ? 'Vacancy screen: no mapped building footprint. Verify current use.'
+            : `${structures.count} mapped building ${structures.count === 1 ? 'footprint' : 'footprints'}.`}
+        </li>
       </ul>
       <p className="map-parcel-id">PIDN {p.pidn}</p>
     </div>
@@ -1061,7 +1365,12 @@ function CloseButton({ onClick }: { onClick: () => void }) {
       }}
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path
+          d="M2 2L10 10M10 2L2 10"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
     </button>
   )
@@ -1096,14 +1405,17 @@ function DataField({ label, value, accent }: { label: string; value: string; acc
   )
 }
 
-const formatCost = (cost: number | null) =>
-  formatCurrencyCompact(cost, { allowThousands: true })
+const formatCost = (cost: number | null) => formatCurrencyCompact(cost, { allowThousands: true })
 
 function formatDate(d: string | null): string {
-  if (!d) return ''
+  if (!d) {
+    return ''
+  }
   try {
     return new Date(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-  } catch { return d }
+  } catch {
+    return d
+  }
 }
 
 function MapTooltip({ properties }: { properties: TooltipProperties }) {
@@ -1111,10 +1423,18 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
     const p = properties
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>{p.radar_basis === 'momentum' ? 'Momentum' : 'Opportunity'} score {p.radar_score}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{p.top_signal || 'No headline signal'}</div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{p.pidn}</div>
-        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>Click for details</div>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>
+          {p.radar_basis === 'momentum' ? 'Momentum' : 'Opportunity'} score {p.radar_score}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+          {p.top_signal || 'No headline signal'}
+        </div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+          {p.pidn}
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+          Click for details
+        </div>
       </div>
     )
   }
@@ -1125,21 +1445,42 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
     const className = getPropertyClassLabel(p.class)
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>{p.owner_full || 'Owner not displayed'}</div>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>
+          {p.owner_full || 'Owner not displayed'}
+        </div>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
           {p.propadr || 'No address'}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-          {p.aprtotal != null && <span style={{ color: 'var(--accent-blue)' }}>{formatCurrency(p.aprtotal)}</span>}
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {p.aprtotal != null && (
+            <span style={{ color: 'var(--accent-blue)' }}>{formatCurrency(p.aprtotal)}</span>
+          )}
           {className && <span style={{ color: 'var(--text-muted)' }}>{className}</span>}
           {schoolName && <span style={{ color: 'var(--text-muted)' }}>{schoolName}</span>}
         </div>
         {p.has_tax_delinquency && (
-          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent-red)', marginTop: 4 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--accent-red)',
+              marginTop: 4,
+            }}
+          >
             Delinquency signal detected
           </div>
         )}
-        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>Click for details</div>
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+          Click for details
+        </div>
       </div>
     )
   }
@@ -1152,26 +1493,70 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>{p.project_name}</div>
         {p.location_desc && (
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--text-secondary)',
+              marginBottom: 6,
+              lineHeight: 1.4,
+            }}
+          >
             {p.location_desc}
           </div>
         )}
         {!p.location_desc && p.description && (
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--text-secondary)',
+              marginBottom: 6,
+              lineHeight: 1.4,
+            }}
+          >
             {p.description}
           </div>
         )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginBottom: 4 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px 14px',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-muted)',
+            marginBottom: 4,
+          }}
+        >
           <span style={{ color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
           {p.project_type && <span>{p.project_type}</span>}
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px 14px',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-muted)',
+          }}
+        >
           {p.start_date && <span>Start: {formatDate(p.start_date)}</span>}
           {p.end_date && <span>End: {formatDate(p.end_date)}</span>}
-          {p.cost != null && <span style={{ color: 'var(--accent-blue)' }}>{formatCost(p.cost)}</span>}
+          {p.cost != null && (
+            <span style={{ color: 'var(--accent-blue)' }}>{formatCost(p.cost)}</span>
+          )}
         </div>
         {p.project_manager && (
-          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginTop: 6, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-muted)',
+              marginTop: 6,
+              borderTop: '1px solid var(--border)',
+              paddingTop: 6,
+            }}
+          >
             PM: {p.project_manager}
           </div>
         )}
@@ -1197,7 +1582,9 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
         <div style={{ fontWeight: 600 }}>{p.name}</div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{p.muni_type}</div>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+          {p.muni_type}
+        </div>
       </div>
     )
   }
@@ -1207,7 +1594,9 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
         <div style={{ fontWeight: 600 }}>Zone {p.fld_zone}</div>
-        {p.zone_subty && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.zone_subty}</div>}
+        {p.zone_subty && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.zone_subty}</div>
+        )}
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
           SFHA: {p.sfha_tf === 'T' ? 'Yes' : 'No'}
         </div>

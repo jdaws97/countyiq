@@ -108,7 +108,13 @@ def pa_dos_entities(
     s3: S3StorageResource,
 ) -> MaterializeResult:
     county = get_county_config()
-    authorization = authorize_source(database, source_key="data_pa_businesses", acquisition_method="soda_api", asset_key="pa_dos_entities", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key="data_pa_businesses",
+        acquisition_method="soda_api",
+        asset_key="pa_dos_entities",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
     log = context.log
@@ -146,7 +152,10 @@ def pa_dos_entities(
 
     log.info(
         "Queued %d entity names (run cap=%d, found TTL=%dd, miss TTL=%dd)",
-        len(entity_names), max_names, found_ttl_days, not_found_ttl_days,
+        len(entity_names),
+        max_names,
+        found_ttl_days,
+        not_found_ttl_days,
     )
 
     dataset_url = f"{county.soda_base_url}/{county.pa_dos_soda_dataset}.json"
@@ -172,7 +181,11 @@ def pa_dos_entities(
         if processed > 0 and processed % _LOG_INTERVAL == 0:
             log.info(
                 "Progress: %d/%d processed, %d found, %d not found, %d errors",
-                processed, len(entity_names), found, not_found, error_count,
+                processed,
+                len(entity_names),
+                found,
+                not_found,
+                error_count,
             )
 
         last_attempted_name = entity_name
@@ -194,7 +207,8 @@ def pa_dos_entities(
 
         record["source_url"] = (
             f"{dataset_url}?filing_number={record['entity_number']}"
-            if record["entity_number"] else dataset_url
+            if record["entity_number"]
+            else dataset_url
         )
         record["last_checked_at"] = datetime.now(timezone.utc)
         records.append(record)
@@ -257,8 +271,21 @@ def pa_dos_entities(
 # matched literally; parse_soda_business_rows normalizes suffixes when it
 # compact-compares candidates.
 _SUFFIX_TOKENS = {
-    "LLC", "LLP", "LLLP", "LP", "INC", "CORP", "LTD", "CO", "LC", "PC",
-    "LIMITED", "PARTNERSHIP", "COMPANY", "CORPORATION", "INCORPORATED",
+    "LLC",
+    "LLP",
+    "LLLP",
+    "LP",
+    "INC",
+    "CORP",
+    "LTD",
+    "CO",
+    "LC",
+    "PC",
+    "LIMITED",
+    "PARTNERSHIP",
+    "COMPANY",
+    "CORPORATION",
+    "INCORPORATED",
 }
 
 
@@ -316,7 +343,11 @@ def _query_pattern(
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.HTTPError as e:
-        if attempt < _MAX_RETRIES and e.response is not None and e.response.status_code >= 500:
+        if (
+            attempt < _MAX_RETRIES
+            and e.response is not None
+            and e.response.status_code >= 500
+        ):
             time.sleep(_RETRY_BACKOFF * attempt)
             return _query_pattern(session, dataset_url, pattern, attempt + 1)
         raise
@@ -341,6 +372,7 @@ def _lookup_entity(
 # ---------------------------------------------------------------------------
 # Database helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_pending_entity_names(
     database: DatabaseResource,

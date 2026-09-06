@@ -120,9 +120,16 @@ def _get_feature_count(url: str, where: str = "1=1") -> int:
     return resp.json().get("count", 0)
 
 
-def _fetch_page(url: str, where: str, out_fields: str, out_sr: int,
-                batch_size: int, offset: int, return_geometry: bool,
-                retries: int = 3) -> list[dict]:
+def _fetch_page(
+    url: str,
+    where: str,
+    out_fields: str,
+    out_sr: int,
+    batch_size: int,
+    offset: int,
+    return_geometry: bool,
+    retries: int = 3,
+) -> list[dict]:
     """Fetch a single page — called by the thread pool workers.
 
     Retries transient failures (5xx, timeouts, connection errors) with
@@ -144,18 +151,24 @@ def _fetch_page(url: str, where: str, out_fields: str, out_sr: int,
             resp.raise_for_status()
             data = resp.json()
             if "error" in data:
-                raise RuntimeError(f"ArcGIS API error at offset {offset}: {data['error']}")
+                raise RuntimeError(
+                    f"ArcGIS API error at offset {offset}: {data['error']}"
+                )
             return data.get("features", [])
-        except (requests.exceptions.Timeout,
-                requests.exceptions.ConnectionError) as exc:
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+        ) as exc:
             last_exc = exc
         except requests.exceptions.HTTPError as exc:
             last_exc = exc
             if exc.response is not None and exc.response.status_code < 500:
                 raise  # 4xx won't heal on retry
         if attempt < retries - 1:
-            time.sleep(2 ** attempt)
-    raise RuntimeError(f"Page at offset {offset} failed after {retries} attempts: {last_exc}")
+            time.sleep(2**attempt)
+    raise RuntimeError(
+        f"Page at offset {offset} failed after {retries} attempts: {last_exc}"
+    )
 
 
 def iterate_feature_pages_parallel(
@@ -192,10 +205,17 @@ def iterate_feature_pages_parallel(
     offsets = iter(range(0, total, batch_size))
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
+
         def submit(offset: int):
             return pool.submit(
-                _fetch_page, url, where, out_fields, out_sr,
-                batch_size, offset, return_geometry,
+                _fetch_page,
+                url,
+                where,
+                out_fields,
+                out_sr,
+                batch_size,
+                offset,
+                return_geometry,
             )
 
         pending = {}
@@ -223,8 +243,7 @@ def iterate_feature_pages_parallel(
             fetched += len(features)
             if completed % 10 == 0 or completed == page_total:
                 log.info(
-                    f"  Pages consumed: {completed}/{page_total} "
-                    f"({fetched:,} features)"
+                    f"  Pages consumed: {completed}/{page_total} ({fetched:,} features)"
                 )
 
             yield features

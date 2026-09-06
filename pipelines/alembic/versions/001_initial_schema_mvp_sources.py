@@ -4,6 +4,7 @@ Revision ID: 001
 Revises:
 Create Date: 2026-03-20
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -67,17 +68,38 @@ def upgrade() -> None:
         sa.Column("comm_building_sq_ft", sa.Integer),
         sa.Column("grade", sa.String(2)),
         sa.Column("cdu", sa.String(2)),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("pidn", "valid_from"),
         schema="staging",
     )
     # PostGIS geometry column added separately (Alembic doesn't natively handle geometry)
-    op.execute("SELECT AddGeometryColumn('staging', 'parcels', 'geom', 4326, 'MULTIPOLYGON', 2)")
-    op.create_index("idx_parcels_geom", "parcels", ["geom"], schema="staging", postgresql_using="gist")
+    op.execute(
+        "SELECT AddGeometryColumn('staging', 'parcels', 'geom', 4326, 'MULTIPOLYGON', 2)"
+    )
+    op.create_index(
+        "idx_parcels_geom",
+        "parcels",
+        ["geom"],
+        schema="staging",
+        postgresql_using="gist",
+    )
     op.create_index("idx_parcels_owner", "parcels", ["owner_full"], schema="staging")
-    op.create_index("idx_parcels_municipality", "parcels", ["municipality"], schema="staging")
-    op.create_index("idx_parcels_current", "parcels", ["pidn"], schema="staging", postgresql_where=sa.text("valid_to IS NULL"))
+    op.create_index(
+        "idx_parcels_municipality", "parcels", ["municipality"], schema="staging"
+    )
+    op.create_index(
+        "idx_parcels_current",
+        "parcels",
+        ["pidn"],
+        schema="staging",
+        postgresql_where=sa.text("valid_to IS NULL"),
+    )
 
     # --- staging.assessment_properties (Source 2: Assessment Database) ---
     op.create_table(
@@ -98,13 +120,29 @@ def upgrade() -> None:
         sa.Column("permits", JSONB),
         sa.Column("delinquent_taxes", JSONB),
         sa.Column("value_history", JSONB),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("pidn", "valid_from"),
         schema="staging",
     )
-    op.create_index("idx_assessment_owner", "assessment_properties", ["owner_name"], schema="staging")
-    op.create_index("idx_assessment_current", "assessment_properties", ["pidn"], schema="staging", postgresql_where=sa.text("valid_to IS NULL"))
+    op.create_index(
+        "idx_assessment_owner",
+        "assessment_properties",
+        ["owner_name"],
+        schema="staging",
+    )
+    op.create_index(
+        "idx_assessment_current",
+        "assessment_properties",
+        ["pidn"],
+        schema="staging",
+        postgresql_where=sa.text("valid_to IS NULL"),
+    )
 
     # --- staging.flood_zones (Source 3: FEMA NFHL) ---
     op.create_table(
@@ -114,13 +152,26 @@ def upgrade() -> None:
         sa.Column("sfha_tf", sa.String(1)),
         sa.Column("fld_ar_id", sa.Text, nullable=False),
         sa.Column("study_typ", sa.Text),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("fld_ar_id", "valid_from"),
         schema="staging",
     )
-    op.execute("SELECT AddGeometryColumn('staging', 'flood_zones', 'geom', 4326, 'MULTIPOLYGON', 2)")
-    op.create_index("idx_flood_geom", "flood_zones", ["geom"], schema="staging", postgresql_using="gist")
+    op.execute(
+        "SELECT AddGeometryColumn('staging', 'flood_zones', 'geom', 4326, 'MULTIPOLYGON', 2)"
+    )
+    op.create_index(
+        "idx_flood_geom",
+        "flood_zones",
+        ["geom"],
+        schema="staging",
+        postgresql_using="gist",
+    )
 
     # --- staging.municipalities (Source 1: GIS Portal) ---
     op.create_table(
@@ -128,26 +179,52 @@ def upgrade() -> None:
         sa.Column("name", sa.Text, nullable=False),
         sa.Column("muni_type", sa.Text),
         sa.Column("county", sa.Text),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("name", "valid_from"),
         schema="staging",
     )
-    op.execute("SELECT AddGeometryColumn('staging', 'municipalities', 'geom', 4326, 'MULTIPOLYGON', 2)")
-    op.create_index("idx_muni_geom", "municipalities", ["geom"], schema="staging", postgresql_using="gist")
+    op.execute(
+        "SELECT AddGeometryColumn('staging', 'municipalities', 'geom', 4326, 'MULTIPOLYGON', 2)"
+    )
+    op.create_index(
+        "idx_muni_geom",
+        "municipalities",
+        ["geom"],
+        schema="staging",
+        postgresql_using="gist",
+    )
 
     # --- staging.school_districts (Source 1: GIS Portal) ---
     op.create_table(
         "school_districts",
         sa.Column("name", sa.Text, nullable=False),
         sa.Column("district_code", sa.String(5)),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("name", "valid_from"),
         schema="staging",
     )
-    op.execute("SELECT AddGeometryColumn('staging', 'school_districts', 'geom', 4326, 'MULTIPOLYGON', 2)")
-    op.create_index("idx_school_geom", "school_districts", ["geom"], schema="staging", postgresql_using="gist")
+    op.execute(
+        "SELECT AddGeometryColumn('staging', 'school_districts', 'geom', 4326, 'MULTIPOLYGON', 2)"
+    )
+    op.create_index(
+        "idx_school_geom",
+        "school_districts",
+        ["geom"],
+        schema="staging",
+        postgresql_using="gist",
+    )
 
     # --- staging.zoning_districts (Source 1: GIS Portal) ---
     op.create_table(
@@ -156,14 +233,32 @@ def upgrade() -> None:
         sa.Column("zone_type", sa.Text),
         sa.Column("zone_desc", sa.Text),
         sa.Column("municipality", sa.Text),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("zone_id", "valid_from"),
         schema="staging",
     )
-    op.execute("SELECT AddGeometryColumn('staging', 'zoning_districts', 'geom', 4326, 'MULTIPOLYGON', 2)")
-    op.create_index("idx_zoning_geom", "zoning_districts", ["geom"], schema="staging", postgresql_using="gist")
-    op.create_index("idx_zoning_municipality", "zoning_districts", ["municipality"], schema="staging")
+    op.execute(
+        "SELECT AddGeometryColumn('staging', 'zoning_districts', 'geom', 4326, 'MULTIPOLYGON', 2)"
+    )
+    op.create_index(
+        "idx_zoning_geom",
+        "zoning_districts",
+        ["geom"],
+        schema="staging",
+        postgresql_using="gist",
+    )
+    op.create_index(
+        "idx_zoning_municipality",
+        "zoning_districts",
+        ["municipality"],
+        schema="staging",
+    )
 
     # --- staging.pa_open_data (Source 4: PA Open Data / SODA API) ---
     op.create_table(
@@ -171,7 +266,12 @@ def upgrade() -> None:
         sa.Column("dataset_id", sa.Text, nullable=False),
         sa.Column("record_id", sa.Text, nullable=False),
         sa.Column("data", JSONB, nullable=False),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("dataset_id", "record_id", "valid_from"),
         schema="staging",
@@ -187,13 +287,26 @@ def upgrade() -> None:
         sa.Column("municipality", sa.Text),
         sa.Column("speed_limit", sa.Integer),
         sa.Column("surface_type", sa.Text),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("road_id", "valid_from"),
         schema="staging",
     )
-    op.execute("SELECT AddGeometryColumn('staging', 'penndot_roads', 'geom', 4326, 'MULTILINESTRING', 2)")
-    op.create_index("idx_roads_geom", "penndot_roads", ["geom"], schema="staging", postgresql_using="gist")
+    op.execute(
+        "SELECT AddGeometryColumn('staging', 'penndot_roads', 'geom', 4326, 'MULTILINESTRING', 2)"
+    )
+    op.create_index(
+        "idx_roads_geom",
+        "penndot_roads",
+        ["geom"],
+        schema="staging",
+        postgresql_using="gist",
+    )
 
     # --- staging.penndot_projects (Source 13: PennDOT Projects MapServer) ---
     op.create_table(
@@ -209,13 +322,26 @@ def upgrade() -> None:
         sa.Column("municipality", sa.Text),
         sa.Column("county", sa.Text),
         sa.Column("data", JSONB),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("project_id", "valid_from"),
         schema="staging",
     )
-    op.execute("SELECT AddGeometryColumn('staging', 'penndot_projects', 'geom', 4326, 'GEOMETRY', 2)")
-    op.create_index("idx_projects_geom", "penndot_projects", ["geom"], schema="staging", postgresql_using="gist")
+    op.execute(
+        "SELECT AddGeometryColumn('staging', 'penndot_projects', 'geom', 4326, 'GEOMETRY', 2)"
+    )
+    op.create_index(
+        "idx_projects_geom",
+        "penndot_projects",
+        ["geom"],
+        schema="staging",
+        postgresql_using="gist",
+    )
 
     # =====================================================================
     # PUBLIC SCHEMA — Entity-resolved, query-ready
@@ -232,30 +358,57 @@ def upgrade() -> None:
         sa.Column("parcel_count", sa.Integer, server_default="0"),
         sa.Column("first_seen", sa.Date),
         sa.Column("last_seen", sa.Date),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
         schema="public",
     )
-    op.create_index("idx_owners_name", "owners", ["canonical_name"], schema="public", postgresql_using="gin", postgresql_ops={"canonical_name": "gin_trgm_ops"})
-    op.create_index("idx_owners_municipality", "owners", ["municipality"], schema="public")
+    op.create_index(
+        "idx_owners_name",
+        "owners",
+        ["canonical_name"],
+        schema="public",
+        postgresql_using="gin",
+        postgresql_ops={"canonical_name": "gin_trgm_ops"},
+    )
+    op.create_index(
+        "idx_owners_municipality", "owners", ["municipality"], schema="public"
+    )
 
     # --- public.owner_source_links ---
     op.create_table(
         "owner_source_links",
         sa.Column("link_id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("owner_id", sa.Integer, sa.ForeignKey("public.owners.owner_id"), nullable=False),
+        sa.Column(
+            "owner_id",
+            sa.Integer,
+            sa.ForeignKey("public.owners.owner_id"),
+            nullable=False,
+        ),
         sa.Column("source_type", sa.Text, nullable=False),
         sa.Column("source_id", sa.Text, nullable=False),
         sa.Column("source_name", sa.Text),
         sa.Column("source_address", sa.Text),
         sa.Column("match_tier", sa.Text),
         sa.Column("confidence", sa.Numeric(3, 2)),
-        sa.Column("matched_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
+        sa.Column(
+            "matched_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
         sa.UniqueConstraint("source_type", "source_id"),
         schema="public",
     )
-    op.create_index("idx_owner_links_owner", "owner_source_links", ["owner_id"], schema="public")
-    op.create_index("idx_owner_links_source", "owner_source_links", ["source_type", "source_id"], schema="public")
+    op.create_index(
+        "idx_owner_links_owner", "owner_source_links", ["owner_id"], schema="public"
+    )
+    op.create_index(
+        "idx_owner_links_source",
+        "owner_source_links",
+        ["source_type", "source_id"],
+        schema="public",
+    )
 
     # --- public.properties VIEW ---
     op.execute("""
@@ -299,23 +452,42 @@ def upgrade() -> None:
         sa.Column("prev_record_count", sa.Integer),
         sa.Column("error_message", sa.Text),
         sa.Column("next_scheduled_run", sa.DateTime(timezone=True)),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
         schema="meta",
     )
-    op.execute("ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_schedule_type CHECK (schedule_type IN ('daily', 'weekly', 'monthly', 'on_demand'))")
-    op.execute("ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_status CHECK (status IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS'))")
-    op.execute("ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_duration CHECK (duration_seconds >= 0)")
-    op.execute("ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_record_count CHECK (record_count >= 0)")
-    op.execute("ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_prev_count CHECK (prev_record_count >= 0)")
+    op.execute(
+        "ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_schedule_type CHECK (schedule_type IN ('daily', 'weekly', 'monthly', 'on_demand'))"
+    )
+    op.execute(
+        "ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_status CHECK (status IN ('SUCCESS', 'FAILURE', 'IN_PROGRESS'))"
+    )
+    op.execute(
+        "ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_duration CHECK (duration_seconds >= 0)"
+    )
+    op.execute(
+        "ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_record_count CHECK (record_count >= 0)"
+    )
+    op.execute(
+        "ALTER TABLE meta.pipeline_status ADD CONSTRAINT chk_prev_count CHECK (prev_record_count >= 0)"
+    )
 
     op.create_table(
         "infra_metrics",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("checked_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "checked_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("metrics", JSONB, nullable=False),
         schema="meta",
     )
-    op.create_index("idx_infra_metrics_checked", "infra_metrics", ["checked_at"], schema="meta")
+    op.create_index(
+        "idx_infra_metrics_checked", "infra_metrics", ["checked_at"], schema="meta"
+    )
 
     op.create_table(
         "data_quality_checks",
@@ -324,11 +496,20 @@ def upgrade() -> None:
         sa.Column("check_name", sa.Text, nullable=False),
         sa.Column("passed", sa.Boolean, nullable=False),
         sa.Column("details", sa.Text),
-        sa.Column("checked_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
+        sa.Column(
+            "checked_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
         schema="meta",
     )
-    op.execute("ALTER TABLE meta.data_quality_checks ADD CONSTRAINT chk_check_name CHECK (check_name IN ('record_count_nonzero', 'schema_valid', 'freshness_ok', 'row_count_delta'))")
-    op.create_index("idx_dq_checks_source", "data_quality_checks", [sa.text("source_name"), sa.text("checked_at DESC")], schema="meta")
+    op.execute(
+        "ALTER TABLE meta.data_quality_checks ADD CONSTRAINT chk_check_name CHECK (check_name IN ('record_count_nonzero', 'schema_valid', 'freshness_ok', 'row_count_delta'))"
+    )
+    op.create_index(
+        "idx_dq_checks_source",
+        "data_quality_checks",
+        [sa.text("source_name"), sa.text("checked_at DESC")],
+        schema="meta",
+    )
 
     # =====================================================================
     # FUNCTIONS — Normalization + PARID crosswalk

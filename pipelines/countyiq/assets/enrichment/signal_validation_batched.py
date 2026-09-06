@@ -9,6 +9,7 @@ This is the production-recommended asset. The per-signal version
 
 The asset requires ``COUNTYIQ_PASS2_ENABLED=true``; model selection is independent.
 """
+
 import hashlib
 import json
 import os
@@ -294,6 +295,7 @@ UPSERT_EVIDENCE_QUERY = """
 # Dagster Asset
 # ---------------------------------------------------------------------------
 
+
 @asset(
     group_name="enrichment",
     description=(
@@ -342,7 +344,9 @@ def signal_validation_batched(
     n_trials = max(1, int(os.environ.get("COUNTYIQ_PASS2_TRIALS", "1")))
     fingerprint = pass2_config_fingerprint(config.model_path, n_trials)
     stored_rows = database.execute(FINGERPRINT_SELECT, {"pass_number": 2}) or []
-    stored_fingerprint = _row_value(stored_rows[0], "fingerprint") if stored_rows else None
+    stored_fingerprint = (
+        _row_value(stored_rows[0], "fingerprint") if stored_rows else None
+    )
     fast_path = stored_fingerprint == fingerprint
     log.info(
         "Finding parcels with unvalidated signals (%s)",
@@ -351,7 +355,9 @@ def signal_validation_batched(
         else "full scan: model/prompt fingerprint changed or never recorded",
     )
     rows = database.execute(
-        PARCELS_NEEDING_VALIDATION_FAST_QUERY if fast_path else PARCELS_NEEDING_VALIDATION_QUERY
+        PARCELS_NEEDING_VALIDATION_FAST_QUERY
+        if fast_path
+        else PARCELS_NEEDING_VALIDATION_QUERY
     )
     pidns = [_row_value(row, "pidn") for row in (rows or [])]
     total_parcels = len(pidns)
@@ -400,7 +406,9 @@ def signal_validation_batched(
         except Exception as exc:
             log.warning(f"Error gathering context for {pidn}: {exc}")
             try:
-                _update_pass_status(database, pidn, 2, "error", "", error_message=str(exc))
+                _update_pass_status(
+                    database, pidn, 2, "error", "", error_message=str(exc)
+                )
             except Exception as status_exc:
                 log.warning(f"Failed to persist error status for {pidn}: {status_exc}")
             gather_errors += 1
@@ -455,312 +463,358 @@ def signal_validation_batched(
         if executor is None:
             return
         for trial_idx in range(item.n_trials):
-            archive_key = item.pidn if item.n_trials == 1 else f"{item.pidn}:trial-{trial_idx}"
+            archive_key = (
+                item.pidn if item.n_trials == 1 else f"{item.pidn}:trial-{trial_idx}"
+            )
             item.futures[trial_idx] = executor.submit(
-                invoke_with_retry, config, item.prompt, archive_key=archive_key, retries=1
+                invoke_with_retry,
+                config,
+                item.prompt,
+                archive_key=archive_key,
+                retries=1,
             )
 
     def _trial_result(item: _WorkItem, trial_idx: int):
         future = item.futures.pop(trial_idx, None)
         if future is not None:
             return future.result()
-        archive_key = item.pidn if item.n_trials == 1 else f"{item.pidn}:trial-{trial_idx}"
-        return invoke_with_retry(config, item.prompt, archive_key=archive_key, retries=1)
+        archive_key = (
+            item.pidn if item.n_trials == 1 else f"{item.pidn}:trial-{trial_idx}"
+        )
+        return invoke_with_retry(
+            config, item.prompt, archive_key=archive_key, retries=1
+        )
 
     dispatched_upto = 0
     try:
-      for i, item in enumerate(work_items, 1):
-        if spend_limit_reached:
-            break
-        # Keep `concurrency` parcels in flight ahead of the consumer.
-        while dispatched_upto < len(work_items) and dispatched_upto < i - 1 + concurrency:
-            _dispatch(work_items[dispatched_upto])
-            dispatched_upto += 1
+        for i, item in enumerate(work_items, 1):
+            if spend_limit_reached:
+                break
+            # Keep `concurrency` parcels in flight ahead of the consumer.
+            while (
+                dispatched_upto < len(work_items)
+                and dispatched_upto < i - 1 + concurrency
+            ):
+                _dispatch(work_items[dispatched_upto])
+                dispatched_upto += 1
 
-        pidn = item.pidn
-        ctx = item.ctx
-        source_hash = item.source_hash
-        input_hash: str | None = item.input_hash
-        n_trials = item.n_trials
-        try:
-            trial_parses: list[dict] = []
-            trial_result = None
-            last_success_result = None
-            for trial_idx in range(n_trials):
-                trial_result = _trial_result(item, trial_idx)
-                if not trial_result.success:
-                    log.warning(
-                        f"LLM failed for {pidn} (trial {trial_idx + 1}/{n_trials}): "
-                        f"{trial_result.error}"
-                    )
-                    continue
-                tp = parse_batched_signal_output(trial_result.parsed or {}, ctx["signals"])
-                if tp.get("parse_error"):
-                    log.warning(
-                        f"Parse error on {pidn} trial {trial_idx + 1}/{n_trials}: "
-                        f"{tp['parse_error']}"
-                    )
-                    continue
-                trial_parses.append(tp)
-                last_success_result = trial_result
-
-            if not trial_parses:
-                # All N trials failed — escalate as a parcel-level error.
-                err_msg = trial_result.error if trial_result else "all trials failed"
-                _update_pass_status(database, pidn, 2, "error", input_hash, err_msg)
-                errors += 1
-                continue
-
-            # Merge trials into single set with trial_agreement + confidence.
-            if n_trials == 1:
-                # Single-trial mode: preserve legacy shape, annotate metadata.
-                parsed = trial_parses[0]
-                for v in parsed.get("validations", []):
-                    v.setdefault("n_trials", 1)
-                    v.setdefault("trial_agreement", 1.0)
-                    v.setdefault("confidence", None)
-            else:
-                parsed = merge_trial_validations(trial_parses, ctx["signals"])
-
-            all_validations = list(parsed["validations"])
-            unresolved_error_keys = set(parsed.get("errors") or [])
-
-            # Retry path: if any signals were missing or failed to parse,
-            # make a second call with just those signals to recover them.
-            retry_keys = set(parsed.get("missing", [])) | set(parsed.get("errors", []))
-            if retry_keys:
-                retry_signals = [
-                    s for s in ctx["signals"] if s["signal_key"] in retry_keys
-                ]
-                log.info(
-                    f"{pidn}: retrying {len(retry_signals)} dropped signal(s): "
-                    f"{sorted(retry_keys)}"
-                )
-
-                retry_prompt = build_batched_signal_prompt(
-                    ctx, signals_override=retry_signals
-                )
-                retry_result = invoke_with_retry(
-                    config, retry_prompt, archive_key=f"{pidn}:retry", retries=1
-                )
-
-                if retry_result.success:
-                    last_success_result = retry_result
-                    retry_parsed = parse_batched_signal_output(
-                        retry_result.parsed or {}, retry_signals
-                    )
-                    # Take whatever validations the retry produced
-                    all_validations.extend(retry_parsed.get("validations", []))
-                    recovered_retry_keys = {
-                        v["signal_key"] for v in retry_parsed.get("validations", [])
-                    }
-                    unresolved_error_keys = (
-                        (unresolved_error_keys - retry_keys)
-                        | set(retry_parsed.get("errors", []))
-                    ) - recovered_retry_keys
-                    if retry_parsed.get("missing"):
+            pidn = item.pidn
+            ctx = item.ctx
+            source_hash = item.source_hash
+            input_hash: str | None = item.input_hash
+            n_trials = item.n_trials
+            try:
+                trial_parses: list[dict] = []
+                trial_result = None
+                last_success_result = None
+                for trial_idx in range(n_trials):
+                    trial_result = _trial_result(item, trial_idx)
+                    if not trial_result.success:
                         log.warning(
-                            f"{pidn}: still missing after retry: "
-                            f"{retry_parsed['missing']}"
+                            f"LLM failed for {pidn} (trial {trial_idx + 1}/{n_trials}): "
+                            f"{trial_result.error}"
                         )
-                else:
-                    log.warning(f"{pidn}: retry failed: {retry_result.error}")
+                        continue
+                    tp = parse_batched_signal_output(
+                        trial_result.parsed or {}, ctx["signals"]
+                    )
+                    if tp.get("parse_error"):
+                        log.warning(
+                            f"Parse error on {pidn} trial {trial_idx + 1}/{n_trials}: "
+                            f"{tp['parse_error']}"
+                        )
+                        continue
+                    trial_parses.append(tp)
+                    last_success_result = trial_result
 
-            validation_errors = validate_pass2_evidence_refs(
-                all_validations,
-                ctx["signals"],
-                ctx.get("context_signals", []),
-                parsed.get("cross_signal_insight") or None,
-            )
-            if validation_errors:
-                record_validation_rejection(
+                if not trial_parses:
+                    # All N trials failed — escalate as a parcel-level error.
+                    err_msg = (
+                        trial_result.error if trial_result else "all trials failed"
+                    )
+                    _update_pass_status(database, pidn, 2, "error", input_hash, err_msg)
+                    errors += 1
+                    continue
+
+                # Merge trials into single set with trial_agreement + confidence.
+                if n_trials == 1:
+                    # Single-trial mode: preserve legacy shape, annotate metadata.
+                    parsed = trial_parses[0]
+                    for v in parsed.get("validations", []):
+                        v.setdefault("n_trials", 1)
+                        v.setdefault("trial_agreement", 1.0)
+                        v.setdefault("confidence", None)
+                else:
+                    parsed = merge_trial_validations(trial_parses, ctx["signals"])
+
+                all_validations = list(parsed["validations"])
+                unresolved_error_keys = set(parsed.get("errors") or [])
+
+                # Retry path: if any signals were missing or failed to parse,
+                # make a second call with just those signals to recover them.
+                retry_keys = set(parsed.get("missing", [])) | set(
+                    parsed.get("errors", [])
+                )
+                if retry_keys:
+                    retry_signals = [
+                        s for s in ctx["signals"] if s["signal_key"] in retry_keys
+                    ]
+                    log.info(
+                        f"{pidn}: retrying {len(retry_signals)} dropped signal(s): "
+                        f"{sorted(retry_keys)}"
+                    )
+
+                    retry_prompt = build_batched_signal_prompt(
+                        ctx, signals_override=retry_signals
+                    )
+                    retry_result = invoke_with_retry(
+                        config, retry_prompt, archive_key=f"{pidn}:retry", retries=1
+                    )
+
+                    if retry_result.success:
+                        last_success_result = retry_result
+                        retry_parsed = parse_batched_signal_output(
+                            retry_result.parsed or {}, retry_signals
+                        )
+                        # Take whatever validations the retry produced
+                        all_validations.extend(retry_parsed.get("validations", []))
+                        recovered_retry_keys = {
+                            v["signal_key"] for v in retry_parsed.get("validations", [])
+                        }
+                        unresolved_error_keys = (
+                            (unresolved_error_keys - retry_keys)
+                            | set(retry_parsed.get("errors", []))
+                        ) - recovered_retry_keys
+                        if retry_parsed.get("missing"):
+                            log.warning(
+                                f"{pidn}: still missing after retry: "
+                                f"{retry_parsed['missing']}"
+                            )
+                    else:
+                        log.warning(f"{pidn}: retry failed: {retry_result.error}")
+
+                validation_errors = validate_pass2_evidence_refs(
+                    all_validations,
+                    ctx["signals"],
+                    ctx.get("context_signals", []),
+                    parsed.get("cross_signal_insight") or None,
+                )
+                if validation_errors:
+                    record_validation_rejection(
+                        database,
+                        subject_key=pidn,
+                        pass_number=2,
+                        output_kind="signal_validation",
+                        source_hash=source_hash,
+                        input_hash=input_hash,
+                        requested_model=config.model_path,
+                        prompt_version=PROMPT_VERSION,
+                        errors=validation_errors,
+                    )
+                    message = "; ".join(validation_errors)
+                    log.warning(
+                        "%s failed evidence-reference validation: %s", pidn, message
+                    )
+                    _update_pass_status(
+                        database,
+                        pidn,
+                        2,
+                        "error",
+                        input_hash,
+                        message,
+                    )
+                    errors += 1
+                    continue
+
+                evidence_refs = sorted(
+                    {
+                        ref
+                        for validation in all_validations
+                        for ref in validation.get("cross_references", [])
+                    }
+                    | proceeding_context_refs(ctx)
+                )
+                history_payload = {
+                    "validations": all_validations,
+                    "cross_signal_insight": parsed.get("cross_signal_insight") or "",
+                }
+                gate = record_inference_decision(
                     database,
                     subject_key=pidn,
                     pass_number=2,
                     output_kind="signal_validation",
+                    decision_key="signal_batch",
                     source_hash=source_hash,
                     input_hash=input_hash,
                     requested_model=config.model_path,
+                    served_model=(
+                        last_success_result.metadata.get("served_model")
+                        if last_success_result
+                        else None
+                    ),
+                    provider=(
+                        last_success_result.metadata.get("provider")
+                        if last_success_result
+                        else None
+                    ),
                     prompt_version=PROMPT_VERSION,
-                    errors=validation_errors,
+                    payload=history_payload,
+                    semantic_decision=pass2_semantic_decision(all_validations),
+                    evidence_refs=evidence_refs,
                 )
-                message = "; ".join(validation_errors)
-                log.warning("%s failed evidence-reference validation: %s", pidn, message)
-                _update_pass_status(
-                    database, pidn, 2, "error", input_hash, message,
-                )
-                errors += 1
-                continue
-
-            evidence_refs = sorted({
-                ref
-                for validation in all_validations
-                for ref in validation.get("cross_references", [])
-            } | proceeding_context_refs(ctx))
-            history_payload = {
-                "validations": all_validations,
-                "cross_signal_insight": parsed.get("cross_signal_insight") or "",
-            }
-            gate = record_inference_decision(
-                database,
-                subject_key=pidn,
-                pass_number=2,
-                output_kind="signal_validation",
-                decision_key="signal_batch",
-                source_hash=source_hash,
-                input_hash=input_hash,
-                requested_model=config.model_path,
-                served_model=(
-                    last_success_result.metadata.get("served_model")
-                    if last_success_result else None
-                ),
-                provider=(
-                    last_success_result.metadata.get("provider")
-                    if last_success_result else None
-                ),
-                prompt_version=PROMPT_VERSION,
-                payload=history_payload,
-                semantic_decision=pass2_semantic_decision(all_validations),
-                evidence_refs=evidence_refs,
-            )
-            if not gate.accepted:
-                auto = auto_resolve_contradiction(database, gate.contradiction_id, log)
-                if auto.resolved:
-                    log.info(
-                        "Contradiction %s auto-resolved (%s): %s",
-                        gate.contradiction_id, auto.resolution, auto.rationale,
+                if not gate.accepted:
+                    auto = auto_resolve_contradiction(
+                        database, gate.contradiction_id, log
                     )
+                    if auto.resolved:
+                        log.info(
+                            "Contradiction %s auto-resolved (%s): %s",
+                            gate.contradiction_id,
+                            auto.resolution,
+                            auto.rationale,
+                        )
+                        continue
+                    message = (
+                        f"quarantined as contradiction {gate.contradiction_id}: "
+                        f"{gate.reason}"
+                    )
+                    log.warning("%s %s", pidn, message)
+                    _update_pass_status(
+                        database,
+                        pidn,
+                        2,
+                        "error",
+                        input_hash,
+                        message,
+                    )
+                    errors += 1
                     continue
-                message = (
-                    f"quarantined as contradiction {gate.contradiction_id}: "
-                    f"{gate.reason}"
-                )
-                log.warning("%s %s", pidn, message)
-                _update_pass_status(
-                    database, pidn, 2, "error", input_hash, message,
-                )
-                errors += 1
-                continue
 
-            # Upsert each gated validation to the active evidence projection.
-            now_iso = datetime.now(UTC).isoformat()
-            written_keys = set()
-            source_by_key = {
-                signal["signal_key"]: signal for signal in ctx["signals"]
-            }
-            with database.transaction(dict_rows=True) as cur:
-                assert_current_validation_context(cur, pidn, source_hash)
-                current_keys = [
-                    validation["signal_key"] for validation in all_validations
-                ]
-                cur.execute(
-                    """
+                # Upsert each gated validation to the active evidence projection.
+                now_iso = datetime.now(UTC).isoformat()
+                written_keys = set()
+                source_by_key = {
+                    signal["signal_key"]: signal for signal in ctx["signals"]
+                }
+                with database.transaction(dict_rows=True) as cur:
+                    assert_current_validation_context(cur, pidn, source_hash)
+                    current_keys = [
+                        validation["signal_key"] for validation in all_validations
+                    ]
+                    cur.execute(
+                        """
                     DELETE FROM public.evidence
                     WHERE pidn = %s
                       AND NOT (signal_key = ANY(%s::text[]))
                     """,
-                    (pidn, current_keys),
-                )
-                for validation in all_validations:
-                    signal_key = validation["signal_key"]
-                    if signal_key in written_keys:
-                        continue
-                    src_signal = source_by_key[signal_key]
-                    cur.execute(
-                        UPSERT_EVIDENCE_QUERY,
-                        {
-                            "pidn": pidn,
-                            "signal_key": signal_key,
-                            "claim": (
-                                f"{signal_key} classified "
-                                f"{validation['validation_status']} with "
-                                f"{validation['adjusted_significance']} significance"
-                            ),
-                            "evidence_data": json.dumps(src_signal.get("evidence", {})),
-                            "source_url": None,
-                            "internal_url": f"/property/{pidn}",
-                            "validation_status": validation["validation_status"],
-                            "adjusted_significance": validation["adjusted_significance"],
-                            "validation_reasoning": validation["reasoning"],
-                            "cross_references": json.dumps(
-                                validation.get("cross_references", [])
-                            ),
-                            "validated_at": now_iso,
-                            "model_version": config.model_path,
-                            "prompt_version": PROMPT_VERSION,
-                            "n_trials": validation.get("n_trials"),
-                            "trial_agreement": validation.get("trial_agreement"),
-                            "confidence": validation.get("confidence"),
-                            "active_inference_id": gate.inference_id,
-                        },
+                        (pidn, current_keys),
                     )
-                    written_keys.add(signal_key)
-                    signals_validated += 1
+                    for validation in all_validations:
+                        signal_key = validation["signal_key"]
+                        if signal_key in written_keys:
+                            continue
+                        src_signal = source_by_key[signal_key]
+                        cur.execute(
+                            UPSERT_EVIDENCE_QUERY,
+                            {
+                                "pidn": pidn,
+                                "signal_key": signal_key,
+                                "claim": (
+                                    f"{signal_key} classified "
+                                    f"{validation['validation_status']} with "
+                                    f"{validation['adjusted_significance']} significance"
+                                ),
+                                "evidence_data": json.dumps(
+                                    src_signal.get("evidence", {})
+                                ),
+                                "source_url": None,
+                                "internal_url": f"/property/{pidn}",
+                                "validation_status": validation["validation_status"],
+                                "adjusted_significance": validation[
+                                    "adjusted_significance"
+                                ],
+                                "validation_reasoning": validation["reasoning"],
+                                "cross_references": json.dumps(
+                                    validation.get("cross_references", [])
+                                ),
+                                "validated_at": now_iso,
+                                "model_version": config.model_path,
+                                "prompt_version": PROMPT_VERSION,
+                                "n_trials": validation.get("n_trials"),
+                                "trial_agreement": validation.get("trial_agreement"),
+                                "confidence": validation.get("confidence"),
+                                "active_inference_id": gate.inference_id,
+                            },
+                        )
+                        written_keys.add(signal_key)
+                        signals_validated += 1
 
-            # Report unrecovered losses (rare — after retry, these are truly dropped)
-            expected_keys = {s["signal_key"] for s in ctx["signals"]}
-            final_missing = sorted(expected_keys - written_keys)
-            if final_missing:
-                log.warning(
-                    f"{pidn}: {len(final_missing)} signal(s) unrecovered after retry: "
-                    f"{final_missing}"
-                )
+                # Report unrecovered losses (rare — after retry, these are truly dropped)
+                expected_keys = {s["signal_key"] for s in ctx["signals"]}
+                final_missing = sorted(expected_keys - written_keys)
+                if final_missing:
+                    log.warning(
+                        f"{pidn}: {len(final_missing)} signal(s) unrecovered after retry: "
+                        f"{final_missing}"
+                    )
 
-            # Persist the full pass record including cross-signal insight and
-            # any unrecovered signal keys so follow-up runs can target them.
-            _update_pass_status(
-                database,
-                pidn,
-                2,
-                "complete",
-                input_hash,
-                cross_signal_insight=parsed.get("cross_signal_insight") or None,
-                missing_signal_keys=final_missing or None,
-                error_signal_keys=sorted(unresolved_error_keys) or None,
-                signals_validated_count=len(written_keys),
-            )
-            parcels_validated += 1
-
-            if (i % 50) == 0:
-                log.info(
-                    f"Progress: {i}/{total_parcels} parcels "
-                    f"({parcels_validated} validated, {parcels_skipped} skipped, "
-                    f"{errors} errors)"
-                )
-
-        except PassSpendLimitExceeded as exc:
-            spend_limit_reached = True
-            log.info(
-                "Pass 2 dollar ceiling reached; remaining parcels are deferred: %s",
-                exc,
-            )
-            break
-        except Exception as exc:
-            # Record the error against meta.intelligence_passes so the next
-            # run has the context to target or skip this parcel, and so the
-            # failure reason survives outside the log stream.
-            log.warning(
-                f"Error processing parcel {pidn}: {exc}\n{traceback.format_exc()}"
-            )
-            try:
+                # Persist the full pass record including cross-signal insight and
+                # any unrecovered signal keys so follow-up runs can target them.
                 _update_pass_status(
                     database,
                     pidn,
                     2,
-                    "error",
-                    input_hash or "",
-                    error_message=str(exc),
+                    "complete",
+                    input_hash,
+                    cross_signal_insight=parsed.get("cross_signal_insight") or None,
+                    missing_signal_keys=final_missing or None,
+                    error_signal_keys=sorted(unresolved_error_keys) or None,
+                    signals_validated_count=len(written_keys),
                 )
-            except Exception as status_exc:
-                # Don't let a secondary failure break the loop
-                log.warning(f"Failed to persist error status for {pidn}: {status_exc}")
-            errors += 1
+                parcels_validated += 1
+
+                if (i % 50) == 0:
+                    log.info(
+                        f"Progress: {i}/{total_parcels} parcels "
+                        f"({parcels_validated} validated, {parcels_skipped} skipped, "
+                        f"{errors} errors)"
+                    )
+
+            except PassSpendLimitExceeded as exc:
+                spend_limit_reached = True
+                log.info(
+                    "Pass 2 dollar ceiling reached; remaining parcels are deferred: %s",
+                    exc,
+                )
+                break
+            except Exception as exc:
+                # Record the error against meta.intelligence_passes so the next
+                # run has the context to target or skip this parcel, and so the
+                # failure reason survives outside the log stream.
+                log.warning(
+                    f"Error processing parcel {pidn}: {exc}\n{traceback.format_exc()}"
+                )
+                try:
+                    _update_pass_status(
+                        database,
+                        pidn,
+                        2,
+                        "error",
+                        input_hash or "",
+                        error_message=str(exc),
+                    )
+                except Exception as status_exc:
+                    # Don't let a secondary failure break the loop
+                    log.warning(
+                        f"Failed to persist error status for {pidn}: {status_exc}"
+                    )
+                errors += 1
 
     finally:
         if executor is not None:
             # Do not wait on futures that were dispatched but never consumed
             # after a spend stop; cancel them so no further money is spent.
-            for pending in work_items[max(i - 1, 0):] if work_items else []:
+            for pending in work_items[max(i - 1, 0) :] if work_items else []:
                 for future in pending.futures.values():
                     future.cancel()
             executor.shutdown(wait=True, cancel_futures=True)
@@ -777,8 +831,10 @@ def signal_validation_batched(
         f"{errors} errors (concurrency={concurrency}, fast_path={fast_path})"
     )
     check_error_budget(
-        log, label="pass2_signal_validation",
-        errors=errors, total=parcels_validated + errors,
+        log,
+        label="pass2_signal_validation",
+        errors=errors,
+        total=parcels_validated + errors,
     )
 
     return MaterializeResult(
@@ -810,10 +866,14 @@ def signal_validation_batched(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _retract_stale_evidence(database: DatabaseResource) -> int:
-    rows = database.execute(
-        RETRACT_STALE_EVIDENCE_QUERY, {"volatile": list(VOLATILE_EVIDENCE_KEYS)}
-    ) or []
+    rows = (
+        database.execute(
+            RETRACT_STALE_EVIDENCE_QUERY, {"volatile": list(VOLATILE_EVIDENCE_KEYS)}
+        )
+        or []
+    )
     return len(rows)
 
 

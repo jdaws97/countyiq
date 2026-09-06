@@ -34,27 +34,54 @@ def _cursor_context(cursor):
 
 
 def test_new_signal_labels_say_where_the_plan_is():
-    on_parcel = {"distance_m": 0, "evidence": {"plan_title": "Ridge Estates", "plan_location": "point_on_parcel"}}
+    on_parcel = {
+        "distance_m": 0,
+        "evidence": {"plan_title": "Ridge Estates", "plan_location": "point_on_parcel"},
+    }
     nearby = {"distance_m": 142.4, "evidence": {"plan_title": "Ridge Estates"}}
-    assert format_signal_label("active_subdivision", on_parcel) == "Plan point mapped on parcel: Ridge Estates"
-    assert format_signal_label("nearby_subdivision", nearby) == "Plan 142 m away: Ridge Estates"
-    assert format_signal_label(
-        "municipal_action",
-        {"evidence": {"extraction_type": "rezoning_application", "decision": "approved"}},
-    ) == "Municipal rezoning application linked by record (approved)"
-    assert format_signal_label(
-        "entity_assemblage", {"evidence": {"contiguous_same_owner_parcels": 3}}
-    ) == "Same recorded owner holds 3 touching parcels after a recent acquisition"
+    assert (
+        format_signal_label("active_subdivision", on_parcel)
+        == "Plan point mapped on parcel: Ridge Estates"
+    )
+    assert (
+        format_signal_label("nearby_subdivision", nearby)
+        == "Plan 142 m away: Ridge Estates"
+    )
+    assert (
+        format_signal_label(
+            "municipal_action",
+            {
+                "evidence": {
+                    "extraction_type": "rezoning_application",
+                    "decision": "approved",
+                }
+            },
+        )
+        == "Municipal rezoning application linked by record (approved)"
+    )
+    assert (
+        format_signal_label(
+            "entity_assemblage", {"evidence": {"contiguous_same_owner_parcels": 3}}
+        )
+        == "Same recorded owner holds 3 touching parcels after a recent acquisition"
+    )
 
 
 def test_reason_signals_rank_municipal_action_above_context():
     signals = {
         "growth_area": {"weight": 0.02, "evidence": {"ga_type": "PGA"}},
-        "municipal_action": {"weight": 0.14, "evidence": {"extraction_type": "variance_request"}},
+        "municipal_action": {
+            "weight": 0.14,
+            "evidence": {"extraction_type": "variance_request"},
+        },
         "flood_zone": {"weight": -0.1, "evidence": {"fld_zone": "AE"}},
     }
     reasons = build_reason_signals(signals, limit=4)
-    assert [r["key"] for r in reasons] == ["municipal_action", "growth_area", "flood_zone"]
+    assert [r["key"] for r in reasons] == [
+        "municipal_action",
+        "growth_area",
+        "flood_zone",
+    ]
     assert reasons[0]["is_direct"] is True
     assert reasons[2]["is_risk"] is True
 

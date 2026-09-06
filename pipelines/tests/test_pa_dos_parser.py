@@ -36,7 +36,6 @@ def _row(**overrides) -> dict:
 
 
 class TestParseSodaBusinessRows:
-
     def test_matches_despite_case_and_punctuation_drift(self):
         record = parse_soda_business_rows([_row()], "YORK HOLDINGS LLC")
         assert record is not None
@@ -55,7 +54,12 @@ class TestParseSodaBusinessRows:
     def test_officer_rows_group_into_one_record(self):
         rows = [
             _row(),
-            _row(party_type="Secretary", first_name="JOHN", middle_name=None, last_name="SMITH"),
+            _row(
+                party_type="Secretary",
+                first_name="JOHN",
+                middle_name=None,
+                last_name="SMITH",
+            ),
         ]
         record = parse_soda_business_rows(rows, "YORK HOLDINGS LLC")
         assert record["officers"] == [
@@ -83,13 +87,14 @@ class TestParseSodaBusinessRows:
         assert parse_soda_business_rows([], "YORK HOLDINGS LLC") is None
 
     def test_missing_creationdate_still_parses(self):
-        record = parse_soda_business_rows([_row(creationdate=None)], "YORK HOLDINGS LLC")
+        record = parse_soda_business_rows(
+            [_row(creationdate=None)], "YORK HOLDINGS LLC"
+        )
         assert record is not None
         assert record["formation_date"] is None
 
 
 class TestMakeNotFoundRecord:
-
     def test_negative_cache_record(self):
         record = make_not_found_record("GHOST VENTURES LP")
         assert record["entity_name"] == "GHOST VENTURES LP"

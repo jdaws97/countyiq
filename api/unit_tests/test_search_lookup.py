@@ -40,9 +40,7 @@ def test_york_school_district_codes_match_the_county_codebook():
     # The browser currently formats the raw county code itself. Keep that
     # duplicated UI map locked to the API map until labels move into a shared
     # response contract.
-    frontend_labels = (
-        REPO_ROOT / "frontend/src/lib/propertyLabels.ts"
-    ).read_text()
+    frontend_labels = (REPO_ROOT / "frontend/src/lib/propertyLabels.ts").read_text()
     for code, label in expected.items():
         assert f"'{code}': '{label}'" in frontend_labels
 
@@ -62,7 +60,9 @@ def test_company_name_is_not_reversed_around_its_legal_suffix():
 
 
 def test_pasted_address_adds_county_style_suffix_and_drops_location_tail():
-    variants = [value.casefold() for value in _lookup_variants("1 Main Street, York PA 17401")]
+    variants = [
+        value.casefold() for value in _lookup_variants("1 Main Street, York PA 17401")
+    ]
 
     assert "1 main street" in variants
     assert "1 main st" in variants

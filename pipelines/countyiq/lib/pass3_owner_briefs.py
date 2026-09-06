@@ -9,6 +9,7 @@ See ``docs/decisions.md`` for why this
 exists: owner rollups scored 4.75 vs 1.00 on pattern_insight versus
 reading N parcel briefs separately.
 """
+
 from __future__ import annotations
 
 import hashlib as _hashlib
@@ -84,10 +85,17 @@ PROMPT_VERSION = _hashlib.sha256(
 
 
 # Vocabulary clamps for safe parsing.
-VALID_STRATEGIES     = {"accumulator", "flipper", "holder", "distressed", "institutional", "unclear"}
+VALID_STRATEGIES = {
+    "accumulator",
+    "flipper",
+    "holder",
+    "distressed",
+    "institutional",
+    "unclear",
+}
 VALID_RECOMMENDATIONS = {"investigate", "watch", "insufficient_evidence"}
-VALID_URGENCY         = {"urgent_30d", "near_term_90d", "long_term_12mo", "none"}
-VALID_EVIDENCE        = {"strong", "moderate", "weak"}
+VALID_URGENCY = {"urgent_30d", "near_term_90d", "long_term_12mo", "none"}
+VALID_EVIDENCE = {"strong", "moderate", "weak"}
 
 
 def _clamp_enum(value: object, valid: set[str], default: str | None) -> str | None:
@@ -225,9 +233,9 @@ def _format_portfolio_evidence(rows: list[dict]) -> str:
 
 
 def build_owner_rollup_prompt(owner: dict, evidence_rows: list[dict]) -> str:
-    municipalities = sorted({
-        r.get("municipality") for r in evidence_rows if r.get("municipality")
-    })
+    municipalities = sorted(
+        {r.get("municipality") for r in evidence_rows if r.get("municipality")}
+    )
     # Returns only the dynamic user block; the static instructions travel
     # as OWNER_ROLLUP_SYSTEM_PROMPT via the harness system_prompt.
     return OWNER_ROLLUP_USER_TEMPLATE.format(
@@ -254,17 +262,23 @@ def parse_owner_brief_output(output: object) -> dict:
         parcel_citations = []
 
     return {
-        "brief_text":          narrative,
-        "portfolio_strategy":  _clamp_enum(output.get("portfolio_strategy"), VALID_STRATEGIES, "unclear"),
+        "brief_text": narrative,
+        "portfolio_strategy": _clamp_enum(
+            output.get("portfolio_strategy"), VALID_STRATEGIES, "unclear"
+        ),
         "concentration_notes": output.get("concentration_notes") or "",
-        "key_pattern":         output.get("key_pattern") or "",
-        "recommendation":      _clamp_enum(output.get("recommendation"), VALID_RECOMMENDATIONS, "insufficient_evidence"),
-        "urgency":             _clamp_enum(output.get("urgency"), VALID_URGENCY, "none"),
-        "top_risk":            output.get("top_risk") or "",
-        "evidence_strength":   _clamp_enum(output.get("evidence_strength"), VALID_EVIDENCE, "moderate"),
-        "confidence":          _clamp_float_01(output.get("confidence")),
-        "citations":           [c for c in citations if isinstance(c, str)],
-        "parcel_citations":    [c for c in parcel_citations if isinstance(c, str)],
+        "key_pattern": output.get("key_pattern") or "",
+        "recommendation": _clamp_enum(
+            output.get("recommendation"), VALID_RECOMMENDATIONS, "insufficient_evidence"
+        ),
+        "urgency": _clamp_enum(output.get("urgency"), VALID_URGENCY, "none"),
+        "top_risk": output.get("top_risk") or "",
+        "evidence_strength": _clamp_enum(
+            output.get("evidence_strength"), VALID_EVIDENCE, "moderate"
+        ),
+        "confidence": _clamp_float_01(output.get("confidence")),
+        "citations": [c for c in citations if isinstance(c, str)],
+        "parcel_citations": [c for c in parcel_citations if isinstance(c, str)],
     }
 
 
@@ -273,7 +287,6 @@ def owner_brief_context(owner: dict, evidence_rows: list[dict]) -> dict:
     return {
         **owner,
         "signal_municipalities": {
-            row["pidn"]: row.get("municipality") or None
-            for row in evidence_rows
+            row["pidn"]: row.get("municipality") or None for row in evidence_rows
         },
     }

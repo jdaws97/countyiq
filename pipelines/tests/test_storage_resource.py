@@ -34,9 +34,7 @@ def test_local_archive_file_streams_to_destination(tmp_path, monkeypatch):
 
     resource.archive_file("york/arcgis/address_points", str(source))
 
-    archived = list(
-        archive_root.glob("york/arcgis/address_points/*/source.bin")
-    )
+    archived = list(archive_root.glob("york/arcgis/address_points/*/source.bin"))
     assert len(archived) == 1
     assert archived[0].read_bytes() == b"source payload"
 
@@ -94,7 +92,9 @@ def test_non_strict_r2_archive_skips_write_when_cost_guard_is_tripped(
 
 
 @pytest.mark.parametrize("streamed", [False, True])
-def test_same_day_reruns_never_overwrite_locked_objects(tmp_path, monkeypatch, streamed):
+def test_same_day_reruns_never_overwrite_locked_objects(
+    tmp_path, monkeypatch, streamed
+):
     monkeypatch.setattr(storage, "get_dagster_logger", mock.Mock)
     keys = set()
 
@@ -112,8 +112,13 @@ def test_same_day_reruns_never_overwrite_locked_objects(tmp_path, monkeypatch, s
     with mock.patch.object(S3StorageResource, "_client", return_value=client):
         for _ in range(2):
             if streamed:
-                resource.archive_file("york/arcgis/parcels", str(source), "response.json")
+                resource.archive_file(
+                    "york/arcgis/parcels", str(source), "response.json"
+                )
             else:
                 resource.archive("york/arcgis/parcels", {"pidn": "123"})
     assert len(keys) == 2
-    assert all(key.startswith("york/arcgis/parcels/") and key.endswith("/response.json") for key in keys)
+    assert all(
+        key.startswith("york/arcgis/parcels/") and key.endswith("/response.json")
+        for key in keys
+    )

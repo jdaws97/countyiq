@@ -136,7 +136,8 @@ def parse_signal_validation_output(output: object) -> dict:
     # only this exact wrapper; unknown/malformed IDs still reach the source gate.
     cross_references = [
         re.sub(r"^Evidence:\s*((?:signal|context):[a-z_]+)$", r"\1", ref)
-        if isinstance(ref, str) else ref
+        if isinstance(ref, str)
+        else ref
         for ref in cross_references
     ]
 

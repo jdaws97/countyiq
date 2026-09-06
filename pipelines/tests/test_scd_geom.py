@@ -265,9 +265,7 @@ def test_geom_upsert_data_loss_guard_aborts(db_conn, polygon_table):
         )
 
     # All 200 should still be current — guard prevented mass expiration
-    cur.execute(
-        "SELECT COUNT(*) FROM staging._test_geom_poly WHERE valid_to IS NULL"
-    )
+    cur.execute("SELECT COUNT(*) FROM staging._test_geom_poly WHERE valid_to IS NULL")
     assert cur.fetchone()[0] == 200
     cur.close()
 
@@ -366,13 +364,9 @@ def test_geom_upsert_change_detection_expires_then_inserts(db_conn, polygon_tabl
     # Same row, different value: 1 expired, 1 inserted
     assert stats["expired"] == 1
     assert stats["inserted"] == 1
-    cur.execute(
-        "SELECT COUNT(*) FROM staging._test_geom_poly WHERE valid_to IS NULL"
-    )
+    cur.execute("SELECT COUNT(*) FROM staging._test_geom_poly WHERE valid_to IS NULL")
     assert cur.fetchone()[0] == 1
-    cur.execute(
-        "SELECT name FROM staging._test_geom_poly WHERE valid_to IS NULL"
-    )
+    cur.execute("SELECT name FROM staging._test_geom_poly WHERE valid_to IS NULL")
     assert cur.fetchone()[0] == "second"
     cur.close()
 

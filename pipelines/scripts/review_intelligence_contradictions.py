@@ -62,8 +62,15 @@ def cmd_list(database, args) -> int:
         """,
         (min(max(int(args.limit), 1), 500),),
         keys=(
-            "contradiction_id", "pass_number", "output_kind", "subject_key",
-            "detected_at", "queue_reason", "assessment", "judge_verdict", "judge_reason",
+            "contradiction_id",
+            "pass_number",
+            "output_kind",
+            "subject_key",
+            "detected_at",
+            "queue_reason",
+            "assessment",
+            "judge_verdict",
+            "judge_reason",
         ),
     )
     for item in queue:
@@ -92,8 +99,14 @@ def cmd_show(database, args) -> int:
         """,
         (args.contradiction_id,),
         keys=(
-            "outcome", "rule_default", "judge_model", "judge_verdict",
-            "judge_confidence", "judge_reason", "assessment", "created_at",
+            "outcome",
+            "rule_default",
+            "judge_model",
+            "judge_verdict",
+            "judge_confidence",
+            "judge_reason",
+            "assessment",
+            "created_at",
         ),
     )
     _print_json(detail)
@@ -120,7 +133,9 @@ def cmd_resolve(database, args) -> int:
 def cmd_auto(database, args) -> int:
     import logging
 
-    counts = auto_resolve_queue(database, limit=args.limit, log=logging.getLogger("countyiq.autoresolve"))
+    counts = auto_resolve_queue(
+        database, limit=args.limit, log=logging.getLogger("countyiq.autoresolve")
+    )
     _print_json({"processed": sum(counts.values()), "outcomes": counts})
     return 0
 
@@ -128,9 +143,17 @@ def cmd_auto(database, args) -> int:
 def _sample(database, *, pass_number: int | None, size: int, days: int) -> list[dict]:
     """Disagreement-driven sample: judged disagreements, then low-agreement, then random."""
 
-    pass_clause = "AND h.pass_number = %(pass_number)s" if pass_number is not None else ""
+    pass_clause = (
+        "AND h.pass_number = %(pass_number)s" if pass_number is not None else ""
+    )
     params = {"pass_number": pass_number, "days": days, "size": size}
-    keys = ("inference_id", "pass_number", "output_kind", "subject_key", "sampled_reason")
+    keys = (
+        "inference_id",
+        "pass_number",
+        "output_kind",
+        "subject_key",
+        "sampled_reason",
+    )
 
     flagged = _rows(
         database,
@@ -199,7 +222,9 @@ def _sample(database, *, pass_number: int | None, size: int, days: int) -> list[
 
 
 def cmd_sample(database, args) -> int:
-    _print_json(_sample(database, pass_number=args.pass_number, size=args.size, days=args.days))
+    _print_json(
+        _sample(database, pass_number=args.pass_number, size=args.size, days=args.days)
+    )
     return 0
 
 
@@ -215,9 +240,18 @@ def _inference(database, inference_id: int) -> dict | None:
         """,
         (inference_id,),
         keys=(
-            "inference_id", "pass_number", "output_kind", "subject_key", "source_hash",
-            "input_hash", "requested_model", "prompt_version", "payload", "evidence_refs",
-            "disposition", "decision_origin",
+            "inference_id",
+            "pass_number",
+            "output_kind",
+            "subject_key",
+            "source_hash",
+            "input_hash",
+            "requested_model",
+            "prompt_version",
+            "payload",
+            "evidence_refs",
+            "disposition",
+            "decision_origin",
         ),
     )
     return rows[0] if rows else None
@@ -225,7 +259,11 @@ def _inference(database, inference_id: int) -> dict | None:
 
 def _gold_candidate_dir() -> Path:
     configured = os.environ.get("COUNTYIQ_GOLD_CANDIDATE_DIR", "").strip()
-    return Path(configured) if configured else REPO_ROOT / "eval" / "fixtures" / "candidates"
+    return (
+        Path(configured)
+        if configured
+        else REPO_ROOT / "eval" / "fixtures" / "candidates"
+    )
 
 
 def _review(database, args, verdict: str) -> int:
@@ -254,8 +292,14 @@ def _review(database, args, verdict: str) -> int:
         "inference": {
             key: inference[key]
             for key in (
-                "inference_id", "pass_number", "output_kind", "subject_key",
-                "source_hash", "input_hash", "requested_model", "prompt_version",
+                "inference_id",
+                "pass_number",
+                "output_kind",
+                "subject_key",
+                "source_hash",
+                "input_hash",
+                "requested_model",
+                "prompt_version",
             )
         },
         "context": context,
@@ -267,8 +311,13 @@ def _review(database, args, verdict: str) -> int:
     }
     out_dir = _gold_candidate_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"pass{inference['pass_number']}-{inference['inference_id']}-{verdict}.json"
-    path.write_text(json.dumps(candidate, indent=2, default=str) + "\n", encoding="utf-8")
+    path = (
+        out_dir
+        / f"pass{inference['pass_number']}-{inference['inference_id']}-{verdict}.json"
+    )
+    path.write_text(
+        json.dumps(candidate, indent=2, default=str) + "\n", encoding="utf-8"
+    )
     with database.transaction() as cur:
         cur.execute(
             """
@@ -278,17 +327,25 @@ def _review(database, args, verdict: str) -> int:
             RETURNING review_id
             """,
             (
-                inference["inference_id"], verdict, args.reviewer, args.notes,
-                args.sampled_reason, str(path),
+                inference["inference_id"],
+                verdict,
+                args.reviewer,
+                args.notes,
+                args.sampled_reason,
+                str(path),
             ),
         )
         review_id = cur.fetchone()[0]
-    _print_json({"review_id": review_id, "verdict": verdict, "gold_candidate": str(path)})
+    _print_json(
+        {"review_id": review_id, "verdict": verdict, "gold_candidate": str(path)}
+    )
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     queue = sub.add_parser("list", help="Contradictions waiting for a person")
@@ -299,11 +356,23 @@ def main() -> int:
 
     resolve = sub.add_parser("resolve", help="Record and apply a human resolution")
     resolve.add_argument("contradiction_id", type=int)
-    resolve.add_argument("--decision", required=True, choices=("accept_prior", "accept_challenger", "discard_both"))
+    resolve.add_argument(
+        "--decision",
+        required=True,
+        choices=("accept_prior", "accept_challenger", "discard_both"),
+    )
     resolve.add_argument("--resolved-by", required=True)
     resolve.add_argument("--rationale", required=True)
-    resolve.add_argument("--expected-source-hash", required=True, help="Exact source_hash copied from the latest `show` output")
-    resolve.add_argument("--confirm-projection-change", action="store_true", help="Required acknowledgement that the serving projection may change")
+    resolve.add_argument(
+        "--expected-source-hash",
+        required=True,
+        help="Exact source_hash copied from the latest `show` output",
+    )
+    resolve.add_argument(
+        "--confirm-projection-change",
+        action="store_true",
+        help="Required acknowledgement that the serving projection may change",
+    )
 
     auto = sub.add_parser("auto", help="Apply the rule/judge policy to the backlog")
     auto.add_argument("--limit", type=int, default=500)
@@ -313,7 +382,10 @@ def main() -> int:
     sample.add_argument("--size", type=int, default=20)
     sample.add_argument("--days", type=int, default=30)
 
-    for name, help_text in (("approve", "Record a correct sampled output"), ("reject", "Record an incorrect sampled output")):
+    for name, help_text in (
+        ("approve", "Record a correct sampled output"),
+        ("reject", "Record an incorrect sampled output"),
+    ):
         review = sub.add_parser(name, help=help_text)
         review.add_argument("inference_id", type=int)
         review.add_argument("--reviewer", required=True)

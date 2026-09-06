@@ -22,6 +22,7 @@ from countyiq.lib.pass0_templates import EXTRACTION_USER_TEMPLATE, PASS0_SYSTEM_
 # _is_pdf_document — guards the inline-upload fallback
 # ---------------------------------------------------------------------------
 
+
 class TestIsPdfDocument:
     """OpenRouter's file-parser accepts only PDFs, so the download-and-attach
     fallback must never fire for Word documents or unknown types."""
@@ -33,23 +34,29 @@ class TestIsPdfDocument:
         assert _is_pdf_document("https://img1.wsimg.com/blobby/go/x/m.pdf?ver=178")
 
     def test_docx_url(self):
-        assert not _is_pdf_document("https://x.com/_files/ugd/390391_abc.docx?dn=m.docx")
+        assert not _is_pdf_document(
+            "https://x.com/_files/ugd/390391_abc.docx?dn=m.docx"
+        )
 
     def test_legacy_doc_url(self):
-        assert not _is_pdf_document("https://x.com/_files/ugd/1f235a_x.doc?dn=agenda.doc")
+        assert not _is_pdf_document(
+            "https://x.com/_files/ugd/1f235a_x.doc?dn=agenda.doc"
+        )
 
     def test_extensionless_url(self):
         """Drive uc?export=download URLs carry no extension — can't verify
         PDF-ness up front, so the fallback must skip them."""
-        assert not _is_pdf_document("https://drive.google.com/uc?export=download&id=1uQ")
+        assert not _is_pdf_document(
+            "https://drive.google.com/uc?export=download&id=1uQ"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Pass 0 prompt template tests
 # ---------------------------------------------------------------------------
 
-class TestExtractionPrompt:
 
+class TestExtractionPrompt:
     def _filled(self, **overrides) -> str:
         """Return a fully-formatted prompt with sensible defaults."""
         defaults = dict(
@@ -196,8 +203,8 @@ class TestExtractionPrompt:
 # HarnessConfig tests
 # ---------------------------------------------------------------------------
 
-class TestHarnessConfig:
 
+class TestHarnessConfig:
     def test_requires_model_path(self):
         config = HarnessConfig(model_path="provider/model")
         assert config.model_path == "provider/model"
@@ -235,7 +242,6 @@ class TestHarnessConfig:
 
 
 class TestBuildMessages:
-
     def test_pdf_message_includes_file_block_and_prompt(self):
         config = HarnessConfig(model_path="x-ai/grok-4.1-fast")
         messages = _build_messages(
@@ -270,8 +276,8 @@ class TestBuildMessages:
 # HarnessResult tests
 # ---------------------------------------------------------------------------
 
-class TestHarnessResult:
 
+class TestHarnessResult:
     def test_success_construction(self):
         result = HarnessResult(
             raw_output='{"extractions": []}',
@@ -299,7 +305,9 @@ class TestHarnessResult:
         assert result.raw_output == raw
 
     def test_raw_output_preserved_on_failure(self):
-        result = HarnessResult(raw_output="bad output", parsed=None, success=False, error="err")
+        result = HarnessResult(
+            raw_output="bad output", parsed=None, success=False, error="err"
+        )
         assert result.raw_output == "bad output"
 
     def test_error_defaults_to_none_on_success(self):
@@ -385,10 +393,12 @@ class _FakeDatabase:
 
 
 class TestProceedingPersistence:
-
     def test_prior_hash_skip_requires_the_active_projection(self):
         assert "JOIN staging.proceeding_extractions" in PRIOR_ACCEPTED_PROJECTIONS_QUERY
-        assert "pe.active_inference_id = latest.inference_id" in PRIOR_ACCEPTED_PROJECTIONS_QUERY
+        assert (
+            "pe.active_inference_id = latest.inference_id"
+            in PRIOR_ACCEPTED_PROJECTIONS_QUERY
+        )
 
     def test_prefilter_marker_is_linked_to_immutable_inference(self):
         database = _FakeDatabase()

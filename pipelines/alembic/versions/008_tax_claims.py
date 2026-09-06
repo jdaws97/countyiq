@@ -4,6 +4,7 @@ Revision ID: 008
 Revises: 007
 Create Date: 2026-03-29
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -35,23 +36,36 @@ def upgrade() -> None:
         sa.Column("fees_paid", sa.Numeric(12, 2)),
         sa.Column("total", sa.Numeric(12, 2)),
         sa.Column("report_date", sa.Date, nullable=False),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
-        sa.PrimaryKeyConstraint("pidn", "unit_suffix", "tax_year", "authority_name", "valid_from"),
+        sa.PrimaryKeyConstraint(
+            "pidn", "unit_suffix", "tax_year", "authority_name", "valid_from"
+        ),
         schema="staging",
     )
     op.create_index(
-        "idx_tax_claims_current", "tax_claims",
-        ["pidn"], schema="staging",
+        "idx_tax_claims_current",
+        "tax_claims",
+        ["pidn"],
+        schema="staging",
         postgresql_where=sa.text("valid_to IS NULL"),
     )
     op.create_index(
-        "idx_tax_claims_district", "tax_claims",
-        ["tax_district_code"], schema="staging",
+        "idx_tax_claims_district",
+        "tax_claims",
+        ["tax_district_code"],
+        schema="staging",
     )
     op.create_index(
-        "idx_tax_claims_owner", "tax_claims",
-        ["owner_name"], schema="staging",
+        "idx_tax_claims_owner",
+        "tax_claims",
+        ["owner_name"],
+        schema="staging",
     )
 
 

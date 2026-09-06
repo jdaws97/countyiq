@@ -25,17 +25,19 @@ depends_on = None
 # -----------------------------------------------------------------------------
 
 _COMMON_COLUMNS = [
-    ("model_version",  sa.Text(),                           True),
-    ("prompt_version", sa.Text(),                           True),
-    ("n_trials",       sa.Integer(),                        True),
-    ("trial_agreement", sa.Numeric(3, 2),                   True),
-    ("confidence",     sa.Numeric(3, 2),                    True),
+    ("model_version", sa.Text(), True),
+    ("prompt_version", sa.Text(), True),
+    ("n_trials", sa.Integer(), True),
+    ("trial_agreement", sa.Numeric(3, 2), True),
+    ("confidence", sa.Numeric(3, 2), True),
 ]
 
 
 def _add(table: str, schema: str = "public") -> None:
     for name, col_type, nullable in _COMMON_COLUMNS:
-        op.add_column(table, sa.Column(name, col_type, nullable=nullable), schema=schema)
+        op.add_column(
+            table, sa.Column(name, col_type, nullable=nullable), schema=schema
+        )
 
 
 def _drop(table: str, schema: str = "public") -> None:

@@ -30,17 +30,45 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["site_nguid"]
 VALUE_COLUMNS = [
-    "add_number", "addnum_suf", "st_pre_dir", "st_pre_typ",
-    "street_name", "st_pos_typ", "st_pos_dir",
-    "inc_muni", "post_comm", "post_code", "post_code4",
-    "building", "floor", "unit", "place_type", "long", "lat", "source_url",
+    "add_number",
+    "addnum_suf",
+    "st_pre_dir",
+    "st_pre_typ",
+    "street_name",
+    "st_pos_typ",
+    "st_pos_dir",
+    "inc_muni",
+    "post_comm",
+    "post_code",
+    "post_code4",
+    "building",
+    "floor",
+    "unit",
+    "place_type",
+    "long",
+    "lat",
+    "source_url",
 ]
 
 EXPECTED_FIELDS = {
-    "Site_NGUID", "Add_Number", "AddNum_Suf", "St_PreDir", "St_PreTyp",
-    "StreetName", "St_PosTyp", "St_PosDir", "Inc_Muni", "Post_Comm",
-    "Post_Code", "Post_Code4", "Building", "Floor", "Unit",
-    "Place_Type", "Long", "Lat",
+    "Site_NGUID",
+    "Add_Number",
+    "AddNum_Suf",
+    "St_PreDir",
+    "St_PreTyp",
+    "StreetName",
+    "St_PosTyp",
+    "St_PosDir",
+    "Inc_Muni",
+    "Post_Comm",
+    "Post_Code",
+    "Post_Code4",
+    "Building",
+    "Floor",
+    "Unit",
+    "Place_Type",
+    "Long",
+    "Lat",
 }
 
 
@@ -62,10 +90,18 @@ def address_points_arcgis(
     """
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="address_points_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="address_points_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS address points for {county.name}: {county.arcgis_address_pts_url}")
+    context.log.info(
+        f"Querying ArcGIS address points for {county.name}: {county.arcgis_address_pts_url}"
+    )
 
     cur = database.cursor()
     archive_path = None
@@ -114,7 +150,14 @@ def address_points_arcgis(
     )
 
 
-def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_records: int, context, source_url: str = "") -> dict:
+def _geom_scd2_upsert_streaming(
+    cursor,
+    feature_pages,
+    archive_handle,
+    min_records: int,
+    context,
+    source_url: str = "",
+) -> dict:
     """Stream ArcGIS pages into a temp table and finalize one SCD2 upsert."""
     conn = cursor.connection
     was_autocommit = conn.autocommit
@@ -126,11 +169,13 @@ def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_recor
         fqn = "staging.address_points"
 
         cursor.execute("DROP TABLE IF EXISTS _tmp_address_points")
-        cursor.execute(f"CREATE TEMP TABLE _tmp_address_points (LIKE {fqn} INCLUDING DEFAULTS)")
+        cursor.execute(
+            f"CREATE TEMP TABLE _tmp_address_points (LIKE {fqn} INCLUDING DEFAULTS)"
+        )
 
         insert_sql = f"""
-            INSERT INTO _tmp_address_points ({', '.join(all_cols)}, geom)
-            VALUES ({', '.join(['%s'] * len(all_cols))},
+            INSERT INTO _tmp_address_points ({", ".join(all_cols)}, geom)
+            VALUES ({", ".join(["%s"] * len(all_cols))},
                     CASE WHEN %s IS NOT NULL
                          THEN ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)
                          ELSE NULL END)
@@ -140,7 +185,9 @@ def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_recor
         raw_feature_count = 0
         for page_num, raw_features in enumerate(feature_pages, start=1):
             raw_feature_count += len(raw_features)
-            page_record_count = _stage_address_points_page(cursor, insert_sql, all_cols, raw_features, archive_handle, source_url)
+            page_record_count = _stage_address_points_page(
+                cursor, insert_sql, all_cols, raw_features, archive_handle, source_url
+            )
             record_count += page_record_count
             context.log.info(
                 f"Staged address_points page {page_num}: {page_record_count} parsed records "
@@ -180,7 +227,9 @@ def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_recor
         cursor.execute("ANALYZE _tmp_address_points")
 
         key_join = "c.site_nguid = t.site_nguid"
-        value_diff = " OR ".join(f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS)
+        value_diff = " OR ".join(
+            f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS
+        )
         cursor.execute(f"""
             UPDATE {fqn} c SET valid_to = NOW()
             WHERE c.valid_to IS NULL
@@ -191,10 +240,10 @@ def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_recor
         """)
         expired = cursor.rowcount
 
-        col_list = ', '.join(all_cols)
+        col_list = ", ".join(all_cols)
         cursor.execute(f"""
             INSERT INTO {fqn} ({col_list}, geom, valid_from)
-            SELECT {', '.join(f't.{c}' for c in all_cols)}, t.geom, NOW()
+            SELECT {", ".join(f"t.{c}" for c in all_cols)}, t.geom, NOW()
             FROM _tmp_address_points t
             WHERE NOT EXISTS (
                 SELECT 1 FROM {fqn} c WHERE c.valid_to IS NULL AND {key_join}
@@ -222,7 +271,14 @@ def _geom_scd2_upsert_streaming(cursor, feature_pages, archive_handle, min_recor
         raise
 
 
-def _stage_address_points_page(cursor, insert_sql: str, all_cols: list[str], raw_features: list[dict], archive_handle, source_url: str = "") -> int:
+def _stage_address_points_page(
+    cursor,
+    insert_sql: str,
+    all_cols: list[str],
+    raw_features: list[dict],
+    archive_handle,
+    source_url: str = "",
+) -> int:
     """Parse one ArcGIS page and bulk insert it into the temp table."""
     rows = []
     record_count = 0
@@ -240,7 +296,9 @@ def _stage_address_points_page(cursor, insert_sql: str, all_cols: list[str], raw
         geom = feat.get("geometry")
         geom_json = None
         if geom and geom.get("x") is not None and geom.get("y") is not None:
-            geom_json = json.dumps({"type": "Point", "coordinates": [geom["x"], geom["y"]]})
+            geom_json = json.dumps(
+                {"type": "Point", "coordinates": [geom["x"], geom["y"]]}
+            )
 
         row = [record.get(c) for c in all_cols]
         row.extend([geom_json, geom_json])
@@ -275,7 +333,11 @@ def address_points_schema_drift(database: DatabaseResource) -> AssetCheckResult:
         return AssetCheckResult(
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
-            metadata={"missing_fields": MetadataValue.text(str(missing) if missing else "none")},
+            metadata={
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                )
+            },
         )
     except requests.exceptions.RequestException as e:
         return AssetCheckResult(

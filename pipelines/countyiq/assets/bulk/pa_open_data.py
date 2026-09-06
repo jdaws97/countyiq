@@ -21,7 +21,10 @@ from dagster import (
 
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.parsers.pa_open_data import parse_soda_records, EXPECTED_BUSINESS_FIELDS
+from countyiq.lib.parsers.pa_open_data import (
+    parse_soda_records,
+    EXPECTED_BUSINESS_FIELDS,
+)
 from countyiq.lib.scd import scd2_upsert
 from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
@@ -43,7 +46,11 @@ def _fetch_page(url: str, attempt: int = 1) -> list[dict]:
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.HTTPError as e:
-        if attempt < MAX_RETRIES and e.response is not None and e.response.status_code >= 500:
+        if (
+            attempt < MAX_RETRIES
+            and e.response is not None
+            and e.response.status_code >= 500
+        ):
             wait = RETRY_BACKOFF * attempt
             time.sleep(wait)
             return _fetch_page(url, attempt + 1)
@@ -94,7 +101,13 @@ def pa_open_data(
     """Fetch PA Open Data datasets via SODA API, parse, and SCD2 upsert."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key="data_pa_businesses", acquisition_method="soda_api", asset_key="pa_open_data", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key="data_pa_businesses",
+        acquisition_method="soda_api",
+        asset_key="pa_open_data",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
     total_records = 0
@@ -104,7 +117,9 @@ def pa_open_data(
     datasets_processed = 0
 
     for dataset_id, filter_field, filter_value, record_id_field in county.soda_datasets:
-        context.log.info(f"Processing dataset {dataset_id} (filter: {filter_field}={filter_value})")
+        context.log.info(
+            f"Processing dataset {dataset_id} (filter: {filter_field}={filter_value})"
+        )
 
         # 1. Fetch all pages
         raw_records = _fetch_all_pages(
@@ -253,7 +268,9 @@ def pa_open_data_schema_drift(database: DatabaseResource) -> AssetCheckResult:
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
             metadata={
-                "missing_fields": MetadataValue.text(str(missing) if missing else "none"),
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                ),
                 "sample_fields": MetadataValue.text(str(sorted(actual_fields)[:10])),
             },
         )

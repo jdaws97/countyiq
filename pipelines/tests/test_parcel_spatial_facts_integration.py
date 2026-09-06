@@ -40,15 +40,20 @@ def spatial_cursor():
         connection.close()
 
 
-def _soil(cursor, objectid, left, width, *, slope=20, septic="Very limited", key="542898"):
-    cursor.execute("""
+def _soil(
+    cursor, objectid, left, width, *, slope=20, septic="Very limited", key="542898"
+):
+    cursor.execute(
+        """
         INSERT INTO staging.soils (
             objectid, map_unit_key, map_unit_symbol, map_unit_name,
             representative_slope, septic_rating, source_url, geom
         ) VALUES (%s, %s, 'MOD', 'Mapped test soil', %s, %s,
             'https://example.com/soils/FeatureServer/0', ST_Multi(ST_Transform(
                 ST_MakeEnvelope(500000 + %s, 4400000, 500000 + %s + %s, 4400100, 32617), 4326)))
-    """, (objectid, key, slope, septic, left, left, width))
+    """,
+        (objectid, key, slope, septic, left, left, width),
+    )
 
 
 @pytest.mark.integration
@@ -69,17 +74,25 @@ def test_soil_fragments_union_before_rounding_and_preserve_distinct_attributes(
     """)
     units = cur.fetchall()
     assert [u["source_record_ids"] for u in units] == [[66001, 66002], [66003]]
-    assert float(units[0]["coverage_pct"]) == pytest.approx(expected_coverage, abs=0.001)
+    assert float(units[0]["coverage_pct"]) == pytest.approx(
+        expected_coverage, abs=0.001
+    )
     for unit in units:
-        assert float(unit["mapped_coverage_pct"]) == pytest.approx(expected_coverage, abs=0.001)
-        assert float(unit["very_limited_coverage_pct"]) == pytest.approx(expected_coverage, abs=0.001)
+        assert float(unit["mapped_coverage_pct"]) == pytest.approx(
+            expected_coverage, abs=0.001
+        )
+        assert float(unit["very_limited_coverage_pct"]) == pytest.approx(
+            expected_coverage, abs=0.001
+        )
     cur.execute(dict(_SIGNALS)["soil_constraint"], {})
     cur.execute("SELECT source_id, evidence FROM public.development_signals")
     signal = cur.fetchone()
     assert signal["source_id"] == "66001,66002,66003"
     assert signal["evidence"]["source_record_ids"] == [66001, 66002, 66003]
     assert signal["evidence"]["soil_units"][0]["source_record_ids"] == [66001, 66002]
-    assert signal["evidence"]["soil_units"][0]["coverage_pct"] == round(expected_coverage, 1)
+    assert signal["evidence"]["soil_units"][0]["coverage_pct"] == round(
+        expected_coverage, 1
+    )
 
 
 @pytest.mark.integration
@@ -110,22 +123,30 @@ def test_soil_missing_unit_identity_is_not_grouped_by_label(spatial_cursor):
 
 
 def _zoning(cursor, record_id, adopted, kind, name, general_name=None):
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO staging.zoning (zrecid, adpt_date, ztype, zname, gen_zname, geom)
         SELECT %s, %s::timestamptz, %s, %s, %s, geom FROM staging.parcels
-    """, (record_id, adopted, kind, name, general_name or name))
+    """,
+        (record_id, adopted, kind, name, general_name or name),
+    )
 
 
 def _future(cursor, name, general):
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO staging.future_landuse (globalid, future_lu, general_lu, geom)
         SELECT 'GEO066-FUTURE', %s, %s, geom FROM staging.parcels
-    """, (name, general))
+    """,
+        (name, general),
+    )
 
 
 @pytest.mark.integration
 @pytest.mark.parametrize("adoption", ["2026-05-12", None])
-def test_newest_zoning_is_selected_before_filtering_for_divergence(spatial_cursor, adoption):
+def test_newest_zoning_is_selected_before_filtering_for_divergence(
+    spatial_cursor, adoption
+):
     cur = spatial_cursor
     # With a dated rezoning it wins over undated mapping. With no dates, the
     # higher record ID is the stable tie-breaker for both report and signal.
@@ -139,7 +160,9 @@ def test_newest_zoning_is_selected_before_filtering_for_divergence(spatial_curso
     assert cur.fetchone()["zrecid"] == 66002
     cur.execute(dict(_SIGNALS)["zoning_mismatch"], {})
     assert cur.rowcount == 0  # The older commercial district cannot survive.
-    cur.execute("UPDATE staging.future_landuse SET general_lu = 'Industrial', future_lu = 'Employment' ")
+    cur.execute(
+        "UPDATE staging.future_landuse SET general_lu = 'Industrial', future_lu = 'Employment' "
+    )
     cur.execute(dict(_SIGNALS)["zoning_mismatch"], {})
     cur.execute("SELECT evidence FROM public.development_signals")
     evidence = cur.fetchone()["evidence"]
@@ -148,15 +171,30 @@ def test_newest_zoning_is_selected_before_filtering_for_divergence(spatial_curso
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("kind,name,general_name,future,expected", [
-    ("M", "Mixed Residential Commercial", "Mixed Use", "Mixed Use - Residential and Commerical", False),
-    ("M", "Mixed Residential Commercial", "Mixed Use", "Agriculture", True),
-    ("C", "Commercial Office", "Highway Commercial", "Mixed Use - Commerical and Industrial", False),
-    ("C", "Rural Residential", "Low Density Residential", "Agriculture", False),
-    ("A", "Commercial", "Low Density Residential", "Industrial", False),
-    ("A", "Farming", "Resource Protection", "Industrial", True),
-    ("R", "Residential Low Density", "Low Density Residential", "Industrial", True),
-])
+@pytest.mark.parametrize(
+    "kind,name,general_name,future,expected",
+    [
+        (
+            "M",
+            "Mixed Residential Commercial",
+            "Mixed Use",
+            "Mixed Use - Residential and Commerical",
+            False,
+        ),
+        ("M", "Mixed Residential Commercial", "Mixed Use", "Agriculture", True),
+        (
+            "C",
+            "Commercial Office",
+            "Highway Commercial",
+            "Mixed Use - Commerical and Industrial",
+            False,
+        ),
+        ("C", "Rural Residential", "Low Density Residential", "Agriculture", False),
+        ("A", "Commercial", "Low Density Residential", "Industrial", False),
+        ("A", "Farming", "Resource Protection", "Industrial", True),
+        ("R", "Residential Low Density", "Low Density Residential", "Industrial", True),
+    ],
+)
 def test_zoning_screen_respects_county_labels_and_abstains_on_conflicting_codes(
     spatial_cursor, kind, name, general_name, future, expected
 ):

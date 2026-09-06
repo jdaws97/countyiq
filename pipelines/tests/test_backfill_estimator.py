@@ -69,11 +69,13 @@ def test_approximate_tokens_uses_visible_four_character_rule():
 
 
 def test_name_clusters_are_connected_components():
-    clusters = build_name_clusters([
-        ("A LLC", "A PROPERTIES"),
-        ("A PROPERTIES", "A HOLDINGS"),
-        ("B LLC", "B INC"),
-    ])
+    clusters = build_name_clusters(
+        [
+            ("A LLC", "A PROPERTIES"),
+            ("A PROPERTIES", "A HOLDINGS"),
+            ("B LLC", "B INC"),
+        ]
+    )
     assert sorted(clusters) == [
         ["A HOLDINGS", "A LLC", "A PROPERTIES"],
         ["B INC", "B LLC"],
@@ -100,21 +102,21 @@ def test_report_counts_only_call_eligible_pass0_rows_and_is_select_only():
     assert pass0["details"]["deterministic_prefilter_skips"] == 1
     assert pass0["sampled_units"] == 1
     assert pass0["runtime_max_input_tokens_per_call"] > pass0["average_input_tokens"]
-    assert (
-        pass0["retry_ceiling_cost"]
-        > pass0["details"]["provider_retry_ceiling_cost"]
-    )
+    assert pass0["retry_ceiling_cost"] > pass0["details"]["provider_retry_ceiling_cost"]
     assert report["read_only"] is True
 
     assert database.statements
     executable_sql = [
         "\n".join(
-            line for line in statement.splitlines()
+            line
+            for line in statement.splitlines()
             if not line.lstrip().startswith("--")
         ).upper()
         for statement in database.statements
     ]
-    assert all("SELECT " in statement or "WITH " in statement for statement in executable_sql)
+    assert all(
+        "SELECT " in statement or "WITH " in statement for statement in executable_sql
+    )
     assert not any(
         word in statement
         for statement in executable_sql
@@ -164,13 +166,18 @@ def test_pass1_estimate_excludes_runtime_context_deferrals(monkeypatch):
 
     large = [f"LARGE {n} LLC" for n in range(41)]
     pairs = list(zip(large, large[1:])) + [
-        ("SMALL A LLC", "SMALL B LLC"), ("LONG A LLC", "LONG B LLC"),
+        ("SMALL A LLC", "SMALL B LLC"),
+        ("LONG A LLC", "LONG B LLC"),
     ]
     gathered = []
 
     class CandidateDatabase(FakeDatabase):
         def execute(self, query, params=None):
-            return pairs if query == estimator.CANDIDATE_CLUSTERS_QUERY else super().execute(query, params)
+            return (
+                pairs
+                if query == estimator.CANDIDATE_CLUSTERS_QUERY
+                else super().execute(query, params)
+            )
 
         def dict_cursor(self):
             return nullcontext(None)
@@ -180,8 +187,13 @@ def test_pass1_estimate_excludes_runtime_context_deferrals(monkeypatch):
         return {"names": names}
 
     monkeypatch.setattr(estimator, "gather_cluster_records", gather)
-    monkeypatch.setattr(estimator, "build_entity_cluster_prompt", lambda records:
-                        "x" * 64_001 if records["names"][0].startswith("LONG") else "small context")
+    monkeypatch.setattr(
+        estimator,
+        "build_entity_cluster_prompt",
+        lambda records: (
+            "x" * 64_001 if records["names"][0].startswith("LONG") else "small context"
+        ),
+    )
     result = estimator._estimate_pass1(CandidateDatabase(), sample_size=10)
 
     assert all(len(names) == 2 for names in gathered)

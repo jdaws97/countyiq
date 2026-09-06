@@ -27,21 +27,31 @@ export function useFetchJson<T>(url: string | null): {
   const reload = useCallback(() => setVersion((current) => current + 1), [])
 
   useEffect(() => {
-    if (!url) return
+    if (!url) {
+      return
+    }
     let cancelled = false
     const controller = new AbortController()
     fetch(url, { signal: controller.signal })
       .then((r) => {
-        if (!r.ok) throw new Error(`Request failed (${r.status})`)
+        if (!r.ok) {
+          throw new Error(`Request failed (${r.status})`)
+        }
         return r.json() as Promise<T>
       })
       .then((data) => {
-        if (!cancelled) setState({ key: url, version, data })
+        if (!cancelled) {
+          setState({ key: url, version, data })
+        }
       })
       .catch((err: unknown) => {
-        if (cancelled) return
+        if (cancelled) {
+          return
+        }
         console.error('useFetchJson failed for', url, err)
-        if (!cancelled) setState({ key: url, version, error: 'Request failed' })
+        if (!cancelled) {
+          setState({ key: url, version, error: 'Request failed' })
+        }
       })
     return () => {
       cancelled = true

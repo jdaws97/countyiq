@@ -72,7 +72,9 @@ def parse_planning_subdivision_features(features: list[dict]) -> list[dict]:
         # DATE_RCVD comes as epoch milliseconds from ArcGIS
         date_rcvd_raw = attrs.get("DATE_RCVD")
         if date_rcvd_raw is not None and isinstance(date_rcvd_raw, (int, float)):
-            record["date_rcvd"] = datetime.fromtimestamp(date_rcvd_raw / 1000, tz=timezone.utc)
+            record["date_rcvd"] = datetime.fromtimestamp(
+                date_rcvd_raw / 1000, tz=timezone.utc
+            )
         else:
             record["date_rcvd"] = None
 

@@ -25,9 +25,13 @@ export interface WatchedMunicipality {
 function read(): string[] {
   try {
     const raw = localStorage.getItem(workspaceStorageKey(STORAGE_KEY))
-    if (!raw) return []
+    if (!raw) {
+      return []
+    }
     const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) {
+      return []
+    }
     return parsed.filter((p): p is string => typeof p === 'string')
   } catch {
     return []
@@ -52,15 +56,20 @@ function write(pidns: string[]): boolean {
 function readProjects(): WatchedProject[] {
   try {
     const raw = localStorage.getItem(workspaceStorageKey(PROJECT_STORAGE_KEY))
-    if (!raw) return []
+    if (!raw) {
+      return []
+    }
     const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((project): project is WatchedProject => (
-      typeof project === 'object'
-      && project !== null
-      && typeof (project as WatchedProject).key === 'string'
-      && typeof (project as WatchedProject).name === 'string'
-    ))
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.filter(
+      (project): project is WatchedProject =>
+        typeof project === 'object' &&
+        project !== null &&
+        typeof (project as WatchedProject).key === 'string' &&
+        typeof (project as WatchedProject).name === 'string',
+    )
   } catch {
     return []
   }
@@ -73,15 +82,20 @@ function writeProjects(projects: WatchedProject[]): boolean {
 function readEntities(): WatchedEntity[] {
   try {
     const raw = localStorage.getItem(workspaceStorageKey(ENTITY_STORAGE_KEY))
-    if (!raw) return []
+    if (!raw) {
+      return []
+    }
     const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((entity): entity is WatchedEntity => (
-      typeof entity === 'object'
-      && entity !== null
-      && Number.isInteger((entity as WatchedEntity).id)
-      && typeof (entity as WatchedEntity).name === 'string'
-    ))
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.filter(
+      (entity): entity is WatchedEntity =>
+        typeof entity === 'object' &&
+        entity !== null &&
+        Number.isInteger((entity as WatchedEntity).id) &&
+        typeof (entity as WatchedEntity).name === 'string',
+    )
   } catch {
     return []
   }
@@ -94,15 +108,20 @@ function writeEntities(entities: WatchedEntity[]): boolean {
 function readMunicipalities(): WatchedMunicipality[] {
   try {
     const raw = localStorage.getItem(workspaceStorageKey(MUNICIPALITY_STORAGE_KEY))
-    if (!raw) return []
+    if (!raw) {
+      return []
+    }
     const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((municipality): municipality is WatchedMunicipality => (
-      typeof municipality === 'object'
-      && municipality !== null
-      && typeof (municipality as WatchedMunicipality).name === 'string'
-      && (municipality as WatchedMunicipality).name.trim().length > 0
-    ))
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.filter(
+      (municipality): municipality is WatchedMunicipality =>
+        typeof municipality === 'object' &&
+        municipality !== null &&
+        typeof (municipality as WatchedMunicipality).name === 'string' &&
+        (municipality as WatchedMunicipality).name.trim().length > 0,
+    )
   } catch {
     return []
   }
@@ -126,7 +145,9 @@ export function toggleWatch(pidn: string): boolean {
     return !write(current.filter((p) => p !== pidn))
   }
   if (current.length >= WATCHLIST_CAP) {
-    window.alert(`Parcel watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`)
+    window.alert(
+      `Parcel watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`,
+    )
     return false
   }
   return write([pidn, ...current])
@@ -146,7 +167,9 @@ export function toggleProjectWatch(project: WatchedProject): boolean {
     return !writeProjects(current.filter((item) => item.key !== project.key))
   }
   if (current.length >= WATCHLIST_CAP) {
-    window.alert(`Project watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`)
+    window.alert(
+      `Project watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`,
+    )
     return false
   }
   return writeProjects([project, ...current])
@@ -166,7 +189,9 @@ export function toggleEntityWatch(entity: WatchedEntity): boolean {
     return !writeEntities(current.filter((item) => item.id !== entity.id))
   }
   if (current.length >= WATCHLIST_CAP) {
-    window.alert(`Entity watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`)
+    window.alert(
+      `Entity watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`,
+    )
     return false
   }
   return writeEntities([entity, ...current])
@@ -186,7 +211,9 @@ export function toggleMunicipalityWatch(municipality: WatchedMunicipality): bool
     return !writeMunicipalities(current.filter((item) => item.name !== municipality.name))
   }
   if (current.length >= WATCHLIST_CAP) {
-    window.alert(`Municipality watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`)
+    window.alert(
+      `Municipality watchlist is limited to ${WATCHLIST_CAP} items. Remove one before adding another.`,
+    )
     return false
   }
   return writeMunicipalities([municipality, ...current])
@@ -204,26 +231,42 @@ export function watchlistStorageEntries({
   municipalities?: WatchedMunicipality[]
 }): Record<string, string> {
   const nextParcels = Array.from(new Set(parcels.filter((pidn) => typeof pidn === 'string')))
-  const nextProjects = Array.from(new Map(
-    projects
-      .filter((project) => project && typeof project.key === 'string' && typeof project.name === 'string')
-      .map((project) => [project.key, project]),
-  ).values())
-  const nextEntities = Array.from(new Map(
-    entities
-      .filter((entity) => entity && Number.isInteger(entity.id) && typeof entity.name === 'string')
-      .map((entity) => [entity.id, entity]),
-  ).values())
-  const nextMunicipalities = Array.from(new Map(
-    municipalities
-      .filter((municipality) => municipality && typeof municipality.name === 'string' && municipality.name.trim().length > 0)
-      .map((municipality) => [municipality.name, { name: municipality.name }]),
-  ).values())
+  const nextProjects = Array.from(
+    new Map(
+      projects
+        .filter(
+          (project) =>
+            project && typeof project.key === 'string' && typeof project.name === 'string',
+        )
+        .map((project) => [project.key, project]),
+    ).values(),
+  )
+  const nextEntities = Array.from(
+    new Map(
+      entities
+        .filter(
+          (entity) => entity && Number.isInteger(entity.id) && typeof entity.name === 'string',
+        )
+        .map((entity) => [entity.id, entity]),
+    ).values(),
+  )
+  const nextMunicipalities = Array.from(
+    new Map(
+      municipalities
+        .filter(
+          (municipality) =>
+            municipality &&
+            typeof municipality.name === 'string' &&
+            municipality.name.trim().length > 0,
+        )
+        .map((municipality) => [municipality.name, { name: municipality.name }]),
+    ).values(),
+  )
   if (
-    nextParcels.length > WATCHLIST_CAP
-    || nextProjects.length > WATCHLIST_CAP
-    || nextEntities.length > WATCHLIST_CAP
-    || nextMunicipalities.length > WATCHLIST_CAP
+    nextParcels.length > WATCHLIST_CAP ||
+    nextProjects.length > WATCHLIST_CAP ||
+    nextEntities.length > WATCHLIST_CAP ||
+    nextMunicipalities.length > WATCHLIST_CAP
   ) {
     throw new Error(`Workspace exceeds the ${WATCHLIST_CAP}-item limit for a watchlist.`)
   }
@@ -239,12 +282,20 @@ export function watchlistStorageEntries({
 export function watchBoostParams(): Record<string, string> {
   const params: Record<string, string> = {}
   const pidns = getWatchlist()
-  if (pidns.length) params.boost_pidns = pidns.join(',')
+  if (pidns.length) {
+    params.boost_pidns = pidns.join(',')
+  }
   const projects = getProjectWatchlist().map((project) => project.key)
-  if (projects.length) params.boost_project_keys = projects.join(',')
+  if (projects.length) {
+    params.boost_project_keys = projects.join(',')
+  }
   const entities = getEntityWatchlist().map((entity) => String(entity.id))
-  if (entities.length) params.boost_entity_ids = entities.join(',')
+  if (entities.length) {
+    params.boost_entity_ids = entities.join(',')
+  }
   const municipalities = getMunicipalityWatchlist().map((municipality) => municipality.name)
-  if (municipalities.length) params.boost_municipalities = municipalities.join(',')
+  if (municipalities.length) {
+    params.boost_municipalities = municipalities.join(',')
+  }
   return params
 }

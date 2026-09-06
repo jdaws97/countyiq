@@ -16,9 +16,18 @@ from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlparse
 # ---------------------------------------------------------------------------
 
 _MONTH_MAP = {
-    "january": "01", "february": "02", "march": "03", "april": "04",
-    "may": "05", "june": "06", "july": "07", "august": "08",
-    "september": "09", "october": "10", "november": "11", "december": "12",
+    "january": "01",
+    "february": "02",
+    "march": "03",
+    "april": "04",
+    "may": "05",
+    "june": "06",
+    "july": "07",
+    "august": "08",
+    "september": "09",
+    "october": "10",
+    "november": "11",
+    "december": "12",
 }
 
 _DateHandler = Callable[[re.Match[str]], str]
@@ -27,9 +36,11 @@ _DATE_PATTERNS: list[tuple[re.Pattern[str], _DateHandler]] = []
 
 def _register(pattern: str) -> Callable[[_DateHandler], _DateHandler]:
     """Decorator that registers a date-extraction handler."""
+
     def decorator(fn: _DateHandler) -> _DateHandler:
         _DATE_PATTERNS.append((re.compile(pattern, re.IGNORECASE), fn))
         return fn
+
     return decorator
 
 
@@ -59,6 +70,7 @@ def _month_day_year(m: re.Match) -> str:
 
 # Month-only filenames intentionally have no exact meeting date.
 
+
 # M.D.YY (dotted, short year) — e.g. "3.4.26" → "2026-03-04"
 @_register(r"(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{2})(?!\d)")
 def _dotted_short_year(m: re.Match) -> str:
@@ -86,9 +98,7 @@ def _compact_eight_digits(m: re.Match) -> str | None:
 
     def _plausible(year: str, month: str, day: str) -> bool:
         return (
-            1900 <= int(year) <= 2099
-            and 1 <= int(month) <= 12
-            and 1 <= int(day) <= 31
+            1900 <= int(year) <= 2099 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31
         )
 
     year, month, day = digits[:4], digits[4:6], digits[6:8]
@@ -147,13 +157,14 @@ def parse_drive_folder_listing(html: str) -> dict:
         if "/drive/folders/" in href:
             subfolder_ids.append(entry_id)
         elif "/file/d/" in href:
-            files.append({
-                "url": f"https://drive.google.com/uc?export=download&id={entry_id}",
-                "filename": title,
-                "link_text": title,
-            })
+            files.append(
+                {
+                    "url": f"https://drive.google.com/uc?export=download&id={entry_id}",
+                    "filename": title,
+                    "link_text": title,
+                }
+            )
     return {"files": files, "subfolder_ids": subfolder_ids}
-
 
 
 def extract_pdf_links(html: str, base_url: str) -> list[dict]:
@@ -206,12 +217,7 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
             if is_bfd_download
             else None
         )
-        if not (
-            is_doc_ext
-            or is_civicengage
-            or is_coursevector_doc
-            or bfd_type
-        ):
+        if not (is_doc_ext or is_civicengage or is_coursevector_doc or bfd_type):
             continue
 
         if is_civicengage and parsed.query:
@@ -256,11 +262,13 @@ def extract_pdf_links(html: str, base_url: str) -> list[dict]:
             tail = path.rstrip("/").split("/")[-1] or "document"
             filename = f"{tail}.pdf"
 
-        records.append({
-            "url": absolute_url,
-            "filename": filename,
-            "link_text": link_text,
-        })
+        records.append(
+            {
+                "url": absolute_url,
+                "filename": filename,
+                "link_text": link_text,
+            }
+        )
 
     return records
 
@@ -328,15 +336,21 @@ def classify_proceeding_type(filename: str, link_text: str) -> str:
         return re.compile(rf"(?<![A-Za-z]){re.escape(tok)}(?![A-Za-z])", re.IGNORECASE)
 
     # ZHB or "Zoning Hearing"
-    if _token("ZHB").search(combined) or re.search(r"Zoning[\s_-]+Hearing", combined, re.IGNORECASE):
+    if _token("ZHB").search(combined) or re.search(
+        r"Zoning[\s_-]+Hearing", combined, re.IGNORECASE
+    ):
         return "zoning_hearing"
 
     # PC (standalone) or "Planning Commission"
-    if _token("PC").search(combined) or re.search(r"Planning[\s_-]+Commission", combined, re.IGNORECASE):
+    if _token("PC").search(combined) or re.search(
+        r"Planning[\s_-]+Commission", combined, re.IGNORECASE
+    ):
         return "planning_commission"
 
     # BOS (standalone) or "Supervisors"
-    if _token("BOS").search(combined) or re.search(r"Supervisors?", combined, re.IGNORECASE):
+    if _token("BOS").search(combined) or re.search(
+        r"Supervisors?", combined, re.IGNORECASE
+    ):
         return "supervisors"
 
     if re.search(r"Commissioners", combined, re.IGNORECASE):

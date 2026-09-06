@@ -26,9 +26,7 @@ def test_backfill_preflight_requires_matching_durable_authorization(
         max_price_prompt=0.2,
         max_price_completion=1.2,
     )
-    monkeypatch.setenv(
-        "COUNTYIQ_PASS2_BACKFILL_AUTHORIZATION_FILE", str(path)
-    )
+    monkeypatch.setenv("COUNTYIQ_PASS2_BACKFILL_AUTHORIZATION_FILE", str(path))
 
     accepted = _backfill_authorization_check(
         target_pass=2,
@@ -52,9 +50,7 @@ def test_backfill_preflight_requires_matching_durable_authorization(
 
 
 def test_canary_preflight_requires_durable_authorization(monkeypatch) -> None:
-    monkeypatch.delenv(
-        "COUNTYIQ_PASS0_BACKFILL_AUTHORIZATION_FILE", raising=False
-    )
+    monkeypatch.delenv("COUNTYIQ_PASS0_BACKFILL_AUTHORIZATION_FILE", raising=False)
 
     result = _backfill_authorization_check(
         target_pass=0,
@@ -73,14 +69,16 @@ def test_pass2_review_receipt_requires_every_stability_case(tmp_path) -> None:
     case_ids = [case["id"] for case in fixture["cases"]]
     receipt = tmp_path / "receipt.json"
     receipt.write_text(
-        json.dumps({
-            "reviewer": "test-reviewer",
-            "reviewed_at": "2026-08-31T12:00:00Z",
-            "fixture_sha256": hashlib.sha256(
-                PASS2_REVIEW_FIXTURE.read_bytes()
-            ).hexdigest(),
-            "case_decisions": {case_id: "approved" for case_id in case_ids},
-        }),
+        json.dumps(
+            {
+                "reviewer": "test-reviewer",
+                "reviewed_at": "2026-08-31T12:00:00Z",
+                "fixture_sha256": hashlib.sha256(
+                    PASS2_REVIEW_FIXTURE.read_bytes()
+                ).hexdigest(),
+                "case_decisions": {case_id: "approved" for case_id in case_ids},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -125,31 +123,33 @@ def test_preflight_reports_old_schema_without_querying_missing_views(monkeypatch
 
 
 def test_preflight_rejects_integration_test_audit_fixtures(monkeypatch):
-    expected_revision, = _repository_schema_heads()
+    (expected_revision,) = _repository_schema_heads()
 
     class FixtureDatabase:
         def execute(self, sql, params=None):
             if "SELECT version_num FROM alembic_version" in sql:
                 return [(expected_revision,)]
             if "intelligence_integrity_status" in sql:
-                return [{
-                    "history_count": 1,
-                    "accepted_count": 1,
-                    "quarantined_count": 0,
-                    "human_resolution_inference_count": 0,
-                    "contradiction_count": 0,
-                    "unresolved_contradiction_count": 0,
-                    "resolved_contradiction_count": 0,
-                    "oldest_unresolved_at": None,
-                    "projection_count": 0,
-                    "unlinked_projection_count": 0,
-                    "projection_mismatch_count": 0,
-                    "rejection_count": 0,
-                    "rejections_last_24h": 0,
-                    "latest_rejection_at": None,
-                    "test_history_count": 1,
-                    "test_rejection_count": 0,
-                }]
+                return [
+                    {
+                        "history_count": 1,
+                        "accepted_count": 1,
+                        "quarantined_count": 0,
+                        "human_resolution_inference_count": 0,
+                        "contradiction_count": 0,
+                        "unresolved_contradiction_count": 0,
+                        "resolved_contradiction_count": 0,
+                        "oldest_unresolved_at": None,
+                        "projection_count": 0,
+                        "unlinked_projection_count": 0,
+                        "projection_mismatch_count": 0,
+                        "rejection_count": 0,
+                        "rejections_last_24h": 0,
+                        "latest_rejection_at": None,
+                        "test_history_count": 1,
+                        "test_rejection_count": 0,
+                    }
+                ]
             if "intelligence_validation_rejections" in sql and "produced" in sql:
                 return [{"produced": 1, "rejected": 0}]
             if "SELECT EXISTS" in sql and "intelligence_inference_history" in sql:
@@ -192,15 +192,21 @@ def test_gate_pass_rate_applies_only_after_twenty_outputs(monkeypatch):
     assert small["ok"] is True and small["evaluated"] is False
 
     failing = _gate_pass_rate(Database(14, 6), 2)
-    assert failing["evaluated"] is True and failing["pass_rate"] == 0.7 and failing["ok"] is False
+    assert (
+        failing["evaluated"] is True
+        and failing["pass_rate"] == 0.7
+        and failing["ok"] is False
+    )
 
     monkeypatch.setenv("COUNTYIQ_PASS2_MIN_GATE_PASS_RATE", "0.6")
     assert _gate_pass_rate(Database(14, 6), 2)["ok"] is True
 
 
 @pytest.mark.parametrize("reverse", [False, True])
-def test_preflight_rejects_additional_database_head_in_either_order(monkeypatch, reverse):
-    expected, = _repository_schema_heads()
+def test_preflight_rejects_additional_database_head_in_either_order(
+    monkeypatch, reverse
+):
+    (expected,) = _repository_schema_heads()
     rows = [(expected,), ("unexpected-branch",)]
     if reverse:
         rows.reverse()
@@ -211,12 +217,17 @@ def test_preflight_rejects_additional_database_head_in_either_order(monkeypatch,
                 return rows
             raise AssertionError("Schema mismatch must stop integrity/history queries")
 
-    monkeypatch.setattr("scripts.verify_intelligence_preflight.estimate_backfill",
-                        lambda database, sample_size: {"read_only": True})
-    monkeypatch.setattr("scripts.verify_intelligence_preflight.probe_llm_archive_destination",
-                        lambda: {"ok": True, "path": "/tmp/archive", "reason": "fixture"})
-    result = build_report(Database(), target_pass=0, sample_size=1,
-                          max_canary_items=1, receipt_path=None)
+    monkeypatch.setattr(
+        "scripts.verify_intelligence_preflight.estimate_backfill",
+        lambda database, sample_size: {"read_only": True},
+    )
+    monkeypatch.setattr(
+        "scripts.verify_intelligence_preflight.probe_llm_archive_destination",
+        lambda: {"ok": True, "path": "/tmp/archive", "reason": "fixture"},
+    )
+    result = build_report(
+        Database(), target_pass=0, sample_size=1, max_canary_items=1, receipt_path=None
+    )
     assert result["ready"] is False
     assert result["checks"]["schema_at_repository_head"] is False
     assert result["revision"] is None

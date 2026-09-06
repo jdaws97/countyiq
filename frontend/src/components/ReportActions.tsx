@@ -8,13 +8,22 @@ export default function ReportActions({ label }: { label: string }) {
   useEffect(() => {
     let receipts: Array<[HTMLDetailsElement, boolean]> | null = null
     const preparePrint = () => {
-      if (receipts) return
-      receipts = Array.from(document.querySelectorAll<HTMLDetailsElement>('details.evidence-receipt, details.property-signal-details'))
-        .map((receipt) => [receipt, receipt.open])
-      for (const [receipt] of receipts) receipt.open = true
+      if (receipts) {
+        return
+      }
+      receipts = Array.from(
+        document.querySelectorAll<HTMLDetailsElement>(
+          'details.evidence-receipt, details.property-signal-details',
+        ),
+      ).map((receipt) => [receipt, receipt.open])
+      for (const [receipt] of receipts) {
+        receipt.open = true
+      }
     }
     const restoreScreen = () => {
-      for (const [receipt, wasOpen] of receipts ?? []) receipt.open = wasOpen
+      for (const [receipt, wasOpen] of receipts ?? []) {
+        receipt.open = wasOpen
+      }
       receipts = null
     }
     window.addEventListener('beforeprint', preparePrint)
@@ -43,8 +52,12 @@ export default function ReportActions({ label }: { label: string }) {
 
   return (
     <div className="report-actions" data-print-hidden>
-      <Button tone="quiet" type="button" onClick={share}>{copied ? 'Link copied' : 'Share'}</Button>
-      <Button tone="quiet" type="button" onClick={() => window.print()}>Print / Save PDF</Button>
+      <Button tone="quiet" type="button" onClick={share}>
+        {copied ? 'Link copied' : 'Share'}
+      </Button>
+      <Button tone="quiet" type="button" onClick={() => window.print()}>
+        Print / Save PDF
+      </Button>
     </div>
   )
 }

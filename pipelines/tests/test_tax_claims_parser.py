@@ -13,6 +13,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 # PIDN conversion
 # ---------------------------------------------------------------------------
 
+
 def test_pidn_standard():
     pidn, unit = tax_claim_id_to_pidn("01-001-01-0002.00-00000")
     assert pidn == "0100101000200"
@@ -46,6 +47,7 @@ def test_pidn_invalid():
 # ---------------------------------------------------------------------------
 # Text parser
 # ---------------------------------------------------------------------------
+
 
 def _fixture_text():
     return (FIXTURES_DIR / "tax_claims_sample.txt").read_text()
@@ -95,8 +97,12 @@ def test_parse_condo_unit():
 
 def test_parse_negative_payments():
     records = parse_tax_claims_text(_fixture_text())
-    hits = [r for r in records if r["parcel_id_raw"] == "01-001-01-0002.00-00000"
-            and r["authority_name"] == "COUNTY"]
+    hits = [
+        r
+        for r in records
+        if r["parcel_id_raw"] == "01-001-01-0002.00-00000"
+        and r["authority_name"] == "COUNTY"
+    ]
     assert len(hits) >= 1
     assert hits[0]["fees_paid"] == -55.0
 

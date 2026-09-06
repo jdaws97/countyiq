@@ -34,15 +34,18 @@ logger = logging.getLogger(__name__)
 def _integrity_alert(database, *, now: datetime) -> tuple[str, str, dict]:
     """Return severity, message, and stable cursor state for integrity health."""
 
-    rows = database.execute(
-        """
+    rows = (
+        database.execute(
+            """
         SELECT unresolved_contradiction_count, oldest_unresolved_at,
                unlinked_projection_count, projection_mismatch_count,
                rejection_count, rejections_last_24h, latest_rejection_at
         FROM meta.intelligence_integrity_status
         CROSS JOIN meta.intelligence_validation_rejection_status
         """
-    ) or []
+        )
+        or []
+    )
     if not rows:
         state = {"severity": "critical", "reason": "status_unavailable"}
         return "critical", "Intelligence integrity status is unavailable.", state

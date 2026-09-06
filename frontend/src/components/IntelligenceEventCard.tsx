@@ -11,10 +11,18 @@ import { isProjectWatched, isWatched, toggleProjectWatch, toggleWatch } from '..
 import type { IntelligenceEvent } from '../types/api'
 
 function eventColor(event: IntelligenceEvent): string {
-  if (event.event_type === 'denial' || event.event_type === 'delinquency_change') return 'var(--accent-red)'
-  if (event.event_type === 'approval') return 'var(--accent-green)'
-  if (event.event_type === 'continuance' || event.event_type === 'condition') return 'var(--accent-gold)'
-  if (event.category === 'development') return 'var(--accent-cyan)'
+  if (event.event_type === 'denial' || event.event_type === 'delinquency_change') {
+    return 'var(--accent-red)'
+  }
+  if (event.event_type === 'approval') {
+    return 'var(--accent-green)'
+  }
+  if (event.event_type === 'continuance' || event.event_type === 'condition') {
+    return 'var(--accent-gold)'
+  }
+  if (event.category === 'development') {
+    return 'var(--accent-cyan)'
+  }
   return 'var(--accent-blue)'
 }
 
@@ -53,25 +61,34 @@ export default function IntelligenceEventCard({
     return () => window.removeEventListener('countyiq-watchlist-changed', refresh)
   }, [])
 
-  const eventDate = event.event_date
-    ? formatShortDate(event.event_date)
-    : 'Event date unverified'
-  const proceedingDetails = event.sources.find((source) => [2, 3].includes(Number(source.details?.contract_version)))?.details
+  const eventDate = event.event_date ? formatShortDate(event.event_date) : 'Event date unverified'
+  const proceedingDetails = event.sources.find((source) =>
+    [2, 3].includes(Number(source.details?.contract_version)),
+  )?.details
   const conditions = Array.isArray(proceedingDetails?.conditions)
-    ? proceedingDetails.conditions.flatMap((value, index) => typeof value === 'string' && value.trim() ? [{text: value, index}] : [])
+    ? proceedingDetails.conditions.flatMap((value, index) =>
+        typeof value === 'string' && value.trim() ? [{ text: value, index }] : [],
+      )
     : []
   const milestones = Array.isArray(proceedingDetails?.milestones)
     ? proceedingDetails.milestones.flatMap((value, index) =>
-      value && typeof value === 'object' && typeof value.text === 'string' && value.text.trim()
-        ? [{text: value.text, kind: typeof value.kind === 'string' ? value.kind : null, index}] : [])
+        value && typeof value === 'object' && typeof value.text === 'string' && value.text.trim()
+          ? [{ text: value.text, kind: typeof value.kind === 'string' ? value.kind : null, index }]
+          : [],
+      )
     : []
-  const sourceFor = (marker: string) => event.sources.find((source) =>
-    Array.isArray(source.details?.supports) && source.details.supports.includes(marker))
+  const sourceFor = (marker: string) =>
+    event.sources.find(
+      (source) =>
+        Array.isArray(source.details?.supports) && source.details.supports.includes(marker),
+    )
   const projectWatched = event.project ? isProjectWatched(event.project.key) : false
   const pidns = event.related_pidns.slice(0, 8)
   const entityLinks = event.entity_links ?? []
   const linkedEntityNames = new Set(entityLinks.map((entity) => entity.matched_name.toLowerCase()))
-  const unresolvedEntities = event.related_entities.filter((name) => !linkedEntityNames.has(name.toLowerCase()))
+  const unresolvedEntities = event.related_entities.filter(
+    (name) => !linkedEntityNames.has(name.toLowerCase()),
+  )
 
   return (
     <article
@@ -81,13 +98,30 @@ export default function IntelligenceEventCard({
       <div className="intelligence-card-topline">
         <div className="intelligence-card-badges">
           {isNew && <Badge color="var(--accent-gold)">New since last visit</Badge>}
-          <Badge color={eventColor(event)}>{event.event_type === 'scoped_decision' && typeof proceedingDetails?.decision_scope === 'string' ? formatLabel(proceedingDetails.decision_scope) + ' decision' : formatLabel(event.event_type)}</Badge>
-          <Badge color={event.category === 'development' ? 'var(--accent-cyan)' : 'var(--accent-blue)'}>{formatLabel(event.category)}</Badge>
-          {triageStatus && <Badge color={triageStatus === 'reviewed' ? 'var(--accent-green)' : 'var(--text-muted)'}>{triageStatus}</Badge>}
+          <Badge color={eventColor(event)}>
+            {event.event_type === 'scoped_decision' &&
+            typeof proceedingDetails?.decision_scope === 'string'
+              ? formatLabel(proceedingDetails.decision_scope) + ' decision'
+              : formatLabel(event.event_type)}
+          </Badge>
+          <Badge
+            color={event.category === 'development' ? 'var(--accent-cyan)' : 'var(--accent-blue)'}
+          >
+            {formatLabel(event.category)}
+          </Badge>
+          {triageStatus && (
+            <Badge
+              color={triageStatus === 'reviewed' ? 'var(--accent-green)' : 'var(--text-muted)'}
+            >
+              {triageStatus}
+            </Badge>
+          )}
         </div>
-        {event.event_date
-          ? <time dateTime={event.event_date}>{eventDate}</time>
-          : <span title={'First observed ' + formatShortDate(event.detected_at)}>{eventDate}</span>}
+        {event.event_date ? (
+          <time dateTime={event.event_date}>{eventDate}</time>
+        ) : (
+          <span title={'First observed ' + formatShortDate(event.detected_at)}>{eventDate}</span>
+        )}
       </div>
 
       <h2>{event.title}</h2>
@@ -95,14 +129,28 @@ export default function IntelligenceEventCard({
 
       <div className="intelligence-card-meta">
         {event.municipality && <span>{event.municipality}</span>}
-        {proceedingDetails?.record_status === 'scheduled' && <span>Scheduled item · outcome unverified</span>}
-        {proceedingDetails?.record_status === 'recommendation' && <span>Recommendation · final decision unverified</span>}
-        {typeof proceedingDetails?.matter_category === 'string' && <span>{formatLabel(proceedingDetails.matter_category)}</span>}
+        {proceedingDetails?.record_status === 'scheduled' && (
+          <span>Scheduled item · outcome unverified</span>
+        )}
+        {proceedingDetails?.record_status === 'recommendation' && (
+          <span>Recommendation · final decision unverified</span>
+        )}
+        {typeof proceedingDetails?.matter_category === 'string' && (
+          <span>{formatLabel(proceedingDetails.matter_category)}</span>
+        )}
         {proceedingDetails?.discovery_eligible === false && <span>Property history</span>}
-        {typeof proceedingDetails?.decision_authority === 'string' && <span>{proceedingDetails.decision_authority}</span>}
-        {proceedingDetails?.identity_status === 'needs_review' && <span>Source identity conflict · linking requires review</span>}
-        {proceedingDetails?.location_status === 'location_not_resolved' && Array.isArray(proceedingDetails.parcel_references) && proceedingDetails.parcel_references.length > 0 && <span>Parcel location unverified</span>}
-        <span>{event.sources.length} evidence receipt{event.sources.length === 1 ? '' : 's'}</span>
+        {typeof proceedingDetails?.decision_authority === 'string' && (
+          <span>{proceedingDetails.decision_authority}</span>
+        )}
+        {proceedingDetails?.identity_status === 'needs_review' && (
+          <span>Source identity conflict · linking requires review</span>
+        )}
+        {proceedingDetails?.location_status === 'location_not_resolved' &&
+          Array.isArray(proceedingDetails.parcel_references) &&
+          proceedingDetails.parcel_references.length > 0 && <span>Parcel location unverified</span>}
+        <span>
+          {event.sources.length} evidence receipt{event.sources.length === 1 ? '' : 's'}
+        </span>
         {event.interpretation.kind === 'deterministic' && <span>Recorded source change</span>}
         {event.interpretation.kind === 'llm' && <span>Extracted from record</span>}
       </div>
@@ -113,10 +161,18 @@ export default function IntelligenceEventCard({
         </Button>
         {showTriage && (
           <>
-            <Button tone="quiet" type="button" onClick={() => onTriage?.(triageStatus === 'reviewed' ? null : 'reviewed')}>
+            <Button
+              tone="quiet"
+              type="button"
+              onClick={() => onTriage?.(triageStatus === 'reviewed' ? null : 'reviewed')}
+            >
               {triageStatus === 'reviewed' ? 'Mark unreviewed' : '✓ Mark reviewed'}
             </Button>
-            <Button tone="quiet" type="button" onClick={() => onTriage?.(triageStatus === 'dismissed' ? null : 'dismissed')}>
+            <Button
+              tone="quiet"
+              type="button"
+              onClick={() => onTriage?.(triageStatus === 'dismissed' ? null : 'dismissed')}
+            >
               {triageStatus === 'dismissed' ? 'Restore' : 'Dismiss'}
             </Button>
           </>
@@ -124,27 +180,59 @@ export default function IntelligenceEventCard({
       </div>
 
       {(expanded || printEvidence) && (
-        <div className="intelligence-card-details" hidden={!expanded} data-print-evidence={printEvidence || undefined}>
-          {conditions.length > 0 && <div className="recorded-event-facts">
-            <h3>Stated conditions</h3>
-            <p>Completion is not established by this record.</p>
-            <ul>{conditions.map((item) => <li key={item.index}>{item.text}{' '}
-              <FactSource evidenceId={sourceFor(`condition:${item.index}`)?.evidence_id} />
-            </li>)}</ul>
-          </div>}
-          {milestones.length > 0 && <div className="recorded-event-facts">
-            <h3>Stated milestones</h3>
-            <p>A stated date does not establish that the action occurred.</p>
-            <ul>{milestones.map((item) => <li key={item.index}>
-              {typeof item.kind === 'string' && item.kind !== 'other' && <strong>{formatLabel(item.kind)}: </strong>}{item.text}{' '}
-              <FactSource evidenceId={sourceFor(`milestone:${item.index}`)?.evidence_id} />
-            </li>)}</ul>
-          </div>}
+        <div
+          className="intelligence-card-details"
+          hidden={!expanded}
+          data-print-evidence={printEvidence || undefined}
+        >
+          {conditions.length > 0 && (
+            <div className="recorded-event-facts">
+              <h3>Stated conditions</h3>
+              <p>Completion is not established by this record.</p>
+              <ul>
+                {conditions.map((item) => (
+                  <li key={item.index}>
+                    {item.text}{' '}
+                    <FactSource evidenceId={sourceFor(`condition:${item.index}`)?.evidence_id} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {milestones.length > 0 && (
+            <div className="recorded-event-facts">
+              <h3>Stated milestones</h3>
+              <p>A stated date does not establish that the action occurred.</p>
+              <ul>
+                {milestones.map((item) => (
+                  <li key={item.index}>
+                    {typeof item.kind === 'string' && item.kind !== 'other' && (
+                      <strong>{formatLabel(item.kind)}: </strong>
+                    )}
+                    {item.text}{' '}
+                    <FactSource evidenceId={sourceFor(`milestone:${item.index}`)?.evidence_id} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {event.project && (
             <RelatedGroup label="Related project">
-              <Link to={`/project/${encodeURIComponent(event.project.key)}`} className="record-link">{event.project.name} →</Link>
-              <Button tone="quiet" type="button" onClick={() => { toggleProjectWatch(event.project!); setWatchRevision((value) => value + 1) }}>
+              <Link
+                to={`/project/${encodeURIComponent(event.project.key)}`}
+                className="record-link"
+              >
+                {event.project.name} →
+              </Link>
+              <Button
+                tone="quiet"
+                type="button"
+                onClick={() => {
+                  toggleProjectWatch(event.project!)
+                  setWatchRevision((value) => value + 1)
+                }}
+              >
                 {projectWatched ? '★ Watching project' : '☆ Watch project'}
               </Button>
             </RelatedGroup>
@@ -152,8 +240,20 @@ export default function IntelligenceEventCard({
 
           {(entityLinks.length > 0 || unresolvedEntities.length > 0) && (
             <RelatedGroup label="Related entities">
-              {entityLinks.map((entity) => <Link key={entity.owner_id} to={`/entity/${entity.owner_id}`} className="record-link">{entity.name} →</Link>)}
-              {unresolvedEntities.map((entity) => <span className="unresolved-record" key={entity}>{entity} · unresolved</span>)}
+              {entityLinks.map((entity) => (
+                <Link
+                  key={entity.owner_id}
+                  to={`/entity/${entity.owner_id}`}
+                  className="record-link"
+                >
+                  {entity.name} →
+                </Link>
+              ))}
+              {unresolvedEntities.map((entity) => (
+                <span className="unresolved-record" key={entity}>
+                  {entity} · unresolved
+                </span>
+              ))}
             </RelatedGroup>
           )}
 
@@ -164,17 +264,32 @@ export default function IntelligenceEventCard({
                 return (
                   <span className="parcel-record-link" key={pidn}>
                     <Link to={`/property/${pidn}`}>{pidn}</Link>
-                    <button aria-label={`${watched ? 'Unwatch' : 'Watch'} parcel ${pidn}`} title={`${watched ? 'Unwatch' : 'Watch'} parcel ${pidn}`} onClick={() => { toggleWatch(pidn); setWatchRevision((value) => value + 1) }}>
+                    <button
+                      aria-label={`${watched ? 'Unwatch' : 'Watch'} parcel ${pidn}`}
+                      title={`${watched ? 'Unwatch' : 'Watch'} parcel ${pidn}`}
+                      onClick={() => {
+                        toggleWatch(pidn)
+                        setWatchRevision((value) => value + 1)
+                      }}
+                    >
                       {watched ? '★' : '☆'}
                     </button>
                   </span>
                 )
               })}
-              {event.related_pidns.length > pidns.length && <span className="unresolved-record">+{event.related_pidns.length - pidns.length} more</span>}
+              {event.related_pidns.length > pidns.length && (
+                <span className="unresolved-record">
+                  +{event.related_pidns.length - pidns.length} more
+                </span>
+              )}
             </RelatedGroup>
           )}
 
-          <EvidencePanel items={event.sources} title="Verify this event" intro="Inspect source facts, method, timing, caveats, and the original record before relying on this interpretation." />
+          <EvidencePanel
+            items={event.sources}
+            title="Verify this event"
+            intro="Inspect source facts, method, timing, caveats, and the original record before relying on this interpretation."
+          />
         </div>
       )}
     </article>
@@ -182,9 +297,18 @@ export default function IntelligenceEventCard({
 }
 
 function RelatedGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="related-group"><div className="record-label">{label}</div><div className="related-group-items">{children}</div></div>
+  return (
+    <div className="related-group">
+      <div className="record-label">{label}</div>
+      <div className="related-group-items">{children}</div>
+    </div>
+  )
 }
 
 function FactSource({ evidenceId }: { evidenceId?: string }) {
-  return evidenceId ? <a href={'#' + evidenceId} onClick={() => openEvidenceReceipt(evidenceId)}>Source →</a> : null
+  return evidenceId ? (
+    <a href={'#' + evidenceId} onClick={() => openEvidenceReceipt(evidenceId)}>
+      Source →
+    </a>
+  ) : null
 }

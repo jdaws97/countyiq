@@ -4,6 +4,7 @@ Revision ID: 012
 Revises: 011
 Create Date: 2026-04-03
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -32,7 +33,12 @@ def upgrade() -> None:
         sa.Column("office_address", sa.Text),
         sa.Column("officers", JSONB),
         sa.Column("source_url", sa.Text),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("entity_name", "valid_from"),
         schema="staging",
@@ -62,7 +68,12 @@ def upgrade() -> None:
         sa.Column("raw_text", sa.Text),
         sa.Column("source_url", sa.Text, nullable=False),
         sa.Column("document_url", sa.Text),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         schema="staging",
     )
@@ -89,7 +100,11 @@ def upgrade() -> None:
         sa.Column("extraction_confidence", sa.Float),
         sa.Column("model_used", sa.Text),
         sa.Column("page_number", sa.Integer),
-        sa.ForeignKeyConstraint(["proceeding_id"], ["staging.public_proceedings.id"], name="fk_extraction_proceeding"),
+        sa.ForeignKeyConstraint(
+            ["proceeding_id"],
+            ["staging.public_proceedings.id"],
+            name="fk_extraction_proceeding",
+        ),
         schema="staging",
     )
     op.create_index(
@@ -196,7 +211,9 @@ def upgrade() -> None:
         "intelligence_passes",
         sa.Column("pidn", sa.Text, nullable=False),
         sa.Column("pass_number", sa.Integer, nullable=False),
-        sa.Column("status", sa.Text, nullable=False, server_default=sa.text("'pending'")),
+        sa.Column(
+            "status", sa.Text, nullable=False, server_default=sa.text("'pending'")
+        ),
         sa.Column("last_run_at", sa.DateTime(timezone=True)),
         sa.Column("input_hash", sa.Text),
         sa.Column("error_message", sa.Text),
@@ -210,7 +227,9 @@ def downgrade() -> None:
     op.drop_table("intelligence_passes", schema="meta")
 
     # Public tables (reverse order)
-    op.drop_index("idx_entity_graph_canonical_name", table_name="entity_graph", schema="public")
+    op.drop_index(
+        "idx_entity_graph_canonical_name", table_name="entity_graph", schema="public"
+    )
     op.drop_table("entity_graph", schema="public")
     op.drop_table("county_narratives", schema="public")
     op.drop_table("parcel_briefs", schema="public")
@@ -218,11 +237,31 @@ def downgrade() -> None:
     op.drop_table("evidence", schema="public")
 
     # Staging tables (reverse order, drop indexes first)
-    op.drop_index("idx_proceeding_extractions_parcel", table_name="proceeding_extractions", schema="staging")
-    op.drop_index("idx_proceeding_extractions_applicant", table_name="proceeding_extractions", schema="staging")
+    op.drop_index(
+        "idx_proceeding_extractions_parcel",
+        table_name="proceeding_extractions",
+        schema="staging",
+    )
+    op.drop_index(
+        "idx_proceeding_extractions_applicant",
+        table_name="proceeding_extractions",
+        schema="staging",
+    )
     op.drop_table("proceeding_extractions", schema="staging")
-    op.drop_index("idx_public_proceedings_body_date", table_name="public_proceedings", schema="staging")
+    op.drop_index(
+        "idx_public_proceedings_body_date",
+        table_name="public_proceedings",
+        schema="staging",
+    )
     op.drop_table("public_proceedings", schema="staging")
-    op.drop_index("idx_corporate_entities_agent", table_name="corporate_entities", schema="staging")
-    op.drop_index("idx_corporate_entities_current", table_name="corporate_entities", schema="staging")
+    op.drop_index(
+        "idx_corporate_entities_agent",
+        table_name="corporate_entities",
+        schema="staging",
+    )
+    op.drop_index(
+        "idx_corporate_entities_current",
+        table_name="corporate_entities",
+        schema="staging",
+    )
     op.drop_table("corporate_entities", schema="staging")

@@ -25,8 +25,16 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["pidn"]
 VALUE_COLUMNS = [
-    "ease_id", "ease_code", "exclusion", "federal", "ease_acres",
-    "grantor", "curr_owner", "pres_date", "district", "source_url",
+    "ease_id",
+    "ease_code",
+    "exclusion",
+    "federal",
+    "ease_acres",
+    "grantor",
+    "curr_owner",
+    "pres_date",
+    "district",
+    "source_url",
 ]
 
 
@@ -43,10 +51,18 @@ def conservation_easements_arcgis(
     """Fetch conservation easement polygons, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="conservation_easements_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="conservation_easements_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS conservation easements for {county.name}: {county.arcgis_conservation_easements_url}")
+    context.log.info(
+        f"Querying ArcGIS conservation easements for {county.name}: {county.arcgis_conservation_easements_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_conservation_easements_url,
@@ -104,18 +120,22 @@ def _parse(raw_features: list[dict]) -> list[dict]:
         if not pidn:
             continue
         pres_raw = a.get("PRES_DATE")
-        records.append({
-            "pidn": str(pidn).strip(),
-            "ease_id": a.get("EASE_ID"),
-            "ease_code": a.get("EASE_CODE"),
-            "exclusion": a.get("EXCLUSION"),
-            "federal": a.get("FEDERAL"),
-            "ease_acres": a.get("EASE_ACRES"),
-            "grantor": a.get("GRANTOR"),
-            "curr_owner": a.get("CURR_OWNER"),
-            "pres_date": datetime.fromtimestamp(pres_raw / 1000, tz=timezone.utc) if pres_raw else None,
-            "district": a.get("DISTRICT"),
-        })
+        records.append(
+            {
+                "pidn": str(pidn).strip(),
+                "ease_id": a.get("EASE_ID"),
+                "ease_code": a.get("EASE_CODE"),
+                "exclusion": a.get("EXCLUSION"),
+                "federal": a.get("FEDERAL"),
+                "ease_acres": a.get("EASE_ACRES"),
+                "grantor": a.get("GRANTOR"),
+                "curr_owner": a.get("CURR_OWNER"),
+                "pres_date": datetime.fromtimestamp(pres_raw / 1000, tz=timezone.utc)
+                if pres_raw
+                else None,
+                "district": a.get("DISTRICT"),
+            }
+        )
     return records
 
 

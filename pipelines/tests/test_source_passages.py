@@ -3,14 +3,29 @@ import pytest
 from countyiq.lib.source_passages import index_source_passages
 
 
-@pytest.mark.parametrize("source", ["", "  ", "é🌳\r\nPlanning commission\n", "x" * 2501,
-                                      "A decision.\n" * 300, "parcel 123 " * 400])
+@pytest.mark.parametrize(
+    "source",
+    [
+        "",
+        "  ",
+        "é🌳\r\nPlanning commission\n",
+        "x" * 2501,
+        "A decision.\n" * 300,
+        "parcel 123 " * 400,
+    ],
+)
 def test_passages_preserve_exact_source_and_offsets(source):
     document = index_source_passages(source)
     assert document.source_sha256 == hashlib.sha256(source.encode()).hexdigest()
     assert "".join(p.text for p in document.passages) == source
-    assert all(0 < len(p.text) <= 1200 and p.text == source[p.start:p.end] for p in document.passages)
-    assert all(left.end == right.start for left, right in zip(document.passages, document.passages[1:]))
+    assert all(
+        0 < len(p.text) <= 1200 and p.text == source[p.start : p.end]
+        for p in document.passages
+    )
+    assert all(
+        left.end == right.start
+        for left, right in zip(document.passages, document.passages[1:])
+    )
     assert document == index_source_passages(source)
 
 
@@ -24,8 +39,10 @@ def test_reference_cannot_silently_change_source_or_segmentation():
         resized.resolve(first.source_sha256, [first.passages[0].passage_id])
 
 
-@pytest.mark.parametrize("ids", [[], [None], [1], ["unknown"], "v1-1200-p0001",
-                                ["v1-1200-p0001", "v1-1200-p0001"]])
+@pytest.mark.parametrize(
+    "ids",
+    [[], [None], [1], ["unknown"], "v1-1200-p0001", ["v1-1200-p0001", "v1-1200-p0001"]],
+)
 def test_invalid_references_are_rejected(ids):
     document = index_source_passages("Recorded source text")
     with pytest.raises(ValueError):
@@ -35,7 +52,9 @@ def test_invalid_references_are_rejected(ids):
 def test_disjoint_passages_remain_separate_and_in_source_order():
     document = index_source_passages("a" * 3600)
     first, _, last = document.passages
-    resolved = document.resolve(document.source_sha256, [last.passage_id, first.passage_id])
+    resolved = document.resolve(
+        document.source_sha256, [last.passage_id, first.passage_id]
+    )
     assert resolved == (first, last)
     assert len(resolved) == 2
 

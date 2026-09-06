@@ -25,8 +25,12 @@ TRANSFER_CORROBORATING_FIELDS = ("owner_full", "price", "prev_owner", "mail_addr
 VALUE_FIELDS = ("aprland", "aprbldg", "aprtotal")
 
 STRUCTURE_FIELDS = (
-    "yrblt", "res_living_area", "num_stories",
-    "comm_struc", "comm_year_built", "comm_building_sq_ft",
+    "yrblt",
+    "res_living_area",
+    "num_stories",
+    "comm_struc",
+    "comm_year_built",
+    "comm_building_sq_ft",
 )
 
 # Every field the classifier reads — the asset's fetch query selects these
@@ -93,7 +97,9 @@ def _classify_transfer(old: dict, new: dict) -> dict | None:
     # A deed reference change backed by owner/price/prev_owner movement is the
     # county stating a recorded transfer. A lone sale-date drift (data cleanup,
     # backfilled SALEDT) stays "likely" until something else moves with it.
-    if deed_changed and any(f in corroborating for f in ("owner_full", "price", "prev_owner")):
+    if deed_changed and any(
+        f in corroborating for f in ("owner_full", "price", "prev_owner")
+    ):
         confidence = "confirmed"
     elif len(indicators) + len(corroborating) >= 3:
         confidence = "confirmed"
@@ -114,7 +120,9 @@ def _classify_transfer(old: dict, new: dict) -> dict | None:
     }
 
 
-def _classify_value_change(old: dict, new: dict, transfer_detected: bool) -> dict | None:
+def _classify_value_change(
+    old: dict, new: dict, transfer_detected: bool
+) -> dict | None:
     changed = [f for f in VALUE_FIELDS if _changed(old, new, f)]
     if not changed:
         return None
@@ -127,12 +135,12 @@ def _classify_value_change(old: dict, new: dict, transfer_detected: bool) -> dic
     pattern = "general"
     bldg_up = old_bldg is not None and new_bldg is not None and new_bldg > old_bldg
     land_stable = (
-        old_land is not None and new_land is not None
+        old_land is not None
+        and new_land is not None
         and (old_land == 0 or abs(new_land - old_land) / max(old_land, 1.0) <= 0.05)
     )
     bldg_gone = (
-        old_bldg is not None and old_bldg > 0
-        and (new_bldg is None or new_bldg == 0)
+        old_bldg is not None and old_bldg > 0 and (new_bldg is None or new_bldg == 0)
     )
     if bldg_gone:
         pattern = "demolition_like"
@@ -177,7 +185,9 @@ def classify_parcel_change(old: dict, new: dict) -> list[dict]:
     transfer = _classify_transfer(old, new)
     if transfer:
         events.append(transfer)
-    value_change = _classify_value_change(old, new, transfer_detected=transfer is not None)
+    value_change = _classify_value_change(
+        old, new, transfer_detected=transfer is not None
+    )
     if value_change:
         events.append(value_change)
     structure = _classify_structure_change(old, new)

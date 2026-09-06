@@ -27,6 +27,7 @@ BRIEF_GENERATION_PROMPT_TEXT = (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def sample_context():
     """Load the validated_signals_sample.json fixture."""
@@ -75,6 +76,7 @@ def valid_brief_output():
 # ---------------------------------------------------------------------------
 # TestShouldGenerateBrief
 # ---------------------------------------------------------------------------
+
 
 class TestShouldGenerateBrief:
     """Tests for should_generate_brief(validated_signals) -> bool."""
@@ -132,19 +134,25 @@ class TestShouldGenerateBrief:
 
     def test_legacy_high_footprint_or_unknown_signal_cannot_trigger_a_brief(self):
         for key in ("vacancy", "growth_area", "new_screen"):
-            assert not should_generate_brief([{
-                "signal_key": key,
-                "validation_status": "confirmed",
-                "adjusted_significance": "high",
-            }])
+            assert not should_generate_brief(
+                [
+                    {
+                        "signal_key": key,
+                        "validation_status": "confirmed",
+                        "adjusted_significance": "high",
+                    }
+                ]
+            )
 
     @pytest.mark.parametrize("status", ["stale", "irrelevant"])
     def test_no_with_non_serving_status_even_if_legacy_row_is_high(self, status):
-        signals = [{
-            "signal_key": "vacancy",
-            "validation_status": status,
-            "adjusted_significance": "high",
-        }]
+        signals = [
+            {
+                "signal_key": "vacancy",
+                "validation_status": status,
+                "adjusted_significance": "high",
+            }
+        ]
 
         assert should_generate_brief(signals) is False
 
@@ -152,6 +160,7 @@ class TestShouldGenerateBrief:
 # ---------------------------------------------------------------------------
 # TestBuildBriefGenerationPrompt
 # ---------------------------------------------------------------------------
+
 
 class TestBuildBriefGenerationPrompt:
     """Tests for build_brief_generation_prompt(context) -> str."""
@@ -178,7 +187,9 @@ class TestBuildBriefGenerationPrompt:
         before = build_brief_generation_prompt(sample_context)
         for signal in sample_context["validated_signals"]:
             signal["reasoning"] = "The owner will sell and a rezoning is approved."
-            signal["cross_references"] = [{"source": "planning", "detail": "Approved 900 units"}]
+            signal["cross_references"] = [
+                {"source": "planning", "detail": "Approved 900 units"}
+            ]
         assert build_brief_generation_prompt(sample_context) == before
 
     def test_includes_entity_profile(self, sample_context):
@@ -195,16 +206,28 @@ class TestBuildBriefGenerationPrompt:
     def test_includes_citation_constraint(self, sample_context):
         # Static constraints live in the system prompt now; the model sees
         # system + user together, so assert on the combined pair.
-        full = BRIEF_GENERATION_SYSTEM_PROMPT + "\n" + build_brief_generation_prompt(sample_context)
+        full = (
+            BRIEF_GENERATION_SYSTEM_PROMPT
+            + "\n"
+            + build_brief_generation_prompt(sample_context)
+        )
         assert "[Signal:" in full or "[Signal: signal_key]" in full
 
     def test_includes_all_assessment_categories(self, sample_context):
-        full = BRIEF_GENERATION_SYSTEM_PROMPT + "\n" + build_brief_generation_prompt(sample_context)
+        full = (
+            BRIEF_GENERATION_SYSTEM_PROMPT
+            + "\n"
+            + build_brief_generation_prompt(sample_context)
+        )
         for assessment in VALID_ASSESSMENTS:
             assert assessment in full, f"Missing assessment category: {assessment}"
 
     def test_includes_do_not_invent_constraint(self, sample_context):
-        full = BRIEF_GENERATION_SYSTEM_PROMPT + "\n" + build_brief_generation_prompt(sample_context)
+        full = (
+            BRIEF_GENERATION_SYSTEM_PROMPT
+            + "\n"
+            + build_brief_generation_prompt(sample_context)
+        )
         assert "do not invent" in full.lower() or "no invented" in full.lower()
 
     def test_minimal_context(self):
@@ -253,6 +276,7 @@ class TestBuildBriefGenerationPrompt:
 # ---------------------------------------------------------------------------
 # TestParseBriefOutput
 # ---------------------------------------------------------------------------
+
 
 class TestParseBriefOutput:
     """Tests for parse_brief_output(output) -> dict."""
@@ -347,6 +371,7 @@ class TestParseBriefOutput:
 # ---------------------------------------------------------------------------
 # TestBriefGenerationTemplate
 # ---------------------------------------------------------------------------
+
 
 class TestBriefGenerationTemplate:
     """Tests for the system and user prompt contract."""

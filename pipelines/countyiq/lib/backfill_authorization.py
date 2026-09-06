@@ -232,9 +232,7 @@ class BackfillAuthorization:
             return reservation_id
 
     def settle(self, reservation_id: str, actual_cost_usd: float) -> dict:
-        actual = _money(
-            actual_cost_usd, "actual_cost_usd", positive=False
-        )
+        actual = _money(actual_cost_usd, "actual_cost_usd", positive=False)
         return self._finish(reservation_id, charged_usd=actual)
 
     def forfeit(self, reservation_id: str) -> dict:

@@ -24,60 +24,72 @@ def _configured_assets(pairs: tuple[tuple[str, object], ...]) -> AssetSelection:
 
     return AssetSelection.assets(*(asset_name for asset_name, value in pairs if value))
 
+
 # -----------------------------------------------------------------------------
 # Scheduled jobs (production refresh path)
 # -----------------------------------------------------------------------------
 
 arcgis_refresh = define_asset_job(
     name="arcgis_refresh",
-    selection=_configured_assets((
-        ("parcels_arcgis", _county.arcgis_parcels_url),
-        ("zoning_arcgis", _county.arcgis_zoning_url),
-        ("roads_arcgis", _county.arcgis_roads_url),
-        ("structures_arcgis", _county.arcgis_structures_url),
-        ("municipalities_arcgis", _county.arcgis_municipalities_url),
-        ("address_points_arcgis", _county.arcgis_address_pts_url),
-        ("zipcodes_arcgis", _county.arcgis_zipcodes_url),
-        ("traffic_counts_arcgis", _county.traffic_counts_url),
-        ("penndot_roads_arcgis", _county.penndot_roads_url),
-        ("penndot_projects_arcgis", _county.penndot_projects_url),
-    )),
+    selection=_configured_assets(
+        (
+            ("parcels_arcgis", _county.arcgis_parcels_url),
+            ("zoning_arcgis", _county.arcgis_zoning_url),
+            ("roads_arcgis", _county.arcgis_roads_url),
+            ("structures_arcgis", _county.arcgis_structures_url),
+            ("municipalities_arcgis", _county.arcgis_municipalities_url),
+            ("address_points_arcgis", _county.arcgis_address_pts_url),
+            ("zipcodes_arcgis", _county.arcgis_zipcodes_url),
+            ("traffic_counts_arcgis", _county.traffic_counts_url),
+            ("penndot_roads_arcgis", _county.penndot_roads_url),
+            ("penndot_projects_arcgis", _county.penndot_projects_url),
+        )
+    ),
     description="Refresh all ArcGIS REST API data sources",
 )
 
 radar_refresh = define_asset_job(
     name="radar_refresh",
-    selection=_configured_assets((
-        ("planning_subdivisions_arcgis", _county.arcgis_planning_subdivisions_url),
-        ("growth_areas_arcgis", _county.arcgis_growth_areas_url),
-        ("future_landuse_arcgis", _county.arcgis_future_landuse_url),
-        ("conservation_easements_arcgis", _county.arcgis_conservation_easements_url),
-        ("ag_security_arcgis", _county.arcgis_ag_security_url),
-        ("zoning_overlays_arcgis", _county.arcgis_zoning_overlays_url),
-        ("business_parks_arcgis", _county.arcgis_business_parks_url),
-        ("industrial_parks_arcgis", _county.arcgis_industrial_parks_url),
-        ("soils_arcgis", _county.arcgis_soils_url),
-        ("local_traffic_counts_arcgis", _county.arcgis_local_traffic_counts_url),
-        ("pa_dep_environmental_diligence", _county.pa_dep_query_bbox),
-    )),
+    selection=_configured_assets(
+        (
+            ("planning_subdivisions_arcgis", _county.arcgis_planning_subdivisions_url),
+            ("growth_areas_arcgis", _county.arcgis_growth_areas_url),
+            ("future_landuse_arcgis", _county.arcgis_future_landuse_url),
+            (
+                "conservation_easements_arcgis",
+                _county.arcgis_conservation_easements_url,
+            ),
+            ("ag_security_arcgis", _county.arcgis_ag_security_url),
+            ("zoning_overlays_arcgis", _county.arcgis_zoning_overlays_url),
+            ("business_parks_arcgis", _county.arcgis_business_parks_url),
+            ("industrial_parks_arcgis", _county.arcgis_industrial_parks_url),
+            ("soils_arcgis", _county.arcgis_soils_url),
+            ("local_traffic_counts_arcgis", _county.arcgis_local_traffic_counts_url),
+            ("pa_dep_environmental_diligence", _county.pa_dep_query_bbox),
+        )
+    ),
     description="Refresh development-radar ArcGIS layers (upstream of development_signals)",
 )
 
 scraper_refresh = define_asset_job(
     name="scraper_refresh",
-    selection=_configured_assets((
-        ("public_proceedings_scrape", _county.municipality_websites),
-        ("sheriff_sales_scrape", _county.sheriff_sales_url),
-    )),
+    selection=_configured_assets(
+        (
+            ("public_proceedings_scrape", _county.municipality_websites),
+            ("sheriff_sales_scrape", _county.sheriff_sales_url),
+        )
+    ),
     description="Refresh bounded municipal proceedings and sheriff-sale sources",
 )
 
 bulk_refresh = define_asset_job(
     name="bulk_refresh",
-    selection=_configured_assets((
-        ("plcb_licenses", _county.plcb_filter),
-        ("tax_claims", _county.tax_claims_pdf_url),
-    )),
+    selection=_configured_assets(
+        (
+            ("plcb_licenses", _county.plcb_filter),
+            ("tax_claims", _county.tax_claims_pdf_url),
+        )
+    ),
     description="Refresh all bulk download / API sources",
 )
 
@@ -178,7 +190,9 @@ county_narratives_refresh = define_asset_job(
 intelligence_data_refresh = define_asset_job(
     name="intelligence_data_refresh",
     selection=AssetSelection.assets(
-        "pa_dos_entities", "public_proceedings_scrape", "proceeding_extraction",
+        "pa_dos_entities",
+        "public_proceedings_scrape",
+        "proceeding_extraction",
     ),
     description="[Manual] Re-pull all intelligence source data (PA DOS + proceedings + Pass 0)",
 )

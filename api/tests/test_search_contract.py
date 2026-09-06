@@ -11,9 +11,7 @@ def _parcel_results(response) -> list[dict]:
 
 
 def test_owner_name_in_either_order_finds_parcel_without_echoing_owner(client):
-    parcels = _parcel_results(
-        client.get("/api/search", params={"q": "Holdings Alpha"})
-    )
+    parcels = _parcel_results(client.get("/api/search", params={"q": "Holdings Alpha"}))
 
     assert parcels
     assert parcels[0]["pidn"] == "0000000000001"

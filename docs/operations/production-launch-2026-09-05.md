@@ -354,3 +354,20 @@ not wired into production. The [interface study](../research/model-comparison-20
 records the controls, corpus evidence and next experiment. No additional model
 call, serving change or deployment was required; the live revision above remains
 current.
+
+## Readability and formatting
+
+At the user's request, maintained Python and frontend source now use conventional
+multiline formatting. Ruff reformatted 294 Python files; all 387 tracked Python
+syntax trees remain identical, including prompt literals. Prettier formats the
+frontend, and ESLint requires braces around control-flow bodies. The
+[code style guide](code-style.md), editor defaults, locked formatter versions and
+CI checks make the convention repeatable. Archived source and model-evaluation
+artifacts retain their original bytes.
+
+Validation passes: 1,469 pipeline unit/regression tests, 120 API unit tests,
+30 frontend tests, TypeScript, ESLint, both formatter checks and the production
+frontend build. The existing map-bundle size warning remains. This source cleanup
+does not change model settings, enable a paid pass or require a production
+deployment; the live revision recorded above remains current. Local evidence is
+under `output/readability-2026-09-05/`.

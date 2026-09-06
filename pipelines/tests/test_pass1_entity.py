@@ -29,9 +29,7 @@ def test_deterministic_tier_accepts_only_anchored_legal_name_variants():
         "parcels": [{"pidn": "P1", "owner_full": "ACME LLC", "aprtotal": 100}],
         "tax_claims": [],
         "plcb_licenses": [],
-        "corporate_entities": [
-            {"entity_name": "ACME LLC", "entity_number": "123"}
-        ],
+        "corporate_entities": [{"entity_name": "ACME LLC", "entity_number": "123"}],
         "proceedings": [],
     }
     parsed = build_deterministic_entity_resolution(
@@ -47,10 +45,13 @@ def test_deterministic_tier_refuses_people_and_conflicting_entity_numbers():
     people = {
         "corporate_entities": [],
     }
-    assert build_deterministic_entity_resolution(
-        people,
-        ["SMITH JOHN", "SMITH, JOHN"],
-    ) is None
+    assert (
+        build_deterministic_entity_resolution(
+            people,
+            ["SMITH JOHN", "SMITH, JOHN"],
+        )
+        is None
+    )
 
     conflicting = {
         "corporate_entities": [
@@ -58,15 +59,19 @@ def test_deterministic_tier_refuses_people_and_conflicting_entity_numbers():
             {"entity_name": "ACME, L.L.C.", "entity_number": "456"},
         ]
     }
-    assert build_deterministic_entity_resolution(
-        conflicting,
-        ["ACME LLC", "ACME, L.L.C."],
-    ) is None
+    assert (
+        build_deterministic_entity_resolution(
+            conflicting,
+            ["ACME LLC", "ACME, L.L.C."],
+        )
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def sample_cluster():
@@ -147,6 +152,7 @@ def valid_llm_output():
 # ---------------------------------------------------------------------------
 # TestBuildEntityClusterPrompt
 # ---------------------------------------------------------------------------
+
 
 class TestBuildEntityClusterPrompt:
     """Tests for build_entity_cluster_prompt(records) -> str."""
@@ -248,6 +254,7 @@ class TestBuildEntityClusterPrompt:
 # TestParseEntityVerificationOutput
 # ---------------------------------------------------------------------------
 
+
 class TestParseEntityVerificationOutput:
     """Tests for parse_entity_verification_output(output) -> dict."""
 
@@ -260,7 +267,10 @@ class TestParseEntityVerificationOutput:
         # Historical transcripts remain parseable, but their ungrounded,
         # unused model-generated arithmetic must not enter new decisions.
         assert all("portfolio_summary" not in entity for entity in result["entities"])
-        assert result["entities"][0]["linked_records"] == valid_llm_output["entities"][0]["linked_records"]
+        assert (
+            result["entities"][0]["linked_records"]
+            == valid_llm_output["entities"][0]["linked_records"]
+        )
 
     def test_confidence_preserved(self, valid_llm_output):
         result = parse_entity_verification_output(valid_llm_output)
@@ -367,6 +377,7 @@ class TestStableClusterKey:
 # TestEntityVerificationTemplate
 # ---------------------------------------------------------------------------
 
+
 class TestEntityVerificationTemplate:
     """Tests for the system and user prompt contract."""
 
@@ -405,7 +416,9 @@ class TestEntityVerificationTemplate:
     def test_template_accepts_sections_format(self):
         """Verify the template formats without error."""
         try:
-            result = ENTITY_VERIFICATION_USER_TEMPLATE.format(sections="test sections here")
+            result = ENTITY_VERIFICATION_USER_TEMPLATE.format(
+                sections="test sections here"
+            )
         except KeyError as exc:
             pytest.fail(f"ENTITY_VERIFICATION_USER_TEMPLATE missing variable: {exc}")
         assert "test sections here" in result
@@ -414,6 +427,7 @@ class TestEntityVerificationTemplate:
 # ---------------------------------------------------------------------------
 # TestBuildClusters
 # ---------------------------------------------------------------------------
+
 
 class TestBuildClusters:
     """Tests for the _build_clusters union-find algorithm.

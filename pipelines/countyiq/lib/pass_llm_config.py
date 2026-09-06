@@ -185,7 +185,9 @@ class PassItemBudget:
                 if not self._warned:
                     log.warning(
                         "Pass %d reached its %d-item run cap; remaining %s are deferred",
-                        self.pass_number, self.limit, label,
+                        self.pass_number,
+                        self.limit,
+                        label,
                     )
                     self._warned = True
                 return False
@@ -265,9 +267,7 @@ class PassSpendBudget:
     def _release_locked(self, reservation: SpendReservation) -> None:
         self.reserved_usd = max(0.0, self.reserved_usd - float(reservation))
 
-    def block_unverified(
-        self, reservation: SpendReservation, reason: str
-    ) -> None:
+    def block_unverified(self, reservation: SpendReservation, reason: str) -> None:
         """Conservatively charge a dispatched call whose spend is unknowable."""
 
         authorization_id = getattr(reservation, "authorization_id", None)
@@ -320,10 +320,7 @@ class PassSpendBudget:
             if persistent_reason:
                 self.blocked_reason = persistent_reason
                 return self.blocked_reason
-            if (
-                float(cost) > float(reservation)
-                or self.spent_usd > self.max_cost_usd
-            ):
+            if float(cost) > float(reservation) or self.spent_usd > self.max_cost_usd:
                 self.blocked_reason = (
                     f"provider-reported spend exceeded its reservation or pass limit: "
                     f"call=${float(cost):.6f}, "
@@ -344,10 +341,7 @@ def estimate_max_pass_call_cost(
     """Conservative provider-price-bounded reservation for one work item."""
 
     prices = (config.max_price_prompt, config.max_price_completion)
-    if any(
-        price is None or not math.isfinite(price) or price <= 0
-        for price in prices
-    ):
+    if any(price is None or not math.isfinite(price) or price <= 0 for price in prices):
         raise PassSpendLimitExceeded(
             "COUNTYIQ_MAX_PRICE_PROMPT and COUNTYIQ_MAX_PRICE_COMPLETION are "
             "required as positive finite values when a paid pass is enabled"
@@ -355,9 +349,7 @@ def estimate_max_pass_call_cost(
     characters = len(prompt) + len(config.system_prompt or "")
     prompt_tokens = math.ceil(characters / 3)
     if pdf_bytes is not None:
-        prompt_tokens += max(
-            _int_env("COUNTYIQ_PASS0_PDF_TOKEN_CEILING", 50_000), 1
-        )
+        prompt_tokens += max(_int_env("COUNTYIQ_PASS0_PDF_TOKEN_CEILING", 50_000), 1)
     return estimate_reserved_call_cost(
         prompt_tokens=prompt_tokens,
         max_tokens=config.max_tokens,
@@ -495,7 +487,9 @@ def resolve_escalation_config(
     effort_env = os.environ.get(
         f"COUNTYIQ_PASS{pass_number}_ESCALATION_REASONING_EFFORT"
     )
-    effort = (effort_env.strip().lower() or None) if effort_env else base.reasoning_effort
+    effort = (
+        (effort_env.strip().lower() or None) if effort_env else base.reasoning_effort
+    )
 
     return dataclasses.replace(
         base,
@@ -592,6 +586,7 @@ def resolve_pass_harness(
 
     if pass_number in range(4):
         from countyiq.lib.quality_release import check_quality_release
+
         quality = check_quality_release(pass_number)
         if not quality["ok"]:
             raise PassHarnessUnavailable(quality["reason"])

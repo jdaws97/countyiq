@@ -35,6 +35,7 @@ DISTRESS_PROMPT_TEXT = DISTRESS_SYSTEM_PROMPT + "\n\n" + DISTRESS_USER_TEMPLATE
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def sample_cluster():
     """A corridor cluster with 3 parcels sharing a signal."""
@@ -85,8 +86,11 @@ def sample_portfolio():
         "municipalities": ["Manchester Township", "York Township"],
         "total_acres": 22.5,
         "pidns": [
-            "6700100000001", "6700100000002", "6700100000003",
-            "6700100000004", "6700100000005",
+            "6700100000001",
+            "6700100000002",
+            "6700100000003",
+            "6700100000004",
+            "6700100000005",
         ],
         "briefs": [
             {
@@ -182,6 +186,7 @@ def valid_narrative_output():
 # TestCorridorTemplate
 # ---------------------------------------------------------------------------
 
+
 class TestCorridorTemplate:
     """Tests for the corridor system/user prompt and builder."""
 
@@ -234,6 +239,7 @@ class TestCorridorTemplate:
 # TestPortfolioTemplate
 # ---------------------------------------------------------------------------
 
+
 class TestPortfolioTemplate:
     """Tests for the portfolio system/user prompt and builder."""
 
@@ -281,6 +287,7 @@ class TestPortfolioTemplate:
 # TestMunicipalTemplate
 # ---------------------------------------------------------------------------
 
+
 class TestMunicipalTemplate:
     """Tests for the municipal system/user prompt and builder."""
 
@@ -325,6 +332,7 @@ class TestMunicipalTemplate:
 # TestDistressTemplate
 # ---------------------------------------------------------------------------
 
+
 class TestDistressTemplate:
     """Tests for the distress system/user prompt and builder."""
 
@@ -363,6 +371,7 @@ class TestDistressTemplate:
 # ---------------------------------------------------------------------------
 # TestParseNarrativeOutput
 # ---------------------------------------------------------------------------
+
 
 class TestParseNarrativeOutput:
     """Tests for parse_narrative_output(output) -> dict."""

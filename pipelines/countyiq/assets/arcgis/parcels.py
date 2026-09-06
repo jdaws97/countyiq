@@ -41,13 +41,42 @@ KEY_COLUMNS = ["pidn"]
 # Widening this list mass-expires/reinserts all current rows on its first run:
 # a one-time SCD2 version bump, not data loss.
 VALUE_COLUMNS = [
-    "owner_full", "propadr", "aprtotal", "saledt", "price",
-    "municipality", "school_dis", "acres", "class", "source_url",
-    "district", "block", "map", "parcel", "deed_bk", "deed_pg",
-    "own_name1", "own_name2", "mail_addr_full", "prev_owner", "luc",
-    "style", "num_stories", "res_living_area", "yrblt", "clean_green",
-    "heatsys", "fuel", "aprland", "aprbldg", "prev_price",
-    "comm_struc", "comm_year_built", "comm_building_sq_ft", "grade", "cdu",
+    "owner_full",
+    "propadr",
+    "aprtotal",
+    "saledt",
+    "price",
+    "municipality",
+    "school_dis",
+    "acres",
+    "class",
+    "source_url",
+    "district",
+    "block",
+    "map",
+    "parcel",
+    "deed_bk",
+    "deed_pg",
+    "own_name1",
+    "own_name2",
+    "mail_addr_full",
+    "prev_owner",
+    "luc",
+    "style",
+    "num_stories",
+    "res_living_area",
+    "yrblt",
+    "clean_green",
+    "heatsys",
+    "fuel",
+    "aprland",
+    "aprbldg",
+    "prev_price",
+    "comm_struc",
+    "comm_year_built",
+    "comm_building_sq_ft",
+    "grade",
+    "cdu",
 ]
 
 ALL_COLUMNS = KEY_COLUMNS + VALUE_COLUMNS
@@ -55,8 +84,7 @@ ALL_COLUMNS = KEY_COLUMNS + VALUE_COLUMNS
 # Treat a non-null geometry change as an SCD2 change, but preserve the current
 # shape when a source response transiently omits geometry.
 PARCEL_GEOMETRY_DIFF_SQL = (
-    "t.geom IS NOT NULL AND "
-    "(c.geom IS NULL OR NOT ST_Equals(c.geom, t.geom))"
+    "t.geom IS NOT NULL AND (c.geom IS NULL OR NOT ST_Equals(c.geom, t.geom))"
 )
 PARCEL_GEOMETRY_SELECT_SQL = "COALESCE(t.geom, prev.geom)"
 
@@ -65,13 +93,41 @@ PARCEL_GEOMETRY_SELECT_SQL = "COALESCE(t.geom, prev.geom)"
 # tolerates its absence and municipality_join backfills spatially — the SCD2
 # diff deliberately ignores source-NULL municipality for exactly this reason.
 EXPECTED_FIELDS = {
-    "PIDN", "OWNER_FULL", "PROPADR", "APRTOTAL", "SALEDT", "PRICE",
-    "SCHOOL_DIS", "ACRES", "CLASS", "DISTRICT", "BLOCK",
-    "MAP", "PARCEL", "DEED_BK", "DEED_PG", "OWN_NAME1", "OWN_NAME2",
-    "MAIL_ADDR_FULL", "PREV_OWNER", "LUC", "STYLE", "NUM_STORIE",
-    "RES_LIVING_AREA", "YRBLT", "APRLAND", "APRBLDG", "PREV_PRICE",
-    "CLEAN_GREEN", "HEATSYS", "FUEL", "COMM_STRUC", "COMM_YEAR_BUILT",
-    "COMM_BUILDING_SQ_FT", "GRADE", "CDU",
+    "PIDN",
+    "OWNER_FULL",
+    "PROPADR",
+    "APRTOTAL",
+    "SALEDT",
+    "PRICE",
+    "SCHOOL_DIS",
+    "ACRES",
+    "CLASS",
+    "DISTRICT",
+    "BLOCK",
+    "MAP",
+    "PARCEL",
+    "DEED_BK",
+    "DEED_PG",
+    "OWN_NAME1",
+    "OWN_NAME2",
+    "MAIL_ADDR_FULL",
+    "PREV_OWNER",
+    "LUC",
+    "STYLE",
+    "NUM_STORIE",
+    "RES_LIVING_AREA",
+    "YRBLT",
+    "APRLAND",
+    "APRBLDG",
+    "PREV_PRICE",
+    "CLEAN_GREEN",
+    "HEATSYS",
+    "FUEL",
+    "COMM_STRUC",
+    "COMM_YEAR_BUILT",
+    "COMM_BUILDING_SQ_FT",
+    "GRADE",
+    "CDU",
 }
 
 
@@ -87,10 +143,18 @@ def parcels_arcgis(
 ) -> MaterializeResult:
     """Stream parcel pages from ArcGIS directly into DB. Memory-efficient."""
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="parcels_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="parcels_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS parcels for {county.name}: {county.arcgis_parcels_url}")
+    context.log.info(
+        f"Querying ArcGIS parcels for {county.name}: {county.arcgis_parcels_url}"
+    )
 
     cur = database.cursor()
     conn = cur.connection
@@ -109,7 +173,9 @@ def parcels_arcgis(
     try:
         # Create temp table
         cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
-        cur.execute("CREATE TEMP TABLE _tmp_parcels (LIKE staging.parcels INCLUDING DEFAULTS)")
+        cur.execute(
+            "CREATE TEMP TABLE _tmp_parcels (LIKE staging.parcels INCLUDING DEFAULTS)"
+        )
         # Geometry batches update staged rows by pidn while pages are still
         # arriving. Build the lookup index before those updates; creating it
         # after the fetch makes each batch scan an ever-growing temp table.
@@ -140,7 +206,7 @@ def parcels_arcgis(
                 archive_file.write("\n")
 
             for i in range(0, len(page_features), CHUNK):
-                chunk_features = page_features[i:i + CHUNK]
+                chunk_features = page_features[i : i + CHUNK]
                 records = parse_parcels_features(chunk_features)
 
                 rows = []
@@ -178,7 +244,9 @@ def parcels_arcgis(
         if total_staged == 0:
             cur.execute("DROP TABLE IF EXISTS _tmp_parcels")
             conn.commit()
-            context.log.warning("Zero features fetched — aborting to protect existing data")
+            context.log.warning(
+                "Zero features fetched — aborting to protect existing data"
+            )
             return MaterializeResult(metadata={"record_count": MetadataValue.int(0)})
 
         # ── DATA LOSS GUARD ──────────────────────────────────────────
@@ -267,7 +335,9 @@ def parcels_arcgis(
             prior_join = ""
         else:
             select_exprs = [
-                "COALESCE(t.municipality, prev.municipality)" if c == "municipality" else f"t.{c}"
+                "COALESCE(t.municipality, prev.municipality)"
+                if c == "municipality"
+                else f"t.{c}"
                 for c in ALL_COLUMNS
             ]
             select_exprs.append(PARCEL_GEOMETRY_SELECT_SQL)
@@ -282,7 +352,7 @@ def parcels_arcgis(
             """
         cur.execute(f"""
             INSERT INTO staging.parcels ({col_list}, valid_from)
-            SELECT {', '.join(select_exprs)}, NOW()
+            SELECT {", ".join(select_exprs)}, NOW()
             FROM _tmp_parcels t
             {prior_join}
             WHERE NOT EXISTS (
@@ -354,12 +424,15 @@ def parcels_schema_drift(database: DatabaseResource) -> AssetCheckResult:
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
             metadata={
-                "missing_fields": MetadataValue.text(str(missing) if missing else "none"),
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                ),
                 "total_fields": MetadataValue.int(len(actual_fields)),
             },
         )
     except requests.exceptions.RequestException as e:
         return AssetCheckResult(
-            passed=False, severity=AssetCheckSeverity.WARN,
+            passed=False,
+            severity=AssetCheckSeverity.WARN,
             metadata={"error": MetadataValue.text(f"Network error: {e}")},
         )

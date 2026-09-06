@@ -53,7 +53,10 @@ from countyiq.lib.county_config import (
     municipality_name_from_body,
     municipality_source_key,
 )
-from countyiq.lib.doc_text import extract_text_from_docx_bytes, extract_text_from_pdf_bytes
+from countyiq.lib.doc_text import (
+    extract_text_from_docx_bytes,
+    extract_text_from_pdf_bytes,
+)
 from countyiq.lib.error_budget import check_error_budget
 from countyiq.lib.parsers.public_proceedings import (
     classify_proceeding_type,
@@ -92,9 +95,7 @@ _MAX_DOMAIN_WORKERS = 5
 
 # Honest product identity used consistently for robots and document requests.
 _HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"
-    )
+    "User-Agent": ("Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)")
 }
 _ROBOTS_PRODUCT_TOKEN = "CountyIQ"
 
@@ -238,6 +239,7 @@ class _PlaywrightFetcher:
         try:
             page = self._browser.new_page(user_agent=_BROWSER_UA)
             try:
+
                 def authorize_request(route, request):
                     request_origin = source_origin(request.url)
                     carries_source_data = request.resource_type in {
@@ -316,6 +318,7 @@ class _PlaywrightFetcher:
 
         page = self._browser.new_page(user_agent=_BROWSER_UA)
         try:
+
             def authorize_request(route, request):
                 if source_origin(request.url) in allowed_origins:
                     route.continue_()
@@ -333,7 +336,9 @@ class _PlaywrightFetcher:
                 wait_until="domcontentloaded",
             )
             if response is None:
-                self._log.warning("Browser robots fetch returned no response for %s", robots_url)
+                self._log.warning(
+                    "Browser robots fetch returned no response for %s", robots_url
+                )
                 return False
             body = response.body().decode("utf-8", errors="replace")
             self._robots.cache_browser_response(
@@ -371,7 +376,9 @@ def _upgrade_reviewed_document_url(
     parsed = urlsplit(url)
     if parsed.scheme.lower() != "http":
         return url
-    candidate = urlunsplit(("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment))
+    candidate = urlunsplit(
+        ("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment)
+    )
     return candidate if source_origin(candidate) in allowed_origins else url
 
 
@@ -488,8 +495,11 @@ def public_proceedings_scrape(
         """
     )
     for row in rows or []:
-        body, url, chash = (row["body_name"], row["document_url"], row["content_hash"]) \
-            if isinstance(row, dict) else (row[0], row[1], row[2])
+        body, url, chash = (
+            (row["body_name"], row["document_url"], row["content_hash"])
+            if isinstance(row, dict)
+            else (row[0], row[1], row[2])
+        )
         if body and url:
             known_pairs.add((body, url))
         if body and chash:
@@ -502,20 +512,27 @@ def public_proceedings_scrape(
             "SELECT url, etag, last_modified FROM meta.scraper_http_cache"
         )
         for row in cache_rows or []:
-            url, etag, lm = (row["url"], row["etag"], row["last_modified"]) \
-                if isinstance(row, dict) else (row[0], row[1], row[2])
+            url, etag, lm = (
+                (row["url"], row["etag"], row["last_modified"])
+                if isinstance(row, dict)
+                else (row[0], row[1], row[2])
+            )
             validators_by_url[url] = {"etag": etag, "last_modified": lm}
     except UndefinedTable:
         http_cache_available = False
-        log.info("meta.scraper_http_cache missing (migration 024 not applied) — conditional GETs disabled")
+        log.info(
+            "meta.scraper_http_cache missing (migration 024 not applied) — conditional GETs disabled"
+        )
 
     domains = group_by_domain(municipality_websites)
     log.info(
         "Scraping %d source entries across %d domains (%d workers); "
         "%d known documents, %d cached validators",
-        len(municipality_websites), len(domains),
+        len(municipality_websites),
+        len(domains),
         min(_MAX_DOMAIN_WORKERS, len(domains)),
-        len(known_pairs), len(validators_by_url),
+        len(known_pairs),
+        len(validators_by_url),
     )
 
     robots = RobotsPolicy(
@@ -578,9 +595,7 @@ def public_proceedings_scrape(
                 ):
                     entry_result["status"] = "needs_playwright"
                     entry_result["robots_allowed"] = None
-                    entry_result["robots_reason"] = (
-                        "robots_unavailable_risk_accepted"
-                    )
+                    entry_result["robots_reason"] = "robots_unavailable_risk_accepted"
                 elif robots_decision.reason.startswith("robots_network_error:"):
                     entry_result["status"] = "needs_browser_robots"
                 else:
@@ -633,7 +648,9 @@ def public_proceedings_scrape(
             except Exception as exc:
                 log.warning(
                     "Direct HTTP fetch failed for '%s' (%s): %s — not bypassing with a browser",
-                    body_name, minutes_url, exc,
+                    body_name,
+                    minutes_url,
+                    exc,
                 )
                 html = None
                 entry_result["status"] = "access_error"
@@ -678,7 +695,10 @@ def public_proceedings_scrape(
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=min(_MAX_DOMAIN_WORKERS, len(domains))
     ) as pool:
-        futures = [pool.submit(fetch_listings_for_domain, entries) for entries in domains.values()]
+        futures = [
+            pool.submit(fetch_listings_for_domain, entries)
+            for entries in domains.values()
+        ]
         for future in concurrent.futures.as_completed(futures):
             listing_results.extend(future.result())
 
@@ -739,7 +759,9 @@ def public_proceedings_scrape(
                         authorization.robots_unavailable_risk_accepted
                     ),
                 )
-                links = extract_pdf_links(rendered or "", resolved_url) if rendered else []
+                links = (
+                    extract_pdf_links(rendered or "", resolved_url) if rendered else []
+                )
                 links, blocked_urls = _filter_allowed_document_links(
                     links,
                     allowed_origins,
@@ -793,8 +815,7 @@ def public_proceedings_scrape(
     # ------------------------------------------------------------------
     pdfs_found = sum(len(r["links"]) for r in listing_results)
     policy_blocked_documents = sum(
-        len(result["policy_blocked_document_urls"])
-        for result in listing_results
+        len(result["policy_blocked_document_urls"]) for result in listing_results
     )
 
     def process_downloads_for_domain(entry_results):
@@ -832,8 +853,10 @@ def public_proceedings_scrape(
                     continue
 
                 with claimed_lock:
-                    if (body_name, document_url) in known_pairs or \
-                       (body_name, document_url) in claimed_pairs:
+                    if (body_name, document_url) in known_pairs or (
+                        body_name,
+                        document_url,
+                    ) in claimed_pairs:
                         stats["duplicates"] += 1
                         continue
                     claimed_pairs.add((body_name, document_url))
@@ -869,7 +892,9 @@ def public_proceedings_scrape(
                     stats["null_date"] += 1
 
                 resolved_type = (
-                    classified if classified != "unknown" else entry_result["proceeding_type"]
+                    classified
+                    if classified != "unknown"
+                    else entry_result["proceeding_type"]
                 )
 
                 try:
@@ -884,9 +909,16 @@ def public_proceedings_scrape(
                     pdf_bytes = pdf_resp.content
                     filename = _resolved_document_filename(filename, pdf_resp)
                     if not _valid_document_content(filename, pdf_bytes):
-                        raise ValueError("response content does not match document type")
+                        raise ValueError(
+                            "response content does not match document type"
+                        )
                 except Exception as exc:
-                    log.warning("'%s': failed to download '%s': %s", body_name, document_url, exc)
+                    log.warning(
+                        "'%s': failed to download '%s': %s",
+                        body_name,
+                        document_url,
+                        exc,
+                    )
                     stats["errors"] += 1
                     entry_result["download_errors"] += 1
                     entry_result["last_error"] = str(exc)[:500]
@@ -917,7 +949,9 @@ def public_proceedings_scrape(
                 except Exception as exc:
                     if s3.strict:
                         raise
-                    log.warning("'%s': R2 archive failed for '%s': %s", body_name, filename, exc)
+                    log.warning(
+                        "'%s': R2 archive failed for '%s': %s", body_name, filename, exc
+                    )
 
                 raw_text = _extract_raw_text(filename, pdf_bytes)
                 if raw_text is None:
@@ -925,21 +959,25 @@ def public_proceedings_scrape(
                     # back to downloading the document itself (PDFs only).
                     log.info("'%s': no text extracted from '%s'", body_name, filename)
 
-                payloads.append({
-                    "body_name": body_name,
-                    "meeting_date": meeting_date,
-                    "proceeding_type": resolved_type,
-                    "source_url": entry_result["minutes_url"],
-                    "document_url": document_url,
-                    "content_hash": content_hash,
-                    "raw_text": raw_text,
-                })
+                payloads.append(
+                    {
+                        "body_name": body_name,
+                        "meeting_date": meeting_date,
+                        "proceeding_type": resolved_type,
+                        "source_url": entry_result["minutes_url"],
+                        "document_url": document_url,
+                        "content_hash": content_hash,
+                        "raw_text": raw_text,
+                    }
+                )
                 _throttle()
         return entry_results, payloads, stats
 
     results_by_domain: dict[str, list[dict]] = {}
     for entry_result in listing_results:
-        results_by_domain.setdefault(_domain_of(entry_result["minutes_url"]), []).append(entry_result)
+        results_by_domain.setdefault(
+            _domain_of(entry_result["minutes_url"]), []
+        ).append(entry_result)
 
     pdfs_new = 0
     pdfs_skipped_duplicate = 0
@@ -974,11 +1012,15 @@ def public_proceedings_scrape(
                 except Exception as exc:
                     log.warning(
                         "'%s': DB insert failed for '%s': %s",
-                        payload["body_name"], payload["document_url"], exc,
+                        payload["body_name"],
+                        payload["document_url"],
+                        exc,
                     )
                     errors += 1
                     key = (payload["body_name"], payload["source_url"])
-                    insert_failures_by_entry[key] = insert_failures_by_entry.get(key, 0) + 1
+                    insert_failures_by_entry[key] = (
+                        insert_failures_by_entry.get(key, 0) + 1
+                    )
 
             if http_cache_available:
                 for entry_result in entry_results:
@@ -991,7 +1033,11 @@ def public_proceedings_scrape(
                         and insert_failures_by_entry.get(key, 0) == 0
                     )
                     if clean:
-                        _upsert_validators(database, entry_result["minutes_url"], entry_result["validators"])
+                        _upsert_validators(
+                            database,
+                            entry_result["minutes_url"],
+                            entry_result["validators"],
+                        )
 
     for entry_result in listing_results:
         key = (entry_result["body_name"], entry_result["minutes_url"])
@@ -1015,16 +1061,26 @@ def public_proceedings_scrape(
             last_error=entry_result["last_error"],
         )
 
-    listings_not_modified = sum(1 for r in listing_results if r["status"] == "not_modified")
+    listings_not_modified = sum(
+        1 for r in listing_results if r["status"] == "not_modified"
+    )
     robots_skipped = sum(1 for r in listing_results if r["status"] == "robots_skipped")
 
     log.info(
         "Scrape complete: %d PDFs found (%d via Playwright), %d new, %d duplicates, "
         "%d deferred, %d null date, %d future date rejected, %d archived, "
         "%d listings unchanged (304), %d robots-skipped, %d errors",
-        pdfs_found, pdfs_via_playwright, pdfs_new, pdfs_skipped_duplicate,
-        pdfs_deferred, pdfs_null_date, pdfs_future_date_rejected, pdfs_archived,
-        listings_not_modified, robots_skipped, errors,
+        pdfs_found,
+        pdfs_via_playwright,
+        pdfs_new,
+        pdfs_skipped_duplicate,
+        pdfs_deferred,
+        pdfs_null_date,
+        pdfs_future_date_rejected,
+        pdfs_archived,
+        listings_not_modified,
+        robots_skipped,
+        errors,
     )
     # Listing reachability and document processing have different
     # denominators. Keep both visible so zero discovered documents cannot turn
@@ -1051,7 +1107,8 @@ def public_proceedings_scrape(
     governing_body_municipalities = {
         municipality_name_from_body(body_name)
         for body_name, _, proceeding_type in municipality_websites
-        if proceeding_type in {
+        if proceeding_type
+        in {
             "board_of_commissioners",
             "board_of_supervisors",
             "borough_council",
@@ -1071,9 +1128,7 @@ def public_proceedings_scrape(
             "municipalities_with_any_source": MetadataValue.int(
                 len(municipalities_with_any_source)
             ),
-            "source_entries_configured": MetadataValue.int(
-                len(municipality_websites)
-            ),
+            "source_entries_configured": MetadataValue.int(len(municipality_websites)),
             "listing_urls_configured": MetadataValue.int(len(listing_urls)),
             "domains": MetadataValue.int(len(domains)),
             "pdfs_found": MetadataValue.int(pdfs_found),
@@ -1085,9 +1140,7 @@ def public_proceedings_scrape(
             "document_request_limit": MetadataValue.int(max_document_requests),
             "document_per_body_limit": MetadataValue.int(max_documents_per_body),
             "pdfs_null_date": MetadataValue.int(pdfs_null_date),
-            "pdfs_future_date_rejected": MetadataValue.int(
-                pdfs_future_date_rejected
-            ),
+            "pdfs_future_date_rejected": MetadataValue.int(pdfs_future_date_rejected),
             "existing_future_dates_cleared": MetadataValue.int(
                 existing_future_dates_cleared
             ),
@@ -1127,10 +1180,16 @@ def _insert_proceeding(
     """Review metadata before inserting a new SCD2 source version."""
     county = get_county_config()
     quality = review_metadata(
-        dict(body_name=body_name, meeting_date=meeting_date,
-             proceeding_type=proceeding_type, source_url=source_url,
-             document_url=document_url, raw_text=raw_text),
-        county.municipality_websites, county.rejected_proceeding_domains,
+        dict(
+            body_name=body_name,
+            meeting_date=meeting_date,
+            proceeding_type=proceeding_type,
+            source_url=source_url,
+            document_url=document_url,
+            raw_text=raw_text,
+        ),
+        county.municipality_websites,
+        county.rejected_proceeding_domains,
     )
     if quality["status"] == "quarantined":
         raise ValueError("Document belongs to a rejected county source")
@@ -1141,8 +1200,16 @@ def _insert_proceeding(
              content_hash, raw_text, metadata_quality, valid_from)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """,
-        (quality["body_name"], quality["meeting_date"], quality["proceeding_type"],
-         source_url, document_url, content_hash, raw_text, Json(quality)),
+        (
+            quality["body_name"],
+            quality["meeting_date"],
+            quality["proceeding_type"],
+            source_url,
+            document_url,
+            content_hash,
+            raw_text,
+            Json(quality),
+        ),
     )
 
 
@@ -1219,7 +1286,11 @@ def _resolved_document_filename(filename: str, response) -> str:
     if extension is None:
         final_path = urlparse(str(getattr(response, "url", "") or "")).path.lower()
         extension = next(
-            (candidate for candidate in (".docx", ".doc", ".pdf") if final_path.endswith(candidate)),
+            (
+                candidate
+                for candidate in (".docx", ".doc", ".pdf")
+                if final_path.endswith(candidate)
+            ),
             None,
         )
 

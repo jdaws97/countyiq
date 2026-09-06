@@ -186,7 +186,9 @@ def _compile_filters(
         if not isinstance(field_name, str) or field_name not in table.fields:
             raise InvalidSearchPlan("unsupported filter field")
         field = table.fields[field_name]
-        allowed_operators = _TEXT_OPERATORS if field.kind == "text" else _ORDERED_OPERATORS
+        allowed_operators = (
+            _TEXT_OPERATORS if field.kind == "text" else _ORDERED_OPERATORS
+        )
         if operator not in allowed_operators:
             raise InvalidSearchPlan("unsupported filter operator")
         value = raw_filter.get("value")
@@ -202,9 +204,13 @@ def _compile_filters(
 
         bound_value = _coerce_value(field, value)
         if operator == "contains":
-            clauses.append(f"{field.expression} ILIKE {_param(params, f'%{bound_value}%')}")
+            clauses.append(
+                f"{field.expression} ILIKE {_param(params, f'%{bound_value}%')}"
+            )
         elif operator == "starts_with":
-            clauses.append(f"{field.expression} ILIKE {_param(params, f'{bound_value}%')}")
+            clauses.append(
+                f"{field.expression} ILIKE {_param(params, f'{bound_value}%')}"
+            )
         else:
             clauses.append(
                 f"{field.expression} {_COMPARISONS[operator]} {_param(params, bound_value)}"

@@ -364,11 +364,7 @@ def assert_public_http_url(url: str) -> None:
     except (socket.gaierror, UnicodeError, ValueError) as exc:
         raise UnsafeSourceAddressError("hostname_resolution_failed") from exc
 
-    resolved = {
-        entry[4][0].split("%", 1)[0]
-        for entry in addresses
-        if entry[4]
-    }
+    resolved = {entry[4][0].split("%", 1)[0] for entry in addresses if entry[4]}
     if not resolved:
         raise UnsafeSourceAddressError("hostname_resolution_failed")
     try:

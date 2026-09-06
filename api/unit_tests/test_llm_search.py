@@ -19,14 +19,15 @@ def test_redirect_paths_match_the_frontend_watch_route():
     assert "/watch" in ALLOWED_REDIRECT_PATHS
     assert "/watchlist" not in ALLOWED_REDIRECT_PATHS
     # Retired bookmarks must not be offered as intent targets.
-    assert not {"/licenses", "/projects", "/delinquent", "/distressed", "/assemblage"} & ALLOWED_REDIRECT_PATHS
+    assert (
+        not {"/licenses", "/projects", "/delinquent", "/distressed", "/assemblage"}
+        & ALLOWED_REDIRECT_PATHS
+    )
     assert all(path in SYSTEM_PROMPT for path in ALLOWED_REDIRECT_PATHS)
 
 
 def test_clean_llm_json_accepts_single_line_markdown_fence():
-    assert _clean_llm_json('```json {"intent":"lookup"}```') == {
-        "intent": "lookup"
-    }
+    assert _clean_llm_json('```json {"intent":"lookup"}```') == {"intent": "lookup"}
 
 
 def test_search_prompt_only_advertises_compiler_supported_parcel_fields():
@@ -45,7 +46,9 @@ def test_resolve_search_models_uses_search_override_only_for_primary_slot(monkey
     assert models[1:] == DEFAULT_MODELS
 
 
-def test_resolve_search_models_falls_back_to_defaults_not_general_pass_model(monkeypatch):
+def test_resolve_search_models_falls_back_to_defaults_not_general_pass_model(
+    monkeypatch,
+):
     monkeypatch.delenv("COUNTYIQ_SEARCH_MODEL", raising=False)
     monkeypatch.setenv("COUNTYIQ_OPENROUTER_MODEL", "passes/model")
 

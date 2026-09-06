@@ -28,7 +28,10 @@ from dagster import (
 )
 
 from countyiq.lib.county_config import county_open_data_source_key, get_county_config
-from countyiq.lib.intelligence_common import RETRACT_STALE_EVIDENCE_QUERY, VOLATILE_EVIDENCE_KEYS
+from countyiq.lib.intelligence_common import (
+    RETRACT_STALE_EVIDENCE_QUERY,
+    VOLATILE_EVIDENCE_KEYS,
+)
 from countyiq.lib.source_rights import authorize_source_uses, source_use_is_authorized
 from countyiq.resources.database import DatabaseResource
 
@@ -43,7 +46,6 @@ BUSINESS_OWNER_REGEX = (
 
 _SIGNALS: list[tuple[str, str]] = [
     # ── HIGH-VALUE DIRECT SIGNALS ──────────────────────────────────────
-
     # 1. active_subdivision — a believable plan point ON the parcel (inside the
     #    polygon or within 30 m of it), received in the last 3 years. This is
     #    the parcel's own activity; proximity-only matches go to
@@ -154,7 +156,6 @@ _SIGNALS: list[tuple[str, str]] = [
         GROUP BY p.pidn
         """,
     ),
-
     # 2b. municipal_action — the parcel is the subject of a rezoning, variance,
     #     special exception, conditional use, or land-development matter in
     #     Pass 0 municipal proceedings within the last 24 months. Linking is
@@ -232,9 +233,7 @@ _SIGNALS: list[tuple[str, str]] = [
         ORDER BY m.pidn, m.meeting_date DESC, m.extraction_id DESC
         """,
     ),
-
     # ── MEDIUM-VALUE CONTEXT SIGNALS ───────────────────────────────────
-
     # 3. zoning_mismatch — actual zoning vs future land use
     (
         "zoning_mismatch",
@@ -476,7 +475,6 @@ _SIGNALS: list[tuple[str, str]] = [
         ) >= %(assemblage_min_neighbors)s
         """,
     ),
-
     # 7b. entity_assemblage — one owner holds two or more contiguous parcels
     #     and acquired at least one of them in the last 24 months. This is the
     #     developer-intent pattern (an entity accumulating a site); the older
@@ -571,9 +569,7 @@ _SIGNALS: list[tuple[str, str]] = [
         FROM agg a
         """,
     ),
-
     # ── LOW-VALUE PROXIMITY / CONTEXT SIGNALS ──────────────────────────
-
     # 8. penndot_project — closest within 800m
     #    Evidence includes full project metadata so Pass 2 LLM can assess
     #    currency (active vs completed), scale (cost), and impact window.
@@ -695,9 +691,7 @@ _SIGNALS: list[tuple[str, str]] = [
         ORDER BY p.pidn, g.ga_type
         """,
     ),
-
     # ── NEGATIVE / EXCLUSION SIGNALS ───────────────────────────────────
-
     # 12. soil_constraint — parcel-wide mapped slope, drainage, or runoff screen.
     #     A soil unit must cover at least 5% of the parcel to trigger the fixed
     #     site-screening penalty; all materially overlapping units are retained
@@ -968,12 +962,17 @@ def build_signal_params(county) -> dict:
     degrees_per_meter = 1.5e-5
     return {
         "subdivision_radius_m": county.signal_subdivision_radius_m,
-        "subdivision_radius_deg": county.signal_subdivision_radius_m * degrees_per_meter,
+        "subdivision_radius_deg": county.signal_subdivision_radius_m
+        * degrees_per_meter,
         "subdivision_on_parcel_m": county.signal_subdivision_on_parcel_m,
-        "subdivision_on_parcel_deg": county.signal_subdivision_on_parcel_m * degrees_per_meter,
-        "infrastructure_radius_deg": county.signal_infrastructure_radius_m * degrees_per_meter,
-        "local_traffic_radius_deg": county.signal_local_traffic_radius_m * degrees_per_meter,
-        "environmental_radius_deg": county.signal_environmental_radius_m * degrees_per_meter,
+        "subdivision_on_parcel_deg": county.signal_subdivision_on_parcel_m
+        * degrees_per_meter,
+        "infrastructure_radius_deg": county.signal_infrastructure_radius_m
+        * degrees_per_meter,
+        "local_traffic_radius_deg": county.signal_local_traffic_radius_m
+        * degrees_per_meter,
+        "environmental_radius_deg": county.signal_environmental_radius_m
+        * degrees_per_meter,
         "business_owner_regex": BUSINESS_OWNER_REGEX,
         "infrastructure_radius_m": county.signal_infrastructure_radius_m,
         "local_traffic_radius_m": county.signal_local_traffic_radius_m,
@@ -1041,7 +1040,6 @@ def development_signals(
     )
     signal_params = build_signal_params(county)
 
-
     cur = database.cursor()
     conn = cur.connection
     was_autocommit = conn.autocommit
@@ -1054,7 +1052,9 @@ def development_signals(
     try:
         # Serialize rebuilders before they acquire locks on the serving table.
         # Long spatial calculations must not hold TRUNCATE's read-blocking lock.
-        cur.execute("SELECT pg_advisory_xact_lock(hashtext('countyiq:development_signals'))")
+        cur.execute(
+            "SELECT pg_advisory_xact_lock(hashtext('countyiq:development_signals'))"
+        )
         cur.execute("""
             CREATE TEMP TABLE countyiq_new_signals ON COMMIT DROP AS
             SELECT pidn, signal_key, signal_weight, source_table, source_id,
@@ -1062,16 +1062,25 @@ def development_signals(
             FROM public.development_signals WITH NO DATA
         """)
         cur.execute("CREATE UNIQUE INDEX ON countyiq_new_signals (pidn, signal_key)")
-        context.log.info("Computing replacement signals while the current snapshot remains readable")
+        context.log.info(
+            "Computing replacement signals while the current snapshot remains readable"
+        )
 
         for signal_key, sql in _SIGNALS:
             if signal_key == "tax_distress" and not include_tax_claims:
                 signal_counts[signal_key] = 0
-                context.log.info("  tax_distress: disabled by county capability or source policy")
+                context.log.info(
+                    "  tax_distress: disabled by county capability or source policy"
+                )
                 continue
             # These are code-owned SQL constants. Internal references (such as
             # nearby-plan exclusion) must also read this run's new signals.
-            cur.execute(sql.replace("public.development_signals", "pg_temp.countyiq_new_signals"), signal_params)
+            cur.execute(
+                sql.replace(
+                    "public.development_signals", "pg_temp.countyiq_new_signals"
+                ),
+                signal_params,
+            )
             count = cur.rowcount
             signal_counts[signal_key] = count
             total += count
@@ -1088,7 +1097,9 @@ def development_signals(
             SELECT pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence
             FROM pg_temp.countyiq_new_signals
         """)
-        cur.execute(RETRACT_STALE_EVIDENCE_QUERY, {"volatile": list(VOLATILE_EVIDENCE_KEYS)})
+        cur.execute(
+            RETRACT_STALE_EVIDENCE_QUERY, {"volatile": list(VOLATILE_EVIDENCE_KEYS)}
+        )
         evidence_retracted = cur.rowcount
         conn.commit()
         context.log.info("Retracted %d stale validation rows", evidence_retracted)
@@ -1102,7 +1113,10 @@ def development_signals(
             conn.autocommit = True
         cur.close()
 
-    metadata = {"total_signal_rows": MetadataValue.int(total), "evidence_retracted": MetadataValue.int(evidence_retracted)}
+    metadata = {
+        "total_signal_rows": MetadataValue.int(total),
+        "evidence_retracted": MetadataValue.int(evidence_retracted),
+    }
     for key, count in signal_counts.items():
         metadata[key] = MetadataValue.int(count)
     return MaterializeResult(metadata=metadata)

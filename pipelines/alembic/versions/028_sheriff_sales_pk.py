@@ -11,6 +11,7 @@ Revision ID: 028
 Revises: 027
 Create Date: 2026-08-06
 """
+
 from alembic import op
 
 revision = "028"
@@ -20,9 +21,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("UPDATE staging.sheriff_sales SET property_address = '' WHERE property_address IS NULL")
-    op.execute("ALTER TABLE staging.sheriff_sales ALTER COLUMN property_address SET DEFAULT ''")
-    op.execute("ALTER TABLE staging.sheriff_sales ALTER COLUMN property_address SET NOT NULL")
+    op.execute(
+        "UPDATE staging.sheriff_sales SET property_address = '' WHERE property_address IS NULL"
+    )
+    op.execute(
+        "ALTER TABLE staging.sheriff_sales ALTER COLUMN property_address SET DEFAULT ''"
+    )
+    op.execute(
+        "ALTER TABLE staging.sheriff_sales ALTER COLUMN property_address SET NOT NULL"
+    )
     op.execute("ALTER TABLE staging.sheriff_sales DROP CONSTRAINT sheriff_sales_pkey")
     op.execute(
         "ALTER TABLE staging.sheriff_sales ADD CONSTRAINT sheriff_sales_pkey "
@@ -36,5 +43,9 @@ def downgrade() -> None:
         "ALTER TABLE staging.sheriff_sales ADD CONSTRAINT sheriff_sales_pkey "
         "PRIMARY KEY (case_no, valid_from)"
     )
-    op.execute("ALTER TABLE staging.sheriff_sales ALTER COLUMN property_address DROP NOT NULL")
-    op.execute("ALTER TABLE staging.sheriff_sales ALTER COLUMN property_address DROP DEFAULT")
+    op.execute(
+        "ALTER TABLE staging.sheriff_sales ALTER COLUMN property_address DROP NOT NULL"
+    )
+    op.execute(
+        "ALTER TABLE staging.sheriff_sales ALTER COLUMN property_address DROP DEFAULT"
+    )

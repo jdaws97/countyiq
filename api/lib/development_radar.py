@@ -245,7 +245,9 @@ def soil_constraint_reasons(evidence: SignalMapping) -> list[str]:
     reasons: list[str] = []
     for unit in units:
         coverage = unit.get("coverage_pct")
-        coverage_prefix = f"{_percent(coverage)} of parcel: " if coverage is not None else ""
+        coverage_prefix = (
+            f"{_percent(coverage)} of parcel: " if coverage is not None else ""
+        )
         symbol = str(unit.get("map_unit_symbol") or "mapped unit")
         representative = _as_decimal(unit.get("representative_slope"))
         slope_low = unit.get("slope_low")
@@ -263,7 +265,9 @@ def soil_constraint_reasons(evidence: SignalMapping) -> list[str]:
         if drainage in {"Poorly drained", "Somewhat poorly drained"}:
             reasons.append(f"{coverage_prefix}{symbol} is {drainage.lower()}")
         if str(unit.get("hydrologic_group") or "") == "D":
-            reasons.append(f"{coverage_prefix}{symbol} is hydrologic group D (high runoff potential)")
+            reasons.append(
+                f"{coverage_prefix}{symbol} is hydrologic group D (high runoff potential)"
+            )
     return reasons
 
 
@@ -294,13 +298,23 @@ def format_signal_label(key: str, signal: object) -> str:
         names = ev.get("park_names")
         park_types = ev.get("park_types")
         name = names[0] if isinstance(names, list) and names else None
-        kind = park_types[0] if isinstance(park_types, list) and park_types else "development"
+        kind = (
+            park_types[0]
+            if isinstance(park_types, list) and park_types
+            else "development"
+        )
         return f"Mapped in {name or kind.title() + ' park'}"
     if key == "tax_distress":
         return "Current tax-delinquency indicator"
     if key == "ownership_change":
-        organization_name = ev.get("buyer_name_looks_organizational", ev.get("buyer_is_llc"))
-        prefix = "Recorded sale to organization-name buyer" if organization_name else "Recorded sale"
+        organization_name = ev.get(
+            "buyer_name_looks_organizational", ev.get("buyer_is_llc")
+        )
+        prefix = (
+            "Recorded sale to organization-name buyer"
+            if organization_name
+            else "Recorded sale"
+        )
         sale_date = ev.get("saledt")
         dated_prefix = f"{prefix} {sale_date}" if sale_date else prefix
         return f"{dated_prefix} for ${_currency(ev.get('price'))}"
@@ -327,7 +341,9 @@ def format_signal_label(key: str, signal: object) -> str:
         count_year = ev.get("count_year") or "recent"
         distance = _distance_m(signal, ev)
         where = f", {float(distance):,.0f} m away" if distance is not None else ""
-        return f"Reported volume {_currency(volume)} at {count_year} traffic count{where}"
+        return (
+            f"Reported volume {_currency(volume)} at {count_year} traffic count{where}"
+        )
     if key == "growth_area":
         label = "Primary" if ev.get("ga_type") == "PGA" else "Secondary"
         return f"Parcel center lies in {label} Growth Area"
@@ -338,14 +354,25 @@ def format_signal_label(key: str, signal: object) -> str:
         return f"Parcel center lies in SFHA flood zone ({ev.get('fld_zone') or '?'})"
     if key == "environmental_diligence":
         distance = _distance_m(signal, ev)
-        suffix = f" {float(distance):,.0f} m away" if distance is not None else " nearby"
-        site = ev.get("site_name") or ev.get("facility_type") or ev.get("source_layer") or "record"
+        suffix = (
+            f" {float(distance):,.0f} m away" if distance is not None else " nearby"
+        )
+        site = (
+            ev.get("site_name")
+            or ev.get("facility_type")
+            or ev.get("source_layer")
+            or "record"
+        )
         return f"PA DEP screening record{suffix}: {site}"
     if key == "soil_constraint":
         reasons = soil_constraint_reasons(ev)
         return f"Mapped soil constraint: {reasons[0] if reasons else 'review mapped soil units'}"
     if key == "zoning_constraint":
-        name = ev.get("overlay_name") or ev.get("overlay_type") or "special-purpose overlay"
+        name = (
+            ev.get("overlay_name")
+            or ev.get("overlay_type")
+            or "special-purpose overlay"
+        )
         return f"Parcel center lies in {name}"
     if key == "conservation_easement":
         return "Recorded agricultural conservation easement"
@@ -370,7 +397,10 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
             _fact("Received", ev.get("date_rcvd")),
             _fact("Proposed lots", ev.get("prop_lots")),
             _fact("Proposed dwelling units", ev.get("prop_du")),
-            _fact("Distance", f"{float(distance):,.0f} m" if distance is not None else None),
+            _fact(
+                "Distance",
+                f"{float(distance):,.0f} m" if distance is not None else None,
+            ),
         ]
     elif key == "municipal_action":
         raw = [
@@ -383,8 +413,13 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
         names = ev.get("park_names")
         types = ev.get("park_types")
         raw = [
-            _fact("Park", ", ".join(map(str, names)) if isinstance(names, list) else names),
-            _fact("Inventory type", ", ".join(map(str, types)) if isinstance(types, list) else types),
+            _fact(
+                "Park", ", ".join(map(str, names)) if isinstance(names, list) else names
+            ),
+            _fact(
+                "Inventory type",
+                ", ".join(map(str, types)) if isinstance(types, list) else types,
+            ),
         ]
     elif key == "zoning_mismatch":
         raw = [
@@ -396,7 +431,12 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
         raw = [
             _fact("Sale date", ev.get("saledt")),
             _fact("Sale price", f"${_currency(ev.get('price'))}"),
-            _fact("Organization-name pattern", "yes" if ev.get("buyer_name_looks_organizational", ev.get("buyer_is_llc")) else "no"),
+            _fact(
+                "Organization-name pattern",
+                "yes"
+                if ev.get("buyer_name_looks_organizational", ev.get("buyer_is_llc"))
+                else "no",
+            ),
         ]
     elif key == "vacancy":
         raw = [
@@ -405,24 +445,38 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
             _fact("Assessed total", f"${_currency(ev.get('aprtotal'))}"),
         ]
     elif key == "tax_distress":
-        raw = [_fact("Public result", "Current delinquency indicator detected; exact claim details suppressed")]
+        raw = [
+            _fact(
+                "Public result",
+                "Current delinquency indicator detected; exact claim details suppressed",
+            )
+        ]
     elif key == "assemblage":
         raw = [
             _fact("Intersecting neighbor parcels", ev.get("neighbor_parcels")),
-            _fact("Different recorded owner names", ev.get("different_owner_neighbors")),
+            _fact(
+                "Different recorded owner names", ev.get("different_owner_neighbors")
+            ),
         ]
     elif key == "entity_assemblage":
         raw = [
-            _fact("Touching same-name parcels", ev.get("contiguous_same_owner_parcels")),
+            _fact(
+                "Touching same-name parcels", ev.get("contiguous_same_owner_parcels")
+            ),
             _fact("Latest acquisition", ev.get("latest_acquisition")),
-            _fact("Match basis", "resolved owner identity (recorded name variants merged)"),
+            _fact(
+                "Match basis", "resolved owner identity (recorded name variants merged)"
+            ),
         ]
     elif key == "penndot_project":
         raw = [
             _fact("Project", ev.get("project_name")),
             _fact("Status", ev.get("status")),
             _fact("Type", ev.get("project_type")),
-            _fact("Distance", f"{float(distance):,.0f} m" if distance is not None else None),
+            _fact(
+                "Distance",
+                f"{float(distance):,.0f} m" if distance is not None else None,
+            ),
         ]
     elif key in {"development_overlay", "zoning_constraint"}:
         raw = [
@@ -435,11 +489,16 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
             _fact("Reported volume", _currency(ev.get("volume"))),
             _fact("Count year", ev.get("count_year")),
             _fact("Count purpose", ev.get("purpose")),
-            _fact("Distance", f"{float(distance):,.0f} m" if distance is not None else None),
+            _fact(
+                "Distance",
+                f"{float(distance):,.0f} m" if distance is not None else None,
+            ),
         ]
     elif key == "growth_area":
         raw = [
-            _fact("Growth area", "Primary" if ev.get("ga_type") == "PGA" else "Secondary"),
+            _fact(
+                "Growth area", "Primary" if ev.get("ga_type") == "PGA" else "Secondary"
+            ),
             _fact("Status", ev.get("ga_status")),
             _fact("Spatial basis", "parcel center point"),
         ]
@@ -447,23 +506,38 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
         units = _soil_units(ev)
         raw = [_fact("Trigger", reason) for reason in soil_constraint_reasons(ev)[:3]]
         if units:
-            septic = sorted({str(unit.get("septic_rating")) for unit in units if unit.get("septic_rating")})
-            drainage = sorted({str(unit.get("drainage")) for unit in units if unit.get("drainage")})
-            raw.extend([
-                _fact("Mapped drainage", ", ".join(drainage)),
-                _fact("On-lot septic rating", ", ".join(septic)),
-            ])
+            septic = sorted(
+                {
+                    str(unit.get("septic_rating"))
+                    for unit in units
+                    if unit.get("septic_rating")
+                }
+            )
+            drainage = sorted(
+                {str(unit.get("drainage")) for unit in units if unit.get("drainage")}
+            )
+            raw.extend(
+                [
+                    _fact("Mapped drainage", ", ".join(drainage)),
+                    _fact("On-lot septic rating", ", ".join(septic)),
+                ]
+            )
         else:
-            raw.extend([
-                _fact("Mapped drainage", ev.get("drainage")),
-                _fact("On-lot septic rating", ev.get("septic_rating")),
-            ])
+            raw.extend(
+                [
+                    _fact("Mapped drainage", ev.get("drainage")),
+                    _fact("On-lot septic rating", ev.get("septic_rating")),
+                ]
+            )
     elif key == "environmental_diligence":
         raw = [
             _fact("Site / facility", ev.get("site_name") or ev.get("facility_type")),
             _fact("Status", ev.get("facility_status")),
             _fact("Source layer", ev.get("source_layer")),
-            _fact("Distance", f"{float(distance):,.0f} m" if distance is not None else None),
+            _fact(
+                "Distance",
+                f"{float(distance):,.0f} m" if distance is not None else None,
+            ),
         ]
     elif key == "flood_zone":
         zones = ev.get("flood_zones")
@@ -475,7 +549,12 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
                 if (zone := _as_mapping(raw_zone)) and zone.get("fld_zone")
             )
         raw = [
-            _fact("Parcel overlap", _percent(ev.get("overlap_pct")) if ev.get("overlap_pct") is not None else None),
+            _fact(
+                "Parcel overlap",
+                _percent(ev.get("overlap_pct"))
+                if ev.get("overlap_pct") is not None
+                else None,
+            ),
             _fact("Mapped zone", zone_text or ev.get("fld_zone")),
         ]
     elif key == "conservation_easement":
@@ -489,7 +568,9 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
             _fact("Resolution", ev.get("resolution")),
             _fact("Resolution date", ev.get("res_date")),
             _fact("Last review", ev.get("last_review")),
-            _fact("Legal effect", "ASA enrollment is not itself a development prohibition"),
+            _fact(
+                "Legal effect", "ASA enrollment is not itself a development prohibition"
+            ),
         ]
     return [item for item in raw if item is not None]
 
@@ -510,7 +591,9 @@ def build_signal_presentation(key: str, signal: object) -> dict[str, object]:
         "caveat": SIGNAL_CAVEATS.get(key),
         "facts": _signal_facts(key, signal),
         "score_impacts": impacts,
-        "affects_eligibility": bool(signal_map.get("affects_eligibility", key == "conservation_easement")),
+        "affects_eligibility": bool(
+            signal_map.get("affects_eligibility", key == "conservation_easement")
+        ),
     }
 
 
@@ -533,7 +616,9 @@ def ranked_signals(signals: SignalMapping | None) -> list[tuple[str, object]]:
     )
 
 
-def build_reason_signals(signals: SignalMapping | None, limit: int = 3) -> list[ReasonSignal]:
+def build_reason_signals(
+    signals: SignalMapping | None, limit: int = 3
+) -> list[ReasonSignal]:
     reasons: list[ReasonSignal] = []
     for key, signal in ranked_signals(signals)[:limit]:
         reasons.append(

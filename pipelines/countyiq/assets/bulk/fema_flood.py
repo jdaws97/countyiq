@@ -34,10 +34,20 @@ MAX_RETRIES = 3
 RETRY_BACKOFF = 5  # seconds, multiplied by attempt number
 
 # Only request the fields we need (reduces server load vs outFields=*)
-OUT_FIELDS = ",".join([
-    "DFIRM_ID", "FLD_AR_ID", "FLD_ZONE", "ZONE_SUBTY", "SFHA_TF",
-    "STATIC_BFE", "V_DATUM", "DEPTH", "STUDY_TYP", "SOURCE_CIT",
-])
+OUT_FIELDS = ",".join(
+    [
+        "DFIRM_ID",
+        "FLD_AR_ID",
+        "FLD_ZONE",
+        "ZONE_SUBTY",
+        "SFHA_TF",
+        "STATIC_BFE",
+        "V_DATUM",
+        "DEPTH",
+        "STUDY_TYP",
+        "SOURCE_CIT",
+    ]
+)
 
 KEY_COLUMNS = ["fld_ar_id"]
 VALUE_COLUMNS = [
@@ -55,8 +65,16 @@ VALUE_COLUMNS = [
 
 # Expected fields from FEMA MapServer layer metadata (for schema drift check)
 EXPECTED_FIELDS = {
-    "DFIRM_ID", "FLD_AR_ID", "FLD_ZONE", "ZONE_SUBTY", "SFHA_TF",
-    "STATIC_BFE", "V_DATUM", "DEPTH", "STUDY_TYP", "SOURCE_CIT",
+    "DFIRM_ID",
+    "FLD_AR_ID",
+    "FLD_ZONE",
+    "ZONE_SUBTY",
+    "SFHA_TF",
+    "STATIC_BFE",
+    "V_DATUM",
+    "DEPTH",
+    "STUDY_TYP",
+    "SOURCE_CIT",
 }
 
 
@@ -69,7 +87,8 @@ def _fetch_page(url: str, attempt: int = 1) -> dict:
     except requests.exceptions.RequestException as e:
         status_code = e.response.status_code if e.response is not None else None
         retryable = not isinstance(e, requests.exceptions.HTTPError) or (
-            status_code in {408, 429} or (status_code is not None and status_code >= 500)
+            status_code in {408, 429}
+            or (status_code is not None and status_code >= 500)
         )
         if attempt < MAX_RETRIES and retryable:
             wait = RETRY_BACKOFF * attempt
@@ -124,7 +143,13 @@ def fema_flood_zones(
     """Fetch FEMA flood zone polygons, parse, and SCD2 upsert."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key="fema_nfhl", acquisition_method="arcgis_rest", asset_key="fema_flood_zones", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key="fema_nfhl",
+        acquisition_method="arcgis_rest",
+        asset_key="fema_flood_zones",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
 
@@ -225,7 +250,9 @@ def fema_schema_drift(database: DatabaseResource) -> AssetCheckResult:
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
             metadata={
-                "missing_fields": MetadataValue.text(str(missing) if missing else "none"),
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                ),
                 "extra_fields": MetadataValue.text(str(extra) if extra else "none"),
             },
         )

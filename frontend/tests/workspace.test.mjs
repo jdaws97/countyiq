@@ -10,8 +10,13 @@ import ts from 'typescript'
 const directory = mkdtempSync(join(tmpdir(), 'countyiq-workspace-'))
 for (const name of ['browserStorage', 'watchlist', 'investigationState']) {
   const source = readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8')
-  const { outputText } = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } })
-  writeFileSync(join(directory, `${name}.mjs`), outputText.replace(/from '(\.\/[^']+)'/g, "from '$1.mjs'"))
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
+  })
+  writeFileSync(
+    join(directory, `${name}.mjs`),
+    outputText.replace(/from '(\.\/[^']+)'/g, "from '$1.mjs'"),
+  )
 }
 const state = await import(pathToFileURL(join(directory, 'investigationState.mjs')))
 const storage = await import(pathToFileURL(join(directory, 'browserStorage.mjs')))
@@ -31,8 +36,14 @@ beforeEach(() => {
   globalThis.window = { dispatchEvent() {}, alert: (message) => alerts.push(message) }
 })
 const workspace = () => ({
-  version: 1, exportedAt: '2026-09-04T00:00:00Z', parcels: ['123'],
-  projects: [], entities: [], savedSearches: [], comparison: [], triage: {},
+  version: 1,
+  exportedAt: '2026-09-04T00:00:00Z',
+  parcels: ['123'],
+  projects: [],
+  entities: [],
+  savedSearches: [],
+  comparison: [],
+  triage: {},
 })
 
 test('malformed stored JSON shapes cannot crash investigation pages', () => {
@@ -72,15 +83,36 @@ test('older exports without municipalities remain portable', () => {
 })
 
 test('saved searches accept only local Feed and Radar destinations', () => {
-  const search = { id: 'a', name: 'Example', kind: 'feed', createdAt: '2026-09-04', path: '/feed?municipality=York' }
-  assert.equal(state.parseWorkspace(JSON.stringify({ ...workspace(), savedSearches: [search] })).savedSearches.length, 1)
-  for (const path of ['https://example.com', '//example.com', 'javascript:alert(1)', '/feed/../../outside']) {
-    assert.throws(() => state.parseWorkspace(JSON.stringify({ ...workspace(), savedSearches: [{ ...search, path }] })))
+  const search = {
+    id: 'a',
+    name: 'Example',
+    kind: 'feed',
+    createdAt: '2026-09-04',
+    path: '/feed?municipality=York',
+  }
+  assert.equal(
+    state.parseWorkspace(JSON.stringify({ ...workspace(), savedSearches: [search] })).savedSearches
+      .length,
+    1,
+  )
+  for (const path of [
+    'https://example.com',
+    '//example.com',
+    'javascript:alert(1)',
+    '/feed/../../outside',
+  ]) {
+    assert.throws(() =>
+      state.parseWorkspace(
+        JSON.stringify({ ...workspace(), savedSearches: [{ ...search, path }] }),
+      ),
+    )
   }
 })
 
 test('watch toggles report the previous state when persistence fails', () => {
-  localStorage.setItem = () => { throw new Error('storage denied') }
+  localStorage.setItem = () => {
+    throw new Error('storage denied')
+  }
   assert.equal(watches.toggleWatch('123'), false)
   assert.equal(alerts.length, 1)
   values.set('countyiq_watchlist_v1', '["123"]')
@@ -89,13 +121,17 @@ test('watch toggles report the previous state when persistence fails', () => {
 })
 
 test('CSV source text cannot become a spreadsheet formula', () => {
-  assert.equal(state.toCsv([['=1+1', '+cmd', '-formula', '@SUM(A1)', ' =1', -12]]), "'=1+1,'+cmd,'-formula,'@SUM(A1),' =1,-12")
+  assert.equal(
+    state.toCsv([['=1+1', '+cmd', '-formula', '@SUM(A1)', ' =1', -12]]),
+    "'=1+1,'+cmd,'-formula,'@SUM(A1),' =1,-12",
+  )
   assert.equal(state.toCsv([['a,b', 'a"b', 'a\rb']]), '\"a,b\",\"a\"\"b\",\"a\rb\"')
 })
 
-
 test('saved searches and comparisons never claim failed writes succeeded', () => {
-  localStorage.setItem = () => { throw new Error('storage denied') }
+  localStorage.setItem = () => {
+    throw new Error('storage denied')
+  }
   assert.equal(state.saveSearch('Example', 'feed', '/feed'), null)
   assert.deepEqual(state.toggleComparison('123'), { selected: false, full: false })
   assert.deepEqual(state.getSavedSearches(), [])

@@ -4,7 +4,6 @@ Each SODA dataset returns a flat JSON array. Records are stored generically
 in staging.pa_open_data as (dataset_id, record_id, data JSONB) with SCD2.
 """
 
-
 # Fields expected in the "Registered Businesses" dataset (xvd7-5r2c).
 # Used by schema drift check — not exhaustive, just the fields we rely on.
 EXPECTED_BUSINESS_FIELDS = {
@@ -37,9 +36,11 @@ def parse_soda_records(
         rid = rec.get(record_id_field)
         if rid is None:
             continue
-        parsed.append({
-            "dataset_id": dataset_id,
-            "record_id": str(rid),
-            "data": rec,
-        })
+        parsed.append(
+            {
+                "dataset_id": dataset_id,
+                "record_id": str(rid),
+                "data": rec,
+            }
+        )
     return parsed

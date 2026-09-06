@@ -4,7 +4,6 @@ Extracts attribute fields from raw ArcGIS features into flat dicts
 matching the staging.parcels table schema.
 """
 
-
 # Map ArcGIS field names → staging.parcels column names
 FIELD_MAP = {
     "PIDN": "pidn",

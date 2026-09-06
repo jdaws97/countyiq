@@ -40,10 +40,18 @@ def future_landuse_arcgis(
     """Fetch future land use polygons, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="future_landuse_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="future_landuse_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS future land use for {county.name}: {county.arcgis_future_landuse_url}")
+    context.log.info(
+        f"Querying ArcGIS future land use for {county.name}: {county.arcgis_future_landuse_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_future_landuse_url,
@@ -101,13 +109,17 @@ def _parse(raw_features: list[dict]) -> list[dict]:
         if not globalid:
             continue
         adopt_raw = a.get("ADOPT_DATE")
-        records.append({
-            "globalid": str(globalid).strip(),
-            "district": a.get("DISTRICT"),
-            "future_lu": a.get("FUTURE_LU"),
-            "general_lu": a.get("GENERAL_LU"),
-            "adopt_date": datetime.fromtimestamp(adopt_raw / 1000, tz=timezone.utc) if adopt_raw else None,
-        })
+        records.append(
+            {
+                "globalid": str(globalid).strip(),
+                "district": a.get("DISTRICT"),
+                "future_lu": a.get("FUTURE_LU"),
+                "general_lu": a.get("GENERAL_LU"),
+                "adopt_date": datetime.fromtimestamp(adopt_raw / 1000, tz=timezone.utc)
+                if adopt_raw
+                else None,
+            }
+        )
     return records
 
 

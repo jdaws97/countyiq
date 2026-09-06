@@ -10,6 +10,7 @@ O(n²) per municipality — York City alone has 14,678 parcels = 215M comparison
 With the GIN index, Postgres uses the index to prune candidates before
 computing exact similarity, reducing this to seconds.
 """
+
 from alembic import op
 
 revision = "015"

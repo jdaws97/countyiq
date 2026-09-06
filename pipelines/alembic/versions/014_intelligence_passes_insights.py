@@ -15,6 +15,7 @@ state from batched Pass 2 validation, so that:
      batched call are recorded, enabling targeted re-runs instead of
      silently losing them.
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB

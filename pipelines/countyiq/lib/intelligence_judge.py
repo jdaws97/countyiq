@@ -109,7 +109,10 @@ def build_judge_config() -> HarnessConfig:
     if model is None:
         raise RuntimeError("COUNTYIQ_JUDGE_MODEL is not set")
     preset = get_preset_for_model(model, thinking=False, reasoning_task=True)
-    effort = os.environ.get("COUNTYIQ_JUDGE_REASONING_EFFORT", "").strip().lower() or "medium"
+    effort = (
+        os.environ.get("COUNTYIQ_JUDGE_REASONING_EFFORT", "").strip().lower()
+        or "medium"
+    )
     return HarnessConfig(
         model_path=model,
         max_tokens=1_500,
@@ -120,7 +123,8 @@ def build_judge_config() -> HarnessConfig:
         system_prompt=JUDGE_SYSTEM_PROMPT,
         max_price_prompt=_float_env("COUNTYIQ_MAX_PRICE_PROMPT"),
         max_price_completion=_float_env("COUNTYIQ_MAX_PRICE_COMPLETION"),
-        zdr=os.environ.get("COUNTYIQ_ZDR", "").strip().lower() in {"1", "true", "yes", "on"},
+        zdr=os.environ.get("COUNTYIQ_ZDR", "").strip().lower()
+        in {"1", "true", "yes", "on"},
         **preset,
     )
 
@@ -130,13 +134,26 @@ def _trim(text: str, limit: int) -> str:
 
 
 def build_judge_prompt(
-    *, output_kind: str, evidence_text: str, prior_decision: object, challenger_decision: object
+    *,
+    output_kind: str,
+    evidence_text: str,
+    prior_decision: object,
+    challenger_decision: object,
 ) -> str:
     return JUDGE_USER_TEMPLATE.format(
         output_kind=output_kind,
-        evidence=_trim(evidence_text or "(no source evidence could be gathered)", _MAX_EVIDENCE_CHARS),
-        prior=_trim(json.dumps(prior_decision, indent=1, default=str, sort_keys=True), _MAX_DECISION_CHARS),
-        challenger=_trim(json.dumps(challenger_decision, indent=1, default=str, sort_keys=True), _MAX_DECISION_CHARS),
+        evidence=_trim(
+            evidence_text or "(no source evidence could be gathered)",
+            _MAX_EVIDENCE_CHARS,
+        ),
+        prior=_trim(
+            json.dumps(prior_decision, indent=1, default=str, sort_keys=True),
+            _MAX_DECISION_CHARS,
+        ),
+        challenger=_trim(
+            json.dumps(challenger_decision, indent=1, default=str, sort_keys=True),
+            _MAX_DECISION_CHARS,
+        ),
     )
 
 
@@ -183,7 +200,9 @@ def ask_judge(
             config, prompt, retries=1, archive_key=f"contradiction:{contradiction_id}"
         )
     except Exception:
-        budget.block_unverified(reservation, "judge call failed before usage.cost was returned")
+        budget.block_unverified(
+            reservation, "judge call failed before usage.cost was returned"
+        )
         raise
     budget.record(result, reservation)
     if not result.success:
@@ -192,4 +211,6 @@ def ask_judge(
     if parsed is None:
         return None
     winner, confidence, reason = parsed
-    return JudgeVerdict(model=config.model_path, winner=winner, confidence=confidence, reason=reason)
+    return JudgeVerdict(
+        model=config.model_path, winner=winner, confidence=confidence, reason=reason
+    )

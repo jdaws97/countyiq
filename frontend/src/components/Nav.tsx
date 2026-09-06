@@ -23,22 +23,30 @@ function getInitialTheme(): string {
 }
 
 export default function Nav() {
-  const [account,setAccount]=useState(()=>watchSyncState().account)
-  useEffect(()=>{
-    const update=()=>setAccount(watchSyncState().account)
-    window.addEventListener('countyiq-watch-sync-changed',update)
-    return ()=>window.removeEventListener('countyiq-watch-sync-changed',update)
-  },[])
+  const [account, setAccount] = useState(() => watchSyncState().account)
+  useEffect(() => {
+    const update = () => setAccount(watchSyncState().account)
+    window.addEventListener('countyiq-watch-sync-changed', update)
+    return () => window.removeEventListener('countyiq-watch-sync-changed', update)
+  }, [])
   const moreRef = useRef<HTMLDetailsElement>(null)
   const location = useLocation()
   useEffect(() => {
-    if (moreRef.current) moreRef.current.open = false
+    if (moreRef.current) {
+      moreRef.current.open = false
+    }
   }, [location.pathname, location.search])
   const navRef = useRef<HTMLElement>(null)
   useEffect(() => {
     const nav = navRef.current
-    if (!nav) return
-    const updateHeight = () => document.documentElement.style.setProperty('--nav-height', nav.getBoundingClientRect().height + 'px')
+    if (!nav) {
+      return
+    }
+    const updateHeight = () =>
+      document.documentElement.style.setProperty(
+        '--nav-height',
+        nav.getBoundingClientRect().height + 'px',
+      )
     updateHeight()
     const observer = new ResizeObserver(updateHeight)
     observer.observe(nav)
@@ -64,7 +72,9 @@ export default function Nav() {
   const submitSearch = (event: FormEvent) => {
     event.preventDefault()
     const trimmed = query.trim()
-    if (trimmed.length < 2) return
+    if (trimmed.length < 2) {
+      return
+    }
     navigate(`/search?q=${encodeURIComponent(trimmed)}`)
     setQuery('')
   }
@@ -75,12 +85,16 @@ export default function Nav() {
         <div className="brand-mark">CIQ</div>
         <div>
           <div className="brand-name">CountyIQ</div>
-          <div className="brand-county">{county.county_name} · {county.state}</div>
+          <div className="brand-county">
+            {county.county_name} · {county.state}
+          </div>
         </div>
       </NavLink>
 
       <form className="nav-search" role="search" onSubmit={submitSearch}>
-        <label className="sr-only" htmlFor="global-search">Search CountyIQ</label>
+        <label className="sr-only" htmlFor="global-search">
+          Search CountyIQ
+        </label>
         <span aria-hidden="true">⌕</span>
         <input
           id="global-search"
@@ -88,7 +102,9 @@ export default function Nav() {
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Property, organization, project"
         />
-        <button className="nav-search-submit" type="submit">Search</button>
+        <button className="nav-search-submit" type="submit">
+          Search
+        </button>
       </form>
 
       <div className="primary-nav-links" aria-label="Primary navigation">
@@ -97,21 +113,28 @@ export default function Nav() {
             key={item.to}
             to={item.to}
             end={item.to === '/'}
-            className={({ isActive }) => `primary-nav-link${isActive ? ' primary-nav-link-active' : ''}`}
+            className={({ isActive }) =>
+              `primary-nav-link${isActive ? ' primary-nav-link-active' : ''}`
+            }
           >
             {item.label}
           </NavLink>
         ))}
-        <details ref={moreRef} className="nav-more" onKeyDown={event => {
-          if (event.key === 'Escape' && moreRef.current) {
-            moreRef.current.open = false
-            moreRef.current.querySelector('summary')?.focus()
-          }
-        }} onBlur={event => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            event.currentTarget.open = false
-          }
-        }}>
+        <details
+          ref={moreRef}
+          className="nav-more"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && moreRef.current) {
+              moreRef.current.open = false
+              moreRef.current.querySelector('summary')?.focus()
+            }
+          }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              event.currentTarget.open = false
+            }
+          }}
+        >
           <summary className="primary-nav-link">More</summary>
           <div className="nav-more-panel">
             <NavLink to="/organizations">Organizations</NavLink>
@@ -121,9 +144,13 @@ export default function Nav() {
             <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
               Use {theme === 'dark' ? 'light' : 'dark'} theme
             </button>
-            {account?.authenticated
-              ? <button type="button" onClick={signOut}>Sign out</button>
-              : <a href={account?.login_url ?? "/app"}>Sign in</a>}
+            {account?.authenticated ? (
+              <button type="button" onClick={signOut}>
+                Sign out
+              </button>
+            ) : (
+              <a href={account?.login_url ?? '/app'}>Sign in</a>
+            )}
           </div>
         </details>
       </div>

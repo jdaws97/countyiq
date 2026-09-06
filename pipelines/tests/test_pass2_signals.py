@@ -44,6 +44,7 @@ def valid_llm_output():
 # TestParseSignalValidationOutput
 # ---------------------------------------------------------------------------
 
+
 class TestParseSignalValidationOutput:
     """Tests for parse_signal_validation_output(output) -> dict."""
 
@@ -119,14 +120,16 @@ class TestParseSignalValidationOutput:
 
     @pytest.mark.parametrize("status", ["stale", "irrelevant"])
     def test_non_serving_status_rejects_actionable_significance(self, status):
-        result = parse_signal_validation_output({
-            "signal_key": "test",
-            "validation_status": status,
-            "adjusted_significance": "high",
-            "reasoning": "Reasoning here.",
-            "key_facts": [],
-            "cross_references": [],
-        })
+        result = parse_signal_validation_output(
+            {
+                "signal_key": "test",
+                "validation_status": status,
+                "adjusted_significance": "high",
+                "reasoning": "Reasoning here.",
+                "key_facts": [],
+                "cross_references": [],
+            }
+        )
 
         assert "error" in result
         assert "requires adjusted_significance 'none'" in result["error"]

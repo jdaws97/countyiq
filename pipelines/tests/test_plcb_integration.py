@@ -3,20 +3,27 @@
 
 Requires: docker compose up -d postgres-test && alembic upgrade head
 """
+
 import pytest
 import psycopg2
+
 
 # Skip if Docker Postgres is not running
 def _pg_available():
     try:
         conn = psycopg2.connect(
-            host="localhost", port=5433, dbname="countyiq_test",
-            user="dagster_admin", password="localtest", connect_timeout=3,
+            host="localhost",
+            port=5433,
+            dbname="countyiq_test",
+            user="dagster_admin",
+            password="localtest",
+            connect_timeout=3,
         )
         conn.close()
         return True
     except Exception:
         return False
+
 
 pytestmark = [
     pytest.mark.integration,
@@ -38,8 +45,11 @@ def test_plcb_parser_to_staging():
     assert len(records) == 5
 
     conn = psycopg2.connect(
-        host="localhost", port=5433, dbname="countyiq_test",
-        user="dagster_admin", password="localtest",
+        host="localhost",
+        port=5433,
+        dbname="countyiq_test",
+        user="dagster_admin",
+        password="localtest",
     )
     conn.autocommit = True
     cur = conn.cursor()
@@ -54,10 +64,18 @@ def test_plcb_parser_to_staging():
             records=records,
             key_columns=["lid"],
             value_columns=[
-                "license_number", "license_type", "status", "licensee",
-                "premises_name", "premises_address", "premises_mailing_address",
-                "premises_owner", "premises_manager", "municipality",
-                "last_issue_date", "expiration_date",
+                "license_number",
+                "license_type",
+                "status",
+                "licensee",
+                "premises_name",
+                "premises_address",
+                "premises_mailing_address",
+                "premises_owner",
+                "premises_manager",
+                "municipality",
+                "last_issue_date",
+                "expiration_date",
             ],
         )
         conn.commit()

@@ -24,7 +24,10 @@ DEVELOPMENT_EVENT_TAGS = {
     "condition",
     "upcoming_decision",
     "policy_action",
-    "recommendation", "withdrawn", "removed", "scoped_decision",
+    "recommendation",
+    "withdrawn",
+    "removed",
+    "scoped_decision",
 }
 
 _PRIMARY_DEVELOPMENT_TYPE_ORDER = (
@@ -135,7 +138,10 @@ def normalize_development_tags(
         add(str(tag).strip().lower())
 
     extraction_type_normalized = (extraction_type or "").strip().lower()
-    if extraction_type_normalized in _APPLICATION_EXTRACTION_TYPES and record_status in {None, "scheduled"}:
+    if (
+        extraction_type_normalized in _APPLICATION_EXTRACTION_TYPES
+        and record_status in {None, "scheduled"}
+    ):
         add("application")
     if extraction_type_normalized == "ordinance_action":
         # A municipality-wide decision, filterable on its own in the feed.
@@ -145,7 +151,11 @@ def normalize_development_tags(
     if record_status is None:
         add("hearing")
     elif record_status == "scheduled":
-        tags = [tag for tag in tags if tag not in {"hearing", "approval", "denial", "continuance"}]
+        tags = [
+            tag
+            for tag in tags
+            if tag not in {"hearing", "approval", "denial", "continuance"}
+        ]
     if record_status in {"scheduled", "recommendation"}:
         decision = None
     if decision_scope in {"bond", "contract", "naming", "procedural"}:
@@ -166,7 +176,9 @@ def normalize_development_tags(
 
     if list(conditions or []):
         add("condition")
-    if (record_status is None and _clean_text(what_happens_next)) or _clean_text(upcoming_date):
+    if (record_status is None and _clean_text(what_happens_next)) or _clean_text(
+        upcoming_date
+    ):
         add("upcoming_decision")
 
     return tags
@@ -198,8 +210,7 @@ def make_project_key(
         municipality_from_body_name(body_name),
     ]
     normalized = "|".join(
-        re.sub(r"[^a-z0-9]+", " ", (part or "").casefold()).strip()
-        for part in parts
+        re.sub(r"[^a-z0-9]+", " ", (part or "").casefold()).strip() for part in parts
     )
     digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:20]
     return f"project:{digest}"
@@ -268,7 +279,10 @@ def build_parcel_event(row: dict[str, Any]) -> dict[str, Any]:
     entity_candidates = [row.get("owner_full")]
     for field in ("owner_full", "prev_owner"):
         entity_candidates.extend(
-            [_changed_value(evidence, field, "old"), _changed_value(evidence, field, "new")]
+            [
+                _changed_value(evidence, field, "old"),
+                _changed_value(evidence, field, "new"),
+            ]
         )
 
     return {
@@ -373,6 +387,7 @@ def build_delinquency_event(row: dict[str, Any]) -> dict[str, Any]:
 
 def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
     from countyiq.lib.proceeding_contract import source_project_key
+
     details = _json_object(row.get("extraction_details"))
     conditions = row.get("conditions") or []
     if isinstance(conditions, str):
@@ -398,7 +413,9 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
         event_type = "application" if "application" in tags else "upcoming_decision"
     elif details.get("record_status") == "recommendation":
         event_type = "recommendation"
-    elif details.get("record_status") == "update" and (not tags or details.get("contract_version") == 3):
+    elif details.get("record_status") == "update" and (
+        not tags or details.get("contract_version") == 3
+    ):
         event_type = "update"
     if details.get("contract_version") == 3:
         if details.get("record_status") in {"withdrawn", "removed"}:
@@ -411,10 +428,19 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
     project_name = _clean_text(row.get("project_name"))
     parcel_reference = _clean_text(row.get("parcel_reference"))
     body_name = _clean_text(row.get("body_name"))
-    is_policy_action = str(row.get("extraction_type") or "").strip().lower() == "ordinance_action"
+    is_policy_action = (
+        str(row.get("extraction_type") or "").strip().lower() == "ordinance_action"
+    )
     subject = (
-        project_name or applicant or parcel_reference or body_name
-        or ("Municipal policy action" if is_policy_action else "Municipal development matter")
+        project_name
+        or applicant
+        or parcel_reference
+        or body_name
+        or (
+            "Municipal policy action"
+            if is_policy_action
+            else "Municipal development matter"
+        )
     )
 
     fallback_what = f"{subject} appeared in a {str(row.get('extraction_type') or 'development').replace('_', ' ')} record."
@@ -426,7 +452,11 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
 
     model_interpretation = bool(_clean_text(row.get("what_happened")))
     related_entities = _dedupe(
-        [applicant, *(row.get("related_entities") or []), *(row.get("matched_owners") or [])]
+        [
+            applicant,
+            *(row.get("related_entities") or []),
+            *(row.get("matched_owners") or []),
+        ]
     )
     related_pidns = _dedupe(row.get("related_pidns") or [])
     has_project_identity = any((applicant, project_name, parcel_reference))
@@ -441,7 +471,11 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
         else None
     )
     if details.get("contract_version") in {2, 3}:
-        project_key = row["resolved_project_key"] if "resolved_project_key" in row else source_project_key(row)
+        project_key = (
+            row["resolved_project_key"]
+            if "resolved_project_key" in row
+            else source_project_key(row)
+        )
     supporting_text = _clean_text(row.get("supporting_text"))
     source_details = {
         "extraction_type": row.get("extraction_type"),
@@ -452,23 +486,44 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
         "parcel_reference": parcel_reference,
         "upcoming_date": row.get("upcoming_date"),
         **details,
-        "meeting_date": str(row.get("meeting_date")) if row.get("meeting_date") else None,
-        "location_status": "supported_parcels" if related_pidns else "location_not_resolved",
-        "project_identity_status": "source_identified" if project_key else "needs_review",
+        "meeting_date": str(row.get("meeting_date"))
+        if row.get("meeting_date")
+        else None,
+        "location_status": "supported_parcels"
+        if related_pidns
+        else "location_not_resolved",
+        "project_identity_status": "source_identified"
+        if project_key
+        else "needs_review",
     }
     stable_identity = "|".join(
         str(row.get(key) or "")
-        for key in ("proceeding_id", "extraction_type", "applicant_name", "parcel_reference", "supporting_text")
+        for key in (
+            "proceeding_id",
+            "extraction_type",
+            "applicant_name",
+            "parcel_reference",
+            "supporting_text",
+        )
     )
     if details.get("contract_version") == 3:
-        stable_identity += "|" + json.dumps({
-            "application_ids": details.get("application_ids"), "scope": details.get("decision_scope"),
-            "what_happened": row.get("what_happened"), "project_reference": details.get("project_reference"),
-        }, sort_keys=True)
+        stable_identity += "|" + json.dumps(
+            {
+                "application_ids": details.get("application_ids"),
+                "scope": details.get("decision_scope"),
+                "what_happened": row.get("what_happened"),
+                "project_reference": details.get("project_reference"),
+            },
+            sort_keys=True,
+        )
     digest = hashlib.sha256(stable_identity.encode("utf-8")).hexdigest()[:20]
     heading = event_type.replace("_", " ").title()
     if details.get("contract_version") == 3 and details.get("decision_scope"):
-        heading = details["decision_scope"].replace("_", " ").title() + ": " + str(details.get("decision_outcome") or "decision").capitalize()
+        heading = (
+            details["decision_scope"].replace("_", " ").title()
+            + ": "
+            + str(details.get("decision_outcome") or "decision").capitalize()
+        )
 
     return {
         "event_key": f"development:{digest}",
@@ -482,7 +537,8 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
         "why_it_matters": "",
         "what_happens_next": "",
         "event_date": (
-            details.get("event_date") if details.get("contract_version") in {2, 3}
+            details.get("event_date")
+            if details.get("contract_version") in {2, 3}
             else row.get("meeting_date")
         ),
         "detected_at": row.get("extracted_at") or row.get("proceeding_valid_from"),
@@ -498,11 +554,16 @@ def build_development_event(row: dict[str, Any]) -> dict[str, Any]:
                 "url": row.get("source_url"),
                 "document_url": row.get("document_url"),
                 "excerpt": quote,
-                "details": {**(source_details if index == 0 else {}),
-                    "supports": (details.get("evidence_spans") or [{}])[index].get("fields", [])},
+                "details": {
+                    **(source_details if index == 0 else {}),
+                    "supports": (details.get("evidence_spans") or [{}])[index].get(
+                        "fields", []
+                    ),
+                },
             }
             for index, quote in enumerate(
-                [span["quote"] for span in details.get("evidence_spans") or []] or [supporting_text]
+                [span["quote"] for span in details.get("evidence_spans") or []]
+                or [supporting_text]
             )
         ],
         "interpretation_kind": "llm" if model_interpretation else "deterministic",

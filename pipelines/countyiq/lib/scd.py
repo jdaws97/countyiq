@@ -65,8 +65,15 @@ def scd2_upsert(
 
     try:
         result = _scd2_upsert_inner(
-            cursor, fqn, all_columns, key_columns, value_columns,
-            records, log, expire_missing, carry_columns,
+            cursor,
+            fqn,
+            all_columns,
+            key_columns,
+            value_columns,
+            records,
+            log,
+            expire_missing,
+            carry_columns,
         )
         return result
     except Exception:
@@ -78,8 +85,15 @@ def scd2_upsert(
 
 
 def _scd2_upsert_inner(
-    cursor, fqn, all_columns, key_columns, value_columns, records, log,
-    expire_missing, carry_columns=(),
+    cursor,
+    fqn,
+    all_columns,
+    key_columns,
+    value_columns,
+    records,
+    log,
+    expire_missing,
+    carry_columns=(),
 ):
     """Inner implementation — streams records into temp table in batches."""
 
@@ -90,7 +104,9 @@ def _scd2_upsert_inner(
 
     # Stream records into temp table in chunks
     placeholders = ", ".join(["%s"] * len(all_columns))
-    insert_sql = f"INSERT INTO {temp_table} ({', '.join(all_columns)}) VALUES ({placeholders})"
+    insert_sql = (
+        f"INSERT INTO {temp_table} ({', '.join(all_columns)}) VALUES ({placeholders})"
+    )
 
     total_staged = 0
     batch = []
@@ -172,7 +188,7 @@ def _scd2_upsert_inner(
     col_list = ", ".join(all_columns)
     insert_new_sql = f"""
         INSERT INTO {fqn} ({col_list}, valid_from)
-        SELECT {', '.join(f't.{c}' for c in all_columns)}, NOW()
+        SELECT {", ".join(f"t.{c}" for c in all_columns)}, NOW()
         FROM {temp_table} t
         WHERE NOT EXISTS (
             SELECT 1 FROM {fqn} c WHERE c.valid_to IS NULL AND {key_join}
@@ -312,7 +328,11 @@ def scd2_upsert_geom(
                 if isinstance(val, (dict, list)):
                     val = json.dumps(val)
                 row.append(val)
-            geom_json = geom_lookup.get(rec.get(lookup_key)) if rec.get(lookup_key) is not None else None
+            geom_json = (
+                geom_lookup.get(rec.get(lookup_key))
+                if rec.get(lookup_key) is not None
+                else None
+            )
             row.extend([geom_json, geom_json])
             rows.append(row)
 
@@ -388,7 +408,7 @@ def scd2_upsert_geom(
         col_list = ", ".join(all_columns)
         insert_new_sql = f"""
             INSERT INTO {fqn} ({col_list}, geom, valid_from)
-            SELECT {', '.join(f't.{c}' for c in all_columns)}, t.geom, NOW()
+            SELECT {", ".join(f"t.{c}" for c in all_columns)}, t.geom, NOW()
             FROM {temp_table} t
             WHERE NOT EXISTS (
                 SELECT 1 FROM {fqn} c

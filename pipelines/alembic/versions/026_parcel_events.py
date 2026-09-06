@@ -10,6 +10,7 @@ Revision ID: 026
 Revises: 025
 Create Date: 2026-08-05
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -38,8 +39,15 @@ def upgrade() -> None:
         sa.Column("new_version_from", sa.DateTime(timezone=True), nullable=False),
         # {changed: {field: {old, new}}, corroboration: [...], pattern: ...}
         sa.Column("evidence", JSONB, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.UniqueConstraint("pidn", "event_type", "new_version_from", name="uq_parcel_events_version"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
+        sa.UniqueConstraint(
+            "pidn", "event_type", "new_version_from", name="uq_parcel_events_version"
+        ),
         schema="public",
     )
     op.execute(
@@ -50,10 +58,14 @@ def upgrade() -> None:
         "ALTER TABLE public.parcel_events ADD CONSTRAINT chk_parcel_events_confidence "
         "CHECK (confidence IN ('confirmed', 'likely'))"
     )
-    op.create_index("idx_parcel_events_pidn", "parcel_events", ["pidn"], schema="public")
     op.create_index(
-        "idx_parcel_events_type_detected", "parcel_events",
-        [sa.text("event_type"), sa.text("detected_at DESC")], schema="public",
+        "idx_parcel_events_pidn", "parcel_events", ["pidn"], schema="public"
+    )
+    op.create_index(
+        "idx_parcel_events_type_detected",
+        "parcel_events",
+        [sa.text("event_type"), sa.text("detected_at DESC")],
+        schema="public",
     )
 
 

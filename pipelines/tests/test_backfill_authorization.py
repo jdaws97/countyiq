@@ -87,9 +87,7 @@ def test_pass_budget_settles_provider_cost_in_durable_ledger(tmp_path):
     )
     budget = PassSpendBudget(2, 0.01, authorization=authorization)
 
-    reservation = budget.reserve(
-        config, "prompt", retries=0, pdf_bytes=None
-    )
+    reservation = budget.reserve(config, "prompt", retries=0, pdf_bytes=None)
     budget.record(
         HarnessResult("{}", {}, True, metadata={"cost": 0.001}),
         reservation,

@@ -22,7 +22,8 @@ def top_delinquent_owners(
 
     with get_cursor() as cur:
         require_source_use(cur, "tax_claims", "derived_product")
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT
                 tc.owner_name,
                 COUNT(DISTINCT tc.pidn) AS parcel_count,
@@ -36,7 +37,9 @@ def top_delinquent_owners(
             GROUP BY tc.owner_name
             ORDER BY SUM(tc.total) DESC
             LIMIT %(limit)s
-        """, params)
+        """,
+            params,
+        )
         rows = cur.fetchall()
 
     return [
@@ -66,7 +69,8 @@ def delinquent_parcels(
 
     with get_cursor() as cur:
         require_source_use(cur, "tax_claims", "derived_product")
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT
                 tc.pidn,
                 tc.owner_name,
@@ -81,10 +85,9 @@ def delinquent_parcels(
             {"HAVING SUM(tc.total) >= %(min_owed)s" if min_owed else ""}
             ORDER BY SUM(tc.total) DESC
             LIMIT %(limit)s
-        """, params)
+        """,
+            params,
+        )
         rows = cur.fetchall()
 
-    return [
-        {**dict(r), "total_owed": float(r["total_owed"])}
-        for r in rows
-    ]
+    return [{**dict(r), "total_owed": float(r["total_owed"])} for r in rows]

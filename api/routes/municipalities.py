@@ -169,7 +169,9 @@ def _fetch_radar_top(cur, municipality_name: str, *, limit: int = 8) -> list[dic
     return rows
 
 
-def _fetch_municipality_licenses(cur, municipality_name: str, *, limit: int = 50) -> list[dict]:
+def _fetch_municipality_licenses(
+    cur, municipality_name: str, *, limit: int = 50
+) -> list[dict]:
     cur.execute(
         """
         SELECT
@@ -197,7 +199,9 @@ def _fetch_municipality_licenses(cur, municipality_name: str, *, limit: int = 50
 def list_municipalities() -> list[MunicipalitySummary]:
     """List all municipalities with delinquency stats."""
     with get_cursor() as cur:
-        require_source_use(cur, open_data_source_key(), "derived_product", conceal=False)
+        require_source_use(
+            cur, open_data_source_key(), "derived_product", conceal=False
+        )
         require_source_use(cur, "tax_claims", "derived_product", conceal=False)
         cur.execute("""
             SELECT name, muni_type
@@ -229,12 +233,14 @@ def list_municipalities() -> list[MunicipalitySummary]:
                 delinquent_parcels += stats["delinquent_parcels"]
                 total_delinquent += float(stats["total_delinquent"])
 
-        results.append({
-            "name": muni["name"],
-            "muni_type": muni["muni_type"],
-            "delinquent_parcels": delinquent_parcels,
-            "total_delinquent": round(total_delinquent, 2),
-        })
+        results.append(
+            {
+                "name": muni["name"],
+                "muni_type": muni["muni_type"],
+                "delinquent_parcels": delinquent_parcels,
+                "total_delinquent": round(total_delinquent, 2),
+            }
+        )
 
     return results
 
@@ -243,7 +249,9 @@ def list_municipalities() -> list[MunicipalitySummary]:
 def get_municipality(name: str) -> MunicipalityProfileResponse:
     """Get a single municipality profile."""
     with get_cursor() as cur:
-        require_source_use(cur, open_data_source_key(), "derived_product", conceal=False)
+        require_source_use(
+            cur, open_data_source_key(), "derived_product", conceal=False
+        )
         require_source_use(cur, "tax_claims", "derived_product", conceal=False)
         require_source_use(cur, "plcb_licenses", "derived_product", conceal=False)
         cur.execute(
@@ -256,7 +264,9 @@ def get_municipality(name: str) -> MunicipalityProfileResponse:
         )
         muni = cur.fetchone()
         if not muni:
-            raise HTTPException(status_code=404, detail=f"Municipality not found: {name}")
+            raise HTTPException(
+                status_code=404, detail=f"Municipality not found: {name}"
+            )
 
         pattern = muni_name_to_pattern(muni["name"])
         stats = _fetch_municipality_stats(cur, muni["name"])

@@ -24,8 +24,14 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["housingdevid"]
 VALUE_COLUMNS = [
-    "prj_id", "address", "constructi", "units",
-    "date_of_oc", "affordabil", "name", "source_url",
+    "prj_id",
+    "address",
+    "constructi",
+    "units",
+    "date_of_oc",
+    "affordabil",
+    "name",
+    "source_url",
 ]
 
 
@@ -51,7 +57,9 @@ def cdbg_housing_arcgis(
     )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS CDBG housing for {county.name}: {county.arcgis_cdbg_housing_url}")
+    context.log.info(
+        f"Querying ArcGIS CDBG housing for {county.name}: {county.arcgis_cdbg_housing_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_cdbg_housing_url,
@@ -108,16 +116,18 @@ def _parse(raw_features: list[dict]) -> list[dict]:
         housingdevid = a.get("HousingDevID")
         if not housingdevid:
             continue
-        records.append({
-            "housingdevid": str(housingdevid).strip(),
-            "prj_id": a.get("PRJ_ID"),
-            "address": a.get("Address"),
-            "constructi": a.get("Constructi"),
-            "units": a.get("Units"),
-            "date_of_oc": a.get("Date_of_OC"),
-            "affordabil": a.get("Affordabil"),
-            "name": a.get("Name"),
-        })
+        records.append(
+            {
+                "housingdevid": str(housingdevid).strip(),
+                "prj_id": a.get("PRJ_ID"),
+                "address": a.get("Address"),
+                "constructi": a.get("Constructi"),
+                "units": a.get("Units"),
+                "date_of_oc": a.get("Date_of_OC"),
+                "affordabil": a.get("Affordabil"),
+                "name": a.get("Name"),
+            }
+        )
     return records
 
 

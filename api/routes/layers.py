@@ -20,12 +20,27 @@ LAYER_CONFIG: dict[str, LayerConfig] = {
     },
     "zoning": {
         "table": "staging.zoning",
-        "properties": ["muni_name", "zcode", "zname", "ztype", "gen_zcode", "gen_zname"],
+        "properties": [
+            "muni_name",
+            "zcode",
+            "zname",
+            "ztype",
+            "gen_zcode",
+            "gen_zname",
+        ],
     },
     "penndot_projects": {
         "table": "staging.penndot_projects",
-        "properties": ["project_id", "project_name", "description", "status",
-                        "start_date", "end_date", "cost", "project_type"],
+        "properties": [
+            "project_id",
+            "project_name",
+            "description",
+            "status",
+            "start_date",
+            "end_date",
+            "cost",
+            "project_type",
+        ],
         "extra_sql": (
             "t.data->>'PRJCT_GRPHY_DC' AS location_desc, "
             "t.data->>'UNDER_CONSTRUCTION' AS under_construction, "
@@ -76,11 +91,13 @@ def get_layer(layer_name: str) -> dict:
     features = []
     for row in rows:
         geom = row.pop("geometry")
-        features.append({
-            "type": "Feature",
-            "geometry": geom,
-            "properties": dict(row),
-        })
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": geom,
+                "properties": dict(row),
+            }
+        )
 
     return {
         "type": "FeatureCollection",

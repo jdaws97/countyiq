@@ -37,7 +37,9 @@ def send_slack_message(channel: str, text: str, emoji: str = ":bell:"):
     webhook_url = get_slack_webhook_url(channel)
 
     if not webhook_url:
-        log.warning(f"Slack message not sent (no webhook for '{channel}'): {text[:100]}")
+        log.warning(
+            f"Slack message not sent (no webhook for '{channel}'): {text[:100]}"
+        )
         return
 
     payload = {

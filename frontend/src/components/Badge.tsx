@@ -7,9 +7,20 @@ import type { CSSProperties, ReactNode } from 'react'
  * `${color}20` hex-alpha trick silently produced no background for token
  * colours.)
  */
-export default function Badge({ color, mono = false, children }: { color: string; mono?: boolean; children: ReactNode }) {
+export default function Badge({
+  color,
+  mono = false,
+  children,
+}: {
+  color: string
+  mono?: boolean
+  children: ReactNode
+}) {
   return (
-    <span className={`badge${mono ? ' badge-mono' : ''}`} style={{ '--badge-color': color } as CSSProperties}>
+    <span
+      className={`badge${mono ? ' badge-mono' : ''}`}
+      style={{ '--badge-color': color } as CSSProperties}
+    >
       {children}
     </span>
   )

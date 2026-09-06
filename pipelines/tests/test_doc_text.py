@@ -3,7 +3,10 @@
 import io
 import zipfile
 
-from countyiq.lib.doc_text import extract_text_from_docx_bytes, extract_text_from_pdf_bytes
+from countyiq.lib.doc_text import (
+    extract_text_from_docx_bytes,
+    extract_text_from_pdf_bytes,
+)
 
 _DOCX_XML_TEMPLATE = (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -25,10 +28,11 @@ def _make_docx(paragraphs: list[list[str]]) -> bytes:
 
 
 class TestExtractTextFromDocxBytes:
-
     def test_single_paragraph(self):
         docx = _make_docx([["Meeting called to order at 7:00 PM."]])
-        assert extract_text_from_docx_bytes(docx) == "Meeting called to order at 7:00 PM."
+        assert (
+            extract_text_from_docx_bytes(docx) == "Meeting called to order at 7:00 PM."
+        )
 
     def test_multiple_paragraphs_joined_with_newlines(self):
         docx = _make_docx([["Call to order."], ["Roll call: all present."]])
@@ -87,7 +91,11 @@ class TestExtractTextFromPdfBytes:
                 return self.text
 
         class FakePdf:
-            pages = [FakePage(" First page. "), FakePage(None), FakePage("Second page.")]
+            pages = [
+                FakePage(" First page. "),
+                FakePage(None),
+                FakePage("Second page."),
+            ]
 
             def __enter__(self):
                 return self

@@ -52,4 +52,6 @@ def check_error_budget(
         )
         log.error(msg)
         raise RuntimeError(msg)
-    log.warning(f"{label}: {errors}/{total} items failed ({ratio:.0%}) — within error budget")
+    log.warning(
+        f"{label}: {errors}/{total} items failed ({ratio:.0%}) — within error budget"
+    )

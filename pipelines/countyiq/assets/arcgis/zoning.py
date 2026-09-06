@@ -29,15 +29,37 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["zrecid"]
 VALUE_COLUMNS = [
-    "muni_name", "district", "zcode", "zname", "ztype",
-    "gen_zcode", "gen_zname", "changetype", "prj_num",
-    "muni_ord", "adpt_date", "prev_zcode", "prev_zname", "source_url",
+    "muni_name",
+    "district",
+    "zcode",
+    "zname",
+    "ztype",
+    "gen_zcode",
+    "gen_zname",
+    "changetype",
+    "prj_num",
+    "muni_ord",
+    "adpt_date",
+    "prev_zcode",
+    "prev_zname",
+    "source_url",
 ]
 
 EXPECTED_FIELDS = {
-    "ZRECID", "MUNI_NAME", "DISTRICT", "ZCODE", "ZNAME", "ZTYPE",
-    "GEN_ZCODE", "GEN_ZNAME", "CHANGETYPE", "PRJ_NUM", "MUNI_ORD",
-    "ADPT_DATE", "PREV_ZCODE", "PREV_ZNAME",
+    "ZRECID",
+    "MUNI_NAME",
+    "DISTRICT",
+    "ZCODE",
+    "ZNAME",
+    "ZTYPE",
+    "GEN_ZCODE",
+    "GEN_ZNAME",
+    "CHANGETYPE",
+    "PRJ_NUM",
+    "MUNI_ORD",
+    "ADPT_DATE",
+    "PREV_ZCODE",
+    "PREV_ZNAME",
 }
 
 
@@ -54,10 +76,18 @@ def zoning_arcgis(
     """Fetch zoning polygons, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="zoning_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="zoning_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS zoning for {county.name}: {county.arcgis_zoning_url}")
+    context.log.info(
+        f"Querying ArcGIS zoning for {county.name}: {county.arcgis_zoning_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_zoning_url,
@@ -149,7 +179,9 @@ def zoning_schema_drift(database: DatabaseResource) -> AssetCheckResult:
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
             metadata={
-                "missing_fields": MetadataValue.text(str(missing) if missing else "none"),
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                ),
             },
         )
     except requests.exceptions.RequestException as e:

@@ -36,6 +36,14 @@ def test_parse_penndot_roads_skips_missing_key():
 
 
 def test_parse_penndot_roads_composite_key():
-    features = [{"attributes": {"ST_RT_NO": "0030", "SEG_NO": "0220", "STREET_NAME": "MARKET ST"}}]
+    features = [
+        {
+            "attributes": {
+                "ST_RT_NO": "0030",
+                "SEG_NO": "0220",
+                "STREET_NAME": "MARKET ST",
+            }
+        }
+    ]
     records = parse_penndot_roads_features(features)
     assert records[0]["road_id"] == "0030-0220"

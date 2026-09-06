@@ -24,11 +24,26 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["pidn"]
 VALUE_COLUMNS = [
-    "percent_underutilized", "buildable_acres", "functional_class",
-    "interchange", "railroad", "primary_grwth_area", "secondary_grwth_area",
-    "future_grwth_area", "sewer_water_availability", "broadband",
-    "transit_route", "lev_suitability", "ga_type", "owner_full",
-    "propadr", "class", "acres", "aprtotal", "yrblt", "comm_building_sq_ft",
+    "percent_underutilized",
+    "buildable_acres",
+    "functional_class",
+    "interchange",
+    "railroad",
+    "primary_grwth_area",
+    "secondary_grwth_area",
+    "future_grwth_area",
+    "sewer_water_availability",
+    "broadband",
+    "transit_route",
+    "lev_suitability",
+    "ga_type",
+    "owner_full",
+    "propadr",
+    "class",
+    "acres",
+    "aprtotal",
+    "yrblt",
+    "comm_building_sq_ft",
     "source_url",
 ]
 
@@ -55,7 +70,9 @@ def ecodev_candidates_arcgis(
     )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS ecodev candidates for {county.name}: {county.arcgis_ecodev_candidates_url}")
+    context.log.info(
+        f"Querying ArcGIS ecodev candidates for {county.name}: {county.arcgis_ecodev_candidates_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_ecodev_candidates_url,
@@ -112,29 +129,31 @@ def _parse(raw_features: list[dict]) -> list[dict]:
         pidn = a.get("PIDN")
         if not pidn:
             continue
-        records.append({
-            "pidn": str(pidn).strip(),
-            "percent_underutilized": a.get("Percent_Underutilized"),
-            "buildable_acres": a.get("Buildable_Acres"),
-            "functional_class": a.get("Functional_Class"),
-            "interchange": a.get("Interchange"),
-            "railroad": a.get("Railroad"),
-            "primary_grwth_area": a.get("Primary_Grwth_Area"),
-            "secondary_grwth_area": a.get("Secondary_Grwth_Area"),
-            "future_grwth_area": a.get("Future_Grwth_Area"),
-            "sewer_water_availability": a.get("Sewer_Water_Availability"),
-            "broadband": a.get("Broadband"),
-            "transit_route": a.get("Transit_Route"),
-            "lev_suitability": a.get("LEV_Suitability"),
-            "ga_type": a.get("GA_Type"),
-            "owner_full": a.get("OWNER_FULL"),
-            "propadr": a.get("PROPADR"),
-            "class": a.get("CLASS"),
-            "acres": a.get("ACRES"),
-            "aprtotal": a.get("APRTOTAL"),
-            "yrblt": a.get("YRBLT"),
-            "comm_building_sq_ft": a.get("Comm_Building_Sq_Ft"),
-        })
+        records.append(
+            {
+                "pidn": str(pidn).strip(),
+                "percent_underutilized": a.get("Percent_Underutilized"),
+                "buildable_acres": a.get("Buildable_Acres"),
+                "functional_class": a.get("Functional_Class"),
+                "interchange": a.get("Interchange"),
+                "railroad": a.get("Railroad"),
+                "primary_grwth_area": a.get("Primary_Grwth_Area"),
+                "secondary_grwth_area": a.get("Secondary_Grwth_Area"),
+                "future_grwth_area": a.get("Future_Grwth_Area"),
+                "sewer_water_availability": a.get("Sewer_Water_Availability"),
+                "broadband": a.get("Broadband"),
+                "transit_route": a.get("Transit_Route"),
+                "lev_suitability": a.get("LEV_Suitability"),
+                "ga_type": a.get("GA_Type"),
+                "owner_full": a.get("OWNER_FULL"),
+                "propadr": a.get("PROPADR"),
+                "class": a.get("CLASS"),
+                "acres": a.get("ACRES"),
+                "aprtotal": a.get("APRTOTAL"),
+                "yrblt": a.get("YRBLT"),
+                "comm_building_sq_ft": a.get("Comm_Building_Sq_Ft"),
+            }
+        )
     return records
 
 

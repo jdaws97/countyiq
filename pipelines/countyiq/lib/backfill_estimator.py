@@ -233,9 +233,7 @@ def estimate_backfill(database, *, sample_size: int = 50) -> dict[str, Any]:
     ]
 
     costs_known = all(item.planning_cost_max is not None for item in estimates)
-    retry_costs_known = all(
-        item.retry_ceiling_cost is not None for item in estimates
-    )
+    retry_costs_known = all(item.retry_ceiling_cost is not None for item in estimates)
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "read_only": True,
@@ -248,15 +246,18 @@ def estimate_backfill(database, *, sample_size: int = 50) -> dict[str, Any]:
             "retry_ceiling_calls": sum(item.retry_ceiling_calls for item in estimates),
             "planning_cost_min": (
                 round(sum(item.planning_cost_min or 0 for item in estimates), 6)
-                if costs_known else None
+                if costs_known
+                else None
             ),
             "planning_cost_max": (
                 round(sum(item.planning_cost_max or 0 for item in estimates), 6)
-                if costs_known else None
+                if costs_known
+                else None
             ),
             "retry_ceiling_cost": (
                 round(sum(item.retry_ceiling_cost or 0 for item in estimates), 6)
-                if retry_costs_known else None
+                if retry_costs_known
+                else None
             ),
         },
         "excluded": [
@@ -316,8 +317,7 @@ def _data_profile(database) -> dict[str, Any]:
     if not rows:
         raise RuntimeError("Unable to read the backfill input data profile")
     values = {
-        name: _row_value(rows[0], name, index)
-        for index, name in enumerate(names)
+        name: _row_value(rows[0], name, index) for index, name in enumerate(names)
     }
     counts = {
         name: int(values[name] or 0)
@@ -326,7 +326,9 @@ def _data_profile(database) -> dict[str, Any]:
     }
     warnings = []
     if counts["parcels"] == 0:
-        warnings.append("No current parcels: Pass 1-3 candidate counts are not representative.")
+        warnings.append(
+            "No current parcels: Pass 1-3 candidate counts are not representative."
+        )
     if counts["proceedings"] == 0:
         warnings.append("No current proceedings: Pass 0 volume is not representative.")
     if counts["corporate_entities"] == 0:
@@ -334,7 +336,9 @@ def _data_profile(database) -> dict[str, Any]:
             "No PA DOS corporate rows: Pass 1 excludes shared-office corporate candidates."
         )
     if counts["development_signals"] == 0:
-        warnings.append("No deterministic development signals: Pass 2-3 volume is provisional.")
+        warnings.append(
+            "No deterministic development signals: Pass 2-3 volume is provisional."
+        )
     if counts["owners"] == 0:
         warnings.append("No resolved owners: Pass 3b volume is provisional.")
     if not bool(values["candidate_view_populated"]):
@@ -349,8 +353,9 @@ def _data_profile(database) -> dict[str, Any]:
 def _estimate_pass0(database, sample_size: int) -> PassEstimate:
     county = get_county_config()
     rows = list(database.execute(PENDING_PROCEEDINGS_QUERY) or [])
-    prior_rows = database.execute(
-        """
+    prior_rows = (
+        database.execute(
+            """
         SELECT DISTINCT ON (subject_key) subject_key, input_hash
         FROM meta.intelligence_inference_history
         WHERE pass_number = 0
@@ -358,7 +363,9 @@ def _estimate_pass0(database, sample_size: int) -> PassEstimate:
           AND disposition = 'accepted'
         ORDER BY subject_key, inference_id DESC
         """
-    ) or []
+        )
+        or []
+    )
     prior_hashes = {
         str(_row_value(row, "subject_key", 0)): str(_row_value(row, "input_hash", 1))
         for row in prior_rows
@@ -390,23 +397,27 @@ def _estimate_pass0(database, sample_size: int) -> PassEstimate:
         if call_eligible:
             document_content_hash = _row_value(row, "content_hash", 6)
             source_version = (
-                content_hash({
-                    "document_content_hash": document_content_hash,
-                    "raw_text_hash": content_hash(raw_text[:_MAX_RAW_TEXT_CHARS]),
-                })
+                content_hash(
+                    {
+                        "document_content_hash": document_content_hash,
+                        "raw_text_hash": content_hash(raw_text[:_MAX_RAW_TEXT_CHARS]),
+                    }
+                )
                 if isinstance(raw_text, str)
                 and len(raw_text.strip()) >= _MIN_RAW_TEXT_CHARS
                 else document_content_hash
             )
             if source_version:
-                source_hash = content_hash({
-                    "proceeding_id": _row_value(row, "id", 0),
-                    "body_name": _row_value(row, "body_name", 1),
-                    "meeting_date": _row_value(row, "meeting_date", 2),
-                    "proceeding_type": _row_value(row, "proceeding_type", 3),
-                    "document_url": document_url,
-                    "source_version": source_version,
-                })
+                source_hash = content_hash(
+                    {
+                        "proceeding_id": _row_value(row, "id", 0),
+                        "body_name": _row_value(row, "body_name", 1),
+                        "meeting_date": _row_value(row, "meeting_date", 2),
+                        "proceeding_type": _row_value(row, "proceeding_type", 3),
+                        "document_url": document_url,
+                        "source_version": source_version,
+                    }
+                )
                 input_hash = inference_input_hash(
                     source_hash,
                     requested_model=resolve_pass_model(0) or "",
@@ -445,8 +456,7 @@ def _estimate_pass0(database, sample_size: int) -> PassEstimate:
         else:
             rendered_prompt = PASS0_SYSTEM_PROMPT + prompt
             token_samples.append(
-                approximate_tokens(rendered_prompt)
-                + _PDF_FALLBACK_INPUT_TOKENS
+                approximate_tokens(rendered_prompt) + _PDF_FALLBACK_INPUT_TOKENS
             )
             runtime_token_samples.append(
                 runtime_prompt_tokens(rendered_prompt)
@@ -493,22 +503,24 @@ def _estimate_pass0(database, sample_size: int) -> PassEstimate:
     profile = KNOWN_PRICE_PROFILES.get(estimate.model or "")
     scenario_365_calls = recent_365
     scenario_730_calls = recent_730
-    estimate.details.update({
-        "last_365_days_planning_calls": scenario_365_calls,
-        "last_365_days_planning_cost": _cost(
-            profile,
-            scenario_365_calls,
-            estimate.average_input_tokens,
-            estimate.assumed_output_tokens_per_call,
-        ),
-        "last_730_days_planning_calls": scenario_730_calls,
-        "last_730_days_planning_cost": _cost(
-            profile,
-            scenario_730_calls,
-            estimate.average_input_tokens,
-            estimate.assumed_output_tokens_per_call,
-        ),
-    })
+    estimate.details.update(
+        {
+            "last_365_days_planning_calls": scenario_365_calls,
+            "last_365_days_planning_cost": _cost(
+                profile,
+                scenario_365_calls,
+                estimate.average_input_tokens,
+                estimate.assumed_output_tokens_per_call,
+            ),
+            "last_730_days_planning_calls": scenario_730_calls,
+            "last_730_days_planning_cost": _cost(
+                profile,
+                scenario_730_calls,
+                estimate.average_input_tokens,
+                estimate.assumed_output_tokens_per_call,
+            ),
+        }
+    )
     return estimate
 
 
@@ -521,8 +533,14 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
         )
     pairs = list(database.execute(CANDIDATE_CLUSTERS_QUERY) or [])
     clusters, person_only_skipped = select_pass1_clusters(build_name_clusters(pairs))
-    deferred_name_count = sum(len(cluster) > MAX_CANDIDATE_NAMES_PER_CONTEXT for cluster in clusters)
-    clusters = [cluster for cluster in clusters if len(cluster) <= MAX_CANDIDATE_NAMES_PER_CONTEXT]
+    deferred_name_count = sum(
+        len(cluster) > MAX_CANDIDATE_NAMES_PER_CONTEXT for cluster in clusters
+    )
+    clusters = [
+        cluster
+        for cluster in clusters
+        if len(cluster) <= MAX_CANDIDATE_NAMES_PER_CONTEXT
+    ]
     prior_hashes = fetch_reusable_pass_hashes(database, pass_number=1)
     units_max = len(clusters)
 
@@ -565,7 +583,9 @@ def _estimate_pass1(database, sample_size: int) -> PassEstimate:
         calls_max = units_max * trials
 
     retry_ceiling = units_max * trials * 2
-    escalation_enabled = bool(os.environ.get("COUNTYIQ_PASS1_ESCALATION_MODEL", "").strip())
+    escalation_enabled = bool(
+        os.environ.get("COUNTYIQ_PASS1_ESCALATION_MODEL", "").strip()
+    )
     if escalation_enabled:
         retry_ceiling += units_max * 2
 
@@ -605,7 +625,9 @@ def _estimate_pass2(database, sample_size: int) -> PassEstimate:
     rows = list(database.execute(PARCELS_NEEDING_VALIDATION_QUERY) or [])
     pidns = [str(_row_value(row, "pidn", 0)) for row in rows]
     prior_hashes = fetch_reusable_pass_hashes(database, pass_number=2)
-    units_min = sum(pidn not in prior_hashes for pidn in pidns) if prior_hashes else len(pidns)
+    units_min = (
+        sum(pidn not in prior_hashes for pidn in pidns) if prior_hashes else len(pidns)
+    )
     units_max = len(pidns)
     trials = max(1, int(os.environ.get("COUNTYIQ_PASS2_TRIALS", "1")))
 
@@ -654,7 +676,9 @@ def _estimate_pass3(database, sample_size: int) -> PassEstimate:
     )
     pidns = [str(_row_value(row, "pidn", 0)) for row in rows]
     prior_hashes = fetch_prior_pass_hashes(database, pass_number=3)
-    units_min = sum(pidn not in prior_hashes for pidn in pidns) if prior_hashes else len(pidns)
+    units_min = (
+        sum(pidn not in prior_hashes for pidn in pidns) if prior_hashes else len(pidns)
+    )
     units_max = len(pidns)
 
     sample = _stable_sample(pidns, sample_size, lambda pidn: pidn)
@@ -699,9 +723,10 @@ def _estimate_pass3b(database, sample_size: int) -> PassEstimate:
     token_samples = []
     runtime_token_samples = []
     for owner_ref in sample:
-        owner_rows = database.execute(
-            OWNER_PORTFOLIO_QUERY, {"owner_id": owner_ref["owner_id"]}
-        ) or []
+        owner_rows = (
+            database.execute(OWNER_PORTFOLIO_QUERY, {"owner_id": owner_ref["owner_id"]})
+            or []
+        )
         if not owner_rows:
             continue
         owner_row = owner_rows[0]
@@ -712,9 +737,9 @@ def _estimate_pass3b(database, sample_size: int) -> PassEstimate:
             "pidns": _row_value(owner_row, "pidns", 3) or [],
             "n_parcels": _row_value(owner_row, "n_parcels", 4) or 0,
         }
-        evidence_rows = database.execute(
-            PORTFOLIO_EVIDENCE_QUERY, {"pidns": owner["pidns"]}
-        ) or []
+        evidence_rows = (
+            database.execute(PORTFOLIO_EVIDENCE_QUERY, {"pidns": owner["pidns"]}) or []
+        )
         evidence = [
             {
                 "pidn": _row_value(row, "pidn", 0),
@@ -728,8 +753,8 @@ def _estimate_pass3b(database, sample_size: int) -> PassEstimate:
             }
             for row in evidence_rows
         ]
-        rendered_prompt = (
-            OWNER_ROLLUP_SYSTEM_PROMPT + build_owner_rollup_prompt(owner, evidence)
+        rendered_prompt = OWNER_ROLLUP_SYSTEM_PROMPT + build_owner_rollup_prompt(
+            owner, evidence
         )
         token_samples.append(approximate_tokens(rendered_prompt))
         runtime_token_samples.append(runtime_prompt_tokens(rendered_prompt))

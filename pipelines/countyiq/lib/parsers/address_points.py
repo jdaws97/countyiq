@@ -3,7 +3,6 @@
 Maps ArcGIS field names to staging.address_points column names.
 """
 
-
 FIELD_MAP = {
     "Site_NGUID": "site_nguid",
     "Add_Number": "add_number",

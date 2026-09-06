@@ -63,7 +63,9 @@ def downgrade() -> None:
         sa.Column("prev_record_count", sa.Integer),
         sa.Column("error_message", sa.Text),
         sa.Column("next_scheduled_run", sa.DateTime(timezone=True)),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
         schema="meta",
     )
     op.create_check_constraint(
@@ -123,7 +125,9 @@ def downgrade() -> None:
         sa.Column("check_name", sa.Text, nullable=False),
         sa.Column("passed", sa.Boolean, nullable=False),
         sa.Column("details", sa.Text),
-        sa.Column("checked_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
+        sa.Column(
+            "checked_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
         schema="meta",
     )
     op.create_check_constraint(

@@ -38,7 +38,13 @@ def zipcodes_arcgis(
 ) -> MaterializeResult:
     """Fetch zip code polygons from GIS, upsert to staging.zipcodes."""
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="zipcodes_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="zipcodes_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
 
@@ -64,7 +70,9 @@ def zipcodes_arcgis(
 
     try:
         # Clear and reload (small table, full refresh is fine)
-        cur.execute("UPDATE staging.zipcodes SET valid_to = NOW() WHERE valid_to IS NULL")
+        cur.execute(
+            "UPDATE staging.zipcodes SET valid_to = NOW() WHERE valid_to IS NULL"
+        )
         expired = cur.rowcount
 
         inserted = 0
@@ -76,10 +84,13 @@ def zipcodes_arcgis(
 
             if geom and "rings" in geom:
                 geojson = json.dumps({"type": "Polygon", "coordinates": geom["rings"]})
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO staging.zipcodes (zipcode, po_name, source_url, geom)
                     VALUES (%s, %s, %s, ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326))
-                """, (zipcode, po_name, county.arcgis_zipcodes_url, geojson))
+                """,
+                    (zipcode, po_name, county.arcgis_zipcodes_url, geojson),
+                )
                 inserted += 1
 
         conn.commit()

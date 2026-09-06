@@ -138,7 +138,9 @@ RECENT PROCEEDINGS:
 
 Write the corridor narrative. Return ONLY the JSON object."""
 
-CORRIDOR_SYSTEM_PROMPT = _CORRIDOR_SYSTEM_TEMPLATE.format(county_context=_COUNTY_CONTEXT)
+CORRIDOR_SYSTEM_PROMPT = _CORRIDOR_SYSTEM_TEMPLATE.format(
+    county_context=_COUNTY_CONTEXT
+)
 
 
 def _format_corridor_parcels(parcels: list[dict]) -> str:
@@ -288,7 +290,9 @@ DEED HISTORY:
 
 Write the portfolio narrative. Return ONLY the JSON object."""
 
-PORTFOLIO_SYSTEM_PROMPT = _PORTFOLIO_SYSTEM_TEMPLATE.format(county_context=_COUNTY_CONTEXT)
+PORTFOLIO_SYSTEM_PROMPT = _PORTFOLIO_SYSTEM_TEMPLATE.format(
+    county_context=_COUNTY_CONTEXT
+)
 
 
 def _format_portfolio_briefs(briefs: list[dict]) -> str:
@@ -444,7 +448,9 @@ DISTRESS SUMMARY (from tax claims):
 
 Write the municipality narrative. Return ONLY the JSON object."""
 
-MUNICIPAL_SYSTEM_PROMPT = _MUNICIPAL_SYSTEM_TEMPLATE.format(county_context=_COUNTY_CONTEXT)
+MUNICIPAL_SYSTEM_PROMPT = _MUNICIPAL_SYSTEM_TEMPLATE.format(
+    county_context=_COUNTY_CONTEXT
+)
 
 
 def _format_assessment_distribution(data: dict) -> str:
@@ -610,7 +616,9 @@ DISTRESS_USER_TEMPLATE = """DISTRESS CHANGE DATA:
 
 Write the distress migration narrative. Return ONLY the JSON object."""
 
-DISTRESS_SYSTEM_PROMPT = _DISTRESS_SYSTEM_TEMPLATE.format(county_context=_COUNTY_CONTEXT)
+DISTRESS_SYSTEM_PROMPT = _DISTRESS_SYSTEM_TEMPLATE.format(
+    county_context=_COUNTY_CONTEXT
+)
 
 
 def build_distress_prompt(data: dict) -> str:
@@ -639,6 +647,7 @@ def build_distress_prompt(data: dict) -> str:
 # =============================================================================
 # SHARED: OUTPUT PARSER
 # =============================================================================
+
 
 def parse_narrative_output(output: object) -> dict:
     """Validate and normalize LLM narrative output.

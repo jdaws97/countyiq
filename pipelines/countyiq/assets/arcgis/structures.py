@@ -50,7 +50,13 @@ def structures_arcgis(
 ) -> MaterializeResult:
     """Stream building footprints page-by-page into DB. Memory-efficient."""
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="structures_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="structures_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
     context.log.info(f"Querying ArcGIS structures: {county.arcgis_structures_url}")
@@ -71,14 +77,16 @@ def structures_arcgis(
 
     try:
         cur.execute("DROP TABLE IF EXISTS _tmp_structures")
-        cur.execute("CREATE TEMP TABLE _tmp_structures (LIKE staging.structures INCLUDING DEFAULTS)")
+        cur.execute(
+            "CREATE TEMP TABLE _tmp_structures (LIKE staging.structures INCLUDING DEFAULTS)"
+        )
 
         # Stream pages into temp table with geometry
         total_staged = 0
         raw_feature_count = 0
         insert_sql = f"""
-            INSERT INTO _tmp_structures ({', '.join(ALL_COLUMNS)}, geom)
-            VALUES ({', '.join(['%s'] * len(ALL_COLUMNS))},
+            INSERT INTO _tmp_structures ({", ".join(ALL_COLUMNS)}, geom)
+            VALUES ({", ".join(["%s"] * len(ALL_COLUMNS))},
                     CASE WHEN %s IS NOT NULL
                          THEN ST_SetSRID(ST_Multi(ST_GeomFromGeoJSON(%s)), 4326)
                          ELSE NULL END)
@@ -128,7 +136,9 @@ def structures_arcgis(
         context.log.info("Temp table indexed")
 
         if total_staged < county.arcgis_structures_min_records:
-            raise RuntimeError(f"Only {total_staged} structures (expected >= {county.arcgis_structures_min_records})")
+            raise RuntimeError(
+                f"Only {total_staged} structures (expected >= {county.arcgis_structures_min_records})"
+            )
 
         # ── DATA LOSS GUARD ──────────────────────────────────────────
         # Mirrors the guard in lib/scd.py:scd2_upsert_geom — refuse to
@@ -160,7 +170,9 @@ def structures_arcgis(
 
         # SCD2 expire + insert
         key_join = "c.objectid = t.objectid"
-        value_diff = " OR ".join(f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS)
+        value_diff = " OR ".join(
+            f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in VALUE_COLUMNS
+        )
 
         cur.execute(f"""
             UPDATE staging.structures c SET valid_to = NOW()
@@ -172,10 +184,10 @@ def structures_arcgis(
         """)
         expired = cur.rowcount
 
-        col_list = ', '.join(ALL_COLUMNS)
+        col_list = ", ".join(ALL_COLUMNS)
         cur.execute(f"""
             INSERT INTO staging.structures ({col_list}, geom, valid_from)
-            SELECT {', '.join(f't.{c}' for c in ALL_COLUMNS)}, t.geom, NOW()
+            SELECT {", ".join(f"t.{c}" for c in ALL_COLUMNS)}, t.geom, NOW()
             FROM _tmp_structures t
             WHERE NOT EXISTS (
                 SELECT 1 FROM staging.structures c WHERE c.valid_to IS NULL AND {key_join}
@@ -228,8 +240,18 @@ def structures_schema_drift(database: DatabaseResource) -> AssetCheckResult:
         resp.raise_for_status()
         actual_fields = {f["name"] for f in resp.json().get("fields", [])}
         missing = EXPECTED_FIELDS - actual_fields
-        return AssetCheckResult(passed=len(missing) == 0, severity=AssetCheckSeverity.WARN,
-                                metadata={"missing_fields": MetadataValue.text(str(missing) if missing else "none")})
+        return AssetCheckResult(
+            passed=len(missing) == 0,
+            severity=AssetCheckSeverity.WARN,
+            metadata={
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                )
+            },
+        )
     except requests.exceptions.RequestException as e:
-        return AssetCheckResult(passed=False, severity=AssetCheckSeverity.WARN,
-                                metadata={"error": MetadataValue.text(f"Network error: {e}")})
+        return AssetCheckResult(
+            passed=False,
+            severity=AssetCheckSeverity.WARN,
+            metadata={"error": MetadataValue.text(f"Network error: {e}")},
+        )

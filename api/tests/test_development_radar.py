@@ -116,7 +116,11 @@ def test_labels_do_not_overclaim_investor_or_assemblage_intent():
     }
     contiguous = {"evidence": {"contiguous_same_owner_parcels": 3}}
 
-    assert "organization-name buyer" in format_signal_label("ownership_change", ownership)
+    assert "organization-name buyer" in format_signal_label(
+        "ownership_change", ownership
+    )
     assert "Investor" not in format_signal_label("ownership_change", ownership)
-    assert "Same recorded owner holds" in format_signal_label("entity_assemblage", contiguous)
+    assert "Same recorded owner holds" in format_signal_label(
+        "entity_assemblage", contiguous
+    )
     assert "assembling" not in format_signal_label("entity_assemblage", contiguous)

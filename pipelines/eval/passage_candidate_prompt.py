@@ -1,4 +1,5 @@
 """Offline passage-selection prompt; independently versioned from production."""
+
 import hashlib
 import json
 from eval.passage_extraction_contract import CANDIDATE_SCHEMA
@@ -25,5 +26,11 @@ application_ids must be exact printed docket/application identifiers, including 
 
 Use neutral what_happened text stating the actual action and scope. why_it_matters and what_happens_next must have their own support when supplied; unsupported speculation stays null. Confidence is high, medium or low and does not replace source support. Return an empty extractions array when no relevant supported matter exists.
 """
-SYSTEM_PROMPT = _INSTRUCTIONS + "\nJSON schema:\n" + json.dumps(CANDIDATE_SCHEMA, sort_keys=True, separators=(",", ":"))
-PROMPT_VERSION = "passage-candidate-" + hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:16]
+SYSTEM_PROMPT = (
+    _INSTRUCTIONS
+    + "\nJSON schema:\n"
+    + json.dumps(CANDIDATE_SCHEMA, sort_keys=True, separators=(",", ":"))
+)
+PROMPT_VERSION = (
+    "passage-candidate-" + hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:16]
+)

@@ -38,7 +38,9 @@ export default function LayerToggle({ layers, onToggle, availability = {} }: Lay
       data-expanded={expanded}
       aria-label="Map layers"
       onKeyDown={(event) => {
-        if (event.key === 'Escape') setExpanded(false)
+        if (event.key === 'Escape') {
+          setExpanded(false)
+        }
       }}
     >
       <button
@@ -49,7 +51,9 @@ export default function LayerToggle({ layers, onToggle, availability = {} }: Lay
         onClick={() => setExpanded((current) => !current)}
       >
         <span>Map layers</span>
-        <span>{layers.filter((layer) => layer.enabled).length} on · {expanded ? 'close' : 'configure'}</span>
+        <span>
+          {layers.filter((layer) => layer.enabled).length} on · {expanded ? 'close' : 'configure'}
+        </span>
       </button>
 
       <div id="map-layer-options" className="layer-toggle-content">
@@ -59,11 +63,7 @@ export default function LayerToggle({ layers, onToggle, availability = {} }: Lay
           const unavailable = layerStatus === 'error'
 
           return (
-            <label
-              key={layer.id}
-              className="layer-toggle-option"
-              data-unavailable={unavailable}
-            >
+            <label key={layer.id} className="layer-toggle-option" data-unavailable={unavailable}>
               <input
                 className="layer-toggle-checkbox"
                 type="checkbox"

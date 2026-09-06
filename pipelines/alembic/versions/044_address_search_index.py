@@ -32,6 +32,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP INDEX IF EXISTS staging.idx_address_points_search_trgm"
-    )
+    op.execute("DROP INDEX IF EXISTS staging.idx_address_points_search_trgm")

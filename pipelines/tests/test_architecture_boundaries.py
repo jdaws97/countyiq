@@ -71,13 +71,12 @@ def test_compose_enforces_credentials_networks_and_versioned_images() -> None:
     assert set(pipeline["networks"]) == {"database", "pipeline-egress"}
 
     database_url_services = {
-        name for name, service in services.items()
+        name
+        for name, service in services.items()
         if "DATABASE_URL" in (service.get("environment") or {})
     }
     assert database_url_services == {"migrate"}
-    assert compose["volumes"]["postgres-data"]["name"] == (
-        "countyiq-postgres-data"
-    )
+    assert compose["volumes"]["postgres-data"]["name"] == ("countyiq-postgres-data")
     for service in services.values():
         assert service["logging"]["driver"] == "json-file"
         assert service["logging"]["options"] == {
@@ -88,7 +87,7 @@ def test_compose_enforces_credentials_networks_and_versioned_images() -> None:
 
 def test_deploy_requires_quiesced_verified_backup_before_migration() -> None:
     deploy = (REPO_ROOT / "docker/deploy.sh").read_text(encoding="utf-8")
-    stop_position = deploy.index('stop -t 60 api dagster-webserver dagster-daemon')
+    stop_position = deploy.index("stop -t 60 api dagster-webserver dagster-daemon")
     backup_position = deploy.index('"$SCRIPT_DIR/backup.sh" --reason pre-deploy')
     migration_position = deploy.rindex('"${COMPOSE[@]}" run --rm migrate')
 
@@ -153,8 +152,7 @@ def test_production_environment_validation_fails_closed() -> None:
         "COUNTYIQ_BACKUP_R2_BUCKET": "countyiq-backups",
     }
     command = (
-        "source docker/lib/operations.sh; "
-        "countyiq_validate_production_environment"
+        "source docker/lib/operations.sh; countyiq_validate_production_environment"
     )
     valid = subprocess.run(
         ["bash", "-c", command],
@@ -183,17 +181,15 @@ def test_restore_drill_targets_only_disposable_sibling_databases() -> None:
     restore = (REPO_ROOT / "docker/restore-drill.sh").read_text(encoding="utf-8")
     assert 'PRIMARY_DRILL_DATABASE="${PRIMARY_DATABASE}_restore_drill"' in restore
     assert 'DAGSTER_DRILL_DATABASE="${DAGSTER_DATABASE}_restore_drill"' in restore
-    assert 'countyiq_validate_restore_targets' in restore
-    create_position = restore.index('docker exec countyiq-postgres createdb')
+    assert "countyiq_validate_restore_targets" in restore
+    create_position = restore.index("docker exec countyiq-postgres createdb")
     assert restore.index('CREATED_DRILL_DATABASE="$drill_database"') > create_position
     assert '"$CREATED_DRILL_DATABASE"' in restore
     assert "pg_restore --clean" not in restore
 
 
 def test_local_backfill_export_is_fail_closed() -> None:
-    export = (REPO_ROOT / "docker/export-local-backfill.sh").read_text(
-        encoding="utf-8"
-    )
+    export = (REPO_ROOT / "docker/export-local-backfill.sh").read_text(encoding="utf-8")
     verify = (REPO_ROOT / "docker/verify-local-backfill-export.sh").read_text(
         encoding="utf-8"
     )

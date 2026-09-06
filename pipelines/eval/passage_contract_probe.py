@@ -5,6 +5,7 @@ Usage: from pipelines, .venv/bin/python -m eval.passage_contract_probe
   --output ../output/passage-contract-probe.json
 No database access, provider calls, output repairs, or publication.
 """
+
 import argparse
 import hashlib
 import json
@@ -24,7 +25,10 @@ def probe(report_path: Path) -> dict:
             actual = hashlib.sha256((base / filename).read_bytes()).hexdigest()
             if actual != expected:
                 raise ValueError(f"Archived artifact hash mismatch: {base / filename}")
-        sources = {str(row["id"]): row for row in json.loads((base / "sources.json").read_text())}
+        sources = {
+            str(row["id"]): row
+            for row in json.loads((base / "sources.json").read_text())
+        }
         responses = json.loads((base / "results.json").read_text())["responses"]
         for source_id, response in responses.items():
             text = sources[str(source_id)]["raw_text"]
@@ -41,23 +45,48 @@ def probe(report_path: Path) -> dict:
                     if position < 0:
                         checks.append({"mapped": False})
                         continue
-                    start, end = offsets[position], offsets[position + len(needle) - 1] + 1
-                    ids = [p.passage_id for p in document.passages if p.start < end and p.end > start]
+                    start, end = (
+                        offsets[position],
+                        offsets[position + len(needle) - 1] + 1,
+                    )
+                    ids = [
+                        p.passage_id
+                        for p in document.passages
+                        if p.start < end and p.end > start
+                    ]
                     selected = document.resolve(document.source_sha256, ids)
                     assert needle in "".join("".join(p.text.split()) for p in selected)
-                    checks.append({"mapped": True, "passage_ids": ids,
-                                   "quote_characters": len(quote), "id_array_characters": len(json.dumps(ids))})
-            documents.append({"source_id": source_id, "batch": str(base.relative_to(REPO_ROOT)),
-                              "source_sha256": document.source_sha256,
-                              "passages": len(document.passages), "checks": checks})
+                    checks.append(
+                        {
+                            "mapped": True,
+                            "passage_ids": ids,
+                            "quote_characters": len(quote),
+                            "id_array_characters": len(json.dumps(ids)),
+                        }
+                    )
+            documents.append(
+                {
+                    "source_id": source_id,
+                    "batch": str(base.relative_to(REPO_ROOT)),
+                    "source_sha256": document.source_sha256,
+                    "passages": len(document.passages),
+                    "checks": checks,
+                }
+            )
     checks = [check for document in documents for check in document["checks"]]
     mapped = [check for check in checks if check["mapped"]]
-    return {"scope": "Offline format feasibility only; membership is not entailment; character counts are not token or cost estimates.",
-            "summary": {"documents": len(documents), "passages": sum(d["passages"] for d in documents),
-                        "mapped_quotes": len(mapped), "unmapped_quotes": len(checks) - len(mapped),
-                        "mapped_quote_characters": sum(c["quote_characters"] for c in mapped),
-                        "id_array_characters": sum(c["id_array_characters"] for c in mapped)},
-            "documents": documents}
+    return {
+        "scope": "Offline format feasibility only; membership is not entailment; character counts are not token or cost estimates.",
+        "summary": {
+            "documents": len(documents),
+            "passages": sum(d["passages"] for d in documents),
+            "mapped_quotes": len(mapped),
+            "unmapped_quotes": len(checks) - len(mapped),
+            "mapped_quote_characters": sum(c["quote_characters"] for c in mapped),
+            "id_array_characters": sum(c["id_array_characters"] for c in mapped),
+        },
+        "documents": documents,
+    }
 
 
 def main():

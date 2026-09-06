@@ -4,6 +4,7 @@ Revision ID: 007
 Revises: 006
 Create Date: 2026-03-29
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -43,15 +44,33 @@ def upgrade() -> None:
         sa.Column("risk_memo", sa.Text, nullable=False),
         sa.Column("alert_examples", JSONB, nullable=False, server_default="[]"),
         sa.Column("product_examples", JSONB, nullable=False, server_default="[]"),
-        sa.Column("monitor_interval_hours", sa.Integer, nullable=False, server_default="24"),
+        sa.Column(
+            "monitor_interval_hours", sa.Integer, nullable=False, server_default="24"
+        ),
         sa.Column("classification_confidence", sa.Float, nullable=False),
         sa.Column("metadata", JSONB, nullable=False, server_default="{}"),
-        sa.Column("monitored", sa.Boolean, nullable=False, server_default=sa.text("FALSE")),
-        sa.Column("first_discovered_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
-        sa.Column("last_seen_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
-        sa.CheckConstraint("value_score >= 0 AND value_score <= 100", name="ck_source_candidates_value_score"),
-        sa.CheckConstraint("risk_level IN ('low', 'medium', 'high')", name="ck_source_candidates_risk_level"),
+        sa.Column(
+            "monitored", sa.Boolean, nullable=False, server_default=sa.text("FALSE")
+        ),
+        sa.Column(
+            "first_discovered_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "last_seen_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
+        sa.CheckConstraint(
+            "value_score >= 0 AND value_score <= 100",
+            name="ck_source_candidates_value_score",
+        ),
+        sa.CheckConstraint(
+            "risk_level IN ('low', 'medium', 'high')",
+            name="ck_source_candidates_risk_level",
+        ),
         sa.CheckConstraint(
             "discovery_method IN ('seed', 'link_crawl', 'manual', 'monitor')",
             name="ck_source_candidates_discovery_method",
@@ -62,8 +81,18 @@ def upgrade() -> None:
         ),
         schema="meta",
     )
-    op.create_index("idx_source_candidates_county_score", "source_candidates", ["county_key", "value_score"], schema="meta")
-    op.create_index("idx_source_candidates_county_type", "source_candidates", ["county_key", "source_type"], schema="meta")
+    op.create_index(
+        "idx_source_candidates_county_score",
+        "source_candidates",
+        ["county_key", "value_score"],
+        schema="meta",
+    )
+    op.create_index(
+        "idx_source_candidates_county_type",
+        "source_candidates",
+        ["county_key", "source_type"],
+        schema="meta",
+    )
 
     op.create_table(
         "source_observations",
@@ -82,16 +111,31 @@ def upgrade() -> None:
         sa.Column("last_modified", sa.Text),
         sa.Column("notes", sa.Text),
         sa.Column("metadata", JSONB, nullable=False, server_default="{}"),
-        sa.Column("checked_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
-        sa.CheckConstraint("probe_status IN ('ok', 'redirect', 'blocked', 'error')", name="ck_source_observations_probe_status"),
+        sa.Column(
+            "checked_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
+        sa.CheckConstraint(
+            "probe_status IN ('ok', 'redirect', 'blocked', 'error')",
+            name="ck_source_observations_probe_status",
+        ),
         sa.CheckConstraint(
             "extraction_method IN ('static_http_fetch', 'crawler_static_parser', 'browser_automation_fallback')",
             name="ck_source_observations_extraction_method",
         ),
         schema="meta",
     )
-    op.create_index("idx_source_observations_source_checked", "source_observations", ["source_key", "checked_at"], schema="meta")
-    op.create_index("idx_source_observations_county_checked", "source_observations", ["county_key", "checked_at"], schema="meta")
+    op.create_index(
+        "idx_source_observations_source_checked",
+        "source_observations",
+        ["source_key", "checked_at"],
+        schema="meta",
+    )
+    op.create_index(
+        "idx_source_observations_county_checked",
+        "source_observations",
+        ["county_key", "checked_at"],
+        schema="meta",
+    )
 
     op.create_table(
         "source_registry",
@@ -114,14 +158,24 @@ def upgrade() -> None:
         sa.Column("last_status_code", sa.Integer),
         sa.Column("last_probe_status", sa.Text),
         sa.Column("last_content_hash", sa.Text),
-        sa.Column("promoted_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
+        sa.Column(
+            "promoted_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
         sa.Column("last_checked_at", sa.DateTime(timezone=True)),
         sa.Column("last_changed_at", sa.DateTime(timezone=True)),
         sa.Column("active", sa.Boolean, nullable=False, server_default=sa.text("TRUE")),
-        sa.Column("monitor_interval_hours", sa.Integer, nullable=False, server_default="24"),
+        sa.Column(
+            "monitor_interval_hours", sa.Integer, nullable=False, server_default="24"
+        ),
         sa.Column("metadata", JSONB, nullable=False, server_default="{}"),
-        sa.CheckConstraint("value_score >= 0 AND value_score <= 100", name="ck_source_registry_value_score"),
-        sa.CheckConstraint("risk_level IN ('low', 'medium', 'high')", name="ck_source_registry_risk_level"),
+        sa.CheckConstraint(
+            "value_score >= 0 AND value_score <= 100",
+            name="ck_source_registry_value_score",
+        ),
+        sa.CheckConstraint(
+            "risk_level IN ('low', 'medium', 'high')",
+            name="ck_source_registry_risk_level",
+        ),
         sa.CheckConstraint(
             "health_status IN ('healthy', 'changed', 'degraded', 'blocked', 'error')",
             name="ck_source_registry_health_status",
@@ -132,8 +186,18 @@ def upgrade() -> None:
         ),
         schema="meta",
     )
-    op.create_index("idx_source_registry_county_score", "source_registry", ["county_key", "value_score"], schema="meta")
-    op.create_index("idx_source_registry_health", "source_registry", ["county_key", "health_status"], schema="meta")
+    op.create_index(
+        "idx_source_registry_county_score",
+        "source_registry",
+        ["county_key", "value_score"],
+        schema="meta",
+    )
+    op.create_index(
+        "idx_source_registry_health",
+        "source_registry",
+        ["county_key", "health_status"],
+        schema="meta",
+    )
 
 
 def downgrade() -> None:

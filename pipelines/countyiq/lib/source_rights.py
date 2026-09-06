@@ -450,7 +450,9 @@ def authorize_municipality_sources(
             reason = f"method {acquisition_method!r} is not allowlisted"
         elif review_due_on < date.today():
             allowed = False
-            reason = f"municipality source review expired on {review_due_on.isoformat()}"
+            reason = (
+                f"municipality source review expired on {review_due_on.isoformat()}"
+            )
 
         database.execute(
             """

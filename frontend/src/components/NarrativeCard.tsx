@@ -6,10 +6,18 @@ import { formatLabel, formatShortDate } from '../lib/format'
 import type { CountyNarrative } from '../types/api'
 
 function narrativeTypeColor(type: string): string {
-  if (type === 'corridor') return 'var(--accent-blue)'
-  if (type === 'distress') return 'var(--accent-red)'
-  if (type === 'municipal') return 'var(--accent-green)'
-  if (type === 'portfolio') return 'var(--accent-gold)'
+  if (type === 'corridor') {
+    return 'var(--accent-blue)'
+  }
+  if (type === 'distress') {
+    return 'var(--accent-red)'
+  }
+  if (type === 'municipal') {
+    return 'var(--accent-green)'
+  }
+  if (type === 'portfolio') {
+    return 'var(--accent-gold)'
+  }
   return 'var(--accent-cyan)'
 }
 
@@ -75,7 +83,12 @@ export default function NarrativeCard({
       </div>
 
       {showAffectedPidns && pidnsToShow.length > 0 && (
-        <div style={{ marginBottom: narrative.key_entities.length > 0 || narrative.citations.length > 0 ? 12 : 0 }}>
+        <div
+          style={{
+            marginBottom:
+              narrative.key_entities.length > 0 || narrative.citations.length > 0 ? 12 : 0,
+          }}
+        >
           <SectionLabel>Affected Parcels</SectionLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {pidnsToShow.map((pidn) => (
@@ -96,7 +109,9 @@ export default function NarrativeCard({
               </Link>
             ))}
             {extraPidns > 0 && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+              <span
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}
+              >
                 +{extraPidns} more
               </span>
             )}
@@ -109,7 +124,9 @@ export default function NarrativeCard({
           <SectionLabel>Key Entities</SectionLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {narrative.key_entities.map((entity) => (
-              <Badge key={entity} color="var(--accent-green)">{entity}</Badge>
+              <Badge key={entity} color="var(--accent-green)">
+                {entity}
+              </Badge>
             ))}
           </div>
         </div>
@@ -120,7 +137,9 @@ export default function NarrativeCard({
           <SectionLabel>Citations</SectionLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {narrative.citations.map((citation) => {
-              const index = (narrative.citation_evidence ?? []).findIndex((item) => item.citation_key.toLowerCase() === `signal:${citation}`.toLowerCase())
+              const index = (narrative.citation_evidence ?? []).findIndex(
+                (item) => item.citation_key.toLowerCase() === `signal:${citation}`.toLowerCase(),
+              )
               const receipt = index >= 0 ? narrative.citation_evidence[index] : null
               return receipt ? (
                 <a
@@ -129,10 +148,14 @@ export default function NarrativeCard({
                   onClick={() => openEvidenceReceipt(receipt.evidence_id)}
                   style={{ textDecoration: 'none' }}
                 >
-                  <Badge color="var(--accent-cyan)">E{index + 1} · {formatLabel(citation)}</Badge>
+                  <Badge color="var(--accent-cyan)">
+                    E{index + 1} · {formatLabel(citation)}
+                  </Badge>
                 </a>
               ) : (
-                <Badge key={citation} color="var(--text-muted)">{formatLabel(citation)}</Badge>
+                <Badge key={citation} color="var(--text-muted)">
+                  {formatLabel(citation)}
+                </Badge>
               )
             })}
           </div>

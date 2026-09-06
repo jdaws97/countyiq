@@ -24,7 +24,9 @@ DATE_FIELDS = {
 }
 
 # Fields to exclude from JSONB overflow (already mapped above + geometry/OID)
-EXCLUDE_FROM_DATA = set(FIELD_MAP.keys()) | set(DATE_FIELDS.keys()) | {"OBJECTID", "Shape"}
+EXCLUDE_FROM_DATA = (
+    set(FIELD_MAP.keys()) | set(DATE_FIELDS.keys()) | {"OBJECTID", "Shape"}
+)
 
 
 def _parse_date(val) -> date | None:

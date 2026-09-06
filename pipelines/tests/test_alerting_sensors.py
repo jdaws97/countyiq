@@ -53,12 +53,14 @@ def test_record_outcome_is_best_effort_when_application_database_is_down() -> No
 
 def test_integrity_alert_prioritizes_projection_mismatch() -> None:
     database = Mock()
-    database.execute.return_value = [{
-        "unresolved_contradiction_count": 2,
-        "oldest_unresolved_at": datetime(2026, 8, 31, 11, tzinfo=UTC),
-        "unlinked_projection_count": 0,
-        "projection_mismatch_count": 1,
-    }]
+    database.execute.return_value = [
+        {
+            "unresolved_contradiction_count": 2,
+            "oldest_unresolved_at": datetime(2026, 8, 31, 11, tzinfo=UTC),
+            "unlinked_projection_count": 0,
+            "projection_mismatch_count": 1,
+        }
+    ]
 
     severity, message, state = _integrity_alert(
         database, now=datetime(2026, 8, 31, 12, tzinfo=UTC)
@@ -71,12 +73,14 @@ def test_integrity_alert_prioritizes_projection_mismatch() -> None:
 
 def test_integrity_alert_warns_for_fresh_review_queue() -> None:
     database = Mock()
-    database.execute.return_value = [{
-        "unresolved_contradiction_count": 1,
-        "oldest_unresolved_at": datetime(2026, 8, 31, 11, tzinfo=UTC),
-        "unlinked_projection_count": 0,
-        "projection_mismatch_count": 0,
-    }]
+    database.execute.return_value = [
+        {
+            "unresolved_contradiction_count": 1,
+            "oldest_unresolved_at": datetime(2026, 8, 31, 11, tzinfo=UTC),
+            "unlinked_projection_count": 0,
+            "projection_mismatch_count": 0,
+        }
+    ]
 
     severity, message, state = _integrity_alert(
         database, now=datetime(2026, 8, 31, 12, tzinfo=UTC)
@@ -90,15 +94,17 @@ def test_integrity_alert_warns_for_fresh_review_queue() -> None:
 def test_integrity_alert_warns_for_recent_validation_rejection() -> None:
     rejected_at = datetime(2026, 8, 31, 11, tzinfo=UTC)
     database = Mock()
-    database.execute.return_value = [{
-        "unresolved_contradiction_count": 0,
-        "oldest_unresolved_at": None,
-        "unlinked_projection_count": 0,
-        "projection_mismatch_count": 0,
-        "rejection_count": 3,
-        "rejections_last_24h": 1,
-        "latest_rejection_at": rejected_at,
-    }]
+    database.execute.return_value = [
+        {
+            "unresolved_contradiction_count": 0,
+            "oldest_unresolved_at": None,
+            "unlinked_projection_count": 0,
+            "projection_mismatch_count": 0,
+            "rejection_count": 3,
+            "rejections_last_24h": 1,
+            "latest_rejection_at": rejected_at,
+        }
+    ]
 
     severity, message, state = _integrity_alert(
         database, now=datetime(2026, 8, 31, 12, tzinfo=UTC)

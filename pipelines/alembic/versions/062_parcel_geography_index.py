@@ -1,4 +1,5 @@
 """Index meter-based proximity without an inaccurate degree prefilter."""
+
 from alembic import op
 
 revision = "062"

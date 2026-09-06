@@ -9,7 +9,9 @@ from countyiq.resources.database import DatabaseResource
 def test_keyword_connection_to_live_database_is_refused(monkeypatch) -> None:
     monkeypatch.delenv("COUNTYIQ_ALLOW_LIVE_DB_TESTS", raising=False)
     with pytest.raises(RuntimeError, match="live 'countyiq' database"):
-        psycopg2.connect(host="localhost", port=1, dbname="countyiq", user="x", password="y")
+        psycopg2.connect(
+            host="localhost", port=1, dbname="countyiq", user="x", password="y"
+        )
 
 
 def test_dsn_connection_to_live_database_is_refused(monkeypatch) -> None:
@@ -34,6 +36,10 @@ def test_test_database_name_passes_through(monkeypatch) -> None:
     # which proves the guard let the call through instead of refusing it.
     with pytest.raises(psycopg2.OperationalError):
         psycopg2.connect(
-            host="127.0.0.1", port=1, dbname="countyiq_test", user="x", password="y",
+            host="127.0.0.1",
+            port=1,
+            dbname="countyiq_test",
+            user="x",
+            password="y",
             connect_timeout=1,
         )

@@ -7,12 +7,22 @@ from countyiq.lib.parcel_events import TRACKED_FIELDS, classify_parcel_change
 
 def _base(**overrides) -> dict:
     row = {
-        "deed_bk": "2456", "deed_pg": "0812", "saledt": "15-MAR-2020",
-        "price": "250000", "owner_full": "SMITH JOHN", "prev_owner": "DOE JANE",
+        "deed_bk": "2456",
+        "deed_pg": "0812",
+        "saledt": "15-MAR-2020",
+        "price": "250000",
+        "owner_full": "SMITH JOHN",
+        "prev_owner": "DOE JANE",
         "mail_addr_full": "10 MAIN ST YORK PA 17401",
-        "aprland": "40000", "aprbldg": "160000", "aprtotal": "200000",
-        "yrblt": "1988", "res_living_area": "1800", "num_stories": "2",
-        "comm_struc": None, "comm_year_built": None, "comm_building_sq_ft": None,
+        "aprland": "40000",
+        "aprbldg": "160000",
+        "aprtotal": "200000",
+        "yrblt": "1988",
+        "res_living_area": "1800",
+        "num_stories": "2",
+        "comm_struc": None,
+        "comm_year_built": None,
+        "comm_building_sq_ft": None,
     }
     row.update(overrides)
     return row
@@ -25,8 +35,12 @@ def test_no_change_yields_no_events():
 def test_deed_and_owner_change_is_confirmed_transfer():
     old = _base()
     new = _base(
-        deed_bk="2701", deed_pg="0033", saledt="02-JUN-2026", price="410000",
-        owner_full="YORK HOLDINGS LLC", prev_owner="SMITH JOHN",
+        deed_bk="2701",
+        deed_pg="0033",
+        saledt="02-JUN-2026",
+        price="410000",
+        owner_full="YORK HOLDINGS LLC",
+        prev_owner="SMITH JOHN",
     )
     events = classify_parcel_change(old, new)
     transfers = [e for e in events if e["event_type"] == "transfer"]
@@ -63,8 +77,10 @@ def test_value_change_is_confirmed_fact():
 def test_renovation_pattern_requires_no_transfer():
     old = _base()
     new = _base(
-        aprbldg="175000", aprtotal="215000",
-        deed_bk="2701", owner_full="FLIP LLC",
+        aprbldg="175000",
+        aprtotal="215000",
+        deed_bk="2701",
+        owner_full="FLIP LLC",
     )
     events = classify_parcel_change(old, new)
     value = next(e for e in events if e["event_type"] == "value_change")
@@ -91,7 +107,10 @@ def test_structure_change_alone():
         _base(), _base(comm_struc="WH1", comm_building_sq_ft="52000")
     )
     assert [e["event_type"] for e in events] == ["structure_change"]
-    assert set(events[0]["evidence"]["changed"]) == {"comm_struc", "comm_building_sq_ft"}
+    assert set(events[0]["evidence"]["changed"]) == {
+        "comm_struc",
+        "comm_building_sq_ft",
+    }
 
 
 def test_whitespace_and_none_equivalence_is_not_a_change():

@@ -96,7 +96,8 @@ def test_york_proceeding_coverage_counts_sources_not_municipalities():
     governing_body_municipalities = {
         municipality_name_from_body(body_name)
         for body_name, _, proceeding_type in entries
-        if proceeding_type in {
+        if proceeding_type
+        in {
             "board_of_commissioners",
             "board_of_supervisors",
             "borough_council",
@@ -140,7 +141,9 @@ municipality_websites = [
     assert loaded["adams"].name == "Adams County"
     assert loaded["adams"].penndot_projects_layers == (1, 4)
     assert loaded["adams"].soda_datasets[0][2] == "Adams"
-    assert loaded["adams"].municipality_websites[0][0] == "Gettysburg Planning Commission"
+    assert (
+        loaded["adams"].municipality_websites[0][0] == "Gettysburg Planning Commission"
+    )
 
 
 def test_county_manifest_rejects_unknown_fields(tmp_path: Path):
@@ -161,7 +164,9 @@ invented_source = "nope"
 
 
 @pytest.mark.parametrize("directory", [None, "", "  "])
-def test_optional_manifest_directory_does_not_scan_working_directory(tmp_path: Path, directory):
+def test_optional_manifest_directory_does_not_scan_working_directory(
+    tmp_path: Path, directory
+):
     # Compose supplies an empty value for this optional setting. An unrelated
     # TOML file in the process directory must not prevent Dagster startup.
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "not-a-county"\n')
@@ -170,10 +175,17 @@ def test_optional_manifest_directory_does_not_scan_working_directory(tmp_path: P
     if directory is not None:
         environment["COUNTYIQ_COUNTY_CONFIG_DIR"] = directory
     result = subprocess.run(
-        [sys.executable, "-c",
-         "from countyiq.lib.county_config import get_county_config; "
-         "assert get_county_config('york').name == 'York County'"],
-        cwd=tmp_path, env=environment, capture_output=True, text=True, timeout=15,
+        [
+            sys.executable,
+            "-c",
+            "from countyiq.lib.county_config import get_county_config; "
+            "assert get_county_config('york').name == 'York County'",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
     assert result.returncode == 0, result.stderr
 
@@ -190,15 +202,27 @@ def test_county_identity_helpers_are_not_york_specific():
 
     assert county_prompt_context(adams) == "Adams County, PA"
     assert county_open_data_source_key(adams) == "adams_open_data"
-    assert municipality_name_from_body(
-        "Adams County Commissioners", county=adams
-    ) is None
-    assert municipality_name_from_body(
-        "Gettysburg Borough Council", county=adams
-    ) == "GETTYSBURG BORO"
+    assert (
+        municipality_name_from_body("Adams County Commissioners", county=adams) is None
+    )
+    assert (
+        municipality_name_from_body("Gettysburg Borough Council", county=adams)
+        == "GETTYSBURG BORO"
+    )
 
 
 def test_york_sources_exclude_verified_other_counties():
     from urllib.parse import urlsplit
-    hosts = {urlsplit(url).hostname for _, url, _ in get_county_config("york").municipality_websites}
-    assert not hosts.intersection({"penntownship.org", "paradisetownship.org", "windsortownship.com", "jackson-township.org"})
+
+    hosts = {
+        urlsplit(url).hostname
+        for _, url, _ in get_county_config("york").municipality_websites
+    }
+    assert not hosts.intersection(
+        {
+            "penntownship.org",
+            "paradisetownship.org",
+            "windsortownship.com",
+            "jackson-township.org",
+        }
+    )

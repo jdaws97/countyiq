@@ -1,10 +1,12 @@
 """Pause misidentified municipal sources without deleting retained evidence."""
+
 from alembic import op
 
 revision = "057"
 down_revision = "056"
 branch_labels = None
 depends_on = None
+
 
 def upgrade() -> None:
     op.execute("""
@@ -30,5 +32,8 @@ def upgrade() -> None:
         );
     """)
 
+
 def downgrade() -> None:
-    raise RuntimeError("Wrong-county source use cannot be restored by downgrade; repair and re-review in a forward migration.")
+    raise RuntimeError(
+        "Wrong-county source use cannot be restored by downgrade; repair and re-review in a forward migration."
+    )

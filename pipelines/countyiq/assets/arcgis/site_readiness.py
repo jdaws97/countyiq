@@ -98,7 +98,9 @@ def _result(records: list[dict], stats: dict) -> MaterializeResult:
     )
 
 
-def _require_usable_records(records: list[dict], minimum_records: int, label: str) -> None:
+def _require_usable_records(
+    records: list[dict], minimum_records: int, label: str
+) -> None:
     if len(records) < minimum_records:
         raise RuntimeError(
             f"{label} parsed {len(records):,} usable rows; minimum is "
@@ -154,7 +156,8 @@ def zoning_overlays_arcgis(
         records, county.arcgis_zoning_overlays_min_records, "zoning overlays"
     )
     geometries = _polygon_geometries(
-        features, lambda attrs: str(attrs["GlobalID"]).strip() if attrs.get("GlobalID") else None
+        features,
+        lambda attrs: str(attrs["GlobalID"]).strip() if attrs.get("GlobalID") else None,
     )
     with database.transaction() as cursor:
         stats = scd2_upsert_geom(
@@ -164,8 +167,14 @@ def zoning_overlays_arcgis(
             records=records,
             key_columns=["globalid"],
             value_columns=[
-                "objectid", "municipality", "overlay_type", "overlay_name",
-                "description", "project_number", "create_date", "modify_date",
+                "objectid",
+                "municipality",
+                "overlay_type",
+                "overlay_name",
+                "description",
+                "project_number",
+                "create_date",
+                "modify_date",
                 "source_url",
             ],
             geom_lookup=geometries,
@@ -219,9 +228,7 @@ def _economic_parks_asset(
     )
     records = parse_economic_parks(features, url, park_type)
     _require_usable_records(records, minimum_records, f"{park_type} parks")
-    geometries = _polygon_geometries(
-        features, lambda attrs: attrs.get("OBJECTID")
-    )
+    geometries = _polygon_geometries(features, lambda attrs: attrs.get("OBJECTID"))
     with database.transaction() as cursor:
         stats = scd2_upsert_geom(
             cursor=cursor,
@@ -230,8 +237,12 @@ def _economic_parks_asset(
             records=records,
             key_columns=["park_type", "source_objectid"],
             value_columns=[
-                "pidn", "name", "website_url", "create_date",
-                "modify_date", "source_url",
+                "pidn",
+                "name",
+                "website_url",
+                "create_date",
+                "modify_date",
+                "source_url",
             ],
             geom_lookup=geometries,
             geom_key="source_objectid",
@@ -345,11 +356,21 @@ def soils_arcgis(
             records=records,
             key_columns=["objectid"],
             value_columns=[
-                "map_unit_symbol", "map_unit_name", "map_unit_key",
-                "calculated_acres", "drainage", "capability_class",
-                "permeability", "septic_rating", "slope_low", "slope_high",
-                "representative_slope", "hydric_rating", "hydrologic_group",
-                "relative_value", "source_url",
+                "map_unit_symbol",
+                "map_unit_name",
+                "map_unit_key",
+                "calculated_acres",
+                "drainage",
+                "capability_class",
+                "permeability",
+                "septic_rating",
+                "slope_low",
+                "slope_high",
+                "representative_slope",
+                "hydric_rating",
+                "hydrologic_group",
+                "relative_value",
+                "source_url",
             ],
             geom_lookup=geometries,
         )
@@ -418,7 +439,9 @@ def local_traffic_counts_arcgis(
         archive_path=f"{county.s3_prefix}/arcgis/local_traffic_counts",
         minimum_records=county.arcgis_local_traffic_counts_min_records,
     )
-    records = parse_local_traffic_counts(features, county.arcgis_local_traffic_counts_url)
+    records = parse_local_traffic_counts(
+        features, county.arcgis_local_traffic_counts_url
+    )
     _require_usable_records(
         records, county.arcgis_local_traffic_counts_min_records, "local traffic counts"
     )
@@ -431,11 +454,26 @@ def local_traffic_counts_arcgis(
             records=records,
             key_columns=["globalid"],
             value_columns=[
-                "objectid", "counter_id", "count_type", "bridge_id",
-                "bridge_key", "purpose", "volume", "am_volume", "am_percent",
-                "am_peak", "pm_volume", "pm_percent", "pm_peak",
-                "planning_region", "count_year", "other_mode", "comment",
-                "create_date", "modify_date", "source_url",
+                "objectid",
+                "counter_id",
+                "count_type",
+                "bridge_id",
+                "bridge_key",
+                "purpose",
+                "volume",
+                "am_volume",
+                "am_percent",
+                "am_peak",
+                "pm_volume",
+                "pm_percent",
+                "pm_peak",
+                "planning_region",
+                "count_year",
+                "other_mode",
+                "comment",
+                "create_date",
+                "modify_date",
+                "source_url",
             ],
             geom_lookup=geometries,
             geom_kind="point",

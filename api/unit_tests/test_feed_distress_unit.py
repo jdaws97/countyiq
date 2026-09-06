@@ -42,7 +42,10 @@ def test_public_delinquency_copy_hides_exact_debt_details():
 def test_restricted_delinquency_copy_preserves_exact_debt_details():
     row = _delinquency_row()
 
-    assert feed._display_event_copy(
-        row,
-        allow_restricted_distress=True,
-    ) is row
+    assert (
+        feed._display_event_copy(
+            row,
+            allow_restricted_distress=True,
+        )
+        is row
+    )

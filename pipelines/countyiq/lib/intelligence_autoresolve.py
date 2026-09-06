@@ -70,7 +70,9 @@ class AutoResolutionOutcome:
 
 
 def auto_resolution_enabled() -> bool:
-    value = os.environ.get("COUNTYIQ_AUTO_RESOLVE_CONTRADICTIONS", "true").strip().lower()
+    value = (
+        os.environ.get("COUNTYIQ_AUTO_RESOLVE_CONTRADICTIONS", "true").strip().lower()
+    )
     return value in {"1", "true", "yes", "on"}
 
 
@@ -78,11 +80,16 @@ def auto_resolution_enabled() -> bool:
 # Classification
 # ---------------------------------------------------------------------------
 
+
 def _entity_kind(name: str) -> str:
     from countyiq.assets.enrichment.owners import classify_entity
 
     kind = classify_entity(name)
-    return "person" if kind == "person" else ("organization" if kind in _ORGANIZATION_TYPES else "unknown")
+    return (
+        "person"
+        if kind == "person"
+        else ("organization" if kind in _ORGANIZATION_TYPES else "unknown")
+    )
 
 
 def _entity_groups(payload: dict) -> list[frozenset[str]]:
@@ -90,7 +97,9 @@ def _entity_groups(payload: dict) -> list[frozenset[str]]:
     for entity in payload.get("entities", []) or []:
         members = entity.get("member_names") if isinstance(entity, dict) else None
         if isinstance(members, list):
-            names = frozenset(str(name).strip() for name in members if str(name).strip())
+            names = frozenset(
+                str(name).strip() for name in members if str(name).strip()
+            )
             if names:
                 groups.append(names)
     return groups
@@ -101,13 +110,15 @@ def _grouped_pairs(groups: list[frozenset[str]]) -> set[tuple[str, str]]:
     for group in groups:
         ordered = sorted(group)
         for i, a in enumerate(ordered):
-            for b in ordered[i + 1:]:
+            for b in ordered[i + 1 :]:
                 pairs.add((a, b))
     return pairs
 
 
 def _assess_entities(prior: dict, challenger: dict) -> list[str]:
-    changed = _grouped_pairs(_entity_groups(prior)) ^ _grouped_pairs(_entity_groups(challenger))
+    changed = _grouped_pairs(_entity_groups(prior)) ^ _grouped_pairs(
+        _entity_groups(challenger)
+    )
     reasons = []
     for a, b in sorted(changed):
         reasons.append(f"identity membership changed: {a!r} <> {b!r}")
@@ -117,7 +128,12 @@ def _assess_entities(prior: dict, challenger: dict) -> list[str]:
 def _matter_key(extraction: dict) -> tuple[str, ...]:
     return tuple(
         str(extraction.get(key) or "").strip().casefold()
-        for key in ("extraction_type", "applicant_name", "parcel_reference", "project_name")
+        for key in (
+            "extraction_type",
+            "applicant_name",
+            "parcel_reference",
+            "project_name",
+        )
     )
 
 
@@ -133,13 +149,21 @@ def _assess_proceeding(prior: dict, challenger: dict) -> list[str]:
     reasons = []
     for key in before.keys() & after.keys():
         if {before[key], after[key]} == {"approved", "denied"}:
-            reasons.append(f"decision flipped {before[key]} -> {after[key]} for {key[1] or key[0]}")
+            reasons.append(
+                f"decision flipped {before[key]} -> {after[key]} for {key[1] or key[0]}"
+            )
     return reasons
 
 
 def _assess_signals(prior: dict, challenger: dict) -> list[str]:
-    before = {item["signal_key"]: item["serving_band"] for item in signal_validation_consequence(prior)}
-    after = {item["signal_key"]: item["serving_band"] for item in signal_validation_consequence(challenger)}
+    before = {
+        item["signal_key"]: item["serving_band"]
+        for item in signal_validation_consequence(prior)
+    }
+    after = {
+        item["signal_key"]: item["serving_band"]
+        for item in signal_validation_consequence(challenger)
+    }
     reasons = []
     for key in before.keys() & after.keys():
         before_eligible = before[key] in {"high", "medium"}
@@ -153,13 +177,17 @@ def _assess_signals(prior: dict, challenger: dict) -> list[str]:
 
 
 def _assess_field_flip(
-    prior: dict, challenger: dict, field_name: str,
-    actionable: set[str], insufficient: set[str],
+    prior: dict,
+    challenger: dict,
+    field_name: str,
+    actionable: set[str],
+    insufficient: set[str],
 ) -> list[str]:
     before = str(prior.get(field_name) or "").strip()
     after = str(challenger.get(field_name) or "").strip()
-    if ((before in actionable and after in insufficient)
-            or (after in actionable and before in insufficient)):
+    if (before in actionable and after in insufficient) or (
+        after in actionable and before in insufficient
+    ):
         return [f"{field_name} flipped {before} -> {after}"]
     return []
 
@@ -183,13 +211,27 @@ def classify_flip(
     elif output_kind == "signal_validation":
         reasons = _assess_signals(prior, challenger)
     elif output_kind == "parcel_brief":
-        reasons = _assess_field_flip(prior, challenger, "recommendation", {"pursue_now", "investigate"}, {"pass", "insufficient_evidence"})
+        reasons = _assess_field_flip(
+            prior,
+            challenger,
+            "recommendation",
+            {"pursue_now", "investigate"},
+            {"pass", "insufficient_evidence"},
+        )
     elif output_kind == "owner_brief":
-        reasons = _assess_field_flip(prior, challenger, "recommendation", {"pursue_acquisition", "investigate"}, {"none", "insufficient_evidence"})
+        reasons = _assess_field_flip(
+            prior,
+            challenger,
+            "recommendation",
+            {"pursue_acquisition", "investigate"},
+            {"none", "insufficient_evidence"},
+        )
     else:
         reasons = [f"unknown output kind {output_kind}"]
     version_upgrade = bool(
-        prior_input_hash and challenger_input_hash and prior_input_hash != challenger_input_hash
+        prior_input_hash
+        and challenger_input_hash
+        and prior_input_hash != challenger_input_hash
     )
     return FlipAssessment(
         output_kind=output_kind,
@@ -199,7 +241,9 @@ def classify_flip(
     )
 
 
-def decide(assessment: FlipAssessment, judge_winner: str | None, judge_available: bool) -> str:
+def decide(
+    assessment: FlipAssessment, judge_winner: str | None, judge_available: bool
+) -> str:
     """Map an assessment plus judge verdict to an outcome name."""
 
     if assessment.consequential:
@@ -208,7 +252,9 @@ def decide(assessment: FlipAssessment, judge_winner: str | None, judge_available
         return "auto_resolved"
     if judge_winner is None:
         return "queued_judge_unavailable"
-    expected = "challenger" if assessment.rule_default == "accept_challenger" else "prior"
+    expected = (
+        "challenger" if assessment.rule_default == "accept_challenger" else "prior"
+    )
     if judge_winner in {expected, "unclear"}:
         return "auto_resolved"
     return "queued_disagreement"
@@ -218,7 +264,10 @@ def decide(assessment: FlipAssessment, judge_winner: str | None, judge_available
 # Evidence gathering for the judge
 # ---------------------------------------------------------------------------
 
-def _gather_evidence_text(database, contradiction: dict, prior: dict, challenger: dict) -> str:
+
+def _gather_evidence_text(
+    database, contradiction: dict, prior: dict, challenger: dict
+) -> str:
     """Rebuild the exact user-facing evidence block each pass showed the model."""
 
     kind = contradiction["output_kind"]
@@ -239,14 +288,20 @@ def _gather_evidence_text(database, contradiction: dict, prior: dict, challenger
             )
 
             names = _candidate_names(prior, challenger)
-            return build_entity_cluster_prompt(gather_cluster_records(cur, names)) if names else ""
+            return (
+                build_entity_cluster_prompt(gather_cluster_records(cur, names))
+                if names
+                else ""
+            )
         if kind == "signal_validation":
             from countyiq.lib.pass2_batched_validation import (
                 build_batched_signal_prompt,
                 gather_parcel_batch_context,
             )
 
-            return build_batched_signal_prompt(gather_parcel_batch_context(cur, subject_key))
+            return build_batched_signal_prompt(
+                gather_parcel_batch_context(cur, subject_key)
+            )
         if kind == "parcel_brief":
             from countyiq.lib.pass3_brief_generation import (
                 build_brief_generation_prompt,
@@ -274,7 +329,9 @@ def _gather_evidence_text(database, contradiction: dict, prior: dict, challenger
                 return ""
             owner = dict(owner)
             cur.execute(PORTFOLIO_EVIDENCE_QUERY, {"pidns": owner["pidns"] or []})
-            return build_owner_rollup_prompt(owner, [dict(row) for row in cur.fetchall()])
+            return build_owner_rollup_prompt(
+                owner, [dict(row) for row in cur.fetchall()]
+            )
     return ""
 
 
@@ -286,16 +343,34 @@ def _decision_summary(kind: str, payload: Any) -> Any:
     if kind == "signal_validation":
         return {
             "validations": [
-                {k: item.get(k) for k in ("signal_key", "validation_status", "adjusted_significance", "reasoning")}
-                for item in payload.get("validations", []) if isinstance(item, dict)
+                {
+                    k: item.get(k)
+                    for k in (
+                        "signal_key",
+                        "validation_status",
+                        "adjusted_significance",
+                        "reasoning",
+                    )
+                }
+                for item in payload.get("validations", [])
+                if isinstance(item, dict)
             ],
             "cross_signal_insight": payload.get("cross_signal_insight"),
         }
     if kind == "entity_verification":
         return {
             "entities": [
-                {k: item.get(k) for k in ("canonical_name", "member_names", "entity_type", "reasoning")}
-                for item in payload.get("entities", []) if isinstance(item, dict)
+                {
+                    k: item.get(k)
+                    for k in (
+                        "canonical_name",
+                        "member_names",
+                        "entity_type",
+                        "reasoning",
+                    )
+                }
+                for item in payload.get("entities", [])
+                if isinstance(item, dict)
             ],
             "rejected_matches": payload.get("rejected_matches"),
             "abstentions": payload.get("abstentions"),
@@ -303,20 +378,53 @@ def _decision_summary(kind: str, payload: Any) -> Any:
     if kind == "proceeding_extraction":
         return {
             "extractions": [
-                {k: item.get(k) for k in ("extraction_type", "applicant_name", "parcel_reference", "project_name", "decision", "supporting_text")}
-                for item in payload.get("extractions", []) if isinstance(item, dict)
+                {
+                    k: item.get(k)
+                    for k in (
+                        "extraction_type",
+                        "applicant_name",
+                        "parcel_reference",
+                        "project_name",
+                        "decision",
+                        "supporting_text",
+                    )
+                }
+                for item in payload.get("extractions", [])
+                if isinstance(item, dict)
             ]
         }
     if kind == "parcel_brief":
-        return {k: payload.get(k) for k in ("recommendation", "urgency", "assessment", "assessment_reasoning", "top_signal_key", "top_risk", "evidence_strength")}
+        return {
+            k: payload.get(k)
+            for k in (
+                "recommendation",
+                "urgency",
+                "assessment",
+                "assessment_reasoning",
+                "top_signal_key",
+                "top_risk",
+                "evidence_strength",
+            )
+        }
     if kind == "owner_brief":
-        return {k: payload.get(k) for k in ("portfolio_strategy", "recommendation", "urgency", "key_pattern", "top_risk", "evidence_strength")}
+        return {
+            k: payload.get(k)
+            for k in (
+                "portfolio_strategy",
+                "recommendation",
+                "urgency",
+                "key_pattern",
+                "top_risk",
+                "evidence_strength",
+            )
+        }
     return payload
 
 
 # ---------------------------------------------------------------------------
 # Resolution
 # ---------------------------------------------------------------------------
+
 
 def _record_assessment(
     database,
@@ -353,18 +461,30 @@ def _record_assessment(
         )
 
 
-def auto_resolve_contradiction(database, contradiction_id: int, log=None) -> AutoResolutionOutcome:
+def auto_resolve_contradiction(
+    database, contradiction_id: int, log=None
+) -> AutoResolutionOutcome:
     """Apply the policy to one freshly quarantined contradiction."""
 
     from countyiq.lib import intelligence_judge
 
     if not auto_resolution_enabled():
-        return AutoResolutionOutcome(contradiction_id, "queued_consequential", rationale="auto-resolution disabled")
+        return AutoResolutionOutcome(
+            contradiction_id,
+            "queued_consequential",
+            rationale="auto-resolution disabled",
+        )
 
     detail = get_contradiction(database, contradiction_id)
     if detail is None or detail.get("resolution") is not None:
-        return AutoResolutionOutcome(contradiction_id, "auto_resolved", rationale="already resolved")
-    contradiction, prior, challenger = detail["contradiction"], detail["prior"], detail["challenger"]
+        return AutoResolutionOutcome(
+            contradiction_id, "auto_resolved", rationale="already resolved"
+        )
+    contradiction, prior, challenger = (
+        detail["contradiction"],
+        detail["prior"],
+        detail["challenger"],
+    )
 
     assessment = classify_flip(
         output_kind=contradiction["output_kind"],
@@ -381,13 +501,21 @@ def auto_resolve_contradiction(database, contradiction_id: int, log=None) -> Aut
             judge = intelligence_judge.ask_judge(
                 contradiction_id=contradiction_id,
                 output_kind=contradiction["output_kind"],
-                evidence_text=_gather_evidence_text(database, contradiction, prior, challenger),
-                prior_decision=_decision_summary(contradiction["output_kind"], prior.get("payload")),
-                challenger_decision=_decision_summary(contradiction["output_kind"], challenger.get("payload")),
+                evidence_text=_gather_evidence_text(
+                    database, contradiction, prior, challenger
+                ),
+                prior_decision=_decision_summary(
+                    contradiction["output_kind"], prior.get("payload")
+                ),
+                challenger_decision=_decision_summary(
+                    contradiction["output_kind"], challenger.get("payload")
+                ),
             )
         except Exception as exc:  # judge problems must never block the pass
             if log is not None:
-                log.warning("Judge unavailable for contradiction %s: %s", contradiction_id, exc)
+                log.warning(
+                    "Judge unavailable for contradiction %s: %s", contradiction_id, exc
+                )
             judge = None
 
     outcome = decide(assessment, judge.winner if judge else None, judge_available)
@@ -396,7 +524,11 @@ def auto_resolve_contradiction(database, contradiction_id: int, log=None) -> Aut
     rationale = ""
     if outcome == "auto_resolved":
         resolution = assessment.rule_default
-        basis = "newer reviewed model/prompt version" if assessment.version_upgrade else "same-version sampling flip; incumbent retained"
+        basis = (
+            "newer reviewed model/prompt version"
+            if assessment.version_upgrade
+            else "same-version sampling flip; incumbent retained"
+        )
         rationale = f"auto-resolution: {basis}; non-consequential flip"
         if judge is not None:
             rationale += f"; judge {judge.model} said {judge.winner} ({judge.confidence:.2f}): {judge.reason}"
@@ -418,7 +550,9 @@ def auto_resolve_contradiction(database, contradiction_id: int, log=None) -> Aut
             resolution = None
             rationale = f"auto-resolution refused: {exc}"
             if log is not None:
-                log.warning("Contradiction %s left for review: %s", contradiction_id, exc)
+                log.warning(
+                    "Contradiction %s left for review: %s", contradiction_id, exc
+                )
     elif outcome == "queued_consequential":
         rationale = "; ".join(assessment.reasons) or "consequential flip"
     elif outcome == "queued_disagreement":
@@ -448,6 +582,8 @@ def auto_resolve_queue(database, *, limit: int = 500, log=None) -> dict[str, int
 
     counts: dict[str, int] = {}
     for item in list_unresolved_contradictions(database, limit=limit):
-        outcome = auto_resolve_contradiction(database, int(item["contradiction_id"]), log)
+        outcome = auto_resolve_contradiction(
+            database, int(item["contradiction_id"]), log
+        )
         counts[outcome.outcome] = counts.get(outcome.outcome, 0) + 1
     return counts

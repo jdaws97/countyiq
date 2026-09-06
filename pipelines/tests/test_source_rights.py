@@ -234,11 +234,13 @@ def test_municipality_policy_must_match_config_exactly():
 
     authorizations = authorize_municipality_sources(
         database,
-        entries=((
-            "Dover Twp Board of Supervisors",
-            "https://example.gov/minutes",
-            "board_of_supervisors",
-        ),),
+        entries=(
+            (
+                "Dover Twp Board of Supervisors",
+                "https://example.gov/minutes",
+                "board_of_supervisors",
+            ),
+        ),
         acquisition_method="official_document_direct",
         asset_key="public_proceedings_scrape",
     )
@@ -256,11 +258,13 @@ def test_municipality_authorization_exposes_reviewed_robots_exception():
 
     authorizations = authorize_municipality_sources(
         database,
-        entries=((
-            "Dover Twp Board of Supervisors",
-            "https://example.gov/minutes",
-            "board_of_supervisors",
-        ),),
+        entries=(
+            (
+                "Dover Twp Board of Supervisors",
+                "https://example.gov/minutes",
+                "board_of_supervisors",
+            ),
+        ),
         acquisition_method="official_document_direct",
         asset_key="public_proceedings_scrape",
     )
@@ -276,11 +280,13 @@ def test_changed_municipality_url_fails_closed_and_is_audited():
     with pytest.raises(RuntimeError, match="does not match reviewed policy"):
         authorize_municipality_sources(
             database,
-            entries=((
-                "Dover Twp Board of Supervisors",
-                "https://example.gov/new-minutes",
-                "board_of_supervisors",
-            ),),
+            entries=(
+                (
+                    "Dover Twp Board of Supervisors",
+                    "https://example.gov/new-minutes",
+                    "board_of_supervisors",
+                ),
+            ),
             acquisition_method="official_document_direct",
             asset_key="public_proceedings_scrape",
         )
@@ -294,11 +300,13 @@ def test_unknown_municipality_source_fails_closed():
     with pytest.raises(RuntimeError, match="no reviewed policy"):
         authorize_municipality_sources(
             database,
-            entries=((
-                "New Borough Council",
-                "https://example.gov/minutes",
-                "borough_council",
-            ),),
+            entries=(
+                (
+                    "New Borough Council",
+                    "https://example.gov/minutes",
+                    "borough_council",
+                ),
+            ),
             acquisition_method="official_document_direct",
             asset_key="public_proceedings_scrape",
         )

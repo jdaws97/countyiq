@@ -80,7 +80,9 @@ def municipality_join(
         f"Updated {rows_updated} parcels ({rows_filled} filled, {rows_corrected} corrected)"
     )
     if nulls_after > 0:
-        context.log.warning(f"{nulls_after} parcels still have NULL municipality (centroid outside all municipality polygons)")
+        context.log.warning(
+            f"{nulls_after} parcels still have NULL municipality (centroid outside all municipality polygons)"
+        )
 
     # Distinct municipality count
     result = database.execute(

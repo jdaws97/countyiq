@@ -68,9 +68,7 @@ class TestClassifyGroup:
         assert classify_group(["SMITH JOHN", "SMITH JOHN A"]) == "person"
 
     def test_government_wins(self):
-        assert (
-            classify_group(["YORK PROPERTIES LLC", "COUNTY OF YORK"]) == "government"
-        )
+        assert classify_group(["YORK PROPERTIES LLC", "COUNTY OF YORK"]) == "government"
 
 
 class TestUnionFind:

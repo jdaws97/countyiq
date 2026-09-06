@@ -106,7 +106,9 @@ llm_search_limiter = PerClientRateLimiter(
     burst=_env_int("COUNTYIQ_SEARCH_BURST", 5),
     max_clients=_env_int("COUNTYIQ_RATE_LIMIT_MAX_CLIENTS", 10_000),
 )
-llm_search_daily_budget = DailyBudget(_env_int("COUNTYIQ_SEARCH_DAILY_LLM_BUDGET", 2000))
+llm_search_daily_budget = DailyBudget(
+    _env_int("COUNTYIQ_SEARCH_DAILY_LLM_BUDGET", 2000)
+)
 
 # Owner/entity profiles aggregate portfolio relationships and are the most
 # scrape-sensitive public read surface.  This is a second line of defense

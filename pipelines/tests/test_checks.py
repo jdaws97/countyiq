@@ -73,9 +73,7 @@ def test_custom_count_expr_builds_distinct_sql():
 
 
 def test_metadata_key_rename():
-    check = make_row_count_check(
-        dummy_asset, table="widgets", metadata_key="my_count"
-    )
+    check = make_row_count_check(dummy_asset, table="widgets", metadata_key="my_count")
     result, _ = _result_for(check, 3)
     assert "my_count" in result.metadata
     assert "current_record_count" not in result.metadata

@@ -17,7 +17,9 @@ function siteRouting(): Plugin {
       next()
       return
     }
-    const internal = ['/@', '/src/', '/node_modules/', '/assets/'].some(prefix => url.pathname.startsWith(prefix))
+    const internal = ['/@', '/src/', '/node_modules/', '/assets/'].some((prefix) =>
+      url.pathname.startsWith(prefix),
+    )
     const staticFile = ['/favicon-ciq.svg', '/robots.txt'].includes(url.pathname)
     if (!internal && !staticFile) {
       if (appHost && url.pathname !== '/app.html') {
@@ -25,7 +27,9 @@ function siteRouting(): Plugin {
       } else if (!appHost && !['/', '/index.html'].includes(url.pathname)) {
         const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
         url.hostname = local ? 'app.localhost' : 'app.' + url.hostname
-        if (['/app', '/app.html'].includes(url.pathname)) url.pathname = '/'
+        if (['/app', '/app.html'].includes(url.pathname)) {
+          url.pathname = '/'
+        }
         response.writeHead(302, { Location: url.href }).end()
         return
       }
@@ -34,8 +38,12 @@ function siteRouting(): Plugin {
   }
   return {
     name: 'countyiq-site-routing',
-    configureServer(server) { server.middlewares.use(route) },
-    configurePreviewServer(server) { server.middlewares.use(route) },
+    configureServer(server) {
+      server.middlewares.use(route)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(route)
+    },
   }
 }
 

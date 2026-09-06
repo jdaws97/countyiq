@@ -13,10 +13,7 @@ def validate_bbox(west: float, south: float, east: float, north: float) -> None:
             status_code=422,
             detail="Bounding box must have west < east and south < north",
         )
-    if (
-        east - west > MAX_BBOX_SPAN_DEGREES
-        or north - south > MAX_BBOX_SPAN_DEGREES
-    ):
+    if east - west > MAX_BBOX_SPAN_DEGREES or north - south > MAX_BBOX_SPAN_DEGREES:
         raise HTTPException(
             status_code=422,
             detail=(

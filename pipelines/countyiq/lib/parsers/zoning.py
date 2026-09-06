@@ -50,7 +50,9 @@ def parse_zoning_features(raw_features: list[dict]) -> list[dict]:
         # ADPT_DATE comes as epoch milliseconds from ArcGIS
         adpt_raw = attrs.get("ADPT_DATE")
         if adpt_raw and isinstance(adpt_raw, (int, float)):
-            record["adpt_date"] = datetime.fromtimestamp(adpt_raw / 1000, tz=timezone.utc).isoformat()
+            record["adpt_date"] = datetime.fromtimestamp(
+                adpt_raw / 1000, tz=timezone.utc
+            ).isoformat()
         else:
             record["adpt_date"] = None
 

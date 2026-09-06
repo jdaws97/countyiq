@@ -27,13 +27,17 @@ def _resp(json_data, status=200):
 
 
 def test_bounded_parallel_iterator_limits_submitted_page_window():
-    with mock.patch.object(arcgis_client, "_get_feature_count", return_value=5), \
-         mock.patch.object(arcgis_client, "_fetch_page") as fetch_page:
+    with (
+        mock.patch.object(arcgis_client, "_get_feature_count", return_value=5),
+        mock.patch.object(arcgis_client, "_fetch_page") as fetch_page,
+    ):
         fetch_page.side_effect = lambda u, w, f, s, b, offset, g: [
             {"attributes": {"offset": offset}}
         ]
         pages = arcgis_client.iterate_feature_pages_parallel(
-            "http://x/FeatureServer/0", batch_size=1, max_workers=2,
+            "http://x/FeatureServer/0",
+            batch_size=1,
+            max_workers=2,
         )
 
         first_page = next(pages)
@@ -49,40 +53,63 @@ def test_bounded_parallel_iterator_limits_submitted_page_window():
 
 
 def test_bounded_parallel_iterator_raises_on_partial_fetch():
-    with mock.patch.object(arcgis_client, "_get_feature_count", return_value=2), \
-         mock.patch.object(arcgis_client, "_fetch_page") as fetch_page:
-        def side_effect(url, where, out_fields, out_sr, batch_size, offset, return_geometry):
+    with (
+        mock.patch.object(arcgis_client, "_get_feature_count", return_value=2),
+        mock.patch.object(arcgis_client, "_fetch_page") as fetch_page,
+    ):
+
+        def side_effect(
+            url, where, out_fields, out_sr, batch_size, offset, return_geometry
+        ):
             if offset == 1:
                 raise RuntimeError("boom")
             return [{"attributes": {"offset": offset}}]
 
         fetch_page.side_effect = side_effect
         pages = arcgis_client.iterate_feature_pages_parallel(
-            "http://x/FeatureServer/0", batch_size=1, max_workers=2,
+            "http://x/FeatureServer/0",
+            batch_size=1,
+            max_workers=2,
         )
-        with pytest.raises(RuntimeError, match="Refusing to yield a successful partial result"):
+        with pytest.raises(
+            RuntimeError, match="Refusing to yield a successful partial result"
+        ):
             list(pages)
 
 
 def test_fetch_page_retries_transient_then_succeeds():
     good = _resp({"features": [{"attributes": {}}]})
-    with mock.patch.object(arcgis_client.requests, "get",
-                           side_effect=[requests.exceptions.Timeout(), good]), \
-         mock.patch.object(arcgis_client.time, "sleep"):
-        features = arcgis_client._fetch_page("http://x", "1=1", "*", 4326, 1000, 0, True)
+    with (
+        mock.patch.object(
+            arcgis_client.requests,
+            "get",
+            side_effect=[requests.exceptions.Timeout(), good],
+        ),
+        mock.patch.object(arcgis_client.time, "sleep"),
+    ):
+        features = arcgis_client._fetch_page(
+            "http://x", "1=1", "*", 4326, 1000, 0, True
+        )
     assert len(features) == 1
 
 
 def test_fetch_page_gives_up_after_retries():
-    with mock.patch.object(arcgis_client.requests, "get",
-                           side_effect=requests.exceptions.ConnectionError()), \
-         mock.patch.object(arcgis_client.time, "sleep"):
+    with (
+        mock.patch.object(
+            arcgis_client.requests,
+            "get",
+            side_effect=requests.exceptions.ConnectionError(),
+        ),
+        mock.patch.object(arcgis_client.time, "sleep"),
+    ):
         with pytest.raises(RuntimeError, match="failed after 3 attempts"):
             arcgis_client._fetch_page("http://x", "1=1", "*", 4326, 1000, 0, True)
 
 
 def test_fetch_page_4xx_raises_immediately():
-    with mock.patch.object(arcgis_client.requests, "get", return_value=_resp({}, status=404)) as get:
+    with mock.patch.object(
+        arcgis_client.requests, "get", return_value=_resp({}, status=404)
+    ) as get:
         with pytest.raises(requests.exceptions.HTTPError):
             arcgis_client._fetch_page("http://x", "1=1", "*", 4326, 1000, 0, True)
     assert get.call_count == 1

@@ -34,7 +34,9 @@ def test_parse_roads_skips_missing_key():
 
 
 def test_parse_roads_preserves_int_fields():
-    features = [{"attributes": {"RCL_NGUID": "abc-123", "SpeedLimit": 35, "FromAddr_L": 100}}]
+    features = [
+        {"attributes": {"RCL_NGUID": "abc-123", "SpeedLimit": 35, "FromAddr_L": 100}}
+    ]
     records = parse_roads_features(features)
     assert records[0]["speed_limit"] == 35
     assert records[0]["from_addr_l"] == 100

@@ -76,6 +76,7 @@ MAX_DYNAMIC_PROMPT_CHARACTERS = 64_000
 # Union-Find cluster builder
 # ---------------------------------------------------------------------------
 
+
 def _build_clusters(pairs) -> list[list[str]]:
     """Build connected components from name pairs using union-find.
 
@@ -117,6 +118,7 @@ def _build_clusters(pairs) -> list[list[str]]:
 # ---------------------------------------------------------------------------
 # Dagster Asset
 # ---------------------------------------------------------------------------
+
 
 @asset(
     group_name="enrichment",
@@ -183,7 +185,9 @@ def entity_verification(
     clusters, person_only_skipped = select_pass1_clusters(_build_clusters(pairs))
     log.info(
         "Stage A complete: %d pairs → %d clusters (%d person-only clusters skipped)",
-        len(pairs), len(clusters), person_only_skipped,
+        len(pairs),
+        len(clusters),
+        person_only_skipped,
     )
 
     # One upfront fetch of prior input hashes replaces a per-cluster SELECT
@@ -297,9 +301,8 @@ def entity_verification(
                 skipped += 1
                 continue
 
-            if (
-                deterministic_resolution is None
-                and not item_budget.claim(log, label="changed entity clusters")
+            if deterministic_resolution is None and not item_budget.claim(
+                log, label="changed entity clusters"
             ):
                 break
 
@@ -326,18 +329,23 @@ def entity_verification(
                 0 if deterministic_resolution is not None else n_trials
             ):
                 trial_key = (
-                    cluster_key if n_trials == 1
-                    else f"{cluster_key}:trial-{trial_idx}"
+                    cluster_key if n_trials == 1 else f"{cluster_key}:trial-{trial_idx}"
                 )
                 trial_calls += 1
                 result = invoke_with_retry(
-                    config, prompt, retries=1, archive_key=trial_key,
+                    config,
+                    prompt,
+                    retries=1,
+                    archive_key=trial_key,
                 )
                 if not result.success:
                     last_error = result.error
                     log.warning(
                         "LLM failed for cluster %s (trial %d/%d): %s",
-                        cluster_names[:2], trial_idx + 1, n_trials, result.error,
+                        cluster_names[:2],
+                        trial_idx + 1,
+                        n_trials,
+                        result.error,
                     )
                     continue
                 trial_parsed = parse_entity_verification_output(result.parsed or {})
@@ -345,7 +353,9 @@ def entity_verification(
                     last_error = trial_parsed["error"]
                     log.warning(
                         "Invalid LLM output for cluster %s (trial %d/%d): %s",
-                        cluster_names[:2], trial_idx + 1, n_trials,
+                        cluster_names[:2],
+                        trial_idx + 1,
+                        n_trials,
                         trial_parsed["error"],
                     )
                     continue
@@ -373,8 +383,12 @@ def entity_verification(
 
             if not trial_parses:
                 _update_pass_status(
-                    database, cluster_key, 1, "error",
-                    input_hash, last_error or "all trials failed",
+                    database,
+                    cluster_key,
+                    1,
+                    "error",
+                    input_hash,
+                    last_error or "all trials failed",
                 )
                 errors += 1
                 continue
@@ -389,7 +403,9 @@ def entity_verification(
             # model; its (parsed) answer replaces the primary one.
             if escalation_config is not None and parsed.get("abstentions"):
                 esc_result = invoke_with_retry(
-                    escalation_config, prompt, retries=1,
+                    escalation_config,
+                    prompt,
+                    retries=1,
                     archive_key=f"{cluster_key}:escalation",
                 )
                 if esc_result.success:
@@ -409,16 +425,20 @@ def entity_verification(
                     else:
                         log.warning(
                             "Escalation output invalid for %s: %s — keeping primary",
-                            cluster_key, esc_parsed["error"],
+                            cluster_key,
+                            esc_parsed["error"],
                         )
                 else:
                     log.warning(
                         "Escalation failed for %s: %s — keeping primary",
-                        cluster_key, esc_result.error,
+                        cluster_key,
+                        esc_result.error,
                     )
 
             membership_errors = validate_entity_membership(
-                parsed, records, cluster_names,
+                parsed,
+                records,
+                cluster_names,
             )
             if membership_errors:
                 record_validation_rejection(
@@ -439,17 +459,27 @@ def entity_verification(
                     message,
                 )
                 _update_pass_status(
-                    database, cluster_key, 1, "error", input_hash, message,
+                    database,
+                    cluster_key,
+                    1,
+                    "error",
+                    input_hash,
+                    message,
                 )
                 errors += 1
                 continue
 
-            evidence_refs = sorted({
-                f"{group}:{identifier}"
-                for entity in parsed.get("entities", [])
-                for group, identifiers in (entity.get("linked_records") or {}).items()
-                for identifier in identifiers or []
-            } | {f"candidate:{name}" for name in cluster_names})
+            evidence_refs = sorted(
+                {
+                    f"{group}:{identifier}"
+                    for entity in parsed.get("entities", [])
+                    for group, identifiers in (
+                        entity.get("linked_records") or {}
+                    ).items()
+                    for identifier in identifiers or []
+                }
+                | {f"candidate:{name}" for name in cluster_names}
+            )
             if (parsed.get("trial_stats") or {}).get("demoted_entities"):
                 evidence_refs.append("trial:voting")
             gate = record_inference_decision(
@@ -463,11 +493,13 @@ def entity_verification(
                 requested_model=decision_model,
                 served_model=(
                     decision_result.metadata.get("served_model")
-                    if decision_result else None
+                    if decision_result
+                    else None
                 ),
                 provider=(
                     decision_result.metadata.get("provider")
-                    if decision_result else None
+                    if decision_result
+                    else None
                 ),
                 prompt_version=PROMPT_VERSION,
                 payload=parsed,
@@ -479,7 +511,9 @@ def entity_verification(
                 if auto.resolved:
                     log.info(
                         "Contradiction %s auto-resolved (%s): %s",
-                        gate.contradiction_id, auto.resolution, auto.rationale,
+                        gate.contradiction_id,
+                        auto.resolution,
+                        auto.rationale,
                     )
                     continue
                 message = (
@@ -488,7 +522,12 @@ def entity_verification(
                 )
                 log.warning("Cluster %s %s", cluster_key, message)
                 _update_pass_status(
-                    database, cluster_key, 1, "error", input_hash, message,
+                    database,
+                    cluster_key,
+                    1,
+                    "error",
+                    input_hash,
+                    message,
                 )
                 errors += 1
                 continue
@@ -516,7 +555,11 @@ def entity_verification(
 
             # Update pass tracking
             _update_pass_status(
-                database, cluster_key, 1, "complete", input_hash,
+                database,
+                cluster_key,
+                1,
+                "complete",
+                input_hash,
             )
             clusters_processed += 1
 
@@ -545,19 +588,28 @@ def entity_verification(
                 f"{traceback.format_exc()}"
             )
             _update_pass_status(
-                database, cluster_key, 1, "error",
-                input_hash or "", str(exc),
+                database,
+                cluster_key,
+                1,
+                "error",
+                input_hash or "",
+                str(exc),
             )
             errors += 1
 
     log.info(
         "Pass 1 complete: %d clusters processed, %d entities created, "
         "%d skipped, %d errors",
-        clusters_processed, entities_created, skipped, errors,
+        clusters_processed,
+        entities_created,
+        skipped,
+        errors,
     )
     check_error_budget(
-        log, label="pass1_entity_verification",
-        errors=errors, total=clusters_processed + errors,
+        log,
+        label="pass1_entity_verification",
+        errors=errors,
+        total=clusters_processed + errors,
     )
 
     return MaterializeResult(
@@ -596,6 +648,7 @@ def entity_verification(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _merge_unique_strings(*groups) -> list[str]:
     merged: list[str] = []
@@ -690,12 +743,10 @@ def _replace_cluster_entities(
                     entity.get("entity_type", "unknown"),
                     _candidate_names(entity) or None,
                     json.dumps(_merge_linked_sources({}, linked_records)),
-                    json.dumps(_merge_relationships([], entity.get("relationships", []))),
-                    (
-                        "verified"
-                        if entity.get("confidence", 0) >= 0.7
-                        else "tentative"
+                    json.dumps(
+                        _merge_relationships([], entity.get("relationships", []))
                     ),
+                    ("verified" if entity.get("confidence", 0) >= 0.7 else "tentative"),
                     entity.get("reasoning", ""),
                     datetime.now(UTC).isoformat(),
                     inference_id,

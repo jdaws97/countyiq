@@ -55,9 +55,7 @@ def test_tax_claim_rows_are_not_queryable_but_aggregates_remain_available():
             {
                 "table": "tax_claims",
                 "aggregate": {"operation": "sum", "field": "total"},
-                "filters": [
-                    {"field": "owner_name", "op": "eq", "value": "A PERSON"}
-                ],
+                "filters": [{"field": "owner_name", "op": "eq", "value": "A PERSON"}],
             }
         )
 

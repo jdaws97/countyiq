@@ -48,9 +48,7 @@ def test_llm_archive_retention_prunes_only_expired_harness_files(tmp_path):
     os.utime(expired, (old_timestamp, old_timestamp))
     os.utime(recent, (recent_timestamp, recent_timestamp))
 
-    removed = llm_harness.prune_llm_archives(
-        tmp_path, retention_days=90, now=now
-    )
+    removed = llm_harness.prune_llm_archives(tmp_path, retention_days=90, now=now)
 
     assert removed == 1
     assert not expired.exists()
@@ -92,9 +90,7 @@ def test_non_strict_llm_archive_failure_remains_a_warning(tmp_path, monkeypatch)
     monkeypatch.setenv("COUNTYIQ_ARCHIVE_DIR", str(invalid_root))
     monkeypatch.setenv("COUNTYIQ_ARCHIVE_STRICT", "false")
 
-    assert llm_harness.archive_raw_output(
-        "pass2", "pidn", "prompt", "{}"
-    ) is None
+    assert llm_harness.archive_raw_output("pass2", "pidn", "prompt", "{}") is None
 
 
 def test_strict_invoke_requires_archive_key(monkeypatch):
@@ -172,8 +168,11 @@ def test_system_prompt_becomes_leading_system_message():
 def test_pass_config_carries_system_prompt_and_pdf_engine(monkeypatch):
     monkeypatch.setenv("COUNTYIQ_PASS0_ENABLED", "true")
     config = build_pass_harness_config(
-        pass_number=0, archive_label="t", reasoning_task=False,
-        default_max_tokens=1024, system_prompt="Static rules.",
+        pass_number=0,
+        archive_label="t",
+        reasoning_task=False,
+        default_max_tokens=1024,
+        system_prompt="Static rules.",
         pdf_engine="native",
     )
     assert config.system_prompt == "Static rules."
@@ -183,9 +182,7 @@ def test_pass_config_carries_system_prompt_and_pdf_engine(monkeypatch):
 def test_pdf_engine_pins_file_parser_plugin_only_with_pdf():
     config = HarnessConfig(model_path="x/y", pdf_engine="native")
     with_pdf = build_openrouter_payload(config, "prompt", pdf_bytes=b"%PDF-1.4")
-    assert with_pdf["plugins"] == [
-        {"id": "file-parser", "pdf": {"engine": "native"}}
-    ]
+    assert with_pdf["plugins"] == [{"id": "file-parser", "pdf": {"engine": "native"}}]
     without_pdf = build_openrouter_payload(config, "prompt")
     assert "plugins" not in without_pdf
 
@@ -214,8 +211,14 @@ def test_openai_family_omits_all_sampling_params():
         **preset,
     )
     payload = build_openrouter_payload(config, "prompt")
-    for banned in ("temperature", "top_p", "top_k", "min_p",
-                   "presence_penalty", "frequency_penalty"):
+    for banned in (
+        "temperature",
+        "top_p",
+        "top_k",
+        "min_p",
+        "presence_penalty",
+        "frequency_penalty",
+    ):
         assert banned not in payload, f"{banned} must not be sent to gpt-5.x"
     assert payload["provider"]["require_parameters"] is True
     assert payload["response_format"]["type"] == "json_schema"
@@ -237,7 +240,10 @@ def test_pass_config_resolves_schema_and_env_knobs(monkeypatch):
     monkeypatch.setenv("COUNTYIQ_MAX_PRICE_COMPLETION", "6.0")
     monkeypatch.setenv("COUNTYIQ_ZDR", "true")
     config = build_pass_harness_config(
-        pass_number=2, archive_label="t", reasoning_task=True, default_max_tokens=1024,
+        pass_number=2,
+        archive_label="t",
+        reasoning_task=True,
+        default_max_tokens=1024,
         json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
     )
     assert config.json_schema == PASS2_BATCHED_VALIDATION_SCHEMA
@@ -250,7 +256,10 @@ def test_strict_schema_global_kill_switch(monkeypatch):
     monkeypatch.setenv("COUNTYIQ_PASS2_ENABLED", "true")
     monkeypatch.setenv("COUNTYIQ_STRICT_SCHEMA", "false")
     config = build_pass_harness_config(
-        pass_number=2, archive_label="t", reasoning_task=True, default_max_tokens=1024,
+        pass_number=2,
+        archive_label="t",
+        reasoning_task=True,
+        default_max_tokens=1024,
         json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
     )
     assert config.json_schema is None
@@ -272,7 +281,9 @@ def test_404_falls_back_to_json_object_once():
             raise _http_error(404)
         resp = mock.Mock()
         resp.json.return_value = {
-            "choices": [{"message": {"content": '{"ok": true}'}, "finish_reason": "stop"}],
+            "choices": [
+                {"message": {"content": '{"ok": true}'}, "finish_reason": "stop"}
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 5},
             "provider": "TestProvider",
         }
@@ -282,8 +293,10 @@ def test_404_falls_back_to_json_object_once():
     config = HarnessConfig(
         model_path="x/y", json_schema=PASS2_BATCHED_VALIDATION_SCHEMA
     )
-    with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}), \
-         mock.patch.object(llm_harness, "_post_with_backoff", side_effect=fake_post):
+    with (
+        mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}),
+        mock.patch.object(llm_harness, "_post_with_backoff", side_effect=fake_post),
+    ):
         raw, error, meta = llm_harness._invoke_openrouter(config, "prompt")
 
     assert error is None
@@ -312,9 +325,13 @@ def test_usage_meta_captured():
         }
         return resp
 
-    with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}), \
-         mock.patch.object(llm_harness, "_post_with_backoff", side_effect=fake_post):
-        _, error, meta = llm_harness._invoke_openrouter(HarnessConfig(model_path="x/y"), "p")
+    with (
+        mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}),
+        mock.patch.object(llm_harness, "_post_with_backoff", side_effect=fake_post),
+    ):
+        _, error, meta = llm_harness._invoke_openrouter(
+            HarnessConfig(model_path="x/y"), "p"
+        )
 
     assert error is None
     assert meta["prompt_tokens"] == 100
@@ -353,14 +370,18 @@ def test_invoke_exposes_usage_metadata_on_result():
         }
         return resp
 
-    with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}), \
-         mock.patch.object(llm_harness, "_post_with_backoff", side_effect=fake_post):
+    with (
+        mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}),
+        mock.patch.object(llm_harness, "_post_with_backoff", side_effect=fake_post),
+    ):
         result = llm_harness.invoke(HarnessConfig(model_path="x/y"), "p")
 
     assert result.success
     assert result.metadata["cost"] == 0.0042
     assert result.metadata["prompt_tokens"] == 100
-    assert result.metadata["attempt_count"] if "attempt_count" in result.metadata else True
+    assert (
+        result.metadata["attempt_count"] if "attempt_count" in result.metadata else True
+    )
 
 
 def test_retry_result_reports_total_attempt_cost():
@@ -368,7 +389,7 @@ def test_retry_result_reports_total_attempt_cost():
 
     attempts = [
         HarnessResult(
-            raw_output="{\"partial",
+            raw_output='{"partial',
             parsed=None,
             success=False,
             error="Response truncated at max_tokens=100 (finish_reason=length)",
@@ -394,15 +415,17 @@ def test_retry_result_reports_total_attempt_cost():
 
 
 def test_pass1_abstentions_parsed_and_shape_guarded():
-    parsed = parse_entity_verification_output({
-        "entities": [],
-        "rejected_matches": [],
-        "abstentions": [
-            {"names": ["SMITH J", "J SMITH LLC"], "reason": "no shared address"},
-            {"reason": "malformed, no names key"},
-            "not a dict",
-        ],
-    })
+    parsed = parse_entity_verification_output(
+        {
+            "entities": [],
+            "rejected_matches": [],
+            "abstentions": [
+                {"names": ["SMITH J", "J SMITH LLC"], "reason": "no shared address"},
+                {"reason": "malformed, no names key"},
+                "not a dict",
+            ],
+        }
+    )
     assert parsed["abstentions"] == [
         {"names": ["SMITH J", "J SMITH LLC"], "reason": "no shared address"}
     ]
@@ -423,7 +446,9 @@ def test_truncation_retry_doubles_budget_and_steps_effort_down():
         configs_seen.append(config)
         if len(configs_seen) == 1:
             return HarnessResult(
-                raw_output="{\"partial", parsed=None, success=False,
+                raw_output='{"partial',
+                parsed=None,
+                success=False,
                 error=f"Response truncated at max_tokens={config.max_tokens} (finish_reason=length)",
             )
         return HarnessResult(raw_output="{}", parsed={}, success=True)
@@ -446,13 +471,17 @@ def test_truncation_retry_defaults_effort_low_when_unset():
         configs_seen.append(config)
         if len(configs_seen) == 1:
             return HarnessResult(
-                raw_output="", parsed=None, success=False,
+                raw_output="",
+                parsed=None,
+                success=False,
                 error="Response truncated at max_tokens=2048 (finish_reason=length)",
             )
         return HarnessResult(raw_output="{}", parsed={}, success=True)
 
     with mock.patch.object(llm_harness, "invoke", side_effect=fake_invoke):
-        invoke_with_retry(HarnessConfig(model_path="x/y", max_tokens=2048), "p", retries=1)
+        invoke_with_retry(
+            HarnessConfig(model_path="x/y", max_tokens=2048), "p", retries=1
+        )
 
     assert configs_seen[1].reasoning_effort == "low"
     assert configs_seen[1].max_tokens == 4096
@@ -465,8 +494,12 @@ def test_missing_key_not_retried():
 
     def fake_invoke(config, prompt, archive_key=None, pdf_bytes=None):
         calls.append(1)
-        return HarnessResult(raw_output="", parsed=None, success=False,
-                             error="OPENROUTER_API_KEY not set")
+        return HarnessResult(
+            raw_output="",
+            parsed=None,
+            success=False,
+            error="OPENROUTER_API_KEY not set",
+        )
 
     with mock.patch.object(llm_harness, "invoke", side_effect=fake_invoke):
         result = invoke_with_retry(HarnessConfig(model_path="x/y"), "p", retries=3)
@@ -478,47 +511,72 @@ def test_missing_key_not_retried():
 def test_http_error_preserves_provider_body_when_post_raises():
     response = requests.Response()
     response.status_code = 400
-    response._content = b'{"error":{"message":"Unsupported schema keyword: uniqueItems"}}'
+    response._content = (
+        b'{"error":{"message":"Unsupported schema keyword: uniqueItems"}}'
+    )
     error = requests.exceptions.HTTPError(response=response)
-    with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}), \
-         mock.patch.object(llm_harness, "_post_with_backoff", side_effect=error):
-        _, detail, metadata = llm_harness._invoke_openrouter(HarnessConfig(model_path="x/y"), "p")
+    with (
+        mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}),
+        mock.patch.object(llm_harness, "_post_with_backoff", side_effect=error),
+    ):
+        _, detail, metadata = llm_harness._invoke_openrouter(
+            HarnessConfig(model_path="x/y"), "p"
+        )
     assert "Unsupported schema keyword: uniqueItems" in detail
     assert metadata == {}
 
 
-@pytest.mark.parametrize('effort, expected', [(None, 'low'), ('high', 'high'), ('max', 'max')])
-def test_glm_flash_bounds_mandatory_reasoning_without_generic_sampling(effort, expected):
+@pytest.mark.parametrize(
+    "effort, expected", [(None, "low"), ("high", "high"), ("max", "max")]
+)
+def test_glm_flash_bounds_mandatory_reasoning_without_generic_sampling(
+    effort, expected
+):
     from countyiq.lib.llm_harness import get_preset_for_model
-    model = 'z-ai/glm-5.3-flash'
-    payload = build_openrouter_payload(HarnessConfig(
-        model_path=model, thinking=False, reasoning_effort=effort,
-        json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
-        provider_quantizations=('fp8',), **get_preset_for_model(model),
-    ), 'prompt')
-    assert payload['reasoning'] == {'effort': expected}
-    assert payload['temperature'] == 1.0
-    assert payload['top_p'] == 0.95
-    assert 'top_k' not in payload
-    assert payload['provider']['quantizations'] == ['fp8']
-    assert payload['provider']['require_parameters'] is True
+
+    model = "z-ai/glm-5.3-flash"
+    payload = build_openrouter_payload(
+        HarnessConfig(
+            model_path=model,
+            thinking=False,
+            reasoning_effort=effort,
+            json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
+            provider_quantizations=("fp8",),
+            **get_preset_for_model(model),
+        ),
+        "prompt",
+    )
+    assert payload["reasoning"] == {"effort": expected}
+    assert payload["temperature"] == 1.0
+    assert payload["top_p"] == 0.95
+    assert "top_k" not in payload
+    assert payload["provider"]["quantizations"] == ["fp8"]
+    assert payload["provider"]["require_parameters"] is True
 
 
-@pytest.mark.parametrize('thinking, effort, expected', [
-    (False, None, {'enabled': False}),
-    (True, None, {'enabled': True}),
-    (False, 'low', {'effort': 'low'}),
-    (True, 'high', {'effort': 'high'}),
-])
+@pytest.mark.parametrize(
+    "thinking, effort, expected",
+    [
+        (False, None, {"enabled": False}),
+        (True, None, {"enabled": True}),
+        (False, "low", {"effort": "low"}),
+        (True, "high", {"effort": "high"}),
+    ],
+)
 def test_deepseek_v4_uses_portable_reasoning_controls(thinking, effort, expected):
-    payload = build_openrouter_payload(HarnessConfig(
-        model_path='deepseek/deepseek-v4-flash-0731', thinking=thinking,
-        reasoning_effort=effort, json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
-    ), 'prompt')
-    assert payload['reasoning'] == expected
-    assert 'chat_template_kwargs' not in payload
+    payload = build_openrouter_payload(
+        HarnessConfig(
+            model_path="deepseek/deepseek-v4-flash-0731",
+            thinking=thinking,
+            reasoning_effort=effort,
+            json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
+        ),
+        "prompt",
+    )
+    assert payload["reasoning"] == expected
+    assert "chat_template_kwargs" not in payload
     if thinking or effort:
-        assert 'temperature' not in payload
-        assert 'top_p' not in payload
-        assert 'top_k' not in payload
-    assert payload['response_format']['type'] == 'json_schema'
+        assert "temperature" not in payload
+        assert "top_p" not in payload
+        assert "top_k" not in payload
+    assert payload["response_format"]["type"] == "json_schema"

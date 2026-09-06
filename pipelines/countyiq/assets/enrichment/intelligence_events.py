@@ -42,8 +42,8 @@ _INSERT_COLUMNS = (
 )
 
 _INSERT_SQL = f"""
-    INSERT INTO public.intelligence_events ({', '.join(_INSERT_COLUMNS)})
-    VALUES ({', '.join(['%s'] * len(_INSERT_COLUMNS))})
+    INSERT INTO public.intelligence_events ({", ".join(_INSERT_COLUMNS)})
+    VALUES ({", ".join(["%s"] * len(_INSERT_COLUMNS))})
 """
 
 
@@ -262,26 +262,32 @@ def intelligence_events(
 
     with database.transaction() as cur:
         from countyiq.lib.proceeding_contract import resolve_project_keys
-        cur.execute("LOCK TABLE meta.proceeding_project_aliases IN SHARE ROW EXCLUSIVE MODE")
+
+        cur.execute(
+            "LOCK TABLE meta.proceeding_project_aliases IN SHARE ROW EXCLUSIVE MODE"
+        )
         cur.execute("SELECT alias, project_key FROM meta.proceeding_project_aliases")
         known = dict(cur.fetchall())
         keys, additions = resolve_project_keys(development_rows, known)
         for alias, key in additions.items():
-            cur.execute("INSERT INTO meta.proceeding_project_aliases(alias, project_key) VALUES (%s, %s)", (alias, key))
+            cur.execute(
+                "INSERT INTO meta.proceeding_project_aliases(alias, project_key) VALUES (%s, %s)",
+                (alias, key),
+            )
         for row in development_rows:
             row["resolved_project_key"] = keys.get(row["id"])
             events.append(build_development_event(row))
         cur.execute("DELETE FROM public.intelligence_events")
-        execute_batch(cur, _INSERT_SQL, [_insert_tuple(event) for event in events], page_size=500)
+        execute_batch(
+            cur, _INSERT_SQL, [_insert_tuple(event) for event in events], page_size=500
+        )
         cur.execute("SELECT public.refresh_watch_notifications()")
 
     by_category = {
         "parcel": sum(event["category"] == "parcel" for event in events),
         "development": sum(event["category"] == "development" for event in events),
     }
-    llm_interpretations = sum(
-        event["interpretation_kind"] == "llm" for event in events
-    )
+    llm_interpretations = sum(event["interpretation_kind"] == "llm" for event in events)
     context.log.info(
         "Rebuilt intelligence ledger: %d parcel, %d development, %d cached LLM interpretations",
         by_category["parcel"],

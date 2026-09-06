@@ -633,13 +633,17 @@ def _seed_contract_data(cur) -> None:
     proceeding_ids = [row[0] for row in cur.fetchall()]
     # Synthetic parcels and both proceeding bodies share the fixture jurisdiction.
     # Keep the named Hanover policy so policy-revocation tests exercise it.
-    cur.execute("""
+    cur.execute(
+        """
         UPDATE meta.municipality_source_rights
         SET municipality_name=%s, derived_product_allowed=TRUE,
             rights_status='conditional', review_due_on=CURRENT_DATE+30
         WHERE source_key='hanover_borough_council'
-    """, (TEST_MUNICIPALITY,))
-    cur.execute("""
+    """,
+        (TEST_MUNICIPALITY,),
+    )
+    cur.execute(
+        """
         INSERT INTO meta.municipality_source_rights
             (source_key,municipality_name,body_name,proceeding_type,rights_status,
              derived_product_allowed,terms_review_status,reviewed_on,review_due_on)
@@ -647,9 +651,13 @@ def _seed_contract_data(cur) -> None:
                 'planning_commission','conditional',TRUE,'reviewed',CURRENT_DATE,CURRENT_DATE+30)
         ON CONFLICT (source_key) DO UPDATE SET municipality_name=EXCLUDED.municipality_name,
             derived_product_allowed=TRUE, rights_status='conditional',review_due_on=EXCLUDED.review_due_on
-    """, (TEST_MUNICIPALITY,))
-    cur.execute("UPDATE staging.public_proceedings SET metadata_quality=%s WHERE id=ANY(%s)",
-                (Json({"status": "ready", "version": "test-fixture"}), proceeding_ids))
+    """,
+        (TEST_MUNICIPALITY,),
+    )
+    cur.execute(
+        "UPDATE staging.public_proceedings SET metadata_quality=%s WHERE id=ANY(%s)",
+        (Json({"status": "ready", "version": "test-fixture"}), proceeding_ids),
+    )
 
     cur.execute(
         """
@@ -870,6 +878,7 @@ def _seed_contract_data(cur) -> None:
 def _contract_owner_context_ref(cur):
     import hashlib
     import json
+
     cur.execute("""
         SELECT o.owner_id,o.canonical_name,o.entity_type,
                array_agg(DISTINCT osl.source_id ORDER BY osl.source_id),
@@ -879,27 +888,46 @@ def _contract_owner_context_ref(cur):
         WHERE o.canonical_name='Alpha Holdings LLC'
         GROUP BY o.owner_id,o.canonical_name,o.entity_type
     """)
-    context = dict(zip(("owner_id","canonical_name","entity_type","pidns","n_parcels"), cur.fetchone()))
-    cur.execute("""
+    context = dict(
+        zip(
+            ("owner_id", "canonical_name", "entity_type", "pidns", "n_parcels"),
+            cur.fetchone(),
+        )
+    )
+    cur.execute(
+        """
         SELECT DISTINCT e.pidn,p.municipality FROM public.evidence e
         LEFT JOIN staging.parcels p ON p.pidn=e.pidn AND p.valid_to IS NULL
         WHERE e.pidn=%s AND e.validation_status IN ('confirmed','upgraded','downgraded')
-    """, (TEST_PIDN,))
-    context["signal_municipalities"] = {pidn: municipality or None for pidn, municipality in cur.fetchall()}
-    return "owner-context:v2:" + hashlib.sha256(
-        json.dumps(context,sort_keys=True,separators=(",",":"),default=str).encode()
-    ).hexdigest()
+    """,
+        (TEST_PIDN,),
+    )
+    context["signal_municipalities"] = {
+        pidn: municipality or None for pidn, municipality in cur.fetchall()
+    }
+    return (
+        "owner-context:v2:"
+        + hashlib.sha256(
+            json.dumps(
+                context, sort_keys=True, separators=(",", ":"), default=str
+            ).encode()
+        ).hexdigest()
+    )
 
 
 def _contract_brief_payload(cur, kind):
     """Synthetic accepted output matching the persisted customer-facing claims."""
     if kind == "parcel_brief":
-        cur.execute("SELECT to_jsonb(b) FROM public.parcel_briefs b WHERE pidn=%s", (TEST_PIDN,))
+        cur.execute(
+            "SELECT to_jsonb(b) FROM public.parcel_briefs b WHERE pidn=%s", (TEST_PIDN,)
+        )
         payload = cur.fetchone()[0]
         payload["brief"] = payload.pop("brief_text")
         payload["recommendation"] = "watch"
     else:
-        cur.execute("SELECT to_jsonb(b) FROM public.owner_briefs b WHERE canonical_name='Alpha Holdings LLC'")
+        cur.execute(
+            "SELECT to_jsonb(b) FROM public.owner_briefs b WHERE canonical_name='Alpha Holdings LLC'"
+        )
         payload = cur.fetchone()[0]
     return payload
 
@@ -907,26 +935,48 @@ def _contract_brief_payload(cur, kind):
 def _bind_contract_brief_versions(cur):
     """Attach synthetic accepted history to the current contract signal versions."""
     import hashlib
-    owner_subject = "owner_brief:" + hashlib.sha256(b"Alpha Holdings LLC").hexdigest()[:20]
-    cur.execute("SELECT signal_key,active_inference_id FROM public.evidence WHERE pidn=%s ORDER BY signal_key", (TEST_PIDN,))
-    refs = [f"signal-version:{TEST_PIDN}:{key}:{version}" for key, version in cur.fetchall()]
+
+    owner_subject = (
+        "owner_brief:" + hashlib.sha256(b"Alpha Holdings LLC").hexdigest()[:20]
+    )
+    cur.execute(
+        "SELECT signal_key,active_inference_id FROM public.evidence WHERE pidn=%s ORDER BY signal_key",
+        (TEST_PIDN,),
+    )
+    refs = [
+        f"signal-version:{TEST_PIDN}:{key}:{version}" for key, version in cur.fetchall()
+    ]
     owner_ref = _contract_owner_context_ref(cur)
     cur.execute("SELECT meta.parcel_brief_source_fingerprint(%s)", (TEST_PIDN,))
     parcel_ref = "parcel-context:v1:" + cur.fetchone()[0]
     for kind in ("parcel_brief", "owner_brief"):
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO meta.intelligence_inference_history
               (subject_key,pass_number,output_kind,decision_key,source_hash,input_hash,
                requested_model,prompt_version,output_hash,decision_fingerprint,
                payload,evidence_refs,disposition)
             VALUES (%s,3,%s,'contract','fixture','fixture','fixture','fixture',
                     'fixture','fixture',%s,%s,'accepted') RETURNING inference_id
-        """, (owner_subject if kind == "owner_brief" else TEST_PIDN, kind, Json(_contract_brief_payload(cur, kind)), Json(refs + ([owner_ref] if kind == "owner_brief" else [parcel_ref]))))
+        """,
+            (
+                owner_subject if kind == "owner_brief" else TEST_PIDN,
+                kind,
+                Json(_contract_brief_payload(cur, kind)),
+                Json(refs + ([owner_ref] if kind == "owner_brief" else [parcel_ref])),
+            ),
+        )
         inference_id = cur.fetchone()[0]
         if kind == "parcel_brief":
-            cur.execute("UPDATE public.parcel_briefs SET active_inference_id=%s WHERE pidn=%s", (inference_id,TEST_PIDN))
+            cur.execute(
+                "UPDATE public.parcel_briefs SET active_inference_id=%s WHERE pidn=%s",
+                (inference_id, TEST_PIDN),
+            )
         else:
-            cur.execute("UPDATE public.owner_briefs SET active_inference_id=%s WHERE canonical_name='Alpha Holdings LLC'", (inference_id,))
+            cur.execute(
+                "UPDATE public.owner_briefs SET active_inference_id=%s WHERE canonical_name='Alpha Holdings LLC'",
+                (inference_id,),
+            )
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -950,7 +1000,8 @@ def prepared_database() -> None:
         with conn.cursor() as cur:
             _reset_tables(cur)
             _seed_contract_data(cur)
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO meta.intelligence_inference_history
                   (subject_key,pass_number,output_kind,decision_key,source_hash,input_hash,
                    requested_model,prompt_version,output_hash,decision_fingerprint,
@@ -961,10 +1012,18 @@ def prepared_database() -> None:
                             'cross_signal_insight',(SELECT cross_signal_insight FROM meta.intelligence_passes WHERE pidn=%s AND pass_number=2)
                         ),'[]','accepted')
                 RETURNING inference_id
-            """, (TEST_PIDN,TEST_PIDN,TEST_PIDN))
+            """,
+                (TEST_PIDN, TEST_PIDN, TEST_PIDN),
+            )
             signal_inference = cur.fetchone()[0]
-            cur.execute("UPDATE meta.intelligence_passes SET input_hash='fixture' WHERE pidn=%s AND pass_number=2",(TEST_PIDN,))
-            cur.execute("UPDATE public.evidence SET active_inference_id=%s WHERE pidn=%s", (signal_inference,TEST_PIDN))
+            cur.execute(
+                "UPDATE meta.intelligence_passes SET input_hash='fixture' WHERE pidn=%s AND pass_number=2",
+                (TEST_PIDN,),
+            )
+            cur.execute(
+                "UPDATE public.evidence SET active_inference_id=%s WHERE pidn=%s",
+                (signal_inference, TEST_PIDN),
+            )
             _bind_contract_brief_versions(cur)
         conn.commit()
 

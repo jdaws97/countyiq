@@ -36,13 +36,17 @@ def upgrade() -> None:
         sa.Column("canonical_name", sa.Text(), primary_key=True),
         sa.Column("owner_id", sa.Integer()),
         sa.Column("brief_text", sa.Text()),
-        sa.Column("portfolio_strategy", sa.Text()),  # accumulator|flipper|holder|distressed|institutional|unclear
+        sa.Column(
+            "portfolio_strategy", sa.Text()
+        ),  # accumulator|flipper|holder|distressed|institutional|unclear
         sa.Column("concentration_notes", sa.Text()),
         sa.Column("key_pattern", sa.Text()),
-        sa.Column("recommendation", sa.Text()),       # pursue_acquisition|monitor|compete|none
+        sa.Column(
+            "recommendation", sa.Text()
+        ),  # pursue_acquisition|monitor|compete|none
         sa.Column("urgency", sa.Text()),
         sa.Column("top_risk", sa.Text()),
-        sa.Column("evidence_strength", sa.Text()),    # strong|moderate|weak
+        sa.Column("evidence_strength", sa.Text()),  # strong|moderate|weak
         sa.Column("citations", JSONB()),
         sa.Column("parcel_citations", JSONB()),
         sa.Column("n_parcels", sa.Integer()),
@@ -54,7 +58,8 @@ def upgrade() -> None:
         sa.Column("brief_version", sa.Integer(), server_default="1"),
         sa.Column("pass_metadata", JSONB()),
         sa.Column(
-            "generated_at", sa.DateTime(timezone=True),
+            "generated_at",
+            sa.DateTime(timezone=True),
             server_default=sa.text("NOW()"),
         ),
         sa.CheckConstraint(

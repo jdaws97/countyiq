@@ -549,26 +549,44 @@ def test_pass2_forbidden_claims_ignore_explicit_disclaimers_only():
     ]
 
 
-@pytest.mark.parametrize("text,claim", [
-    ("Development intent and distress are unconfirmed.", "development intent"),
-    ("Arm's-length status and buyer development intent are unestablished.", "arm's length"),
-    ("Acquisition prices and a verified developer profile are missing.", "developer"),
-    ("There is no verified developer profile and the delinquency rate is 0.0%.", "developer"),
-    ("Material gaps include the absence of any confirmed filing or coordinated neighboring acquisition.", "coordinated acquisition"),
-])
+@pytest.mark.parametrize(
+    "text,claim",
+    [
+        ("Development intent and distress are unconfirmed.", "development intent"),
+        (
+            "Arm's-length status and buyer development intent are unestablished.",
+            "arm's length",
+        ),
+        (
+            "Acquisition prices and a verified developer profile are missing.",
+            "developer",
+        ),
+        (
+            "There is no verified developer profile and the delinquency rate is 0.0%.",
+            "developer",
+        ),
+        (
+            "Material gaps include the absence of any confirmed filing or coordinated neighboring acquisition.",
+            "coordinated acquisition",
+        ),
+    ],
+)
 def test_forbidden_claims_accept_explicit_absence(text, claim):
     from eval.scoring import _forbidden_assertions
 
     assert _forbidden_assertions(text, [claim]) == []
 
 
-@pytest.mark.parametrize("text", [
-    "No rezoning is recorded, but the seller is distressed.",
-    "There is no development application; the seller is distressed.",
-    "The buyer is not only a developer but also a distressed seller.",
-    "A development plan is missing. The seller is distressed.",
-    "There is an absence of planning records, but the seller is distressed.",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "No rezoning is recorded, but the seller is distressed.",
+        "There is no development application; the seller is distressed.",
+        "The buyer is not only a developer but also a distressed seller.",
+        "A development plan is missing. The seller is distressed.",
+        "There is an absence of planning records, but the seller is distressed.",
+    ],
+)
 def test_disclaimer_cannot_hide_separate_asserted_claim(text):
     from eval.scoring import _forbidden_assertions
 
@@ -590,7 +608,9 @@ def test_required_counts_accept_equivalent_cardinals_without_substring_matches()
     assert _contains_any("Zero mapped structures", ["0 structures"])
     assert _contains_any("13 neighbors across twelve owners", ["12 different owners"])
     assert not _contains_any("13 neighbors across 112 owners", ["12 different owners"])
-    assert not _contains_any("The parcel has a different owner", ["The parcel has an owner"])
+    assert not _contains_any(
+        "The parcel has a different owner", ["The parcel has an owner"]
+    )
 
 
 def test_pass3_scorer_requires_structured_decision_and_grounded_citations():
@@ -623,12 +643,19 @@ def test_pass3_facts_in_cited_risk_count_but_questions_do_not():
     labels = case["labels"]
     citations = labels["required_citations"]
     markers = " ".join(f"[Signal: {key}]" for key in citations)
-    parsed = {field: accepted[0] for field, accepted in labels["accepted_fields"].items()}
+    parsed = {
+        field: accepted[0] for field, accepted in labels["accepted_fields"].items()
+    }
     facts = "; ".join(group[0] for group in labels["required_fact_groups"])
-    parsed.update({"top_signal_key": citations[0], "citations": citations,
-                   "assessment_reasoning": f"Review the documented plan {markers}",
-                   "brief": f"Confirm the plan scope {markers}",
-                   "top_risk": f"{facts} {markers}"})
+    parsed.update(
+        {
+            "top_signal_key": citations[0],
+            "citations": citations,
+            "assessment_reasoning": f"Review the documented plan {markers}",
+            "brief": f"Confirm the plan scope {markers}",
+            "top_risk": f"{facts} {markers}",
+        }
+    )
     assert score_pass3(parsed, case)["gold_pass"]
     parsed["key_questions"] = [f"Are these facts true: {facts}?"]
     parsed["top_risk"] = f"Approval remains unverified {markers}"
@@ -636,7 +663,9 @@ def test_pass3_facts_in_cited_risk_count_but_questions_do_not():
 
 
 @pytest.mark.parametrize("pass_number", [2, 3])
-def test_live_runner_defaults_to_production_pass_protocol(pass_number, monkeypatch, tmp_path):
+def test_live_runner_defaults_to_production_pass_protocol(
+    pass_number, monkeypatch, tmp_path
+):
     """The CLI must exercise the serving prompt/schema without a legacy-mode flag."""
     import sys
     from unittest.mock import MagicMock
@@ -645,10 +674,23 @@ def test_live_runner_defaults_to_production_pass_protocol(pass_number, monkeypat
     pidns = tmp_path / "pidns.txt"
     pidns.write_text("test-parcel\n")
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-no-network")
-    monkeypatch.setattr(sys, "argv", [
-        "eval_runner", "--model", "openai/gpt-5.6-luna", "--pass", str(pass_number),
-        "--pidns-file", str(pidns), "--output", str(tmp_path), "--limit", "1",
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "eval_runner",
+            "--model",
+            "openai/gpt-5.6-luna",
+            "--pass",
+            str(pass_number),
+            "--pidns-file",
+            str(pidns),
+            "--output",
+            str(tmp_path),
+            "--limit",
+            "1",
+        ],
+    )
     connection = MagicMock()
     connection.__enter__.return_value = connection
     cursor = connection.cursor.return_value.__enter__.return_value
@@ -661,14 +703,19 @@ def test_live_runner_defaults_to_production_pass_protocol(pass_number, monkeypat
         assert pidn == "test-parcel"
         assert isinstance(ledger, EvalCostLedger)
         return {
-            "success": True, "elapsed_seconds": 0.1, "raw_output": "{}",
-            "parsed_output": {}, "error": None,
+            "success": True,
+            "elapsed_seconds": 0.1,
+            "raw_output": "{}",
+            "parsed_output": {},
+            "error": None,
         }
 
     expected_route = "run_pass2_batched" if pass_number == 2 else "run_pass3"
     other_route = "run_pass3" if pass_number == 2 else "run_pass2_batched"
     monkeypatch.setattr(eval_runner, expected_route, evaluate)
-    monkeypatch.setattr(eval_runner, other_route, lambda *args: pytest.fail("Wrong pass selected"))
+    monkeypatch.setattr(
+        eval_runner, other_route, lambda *args: pytest.fail("Wrong pass selected")
+    )
     eval_runner.main()
 
     assert len(captured) == 1

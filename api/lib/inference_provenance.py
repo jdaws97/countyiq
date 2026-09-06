@@ -104,7 +104,8 @@ def owner_context_is_current(cur, canonical_name: str, references: list[str]) ->
     import hashlib
     import json
 
-    cur.execute("""
+    cur.execute(
+        """
         SELECT o.owner_id, o.canonical_name, o.entity_type,
                array_agg(DISTINCT osl.source_id ORDER BY osl.source_id) AS pidns,
                COUNT(DISTINCT osl.source_id) AS n_parcels
@@ -113,28 +114,38 @@ def owner_context_is_current(cur, canonical_name: str, references: list[str]) ->
           ON osl.owner_id = o.owner_id AND osl.source_type = 'parcel'
         WHERE o.canonical_name = %(name)s
         GROUP BY o.owner_id, o.canonical_name, o.entity_type
-    """, {"name": canonical_name})
+    """,
+        {"name": canonical_name},
+    )
     owner = cur.fetchone()
     if not owner:
         return False
     context = dict(owner)
-    signal_pidns = sorted({
-        ref.split(":")[1] for ref in references
-        if ref.startswith("signal-version:") and len(ref.split(":")) == 4
-    })
-    cur.execute("""
+    signal_pidns = sorted(
+        {
+            ref.split(":")[1]
+            for ref in references
+            if ref.startswith("signal-version:") and len(ref.split(":")) == 4
+        }
+    )
+    cur.execute(
+        """
         SELECT requested.pidn, parcel.municipality
         FROM unnest(%(pidns)s::text[]) AS requested(pidn)
         LEFT JOIN staging.parcels parcel
           ON parcel.pidn=requested.pidn AND parcel.valid_to IS NULL
         ORDER BY requested.pidn
-    """, {"pidns": signal_pidns})
+    """,
+        {"pidns": signal_pidns},
+    )
     context["signal_municipalities"] = {
         row["pidn"]: row["municipality"] or None for row in cur.fetchall()
     }
     # Same canonical JSON contract as the pipeline intelligence content hash.
     serialized = json.dumps(context, sort_keys=True, separators=(",", ":"), default=str)
-    expected = "owner-context:v2:" + hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    expected = (
+        "owner-context:v2:" + hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    )
     return expected in references
 
 

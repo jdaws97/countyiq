@@ -305,17 +305,27 @@ def _run_corridor_scan(database, log, config, invoke_with_retry, item_budget):
                     cluster_pidns = row.get("cluster_pidns")
                     cluster_size = row.get("cluster_size")
 
-                briefs_rows = database.execute(
-                    BRIEFS_FOR_PIDNS_QUERY,
-                    {"pidns": cluster_pidns or []},
-                ) or []
-                parcels = _rows_to_dicts(briefs_rows, ["pidn", "address", "assessment", "brief_excerpt"])
+                briefs_rows = (
+                    database.execute(
+                        BRIEFS_FOR_PIDNS_QUERY,
+                        {"pidns": cluster_pidns or []},
+                    )
+                    or []
+                )
+                parcels = _rows_to_dicts(
+                    briefs_rows, ["pidn", "address", "assessment", "brief_excerpt"]
+                )
 
-                proc_rows = database.execute(
-                    PROCEEDINGS_FOR_PIDNS_QUERY,
-                    {"pidns": cluster_pidns or []},
-                ) or []
-                proceedings = _rows_to_dicts(proc_rows, ["type", "applicant", "decision", "meeting_date", "body"])
+                proc_rows = (
+                    database.execute(
+                        PROCEEDINGS_FOR_PIDNS_QUERY,
+                        {"pidns": cluster_pidns or []},
+                    )
+                    or []
+                )
+                proceedings = _rows_to_dicts(
+                    proc_rows, ["type", "applicant", "decision", "meeting_date", "body"]
+                )
 
                 narrative_data = {
                     "signal_key": signal_key,
@@ -400,17 +410,27 @@ def _run_portfolio_scan(database, log, config, invoke_with_retry, item_budget):
                 entity_name = canonical_name or ""
                 names = [canonical_name] if canonical_name else []
 
-                briefs_rows = database.execute(
-                    BRIEFS_FOR_PIDNS_QUERY,
-                    {"pidns": pidns or []},
-                ) or []
-                briefs = _rows_to_dicts(briefs_rows, ["pidn", "address", "assessment", "brief_excerpt"])
+                briefs_rows = (
+                    database.execute(
+                        BRIEFS_FOR_PIDNS_QUERY,
+                        {"pidns": pidns or []},
+                    )
+                    or []
+                )
+                briefs = _rows_to_dicts(
+                    briefs_rows, ["pidn", "address", "assessment", "brief_excerpt"]
+                )
 
                 deeds = []
                 if names:
                     try:
-                        deed_rows = database.execute(DEEDS_FOR_ENTITY_QUERY, {"names": names}) or []
-                        deeds = _rows_to_dicts(deed_rows, ["pidn", "grantor", "grantee", "date", "price"])
+                        deed_rows = (
+                            database.execute(DEEDS_FOR_ENTITY_QUERY, {"names": names})
+                            or []
+                        )
+                        deeds = _rows_to_dicts(
+                            deed_rows, ["pidn", "grantor", "grantee", "date", "price"]
+                        )
                     except Exception:
                         deeds = []
 
@@ -501,7 +521,8 @@ def _run_municipal_scan(database, log, config, invoke_with_retry, item_budget):
                 else:
                     municipality = row.get("municipality")
                     assessment_distribution = {
-                        "strong_opportunity": row.get("strong_opportunity_count", 0) or 0,
+                        "strong_opportunity": row.get("strong_opportunity_count", 0)
+                        or 0,
                         "emerging": row.get("emerging_count", 0) or 0,
                         "speculative": row.get("speculative_count", 0) or 0,
                         "constrained": row.get("constrained_count", 0) or 0,
@@ -519,12 +540,19 @@ def _run_municipal_scan(database, log, config, invoke_with_retry, item_budget):
 
                 zhb_decisions = {}
                 try:
-                    zhb_rows = database.execute(ZHB_DECISIONS_QUERY, {"municipality": municipality}) or []
+                    zhb_rows = (
+                        database.execute(
+                            ZHB_DECISIONS_QUERY, {"municipality": municipality}
+                        )
+                        or []
+                    )
                     for zhb_row in zhb_rows:
                         if isinstance(zhb_row, (tuple, list)):
                             zhb_decisions[zhb_row[0] or "unknown"] = zhb_row[1] or 0
                         else:
-                            zhb_decisions[zhb_row.get("decision", "unknown")] = zhb_row.get("cnt", 0)
+                            zhb_decisions[zhb_row.get("decision", "unknown")] = (
+                                zhb_row.get("cnt", 0)
+                            )
                 except Exception:
                     zhb_decisions = {}
 
@@ -610,7 +638,9 @@ def _run_distress_scan(database, log, config, invoke_with_retry, item_budget):
 
                 municipality = narrative_data["municipality"]
                 school_dis = narrative_data["school_dis"]
-                narrative_key = _build_narrative_key("market_segment", municipality, school_dis)
+                narrative_key = _build_narrative_key(
+                    "market_segment", municipality, school_dis
+                )
                 seen_keys.append(narrative_key)
 
                 status = _generate_or_refresh_narrative(
@@ -623,7 +653,9 @@ def _run_distress_scan(database, log, config, invoke_with_retry, item_budget):
                     narrative_type="market_segment",
                     prompt=build_distress_prompt(narrative_data),
                     narrative_data=narrative_data,
-                    archive_key=_narrative_archive_key("distress", municipality, school_dis),
+                    archive_key=_narrative_archive_key(
+                        "distress", municipality, school_dis
+                    ),
                 )
                 if status == "generated":
                     generated += 1
@@ -633,7 +665,12 @@ def _run_distress_scan(database, log, config, invoke_with_retry, item_budget):
                     errors += 1
 
             except Exception as exc:
-                log.warning("Error in distress scan for %s / %s: %s", municipality, school_dis, exc)
+                log.warning(
+                    "Error in distress scan for %s / %s: %s",
+                    municipality,
+                    school_dis,
+                    exc,
+                )
                 errors += 1
 
     except Exception as exc:
@@ -687,8 +724,12 @@ def _generate_or_refresh_narrative(
 
     parsed = parse_narrative_output(result.parsed or {})
     if "error" in parsed:
-        log.warning("Invalid narrative output for %s: %s", narrative_key, parsed["error"])
-        _update_pass_status(database, narrative_key, "error", input_hash, parsed["error"])
+        log.warning(
+            "Invalid narrative output for %s: %s", narrative_key, parsed["error"]
+        )
+        _update_pass_status(
+            database, narrative_key, "error", input_hash, parsed["error"]
+        )
         return "error"
 
     parsed["narrative_type"] = narrative_type
@@ -703,7 +744,9 @@ def _rows_to_dicts(rows: list, keys: list[str]) -> list[dict]:
         if isinstance(row, dict):
             result.append(row)
         elif isinstance(row, (tuple, list)):
-            result.append({key: row[i] if i < len(row) else None for i, key in enumerate(keys)})
+            result.append(
+                {key: row[i] if i < len(row) else None for i, key in enumerate(keys)}
+            )
         else:
             result.append(row)
     return result
@@ -716,7 +759,9 @@ def _normalize_key_part(part: object) -> str:
 
 
 def _build_narrative_key(kind: str, *parts: object) -> str:
-    normalized = [_normalize_key_part(part) for part in parts if part not in (None, "", [], ())]
+    normalized = [
+        _normalize_key_part(part) for part in parts if part not in (None, "", [], ())
+    ]
     digest_source = "|".join([kind, *normalized]).encode("utf-8")
     digest = hashlib.sha256(digest_source).hexdigest()[:16]
     prefix = ":".join([kind, *normalized[:2]])
@@ -729,8 +774,9 @@ def _narrative_archive_key(kind: str, *parts) -> str:
 
 
 def _get_prior_hash(database: DatabaseResource, narrative_key: str) -> str | None:
-    rows = database.execute(
-        """
+    rows = (
+        database.execute(
+            """
         SELECT ip.input_hash
         FROM meta.intelligence_passes ip
         JOIN public.county_narratives cn
@@ -740,8 +786,10 @@ def _get_prior_hash(database: DatabaseResource, narrative_key: str) -> str | Non
           AND ip.pass_number = %(pass_number)s
           AND ip.status = 'complete'
         """,
-        {"pidn": narrative_key, "pass_number": PASS_NUMBER},
-    ) or []
+            {"pidn": narrative_key, "pass_number": PASS_NUMBER},
+        )
+        or []
+    )
     if not rows:
         return None
     row = rows[0]

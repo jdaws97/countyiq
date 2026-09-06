@@ -32,8 +32,10 @@ from countyiq.lib.pass_llm_config import (
 
 def _clean_env():
     blocked = [
-        k for k in os.environ
-        if k.startswith("COUNTYIQ_PASS") or k in {"COUNTYIQ_OPENROUTER_MODEL", "COUNTYIQ_THINKING"}
+        k
+        for k in os.environ
+        if k.startswith("COUNTYIQ_PASS")
+        or k in {"COUNTYIQ_OPENROUTER_MODEL", "COUNTYIQ_THINKING"}
     ]
     return mock.patch.dict(os.environ, {}, clear=False), blocked
 
@@ -41,15 +43,29 @@ def _clean_env():
 def _configure_pass2_authorization(tmp_path, monkeypatch, *, maximum=0.10):
     import json
     from countyiq.lib.quality_release import release_identity
+
     path = tmp_path / "pass2-authorization.json"
     monkeypatch.setenv("COUNTYIQ_PASS2_MODEL", "openai/gpt-5.6-luna")
     import hashlib
+
     artifact = tmp_path / "evaluation.json"
     artifact.write_text("test evaluation record")
     quality = tmp_path / "quality.json"
-    quality.write_text(json.dumps({"identity": release_identity(2), "decision": "approved",
-        "reviewer": "test reviewer", "reviewed_at": "2026-09-04",
-        "evaluation_record": {"path": artifact.name, "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}, "catastrophic_errors": 0}))
+    quality.write_text(
+        json.dumps(
+            {
+                "identity": release_identity(2),
+                "decision": "approved",
+                "reviewer": "test reviewer",
+                "reviewed_at": "2026-09-04",
+                "evaluation_record": {
+                    "path": artifact.name,
+                    "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                },
+                "catastrophic_errors": 0,
+            }
+        )
+    )
     monkeypatch.setenv("COUNTYIQ_PASS2_QUALITY_RECEIPT", str(quality))
 
     create_backfill_authorization(
@@ -60,15 +76,16 @@ def _configure_pass2_authorization(tmp_path, monkeypatch, *, maximum=0.10):
         max_price_prompt=0.20,
         max_price_completion=1.20,
     )
-    monkeypatch.setenv(
-        "COUNTYIQ_PASS2_BACKFILL_AUTHORIZATION_FILE", str(path)
-    )
+    monkeypatch.setenv("COUNTYIQ_PASS2_BACKFILL_AUTHORIZATION_FILE", str(path))
 
 
 def test_pass1_config_carries_high_effort():
     with mock.patch.dict(os.environ, {}, clear=False):
         for key in list(os.environ):
-            if key.startswith("COUNTYIQ_PASS") or key in {"COUNTYIQ_OPENROUTER_MODEL", "COUNTYIQ_THINKING"}:
+            if key.startswith("COUNTYIQ_PASS") or key in {
+                "COUNTYIQ_OPENROUTER_MODEL",
+                "COUNTYIQ_THINKING",
+            }:
                 del os.environ[key]
         os.environ["COUNTYIQ_PASS1_ENABLED"] = "true"
         config = build_pass_harness_config(
@@ -85,7 +102,10 @@ def test_pass1_config_carries_high_effort():
 def test_pass2_config_carries_low_effort():
     with mock.patch.dict(os.environ, {}, clear=False):
         for key in list(os.environ):
-            if key.startswith("COUNTYIQ_PASS") or key in {"COUNTYIQ_OPENROUTER_MODEL", "COUNTYIQ_THINKING"}:
+            if key.startswith("COUNTYIQ_PASS") or key in {
+                "COUNTYIQ_OPENROUTER_MODEL",
+                "COUNTYIQ_THINKING",
+            }:
                 del os.environ[key]
         os.environ["COUNTYIQ_PASS2_ENABLED"] = "true"
         config = build_pass_harness_config(
@@ -180,14 +200,10 @@ def test_pass_spend_budget_reserves_worst_case_before_call():
         max_price_completion=2.0,
         system_prompt="rules",
     )
-    maximum = estimate_max_pass_call_cost(
-        config, "prompt", retries=1
-    )
+    maximum = estimate_max_pass_call_cost(config, "prompt", retries=1)
     budget = PassSpendBudget(2, maximum + 0.01)
 
-    reservation = budget.reserve(
-        config, "prompt", retries=1, pdf_bytes=None
-    )
+    reservation = budget.reserve(config, "prompt", retries=1, pdf_bytes=None)
     budget.record(
         HarnessResult("{}", {}, True, metadata={"cost": 0.001}),
         reservation,
@@ -229,9 +245,7 @@ def test_pass_spend_budget_rejects_invalid_provider_cost(cost):
         max_price_completion=1.0,
     )
     budget = PassSpendBudget(2, 1.0)
-    reservation = budget.reserve(
-        config, "prompt", retries=0, pdf_bytes=None
-    )
+    reservation = budget.reserve(config, "prompt", retries=0, pdf_bytes=None)
 
     reason = budget.record(
         HarnessResult("", None, False, metadata={"cost": cost}),
@@ -264,13 +278,9 @@ def test_every_paid_run_requires_durable_cumulative_authorization(monkeypatch):
     monkeypatch.setenv("COUNTYIQ_PASS2_MAX_COST_USD", "12.50")
     monkeypatch.setenv("COUNTYIQ_MAX_PRICE_PROMPT", "0.20")
     monkeypatch.setenv("COUNTYIQ_MAX_PRICE_COMPLETION", "1.20")
-    monkeypatch.delenv(
-        "COUNTYIQ_PASS2_BACKFILL_AUTHORIZATION_FILE", raising=False
-    )
+    monkeypatch.delenv("COUNTYIQ_PASS2_BACKFILL_AUTHORIZATION_FILE", raising=False)
 
-    with pytest.raises(
-        PassHarnessUnavailable, match="BACKFILL_AUTHORIZATION_FILE"
-    ):
+    with pytest.raises(PassHarnessUnavailable, match="BACKFILL_AUTHORIZATION_FILE"):
         resolve_pass_harness(
             mock.Mock(),
             pass_number=2,
@@ -279,20 +289,16 @@ def test_every_paid_run_requires_durable_cumulative_authorization(monkeypatch):
         )
 
 
-def test_resolved_harness_charges_provider_cost_to_pass_budget(
-    tmp_path, monkeypatch
-):
+def test_resolved_harness_charges_provider_cost_to_pass_budget(tmp_path, monkeypatch):
     monkeypatch.setenv("COUNTYIQ_PASS2_ENABLED", "true")
     monkeypatch.setenv("COUNTYIQ_PASS2_MAX_COST_USD", "0.10")
     monkeypatch.setenv("COUNTYIQ_MAX_PRICE_PROMPT", "0.20")
     monkeypatch.setenv("COUNTYIQ_MAX_PRICE_COMPLETION", "1.20")
     _configure_pass2_authorization(tmp_path, monkeypatch)
-    provider_call = mock.Mock(return_value=HarnessResult(
-        "{}", {}, True, metadata={"cost": 0.001}
-    ))
-    monkeypatch.setattr(
-        "countyiq.lib.llm_harness.invoke_with_retry", provider_call
+    provider_call = mock.Mock(
+        return_value=HarnessResult("{}", {}, True, metadata={"cost": 0.001})
     )
+    monkeypatch.setattr("countyiq.lib.llm_harness.invoke_with_retry", provider_call)
 
     config, invoke = resolve_pass_harness(
         mock.Mock(),
@@ -315,9 +321,7 @@ def test_resolved_harness_blocks_after_provider_failure_without_cost(
     monkeypatch.setenv("COUNTYIQ_MAX_PRICE_COMPLETION", "1.20")
     _configure_pass2_authorization(tmp_path, monkeypatch)
     provider_call = mock.Mock(side_effect=RuntimeError("connection reset"))
-    monkeypatch.setattr(
-        "countyiq.lib.llm_harness.invoke_with_retry", provider_call
-    )
+    monkeypatch.setattr("countyiq.lib.llm_harness.invoke_with_retry", provider_call)
 
     config, invoke = resolve_pass_harness(
         mock.Mock(),
@@ -343,9 +347,7 @@ def test_resolved_harness_retains_paid_result_before_blocking_later_calls(
     _configure_pass2_authorization(tmp_path, monkeypatch)
     paid_result = HarnessResult("{}", {}, True, metadata={})
     provider_call = mock.Mock(return_value=paid_result)
-    monkeypatch.setattr(
-        "countyiq.lib.llm_harness.invoke_with_retry", provider_call
-    )
+    monkeypatch.setattr("countyiq.lib.llm_harness.invoke_with_retry", provider_call)
 
     config, invoke = resolve_pass_harness(
         mock.Mock(),
@@ -363,7 +365,7 @@ def test_resolved_harness_retains_paid_result_before_blocking_later_calls(
 def test_explicit_effort_overrides_mercury_thinking_heuristic():
     config = HarnessConfig(
         model_path="inception/mercury-2",
-        thinking=True,          # family heuristic alone would emit effort=high
+        thinking=True,  # family heuristic alone would emit effort=high
         reasoning_effort="low",
     )
     payload = build_openrouter_payload(config, "prompt")
@@ -386,10 +388,13 @@ def test_effort_replaces_gpt_oss_hardcoded_key():
 
 
 def test_env_override_beats_default():
-    with mock.patch.dict(os.environ, {
-        "COUNTYIQ_PASS2_ENABLED": "true",
-        "COUNTYIQ_PASS2_REASONING_EFFORT": "medium",
-    }):
+    with mock.patch.dict(
+        os.environ,
+        {
+            "COUNTYIQ_PASS2_ENABLED": "true",
+            "COUNTYIQ_PASS2_REASONING_EFFORT": "medium",
+        },
+    ):
         config = build_pass_harness_config(
             pass_number=2,
             archive_label="test",

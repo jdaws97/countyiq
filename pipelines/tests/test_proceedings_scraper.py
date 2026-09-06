@@ -44,10 +44,16 @@ def _load_fixture(name: str) -> str:
 
 class TestSafeName:
     def test_simple_name(self):
-        assert _safe_name("Carroll Twp Board of Supervisors") == "carroll_twp_board_of_supervisors"
+        assert (
+            _safe_name("Carroll Twp Board of Supervisors")
+            == "carroll_twp_board_of_supervisors"
+        )
 
     def test_special_characters(self):
-        assert _safe_name("York City Zoning Hearing Board") == "york_city_zoning_hearing_board"
+        assert (
+            _safe_name("York City Zoning Hearing Board")
+            == "york_city_zoning_hearing_board"
+        )
 
     def test_strips_leading_trailing(self):
         result = _safe_name("  Hellam Twp  ")
@@ -116,7 +122,6 @@ class TestMeetingDateSanitization:
         assert rejected is False
 
 
-
 class _Log:
     def warning(self, *_args, **_kwargs):
         pass
@@ -158,7 +163,9 @@ class TestRobotsPolicy:
         monkeypatch.setattr(
             requests,
             "get",
-            lambda *_args, **_kwargs: _Response(200, "User-agent: *\nDisallow: /private"),
+            lambda *_args, **_kwargs: _Response(
+                200, "User-agent: *\nDisallow: /private"
+            ),
         )
         assert not RobotsPolicy("CountyIQ/1.0").allowed(
             "https://example.gov/private/minutes.pdf"
@@ -171,14 +178,11 @@ class TestRobotsPolicy:
             requested_headers.append(kwargs.get("headers"))
             return _Response(
                 200,
-                "User-agent: CountyIQ\nDisallow: /private\n"
-                "User-agent: *\nAllow: /",
+                "User-agent: CountyIQ\nDisallow: /private\nUser-agent: *\nAllow: /",
             )
 
         monkeypatch.setattr(requests, "get", respond)
-        user_agent = (
-            "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"
-        )
+        user_agent = "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"
         policy = RobotsPolicy(user_agent, product_token="CountyIQ")
 
         assert not policy.allowed("https://example.gov/private/minutes.pdf")
@@ -190,9 +194,7 @@ class TestRobotsPolicy:
             "get",
             lambda *_args, **_kwargs: _Response(
                 200,
-                "User-agent: *\n"
-                "Disallow: /*.pdf$\n"
-                "Allow: /public/*.pdf$",
+                "User-agent: *\nDisallow: /*.pdf$\nAllow: /public/*.pdf$",
             ),
         )
         policy = RobotsPolicy("CountyIQ/1.0", product_token="CountyIQ")
@@ -211,7 +213,9 @@ class TestRobotsPolicy:
         )
 
     def test_empty_policy_fails_closed(self, monkeypatch):
-        monkeypatch.setattr(requests, "get", lambda *_args, **_kwargs: _Response(200, ""))
+        monkeypatch.setattr(
+            requests, "get", lambda *_args, **_kwargs: _Response(200, "")
+        )
         assert not RobotsPolicy("CountyIQ/1.0").allowed(
             "https://example.gov/minutes.pdf"
         )
@@ -389,14 +393,20 @@ class TestDocumentValidation:
 
     def test_legacy_http_link_upgrades_only_to_reviewed_https_origin(self):
         url = "http://minutes.example.gov/files/january.pdf"
-        assert _upgrade_reviewed_document_url(
-            url,
-            frozenset({"https://minutes.example.gov"}),
-        ) == "https://minutes.example.gov/files/january.pdf"
-        assert _upgrade_reviewed_document_url(
-            url,
-            frozenset({"https://other.example.gov"}),
-        ) == url
+        assert (
+            _upgrade_reviewed_document_url(
+                url,
+                frozenset({"https://minutes.example.gov"}),
+            )
+            == "https://minutes.example.gov/files/january.pdf"
+        )
+        assert (
+            _upgrade_reviewed_document_url(
+                url,
+                frozenset({"https://other.example.gov"}),
+            )
+            == url
+        )
 
     def test_mixed_origin_listing_preserves_approved_documents(self):
         links = [
@@ -503,15 +513,20 @@ class TestExtractRawText:
         xml = (
             '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxml'
             'formats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'
-            'Motion approved.</w:t></w:r></w:p></w:body></w:document>'
+            "Motion approved.</w:t></w:r></w:p></w:body></w:document>"
         )
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr("word/document.xml", xml)
-        assert _extract_raw_text("minutes 1-3-22.docx", buf.getvalue()) == "Motion approved."
+        assert (
+            _extract_raw_text("minutes 1-3-22.docx", buf.getvalue())
+            == "Motion approved."
+        )
 
     def test_legacy_doc_returns_none(self):
-        assert _extract_raw_text("080326agenda-.doc", b"\xd0\xcf\x11\xe0 binary") is None
+        assert (
+            _extract_raw_text("080326agenda-.doc", b"\xd0\xcf\x11\xe0 binary") is None
+        )
 
     def test_corrupt_pdf_returns_none(self):
         assert _extract_raw_text("minutes.pdf", b"not a real pdf") is None

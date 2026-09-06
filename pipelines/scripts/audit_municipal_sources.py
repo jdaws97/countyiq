@@ -169,13 +169,10 @@ def audit_listing_url(
             )
     unique_links = {item["url"] for item in [*links, *drive_links]}
     normalized_links = {
-        _upgrade_reviewed_document_url(link, allowed_origins)
-        for link in unique_links
+        _upgrade_reviewed_document_url(link, allowed_origins) for link in unique_links
     }
     collectable_links = {
-        link
-        for link in normalized_links
-        if source_origin(link) in allowed_origins
+        link for link in normalized_links if source_origin(link) in allowed_origins
     }
     blocked_links = normalized_links - collectable_links
     result["document_origins"] = sorted(
@@ -280,9 +277,7 @@ def build_report(database, *, with_browser: bool = False) -> dict:
         permissions_by_url[url] = allowed_origins
     urls_by_domain: dict[str, list[tuple[str, frozenset[str]]]] = defaultdict(list)
     for url, allowed_origins in sorted(permissions_by_url.items()):
-        urls_by_domain[urlparse(url).netloc.lower()].append(
-            (url, allowed_origins)
-        )
+        urls_by_domain[urlparse(url).netloc.lower()].append((url, allowed_origins))
 
     robots = RobotsPolicy(_USER_AGENT)
     url_results = []
@@ -290,8 +285,7 @@ def build_report(database, *, with_browser: bool = False) -> dict:
         max_workers=min(_MAX_DOMAIN_WORKERS, len(urls_by_domain))
     ) as pool:
         futures = [
-            pool.submit(_audit_domain, urls, robots)
-            for urls in urls_by_domain.values()
+            pool.submit(_audit_domain, urls, robots) for urls in urls_by_domain.values()
         ]
         for future in concurrent.futures.as_completed(futures):
             url_results.extend(future.result())
@@ -309,7 +303,9 @@ def build_report(database, *, with_browser: bool = False) -> dict:
                 resolved_url = result["resolved_url"]
                 allowed_origins = permissions_by_url[result["listing_url"]]
                 rendered = browser.fetch_html(resolved_url, allowed_origins)
-                links = extract_pdf_links(rendered or "", resolved_url) if rendered else []
+                links = (
+                    extract_pdf_links(rendered or "", resolved_url) if rendered else []
+                )
                 if rendered and not links:
                     rendered = browser.fetch_html(
                         resolved_url,
@@ -354,10 +350,14 @@ def build_report(database, *, with_browser: bool = False) -> dict:
                     }
                 )
                 result["document_origin_counts"] = dict(
-                    sorted(Counter(source_origin(link) for link in unique_links).items())
+                    sorted(
+                        Counter(source_origin(link) for link in unique_links).items()
+                    )
                 )
                 result["blocked_document_origin_counts"] = dict(
-                    sorted(Counter(source_origin(link) for link in blocked_links).items())
+                    sorted(
+                        Counter(source_origin(link) for link in blocked_links).items()
+                    )
                 )
                 result["browser_document_count"] = len(collectable_links)
                 result["discovered_document_count"] = len(unique_links)

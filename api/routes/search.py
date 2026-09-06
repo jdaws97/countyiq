@@ -32,6 +32,7 @@ def _require_search_source(cur, table: str) -> None:
     if source_key:
         require_source_use(cur, source_key, "derived_product", conceal=False)
 
+
 @router.get("")
 def search(
     request: Request,
@@ -51,7 +52,10 @@ def search(
     # metered LLM surface. Natural-language intent parsing is an explicit,
     # separately budgeted product choice.
     if not llm_search_enabled():
-        return {"mode": "fuzzy", "results": _trgm_search_with_reversal(search_term, limit)}
+        return {
+            "mode": "fuzzy",
+            "results": _trgm_search_with_reversal(search_term, limit),
+        }
 
     # LLM path costs real money on a public endpoint: throttle per client,
     # and degrade to the free fuzzy path once the global daily budget is spent.
@@ -63,7 +67,10 @@ def search(
         )
     if not llm_search_daily_budget.spend():
         logger.warning("Daily LLM search budget exhausted; serving fuzzy fallback")
-        return {"mode": "fuzzy", "results": _trgm_search_with_reversal(search_term, limit)}
+        return {
+            "mode": "fuzzy",
+            "results": _trgm_search_with_reversal(search_term, limit),
+        }
 
     # Otherwise, use LLM for intent classification
     llm_intent = parse_query_with_llm(search_term)
@@ -123,12 +130,46 @@ def search(
 
 
 NL_WORDS = {
-    "show", "find", "list", "what", "who", "where", "which", "how",
-    "oldest", "newest", "most", "least", "biggest", "cheapest", "expensive",
-    "vacant", "delinquent", "flood", "commercial", "residential", "industrial",
-    "restaurants", "restaurant", "breweries", "brewery", "wineries", "bars",
-    "properties", "parcels", "owners", "sales", "sold", "near", "recent",
-    "top", "total", "average", "all", "zoning", "zoned",
+    "show",
+    "find",
+    "list",
+    "what",
+    "who",
+    "where",
+    "which",
+    "how",
+    "oldest",
+    "newest",
+    "most",
+    "least",
+    "biggest",
+    "cheapest",
+    "expensive",
+    "vacant",
+    "delinquent",
+    "flood",
+    "commercial",
+    "residential",
+    "industrial",
+    "restaurants",
+    "restaurant",
+    "breweries",
+    "brewery",
+    "wineries",
+    "bars",
+    "properties",
+    "parcels",
+    "owners",
+    "sales",
+    "sold",
+    "near",
+    "recent",
+    "top",
+    "total",
+    "average",
+    "all",
+    "zoning",
+    "zoned",
 }
 
 
@@ -281,18 +322,24 @@ def _trgm_search_with_reversal(search_term: str, limit: int) -> list[dict]:
         cur.execute("SET TRANSACTION READ ONLY")
         cur.execute("SET LOCAL pg_trgm.similarity_threshold = 0.22")
         cur.execute("SET LOCAL pg_trgm.strict_word_similarity_threshold = 0.45")
-        require_source_use(cur, open_data_source_key(), "derived_product", conceal=False)
+        require_source_use(
+            cur, open_data_source_key(), "derived_product", conceal=False
+        )
         include_licenses = True
         try:
             require_source_use(cur, "plcb_licenses", "derived_product", conceal=False)
         except HTTPException as exc:
             include_licenses = False
-            logger.info("License search unavailable; continuing with parcels: %s", exc.detail)
+            logger.info(
+                "License search unavailable; continuing with parcels: %s", exc.detail
+            )
 
         all_results: list[dict] = []
         for variant in variants:
             all_results.extend(
-                _trgm_search(cur, variant, branch_limit, include_licenses=include_licenses)
+                _trgm_search(
+                    cur, variant, branch_limit, include_licenses=include_licenses
+                )
             )
 
     return _deduplicate_and_rank(all_results, limit)
@@ -466,8 +513,7 @@ def _trgm_search(
         )
 
     return [
-        dict(row)
-        for row in [*owner_parcels, *address_parcels, *addresses, *licenses]
+        dict(row) for row in [*owner_parcels, *address_parcels, *addresses, *licenses]
     ]
 
 
@@ -497,7 +543,11 @@ def _deduplicate_and_rank(results: list[dict], limit: int) -> list[dict]:
                 str(result.get("subtitle") or "").casefold(),
             )
         else:
-            key = (result.get("result_type"), result.get("title"), result.get("subtitle"))
+            key = (
+                result.get("result_type"),
+                result.get("title"),
+                result.get("subtitle"),
+            )
 
         current = best.get(key)
         result_rank = (
@@ -505,9 +555,13 @@ def _deduplicate_and_rank(results: list[dict], limit: int) -> list[dict]:
             _MATCH_PRIORITY.get(str(result.get("match_kind")), 0),
         )
         current_rank = (
-            float(current.get("score") or 0),
-            _MATCH_PRIORITY.get(str(current.get("match_kind")), 0),
-        ) if current else (-1.0, -1)
+            (
+                float(current.get("score") or 0),
+                _MATCH_PRIORITY.get(str(current.get("match_kind")), 0),
+            )
+            if current
+            else (-1.0, -1)
+        )
         if result_rank > current_rank:
             best[key] = result
 
@@ -605,17 +659,35 @@ def _execute_llm_query(intent: dict, limit: int) -> list[dict] | None:
 
 
 SCHOOL_DISTRICTS = {
-    "002": "Central York", "004": "Dallastown", "006": "Dover",
-    "008": "Eastern York", "010": "Hanover", "012": "Northeastern",
-    "014": "Northern York", "016": "Red Lion", "018": "South Eastern",
-    "020": "South Western", "022": "Southern York", "024": "Spring Grove",
-    "026": "West York", "028": "York City", "030": "York Suburban",
-    "17F": "West Shore", "17G": "West Shore", "17L": "West Shore", "17N": "West Shore",
+    "002": "Central York",
+    "004": "Dallastown",
+    "006": "Dover",
+    "008": "Eastern York",
+    "010": "Hanover",
+    "012": "Northeastern",
+    "014": "Northern York",
+    "016": "Red Lion",
+    "018": "South Eastern",
+    "020": "South Western",
+    "022": "Southern York",
+    "024": "Spring Grove",
+    "026": "West York",
+    "028": "York City",
+    "030": "York Suburban",
+    "17F": "West Shore",
+    "17G": "West Shore",
+    "17L": "West Shore",
+    "17N": "West Shore",
 }
 
 CLASS_NAMES = {
-    "R": "Residential", "C": "Commercial", "I": "Industrial",
-    "F": "Farm", "E": "Exempt", "A": "Agricultural", "U": "Utility",
+    "R": "Residential",
+    "C": "Commercial",
+    "I": "Industrial",
+    "F": "Farm",
+    "E": "Exempt",
+    "A": "Agricultural",
+    "U": "Utility",
 }
 
 FRIENDLY_NAMES = {
@@ -657,8 +729,22 @@ FRIENDLY_NAMES = {
 
 
 PARCEL_KEY_FIELDS = ["pidn", "propadr", "class", "acres", "aprtotal", "school_dis"]
-TAX_KEY_FIELDS = ["pidn", "owner_name", "property_address", "tax_district_name", "tax_year", "authority_name", "total"]
-LICENSE_KEY_FIELDS = ["premises_name", "premises_address", "license_type", "status", "municipality"]
+TAX_KEY_FIELDS = [
+    "pidn",
+    "owner_name",
+    "property_address",
+    "tax_district_name",
+    "tax_year",
+    "authority_name",
+    "total",
+]
+LICENSE_KEY_FIELDS = [
+    "premises_name",
+    "premises_address",
+    "license_type",
+    "status",
+    "municipality",
+]
 
 # Friendly names for key fields that are normally hidden (used as title/subtitle in fuzzy mode)
 _KEY_FIELD_NAMES = {
@@ -705,7 +791,22 @@ def _clean_row(row: dict) -> dict:
         if key == "class" and val:
             val = CLASS_NAMES.get(str(val), str(val))
 
-        if key in ("aprtotal", "price", "prev_price", "aprland", "aprbldg", "total", "tax_owed", "penalty_owed", "interest_owed", "fees_owed") and val:
+        if (
+            key
+            in (
+                "aprtotal",
+                "price",
+                "prev_price",
+                "aprland",
+                "aprbldg",
+                "total",
+                "tax_owed",
+                "penalty_owed",
+                "interest_owed",
+                "fees_owed",
+            )
+            and val
+        ):
             val = f"${float(val):,.0f}"
 
         if key in always_show and key in _KEY_FIELD_NAMES:

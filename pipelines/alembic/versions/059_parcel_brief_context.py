@@ -1,4 +1,5 @@
 """Centralize the source context and fingerprint for parcel briefs."""
+
 from alembic import op
 
 revision = "059"

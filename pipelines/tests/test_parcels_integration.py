@@ -81,7 +81,7 @@ def test_scd2_upsert_detects_changes(db_conn):
     cur.close()
 
     assert stats["inserted"] == 1  # Changed record re-inserted
-    assert stats["expired"] == 1   # Old version expired
+    assert stats["expired"] == 1  # Old version expired
 
     # Should have 3 total rows (2 current + 1 expired)
     cur = db_conn.cursor()

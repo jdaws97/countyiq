@@ -50,13 +50,19 @@ class TestMergeEntityTrialPartitions:
 
     def test_majority_merge_survives(self):
         # 2 of 3 trials group ALPHA+BETA; the merge survives.
-        grouped = _parsed([
-            _entity("ALPHA LLC", corporate=["BETA LLC"]),
-            _entity("GAMMA LLC"),
-        ])
-        split = _parsed([
-            _entity("ALPHA LLC"), _entity("BETA LLC"), _entity("GAMMA LLC"),
-        ])
+        grouped = _parsed(
+            [
+                _entity("ALPHA LLC", corporate=["BETA LLC"]),
+                _entity("GAMMA LLC"),
+            ]
+        )
+        split = _parsed(
+            [
+                _entity("ALPHA LLC"),
+                _entity("BETA LLC"),
+                _entity("GAMMA LLC"),
+            ]
+        )
         merged = merge_entity_trial_partitions([grouped, grouped, split], NAMES)
         canonicals = {e["canonical_name"] for e in merged["entities"]}
         assert "ALPHA LLC" in canonicals
@@ -68,19 +74,22 @@ class TestMergeEntityTrialPartitions:
         # The representative all-three grouping contains the unsupported
         # (B,C) pair, so it must be demoted to an abstention.
         t1 = _parsed([_entity("ALPHA LLC", corporate=["BETA LLC", "GAMMA LLC"])])
-        t2 = _parsed([
-            _entity("ALPHA LLC", corporate=["BETA LLC"]),
-            _entity("GAMMA LLC"),
-        ])
-        t3 = _parsed([
-            _entity("ALPHA LLC", corporate=["GAMMA LLC"]),
-            _entity("BETA LLC"),
-        ])
+        t2 = _parsed(
+            [
+                _entity("ALPHA LLC", corporate=["BETA LLC"]),
+                _entity("GAMMA LLC"),
+            ]
+        )
+        t3 = _parsed(
+            [
+                _entity("ALPHA LLC", corporate=["GAMMA LLC"]),
+                _entity("BETA LLC"),
+            ]
+        )
         merged = merge_entity_trial_partitions([t1, t2, t3], NAMES)
         assert merged["trial_stats"]["demoted_entities"] == 1
         assert any(
-            "disagreement" in (a.get("reason") or "")
-            for a in merged["abstentions"]
+            "disagreement" in (a.get("reason") or "") for a in merged["abstentions"]
         )
 
     def test_two_trial_disagreement_is_not_majority(self):
@@ -111,9 +120,7 @@ class TestMergeEntityTrialPartitions:
 class TestEntityTrialMajorityDecided:
     def test_two_matching_partitions_decide_three_trial_vote(self):
         grouped = _parsed([_entity("ALPHA LLC", corporate=("BETA LLC",))])
-        assert entity_trial_majority_decided(
-            [grouped, grouped], NAMES, target_trials=3
-        )
+        assert entity_trial_majority_decided([grouped, grouped], NAMES, target_trials=3)
 
     def test_disagreement_requires_deciding_trial(self):
         grouped = _parsed([_entity("ALPHA LLC", corporate=("BETA LLC",))])
@@ -131,9 +138,7 @@ class TestEntityTrialMajorityDecided:
 
     def test_single_name_cluster_has_no_ambiguous_pairs(self):
         one = _parsed([_entity("ALPHA LLC")])
-        assert entity_trial_majority_decided(
-            [one], ["ALPHA LLC"], target_trials=3
-        )
+        assert entity_trial_majority_decided([one], ["ALPHA LLC"], target_trials=3)
 
 
 class TestResolveEscalationConfig:

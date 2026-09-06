@@ -1,4 +1,5 @@
 """Exercise the actual Caddyfile in a loopback-bound Docker fixture."""
+
 from http.client import HTTPConnection
 from pathlib import Path
 import subprocess
@@ -20,14 +21,35 @@ def origin(tmp_path_factory):
     (directory / "assets" / "fixture.js").write_text("STATIC_ASSET")
     name = "countyiq-site-test-" + uuid4().hex[:12]
     try:
-        subprocess.run([
-            "docker", "run", "--rm", "-d", "--name", name, "--network", "bridge",
-            "--add-host", "api:127.0.0.1", "-p", "127.0.0.1::8080",
-            "-e", "DOMAIN=countyiq.test",
-            "-v", f"{ROOT / 'docker/Caddyfile'}:/etc/caddy/Caddyfile:ro",
-            "-v", f"{directory}:/srv:ro", "caddy:2-alpine",
-        ], check=True, capture_output=True, text=True)
-        address = subprocess.check_output(["docker", "port", name, "8080"], text=True).strip()
+        subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-d",
+                "--name",
+                name,
+                "--network",
+                "bridge",
+                "--add-host",
+                "api:127.0.0.1",
+                "-p",
+                "127.0.0.1::8080",
+                "-e",
+                "DOMAIN=countyiq.test",
+                "-v",
+                f"{ROOT / 'docker/Caddyfile'}:/etc/caddy/Caddyfile:ro",
+                "-v",
+                f"{directory}:/srv:ro",
+                "caddy:2-alpine",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        address = subprocess.check_output(
+            ["docker", "port", name, "8080"], text=True
+        ).strip()
         port = int(address.rsplit(":", 1)[1])
         for _ in range(30):
             try:
@@ -35,7 +57,7 @@ def origin(tmp_path_factory):
                     break
             except OSError:
                 pass
-            time.sleep(.1)
+            time.sleep(0.1)
         else:
             pytest.fail("Isolated Caddy did not become ready")
         yield port
@@ -48,8 +70,11 @@ def get(port, host, path):
     try:
         connection.request("GET", path, headers={"Host": host})
         response = connection.getresponse()
-        return SimpleNamespace(status=response.status, body=response.read().decode(),
-                               headers=dict(response.getheaders()))
+        return SimpleNamespace(
+            status=response.status,
+            body=response.read().decode(),
+            headers=dict(response.getheaders()),
+        )
     finally:
         connection.close()
 
@@ -80,7 +105,9 @@ def test_marketing_never_proxies_any_api_path(origin):
 def test_old_product_links_redirect_and_missing_chunks_are_not_html(origin):
     old = get(origin, "countyiq.test", "/property/123?tab=activity")
     assert old.status == 302
-    assert old.headers["Location"] == "https://app.countyiq.test/property/123?tab=activity"
+    assert (
+        old.headers["Location"] == "https://app.countyiq.test/property/123?tab=activity"
+    )
     for host in ["countyiq.test", "app.countyiq.test"]:
         missing = get(origin, host, "/assets/missing.js")
         assert missing.status == 404 and missing.headers["Cache-Control"] == "no-store"

@@ -7,6 +7,7 @@ derived inputs must be frozen in each evaluation protocol before any model call.
 These are repeated diagnostic cases, not new independent holdouts or a release
 approval. Pass 3 statuses are synthetic fixture inputs, not recorded model runs.
 """
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -29,11 +30,17 @@ def derive_pass2_case(source: dict) -> dict:
     _check_source(source)
     case = deepcopy(source)
     context = case["context"]
-    retired = [s for s in context["signals"] if s["signal_key"] not in INTERPRETIVE_SIGNAL_KEYS]
-    context["signals"] = [s for s in context["signals"] if s["signal_key"] in INTERPRETIVE_SIGNAL_KEYS]
+    retired = [
+        s for s in context["signals"] if s["signal_key"] not in INTERPRETIVE_SIGNAL_KEYS
+    ]
+    context["signals"] = [
+        s for s in context["signals"] if s["signal_key"] in INTERPRETIVE_SIGNAL_KEYS
+    ]
     context["context_signals"] = [*(context.get("context_signals") or []), *retired]
     keys = {s["signal_key"] for s in context["signals"]}
-    case["labels"]["signals"] = [label for label in case["labels"]["signals"] if label["signal_key"] in keys]
+    case["labels"]["signals"] = [
+        label for label in case["labels"]["signals"] if label["signal_key"] in keys
+    ]
     case["signal_combination"] = sorted(keys)
     case["call_eligible"] = len(keys) >= 2
     case["context_sha256"] = canonical_context_hash(context)
@@ -55,7 +62,9 @@ def derive_pass3_case(source: dict, pass2_source: dict) -> dict:
     _check_source(source)
     _check_source(pass2_source)
     if source["source_pass2_case"] != pass2_source["id"]:
-        raise ValueError("Pass 3 source case does not match its retained Pass 2 snapshot")
+        raise ValueError(
+            "Pass 3 source case does not match its retained Pass 2 snapshot"
+        )
     case = deepcopy(source)
     raw_context = pass2_source["context"]
     raw_signals = {s["signal_key"]: s for s in raw_context["signals"]}
@@ -66,14 +75,16 @@ def derive_pass3_case(source: dict, pass2_source: dict) -> dict:
             continue
         if key not in raw_signals:
             raise ValueError(f"Missing source evidence for {source['id']}/{key}")
-        signals.append({
-            "signal_key": key,
-            "validation_status": prior["validation_status"],
-            "adjusted_significance": prior["adjusted_significance"],
-            "key_facts": source_evidence_facts(raw_signals[key].get("evidence")),
-            "source_url": "",
-            "internal_url": f"/property/{raw_context['pidn']}",
-        })
+        signals.append(
+            {
+                "signal_key": key,
+                "validation_status": prior["validation_status"],
+                "adjusted_significance": prior["adjusted_significance"],
+                "key_facts": source_evidence_facts(raw_signals[key].get("evidence")),
+                "source_url": "",
+                "internal_url": f"/property/{raw_context['pidn']}",
+            }
+        )
     context = case["context"] = {
         "pidn": raw_context["pidn"],
         "parcel": deepcopy(raw_context["parcel"]),
@@ -89,7 +100,8 @@ def derive_pass3_case(source: dict, pass2_source: dict) -> dict:
     # record, but the current Pass 3 query does not consume that source signal.
     if source["id"] == "p3-001":
         case["labels"]["required_fact_groups"] = [
-            group for group in case["labels"]["required_fact_groups"]
+            group
+            for group in case["labels"]["required_fact_groups"]
             if group != ["0 structures", "no mapped structure"]
         ]
     case["context_sha256"] = canonical_context_hash(context)
@@ -111,10 +123,15 @@ def derive_pass3_case(source: dict, pass2_source: dict) -> dict:
 
 
 def pass2_cases(path: Path | None = None) -> list[dict]:
-    return [derive_pass2_case(case) for case in load_frozen_cases(path or FIXTURES / "p2_expanded_stability20.json")]
+    return [
+        derive_pass2_case(case)
+        for case in load_frozen_cases(path or FIXTURES / "p2_expanded_stability20.json")
+    ]
 
 
 def pass3_cases() -> list[dict]:
     source_by_id = {c["id"]: c for c in load_frozen_cases(FIXTURES / "p2_frozen.json")}
-    return [derive_pass3_case(c, source_by_id[c["source_pass2_case"]])
-            for c in load_frozen_cases(FIXTURES / "p3_investigation_frozen.json")]
+    return [
+        derive_pass3_case(c, source_by_id[c["source_pass2_case"]])
+        for c in load_frozen_cases(FIXTURES / "p3_investigation_frozen.json")
+    ]

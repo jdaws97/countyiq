@@ -11,7 +11,11 @@ import hashlib
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.lib.inference_provenance import BRIEF_SIGNAL_VERSIONS_CURRENT_SQL, SUPPORTING_PROCEEDINGS_CURRENT_SQL, owner_context_is_current
+from api.lib.inference_provenance import (
+    BRIEF_SIGNAL_VERSIONS_CURRENT_SQL,
+    SUPPORTING_PROCEEDINGS_CURRENT_SQL,
+    owner_context_is_current,
+)
 from api.lib.database import get_cursor
 from api.lib.development_radar import sanitize_signals_for_public
 from api.lib.evidence import evidence_item
@@ -57,7 +61,8 @@ def _fetch_owner_brief(cur, canonical_name: str) -> dict | None:
         {
             "name": canonical_name,
             "brief_kind": "owner_brief",
-            "brief_subject": "owner_brief:" + hashlib.sha256(canonical_name.encode("utf-8")).hexdigest()[:20],
+            "brief_subject": "owner_brief:"
+            + hashlib.sha256(canonical_name.encode("utf-8")).hexdigest()[:20],
         },
     )
     row = cur.fetchone()
@@ -101,15 +106,18 @@ def _fetch_owner_brief_evidence(cur, brief: dict) -> list[dict]:
         )
         for row in cur.fetchall():
             record = dict(row)
-            safe_signal = sanitize_signals_for_public(
-                {
-                    "signal": {
-                        "claim": record.get("claim"),
-                        "validation_reasoning": record.get("validation_reasoning"),
-                        "evidence": record.get("evidence_data") or {},
-                    }
-                },
-            ) or {}
+            safe_signal = (
+                sanitize_signals_for_public(
+                    {
+                        "signal": {
+                            "claim": record.get("claim"),
+                            "validation_reasoning": record.get("validation_reasoning"),
+                            "evidence": record.get("evidence_data") or {},
+                        }
+                    },
+                )
+                or {}
+            )
             signal = safe_signal.get("signal")
             if not isinstance(signal, dict):
                 signal = {}
@@ -177,7 +185,13 @@ def _fetch_owner_brief_evidence(cur, brief: dict) -> list[dict]:
                 internal_url=f"/property/{pidn}",
                 details={
                     key: record.get(key)
-                    for key in ("propadr", "municipality", "aprtotal", "saledt", "price")
+                    for key in (
+                        "propadr",
+                        "municipality",
+                        "aprtotal",
+                        "saledt",
+                        "price",
+                    )
                     if record.get(key) is not None
                 },
                 effective_at=record.get("valid_from"),
@@ -260,7 +274,9 @@ def _fetch_entity_verification_evidence(
 
     for group, identifiers in linked_sources.items():
         for identifier in identifiers:
-            record = parcel_by_id.get(identifier) or corporate_by_name.get(identifier) or {}
+            record = (
+                parcel_by_id.get(identifier) or corporate_by_name.get(identifier) or {}
+            )
             citation_key = f"evidence:{group}:{identifier}"
             if group == "parcels":
                 label = f"County parcel {identifier}"
@@ -277,7 +293,12 @@ def _fetch_entity_verification_evidence(
                 source_kind = "official_business_record"
                 details = {
                     key: record.get(key)
-                    for key in ("entity_number", "status", "formation_date", "office_address")
+                    for key in (
+                        "entity_number",
+                        "status",
+                        "formation_date",
+                        "office_address",
+                    )
                     if record.get(key) is not None
                 }
             else:
@@ -315,7 +336,9 @@ def _linked_relationships(
     """Normalize relationship JSON and attach stable entity IDs when known."""
     relationships: list[dict] = []
     if isinstance(raw_relationships, list):
-        relationships = [dict(item) for item in raw_relationships if isinstance(item, dict)]
+        relationships = [
+            dict(item) for item in raw_relationships if isinstance(item, dict)
+        ]
     elif isinstance(raw_relationships, dict):
         for relationship_type, names in raw_relationships.items():
             candidates = names if isinstance(names, list) else [names]
@@ -435,8 +458,9 @@ def owner_profile(owner_id: int) -> dict:
         # Exact claim rows are a restricted, separately gated surface. The
         # response says so explicitly so the UI never renders "$0 owed" as a
         # fact when the rows were merely withheld.
-        delinquency_detail_available = restricted_distress_enabled() and source_use_allowed(
-            cur, "tax_claims", "derived_product"
+        delinquency_detail_available = (
+            restricted_distress_enabled()
+            and source_use_allowed(cur, "tax_claims", "derived_product")
         )
         if delinquency_detail_available:
             cur.execute(

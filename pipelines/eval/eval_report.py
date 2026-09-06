@@ -22,6 +22,7 @@ from pathlib import Path
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def load_results(results_dir: Path) -> list[dict]:
     """Load all eval_*.json files from a directory."""
     files = sorted(results_dir.glob("eval_*.json"))
@@ -67,7 +68,8 @@ def compute_stats(eval_data: dict) -> dict:
     success_rate = success_count / total * 100
 
     json_valid_count = sum(
-        1 for r in results
+        1
+        for r in results
         if r.get("success") and isinstance(r.get("parsed_output"), dict)
     )
     json_valid_rate = json_valid_count / total * 100
@@ -94,7 +96,9 @@ def compute_stats(eval_data: dict) -> dict:
         "model_family": meta.get("model_family", "?"),
         "pass_num": meta.get("pass_num", "?"),
         "evaluated_at": meta.get("evaluated_at", ""),
-        "temperature": (meta.get("sampling") or {}).get("temperature", meta.get("temperature", "?")),
+        "temperature": (meta.get("sampling") or {}).get(
+            "temperature", meta.get("temperature", "?")
+        ),
         "total": total,
         "success_count": success_count,
         "success_rate": success_rate,
@@ -117,6 +121,7 @@ def _bar(rate: float, width: int = 10) -> str:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -167,7 +172,11 @@ Examples:
 
     # Filter by pass if requested
     if args.pass_filter is not None:
-        all_evals = [e for e in all_evals if e.get("meta", {}).get("pass_num") == args.pass_filter]
+        all_evals = [
+            e
+            for e in all_evals
+            if e.get("meta", {}).get("pass_num") == args.pass_filter
+        ]
         if not all_evals:
             print(f"No results found for Pass {args.pass_filter}.", file=sys.stderr)
             sys.exit(0)
@@ -221,7 +230,12 @@ Examples:
 
     for s in stats_list:
         # Compose display name with mode tag for clarity
-        base = s["model_name"].replace("-Q4_K_M", "").replace("-it", "").replace("-2512", "")
+        base = (
+            s["model_name"]
+            .replace("-Q4_K_M", "")
+            .replace("-it", "")
+            .replace("-2512", "")
+        )
         model_display = f"{base} [{s.get('mode_tag', '?')}]"
         if len(model_display) > COL_MODEL:
             model_display = model_display[: COL_MODEL - 3] + "..."

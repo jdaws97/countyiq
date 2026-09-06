@@ -47,7 +47,9 @@ def test_all_county_config_attribute_accesses_exist():
         for path in sorted(scan_dir.rglob("*.py")):
             for lineno, attr in _config_attr_accesses(path):
                 if attr not in valid_fields:
-                    violations.append(f"{path.relative_to(PIPELINE_ROOT.parent)}:{lineno} -> county.{attr}")
+                    violations.append(
+                        f"{path.relative_to(PIPELINE_ROOT.parent)}:{lineno} -> county.{attr}"
+                    )
     assert not violations, (
         "Attribute(s) accessed on CountyConfig that do not exist as dataclass fields:\n"
         + "\n".join(violations)
@@ -56,5 +58,7 @@ def test_all_county_config_attribute_accesses_exist():
 
 def test_scan_found_accesses():
     # Guard against the scanner silently matching nothing (e.g. after a rename).
-    total = sum(len(_config_attr_accesses(p)) for d in SCAN_DIRS for p in d.rglob("*.py"))
+    total = sum(
+        len(_config_attr_accesses(p)) for d in SCAN_DIRS for p in d.rglob("*.py")
+    )
     assert total > 50, f"expected many county.<attr> accesses, found {total}"

@@ -72,7 +72,18 @@ def test_parse_skips_features_without_fld_ar_id():
         "features": [
             {
                 "type": "Feature",
-                "geometry": {"type": "Polygon", "coordinates": [[[-76.38, 39.73], [-76.37, 39.73], [-76.37, 39.74], [-76.38, 39.74], [-76.38, 39.73]]]},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-76.38, 39.73],
+                            [-76.37, 39.73],
+                            [-76.37, 39.74],
+                            [-76.38, 39.74],
+                            [-76.38, 39.73],
+                        ]
+                    ],
+                },
                 "properties": {"FLD_ZONE": "AE", "SFHA_TF": "T"},
             }
         ],
@@ -103,7 +114,15 @@ def test_parse_arcgis_json_format():
                     "SOURCE_CIT": "42133C_STUDY1",
                 },
                 "geometry": {
-                    "rings": [[[-76.38, 39.73], [-76.37, 39.73], [-76.37, 39.74], [-76.38, 39.74], [-76.38, 39.73]]]
+                    "rings": [
+                        [
+                            [-76.38, 39.73],
+                            [-76.37, 39.73],
+                            [-76.37, 39.74],
+                            [-76.38, 39.74],
+                            [-76.38, 39.73],
+                        ]
+                    ]
                 },
             }
         ]
@@ -116,7 +135,15 @@ def test_parse_arcgis_json_format():
     assert r["static_bfe"] == 300.0
     assert r["depth"] is None  # sentinel converted
     assert r["geojson"]["type"] == "Polygon"
-    assert r["geojson"]["coordinates"] == [[[-76.38, 39.73], [-76.37, 39.73], [-76.37, 39.74], [-76.38, 39.74], [-76.38, 39.73]]]
+    assert r["geojson"]["coordinates"] == [
+        [
+            [-76.38, 39.73],
+            [-76.37, 39.73],
+            [-76.37, 39.74],
+            [-76.38, 39.74],
+            [-76.38, 39.73],
+        ]
+    ]
 
 
 def test_parse_arcgis_json_no_geometry():

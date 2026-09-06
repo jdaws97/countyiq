@@ -46,9 +46,21 @@ def test_geometry_changes_are_versioned_and_missing_source_geometry_is_preserved
 def test_event_source_fields_are_persisted():
     # The exact columns parcel_events classification depends on.
     for col in (
-        "deed_bk", "deed_pg", "saledt", "price", "owner_full", "prev_owner",
-        "mail_addr_full", "aprland", "aprbldg", "aprtotal", "yrblt",
-        "res_living_area", "num_stories", "comm_struc", "comm_year_built",
+        "deed_bk",
+        "deed_pg",
+        "saledt",
+        "price",
+        "owner_full",
+        "prev_owner",
+        "mail_addr_full",
+        "aprland",
+        "aprbldg",
+        "aprtotal",
+        "yrblt",
+        "res_living_area",
+        "num_stories",
+        "comm_struc",
+        "comm_year_built",
         "comm_building_sq_ft",
     ):
         assert col in VALUE_COLUMNS, f"parcel_events needs {col} persisted"
@@ -58,8 +70,8 @@ def test_raw_parcel_payload_is_archived_before_scd2_mutation():
     source = inspect.getsource(parcels_arcgis.node_def.compute_fn.decorated_fn)
 
     assert 'require_source_use(authorization, "raw_retention")' in source
-    assert 'archive_file.write(json.dumps(feature, default=str))' in source
-    assert 'ANALYZE _tmp_parcels' in source
+    assert "archive_file.write(json.dumps(feature, default=str))" in source
+    assert "ANALYZE _tmp_parcels" in source
     index_position = source.index("idx_tmp_parcels_pidn")
     geometry_update_position = source.index("_flush_geometries(")
     assert index_position < geometry_update_position

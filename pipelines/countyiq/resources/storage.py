@@ -54,9 +54,15 @@ class S3StorageResource(ConfigurableResource):
 
     def _local_destination(self, source_path: str, filename: str) -> Path:
         root = Path(self.local_archive_dir).expanduser().resolve()
-        relative = Path(source_path) / datetime.now(timezone.utc).strftime("%Y-%m-%d") / filename
+        relative = (
+            Path(source_path)
+            / datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            / filename
+        )
         if relative.is_absolute() or ".." in relative.parts:
-            raise ValueError("Local archive path must remain beneath its configured root")
+            raise ValueError(
+                "Local archive path must remain beneath its configured root"
+            )
         destination = (root / relative).resolve()
         if not destination.is_relative_to(root):
             raise ValueError("Local archive path escaped its configured root")
@@ -87,7 +93,10 @@ class S3StorageResource(ConfigurableResource):
         )
         temporary_path = Path(temporary_name)
         try:
-            with open(local_path, "rb") as source, os.fdopen(descriptor, "wb") as output:
+            with (
+                open(local_path, "rb") as source,
+                os.fdopen(descriptor, "wb") as output,
+            ):
                 shutil.copyfileobj(source, output)
                 output.flush()
                 os.fsync(output.fileno())

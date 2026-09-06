@@ -24,8 +24,8 @@ def _load_fixture(name: str) -> str:
 # Google Drive folder support (West York Borough hosts minutes in Drive)
 # ---------------------------------------------------------------------------
 
-class TestExtractDriveFolderIds:
 
+class TestExtractDriveFolderIds:
     def test_extracts_drive_folders_links(self):
         html = (
             '<a href="https://drive.google.com/drive/folders/1_kfY8Fq0lomdpIgul7Xt'
@@ -58,7 +58,9 @@ class TestParseDriveFolderListing:
     """Parses the static HTML from drive.google.com/embeddedfolderview?id=..."""
 
     def setup_method(self):
-        self.result = parse_drive_folder_listing(_load_fixture("drive_folder_listing.html"))
+        self.result = parse_drive_folder_listing(
+            _load_fixture("drive_folder_listing.html")
+        )
 
     def test_files_have_download_urls(self):
         urls = [f["url"] for f in self.result["files"]]
@@ -91,8 +93,8 @@ class TestParseDriveFolderListing:
 # extract_pdf_links
 # ---------------------------------------------------------------------------
 
-class TestExtractPdfLinks:
 
+class TestExtractPdfLinks:
     def setup_method(self):
         self.html = _load_fixture("proceedings_sample.html")
         self.links = extract_pdf_links(self.html, BASE_URL)
@@ -132,12 +134,12 @@ class TestExtractPdfLinks:
         html = (
             '<a href="https://shrewsburyborough.org/bfd_download/'
             'bc-minutes-january-2025/">'
-            '<strong>BC minutes January 2025</strong>'
-            '<small>Type : pdf</small></a>'
+            "<strong>BC minutes January 2025</strong>"
+            "<small>Type : pdf</small></a>"
             '<a href="https://shrewsburyborough.org/bfd_download/'
             'bc-minutes-december-2025/">'
-            '<strong>BC Minutes December 2025</strong>'
-            '<small>Type : doc</small></a>'
+            "<strong>BC Minutes December 2025</strong>"
+            "<small>Type : doc</small></a>"
         )
 
         assert extract_pdf_links(html, "https://shrewsburyborough.org/minutes/") == [
@@ -221,9 +223,10 @@ class TestExtractPdfLinks:
                 "link_text": "Meeting Minutes",
             }
         ]
-        assert parse_meeting_date_from_filename(
-            "July 28, 2026 Meeting Minutes.pdf"
-        ) == "2026-07-28"
+        assert (
+            parse_meeting_date_from_filename("July 28, 2026 Meeting Minutes.pdf")
+            == "2026-07-28"
+        )
 
     def test_filenames_extracted(self):
         filenames = {r["filename"] for r in self.links}
@@ -234,8 +237,14 @@ class TestExtractPdfLinks:
 
     def test_link_text_extracted(self):
         by_filename = {r["filename"]: r["link_text"] for r in self.links}
-        assert by_filename["PC_01-15-2026.pdf"] == "Planning Commission Minutes - January 15, 2026"
-        assert by_filename["ZHB_Minutes_March_2025.pdf"] == "Zoning Hearing Board Minutes - March 2025"
+        assert (
+            by_filename["PC_01-15-2026.pdf"]
+            == "Planning Commission Minutes - January 15, 2026"
+        )
+        assert (
+            by_filename["ZHB_Minutes_March_2025.pdf"]
+            == "Zoning Hearing Board Minutes - March 2025"
+        )
 
     def test_document_count(self):
         """Fixture has exactly 10 PDF links + 1 docx; the rest must be dropped."""
@@ -256,11 +265,13 @@ class TestExtractPdfLinks:
 # parse_meeting_date_from_filename
 # ---------------------------------------------------------------------------
 
-class TestParseMeetingDateFromFilename:
 
+class TestParseMeetingDateFromFilename:
     # YYYY-MM-DD
     def test_iso_dash_format(self):
-        assert parse_meeting_date_from_filename("Minutes-2025-11-14.pdf") == "2025-11-14"
+        assert (
+            parse_meeting_date_from_filename("Minutes-2025-11-14.pdf") == "2025-11-14"
+        )
 
     # YYYY_MM_DD
     def test_iso_underscore_format(self):
@@ -279,21 +290,32 @@ class TestParseMeetingDateFromFilename:
         assert parse_meeting_date_from_filename("ZHB_Minutes_March_2025.pdf") is None
 
     def test_month_year_format_november(self):
-        assert parse_meeting_date_from_filename("Planning_Commission_Minutes_November_2024.pdf") is None
+        assert (
+            parse_meeting_date_from_filename(
+                "Planning_Commission_Minutes_November_2024.pdf"
+            )
+            is None
+        )
 
     def test_month_year_case_insensitive(self):
         assert parse_meeting_date_from_filename("MARCH_2025_minutes.pdf") is None
 
     # Spelled-out month used in fixture
     def test_month_year_format_planning(self):
-        assert parse_meeting_date_from_filename("Planning_Commission_Minutes_March_2025.pdf") is None
+        assert (
+            parse_meeting_date_from_filename(
+                "Planning_Commission_Minutes_March_2025.pdf"
+            )
+            is None
+        )
 
     # No recognisable date
     def test_compact_mmddyyyy(self):
         """West York Drive files: 05042026_Meeting_Minutes.PDF.pdf"""
-        assert parse_meeting_date_from_filename(
-            "05042026_Meeting_Minutes.PDF.pdf"
-        ) == "2026-05-04"
+        assert (
+            parse_meeting_date_from_filename("05042026_Meeting_Minutes.PDF.pdf")
+            == "2026-05-04"
+        )
 
     def test_compact_yyyymmdd(self):
         assert parse_meeting_date_from_filename("20260504_minutes.pdf") == "2026-05-04"
@@ -314,7 +336,9 @@ class TestParseMeetingDateFromFilename:
         assert parse_meeting_date_from_filename("PC_01-15-2026.pdf") == "2026-01-15"
 
     def test_unparseable_returns_none(self):
-        assert parse_meeting_date_from_filename("Annual_Report_SpringvaleTwp.pdf") is None
+        assert (
+            parse_meeting_date_from_filename("Annual_Report_SpringvaleTwp.pdf") is None
+        )
 
     def test_unparseable_special_meeting_returns_none(self):
         assert parse_meeting_date_from_filename("Special_Meeting_Notes.pdf") is None
@@ -335,69 +359,122 @@ class TestParseMeetingDateFromFilename:
 # classify_proceeding_type
 # ---------------------------------------------------------------------------
 
-class TestClassifyProceedingType:
 
+class TestClassifyProceedingType:
     # zoning_hearing
     def test_zhb_abbreviation_filename(self):
-        assert classify_proceeding_type("ZHB_Minutes_March_2025.pdf", "") == "zoning_hearing"
+        assert (
+            classify_proceeding_type("ZHB_Minutes_March_2025.pdf", "")
+            == "zoning_hearing"
+        )
 
     def test_zoning_hearing_spelled_out_filename(self):
-        assert classify_proceeding_type("Zoning_Hearing_Board_2025-06-18.pdf", "") == "zoning_hearing"
+        assert (
+            classify_proceeding_type("Zoning_Hearing_Board_2025-06-18.pdf", "")
+            == "zoning_hearing"
+        )
 
     def test_zoning_hearing_in_link_text(self):
-        assert classify_proceeding_type("meeting.pdf", "Zoning Hearing Board Minutes") == "zoning_hearing"
+        assert (
+            classify_proceeding_type("meeting.pdf", "Zoning Hearing Board Minutes")
+            == "zoning_hearing"
+        )
 
     def test_zhb_in_link_text(self):
-        assert classify_proceeding_type("minutes.pdf", "ZHB Meeting - March 2025") == "zoning_hearing"
+        assert (
+            classify_proceeding_type("minutes.pdf", "ZHB Meeting - March 2025")
+            == "zoning_hearing"
+        )
 
     # planning_commission
     def test_pc_abbreviation_filename(self):
-        assert classify_proceeding_type("PC_01-15-2026.pdf", "") == "planning_commission"
+        assert (
+            classify_proceeding_type("PC_01-15-2026.pdf", "") == "planning_commission"
+        )
 
     def test_planning_commission_spelled_out_filename(self):
-        assert classify_proceeding_type("Planning_Commission_Minutes_March_2025.pdf", "") == "planning_commission"
+        assert (
+            classify_proceeding_type("Planning_Commission_Minutes_March_2025.pdf", "")
+            == "planning_commission"
+        )
 
     def test_planning_commission_in_link_text(self):
-        assert classify_proceeding_type("meeting.pdf", "Planning Commission Minutes - January 15, 2026") == "planning_commission"
+        assert (
+            classify_proceeding_type(
+                "meeting.pdf", "Planning Commission Minutes - January 15, 2026"
+            )
+            == "planning_commission"
+        )
 
     # supervisors
     def test_bos_abbreviation_filename(self):
-        assert classify_proceeding_type("BOS_Minutes-2025-11-14.pdf", "") == "supervisors"
+        assert (
+            classify_proceeding_type("BOS_Minutes-2025-11-14.pdf", "") == "supervisors"
+        )
 
     def test_supervisors_in_link_text(self):
-        assert classify_proceeding_type("meeting.pdf", "Board of Supervisors Minutes") == "supervisors"
+        assert (
+            classify_proceeding_type("meeting.pdf", "Board of Supervisors Minutes")
+            == "supervisors"
+        )
 
     def test_bos_meeting_notes_filename(self):
-        assert classify_proceeding_type("BOS_Meeting_Notes_2025.pdf", "") == "supervisors"
+        assert (
+            classify_proceeding_type("BOS_Meeting_Notes_2025.pdf", "") == "supervisors"
+        )
 
     def test_bos_in_link_text(self):
-        assert classify_proceeding_type("notes.pdf", "BOS Annual Notes 2025") == "supervisors"
+        assert (
+            classify_proceeding_type("notes.pdf", "BOS Annual Notes 2025")
+            == "supervisors"
+        )
 
     # council
     def test_council_in_filename(self):
-        assert classify_proceeding_type("Council_Minutes-2025-08-12.pdf", "") == "council"
+        assert (
+            classify_proceeding_type("Council_Minutes-2025-08-12.pdf", "") == "council"
+        )
 
     def test_council_in_link_text(self):
-        assert classify_proceeding_type("meeting.pdf", "Council Meeting Minutes - August 12, 2025") == "council"
+        assert (
+            classify_proceeding_type(
+                "meeting.pdf", "Council Meeting Minutes - August 12, 2025"
+            )
+            == "council"
+        )
 
     # unknown
     def test_unknown_annual_report(self):
-        assert classify_proceeding_type("Annual_Report_SpringvaleTwp.pdf", "Annual Report - Springvale Township") == "unknown"
+        assert (
+            classify_proceeding_type(
+                "Annual_Report_SpringvaleTwp.pdf", "Annual Report - Springvale Township"
+            )
+            == "unknown"
+        )
 
     def test_unknown_special_meeting(self):
-        assert classify_proceeding_type("Special_Meeting_Notes.pdf", "Special Meeting Notes") == "unknown"
+        assert (
+            classify_proceeding_type(
+                "Special_Meeting_Notes.pdf", "Special Meeting Notes"
+            )
+            == "unknown"
+        )
 
     def test_unknown_empty_inputs(self):
         assert classify_proceeding_type("", "") == "unknown"
 
     # Priority: zoning_hearing beats planning_commission if both present
     def test_zhb_takes_priority_over_pc_hint(self):
-        assert classify_proceeding_type("ZHB_PC_overlap.pdf", "PC ZHB overlap") == "zoning_hearing"
+        assert (
+            classify_proceeding_type("ZHB_PC_overlap.pdf", "PC ZHB overlap")
+            == "zoning_hearing"
+        )
 
 
 # ---------------------------------------------------------------------------
 # New date patterns (2026-04-08 municipality survey)
 # ---------------------------------------------------------------------------
+
 
 class TestParseMeetingDateNewPatterns:
     """Tests for date patterns found during the 2026-04-08 municipality survey."""

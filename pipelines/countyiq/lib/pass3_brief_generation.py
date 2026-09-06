@@ -25,7 +25,10 @@ from countyiq.lib.intelligence_common import (
 )
 from countyiq.lib.pass2_signal_validation import SERVING_VALIDATION_STATUSES
 from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, PASS3_FIELD_CONTRACT
-from countyiq.lib.signal_policy import INTERPRETIVE_SIGNAL_KEYS, INTERPRETIVE_SIGNAL_KEYS_SQL
+from countyiq.lib.signal_policy import (
+    INTERPRETIVE_SIGNAL_KEYS,
+    INTERPRETIVE_SIGNAL_KEYS_SQL,
+)
 
 # =============================================================================
 # CONSTANTS
@@ -133,13 +136,16 @@ BRIEF_GENERATION_SYSTEM_PROMPT = (
 # so regressions can be traced to the exact prompt that produced them.
 # Covers both the system and user halves; recompute whenever either changes.
 PROMPT_VERSION = _hashlib.sha256(
-    (BRIEF_GENERATION_SYSTEM_PROMPT + "\n\n" + BRIEF_GENERATION_USER_TEMPLATE).encode("utf-8")
+    (BRIEF_GENERATION_SYSTEM_PROMPT + "\n\n" + BRIEF_GENERATION_USER_TEMPLATE).encode(
+        "utf-8"
+    )
 ).hexdigest()[:12]
 
 
 # =============================================================================
 # PRIVATE HELPERS
 # =============================================================================
+
 
 def _format_entity_text(entity: dict, portfolio: dict) -> str:
     """Format entity profile and portfolio stats for the prompt."""
@@ -232,6 +238,7 @@ def _format_signals_text(validated_signals: list[dict]) -> str:
 # PUBLIC FUNCTIONS
 # =============================================================================
 
+
 def should_generate_brief(validated_signals: list[dict]) -> bool:
     """Check whether a parcel qualifies for brief generation.
 
@@ -270,7 +277,9 @@ def build_brief_generation_prompt(context: dict) -> str:
     portfolio = context.get("portfolio", {})
     validated_signals = context.get("validated_signals", [])
 
-    entity_type = entity.get("entity_type", "unknown") if entity.get("found") else "unknown"
+    entity_type = (
+        entity.get("entity_type", "unknown") if entity.get("found") else "unknown"
+    )
     entity_text = _format_entity_text(entity, portfolio)
     signals_text = _format_signals_text(validated_signals)
 
@@ -310,14 +319,17 @@ def gather_brief_context(cursor, pidn: str) -> dict:
 
     # One database-owned definition is used by generation and serving checks.
     # The caller holds a read snapshot through this and the signal query.
-    cursor.execute("""
+    cursor.execute(
+        """
         WITH source AS MATERIALIZED (
             SELECT meta.parcel_brief_sources(%(pidn)s) AS facts
         )
         SELECT facts,
                encode(sha256(convert_to(facts::text,'UTF8')),'hex') AS fingerprint
         FROM source
-    """, params)
+    """,
+        params,
+    )
     source = dict(cursor.fetchone())
     facts = source["facts"]
     parcel = format_parcel_context(facts.get("parcel") or {"pidn": pidn})
@@ -357,15 +369,17 @@ def gather_brief_context(cursor, pidn: str) -> dict:
         # Feed the next pass structured source evidence, not earlier model prose.
         key_facts = source_evidence_facts(r.get("evidence_data"))
 
-        validated_signals.append({
-            "signal_key": r.get("signal_key", ""),
-            "active_inference_id": r.get("active_inference_id"),
-            "validation_status": r.get("validation_status", ""),
-            "adjusted_significance": r.get("adjusted_significance", ""),
-            "key_facts": key_facts,
-            "source_url": r.get("source_url") or "",
-            "internal_url": r.get("internal_url") or "",
-        })
+        validated_signals.append(
+            {
+                "signal_key": r.get("signal_key", ""),
+                "active_inference_id": r.get("active_inference_id"),
+                "validation_status": r.get("validation_status", ""),
+                "adjusted_significance": r.get("adjusted_significance", ""),
+                "key_facts": key_facts,
+                "source_url": r.get("source_url") or "",
+                "internal_url": r.get("internal_url") or "",
+            }
+        )
 
     return {
         "pidn": pidn,
@@ -380,8 +394,8 @@ def gather_brief_context(cursor, pidn: str) -> dict:
 # Structured-first contract — see the LLM decision in docs/decisions.md.
 # These sets clamp free-form LLM output to known vocabulary.
 VALID_RECOMMENDATIONS = {"investigate", "watch", "insufficient_evidence"}
-VALID_URGENCY         = {"urgent_30d", "near_term_90d", "long_term_12mo", "none"}
-VALID_EVIDENCE        = {"strong", "moderate", "weak"}
+VALID_URGENCY = {"urgent_30d", "near_term_90d", "long_term_12mo", "none"}
+VALID_EVIDENCE = {"strong", "moderate", "weak"}
 
 
 def _clamp_float_01(value: object, default: float | None = None) -> float | None:
@@ -428,9 +442,13 @@ def parse_brief_output(output: object) -> dict:
         citations = []
 
     # Structured-first fields (optional for legacy outputs).
-    recommendation = _clamp_enum(output.get("recommendation"), VALID_RECOMMENDATIONS, None)
+    recommendation = _clamp_enum(
+        output.get("recommendation"), VALID_RECOMMENDATIONS, None
+    )
     urgency = _clamp_enum(output.get("urgency"), VALID_URGENCY, None)
-    evidence_strength = _clamp_enum(output.get("evidence_strength"), VALID_EVIDENCE, None)
+    evidence_strength = _clamp_enum(
+        output.get("evidence_strength"), VALID_EVIDENCE, None
+    )
     confidence = _clamp_float_01(output.get("confidence"))
     top_signal_key = output.get("top_signal_key")
     if top_signal_key is not None and not isinstance(top_signal_key, str):

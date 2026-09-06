@@ -30,11 +30,17 @@ def parse_storage_tanks(features: list[dict], source_url: str) -> list[dict]:
         source_id = attrs.get("OBJECTID")
         if source_id is None or _point(feature) is None:
             continue
-        address = " ".join(
-            str(value).strip()
-            for value in (attrs.get("FACILITY_ADDRESS1"), attrs.get("FACILITY_ADDRESS2"))
-            if value
-        ) or None
+        address = (
+            " ".join(
+                str(value).strip()
+                for value in (
+                    attrs.get("FACILITY_ADDRESS1"),
+                    attrs.get("FACILITY_ADDRESS2"),
+                )
+                if value
+            )
+            or None
+        )
         records.append(
             {
                 "source_layer": "active_storage_tank",
@@ -64,9 +70,12 @@ def parse_cleanup_sites(features: list[dict], source_url: str) -> list[dict]:
             {
                 "source_layer": "land_recycling_cleanup",
                 "source_id": str(source_id),
-                "site_name": attrs.get("SITE_NAME") or attrs.get("PRIMARY_FACILITY_NAME"),
-                "facility_type": attrs.get("SUB_FACILITY_TYPE") or attrs.get("PRIMARY_FACILITY_KIND"),
-                "facility_status": attrs.get("SUB_FACILITY_STATUS") or attrs.get("PRIMARY_FACILITY_STATUS"),
+                "site_name": attrs.get("SITE_NAME")
+                or attrs.get("PRIMARY_FACILITY_NAME"),
+                "facility_type": attrs.get("SUB_FACILITY_TYPE")
+                or attrs.get("PRIMARY_FACILITY_KIND"),
+                "facility_status": attrs.get("SUB_FACILITY_STATUS")
+                or attrs.get("PRIMARY_FACILITY_STATUS"),
                 "address": None,
                 "municipality": None,
                 "county_name": None,
@@ -93,8 +102,14 @@ def _upsert_layer(
             records=records,
             key_columns=["source_layer", "source_id"],
             value_columns=[
-                "site_name", "facility_type", "facility_status", "address",
-                "municipality", "county_name", "detail_url", "source_url",
+                "site_name",
+                "facility_type",
+                "facility_status",
+                "address",
+                "municipality",
+                "county_name",
+                "detail_url",
+                "source_url",
             ],
             geom_lookup=geometries,
             geom_kind="point",
@@ -116,7 +131,9 @@ def pa_dep_environmental_diligence(
 ) -> MaterializeResult:
     county = get_county_config()
     if not county.pa_dep_query_bbox:
-        return MaterializeResult(metadata={"status": MetadataValue.text("not_configured")})
+        return MaterializeResult(
+            metadata={"status": MetadataValue.text("not_configured")}
+        )
 
     authorization = authorize_source(
         database,
@@ -151,8 +168,12 @@ def pa_dep_environmental_diligence(
         },
     )
 
-    storage_records = parse_storage_tanks(storage_features, county.pa_dep_storage_tanks_url)
-    cleanup_records = parse_cleanup_sites(cleanup_features, county.pa_dep_cleanup_sites_url)
+    storage_records = parse_storage_tanks(
+        storage_features, county.pa_dep_storage_tanks_url
+    )
+    cleanup_records = parse_cleanup_sites(
+        cleanup_features, county.pa_dep_cleanup_sites_url
+    )
     minimums = {
         "active_storage_tank": county.pa_dep_storage_tanks_min_records,
         "land_recycling_cleanup": county.pa_dep_cleanup_sites_min_records,

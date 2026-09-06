@@ -12,7 +12,9 @@ export default function PageShell({
   return (
     <div className="page-shell">
       <Nav />
-      <main className="page-shell-main" style={{ maxWidth }}>{children}</main>
+      <main className="page-shell-main" style={{ maxWidth }}>
+        {children}
+      </main>
     </div>
   )
 }

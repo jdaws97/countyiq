@@ -67,15 +67,9 @@ REVIEWED_MERGES = {
             "KEARNEY ALAN MICHAEL & MELISSA E",
         ]
     ],
-    "entity_cluster:00adf60b292f3136fee0": [
-        ["WEAVER KEVIN", "WEAVER KEVIN L"]
-    ],
-    "entity_cluster:012282c0420bad97b9ab": [
-        ["RENTZEL ERIC J", "RENTZEL ERIC J W"]
-    ],
-    "entity_cluster:00f3319383ff265c393e": [
-        ["BENYOU TIMOTHY M", "BENYOU TIMOTHY W"]
-    ],
+    "entity_cluster:00adf60b292f3136fee0": [["WEAVER KEVIN", "WEAVER KEVIN L"]],
+    "entity_cluster:012282c0420bad97b9ab": [["RENTZEL ERIC J", "RENTZEL ERIC J W"]],
+    "entity_cluster:00f3319383ff265c393e": [["BENYOU TIMOTHY M", "BENYOU TIMOTHY W"]],
 }
 
 REVIEWED_SAMPLE_KEYS = {
@@ -129,7 +123,9 @@ def _sample(conn) -> tuple[list[dict], Counter]:
         cur.execute(CANDIDATE_CLUSTERS_QUERY)
         pairs = cur.fetchall()
     clusters = build_name_clusters(pairs)
-    name_to_cluster = {name: index for index, names in enumerate(clusters) for name in names}
+    name_to_cluster = {
+        name: index for index, names in enumerate(clusters) for name in names
+    }
     similarities = defaultdict(list)
     for name_a, name_b, _municipality, similarity in pairs:
         index = name_to_cluster.get(name_a)
@@ -217,7 +213,9 @@ def _parse_result(result):
     value = result.parsed
     if not isinstance(value, dict):
         try:
-            value = json.loads(extract_json_object(strip_thinking(result.raw_output or "")))
+            value = json.loads(
+                extract_json_object(strip_thinking(result.raw_output or ""))
+            )
         except Exception:
             value = {}
     return parse_entity_verification_output(value or {})
@@ -225,7 +223,9 @@ def _parse_result(result):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run", action="store_true", help="Dispatch the paid 20-case audit.")
+    parser.add_argument(
+        "--run", action="store_true", help="Dispatch the paid 20-case audit."
+    )
     parser.add_argument("--model", default="openai/gpt-5.6-luna")
     parser.add_argument("--max-cost-usd", type=float, default=0.10)
     args = parser.parse_args()
@@ -338,7 +338,9 @@ def main() -> None:
         "pair_recall": round(len(true_pairs) / len(gold_pairs), 3)
         if gold_pairs
         else 1.0,
-        "production_gate_passes": sum(not row["production_gate_errors"] for row in rows),
+        "production_gate_passes": sum(
+            not row["production_gate_errors"] for row in rows
+        ),
         "spend": ledger.summary(),
     }
     output = {

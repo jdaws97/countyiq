@@ -145,9 +145,7 @@ def build_production_eval_config(
         max_tokens=resolved_max_tokens,
         thinking=resolved_thinking,
         reasoning_effort=(
-            base.reasoning_effort
-            if reasoning_effort is None
-            else reasoning_effort
+            base.reasoning_effort if reasoning_effort is None else reasoning_effort
         ),
         provider_quantizations=provider_quantizations,
         max_price_prompt=(
@@ -202,7 +200,9 @@ def estimate_max_call_cost(
     if retries < 0:
         raise ValueError("retries must be non-negative")
 
-    schema_text = json.dumps(config.json_schema, sort_keys=True) if config.json_schema else ""
+    schema_text = (
+        json.dumps(config.json_schema, sort_keys=True) if config.json_schema else ""
+    )
     prompt_bytes = len(
         ((config.system_prompt or "") + prompt + schema_text).encode("utf-8")
     )
@@ -241,8 +241,7 @@ class EvalCostLedger:
         with self._lock:
             if (
                 self.max_cost_usd is not None
-                and self.spent_usd + self.reserved_usd + amount_usd
-                > self.max_cost_usd
+                and self.spent_usd + self.reserved_usd + amount_usd > self.max_cost_usd
             ):
                 raise EvalCostLimitExceeded(
                     "eval cost reservation would exceed limit: "
@@ -256,9 +255,7 @@ class EvalCostLedger:
 
     def release(self, reservation: EvalCostReservation) -> None:
         with self._lock:
-            self.reserved_usd = max(
-                0.0, self.reserved_usd - reservation.amount_usd
-            )
+            self.reserved_usd = max(0.0, self.reserved_usd - reservation.amount_usd)
 
     def record(
         self,
@@ -284,10 +281,7 @@ class EvalCostLedger:
                     "provider-reported cost exceeded its pre-call reservation: "
                     f"${float(cost):.6f} > ${reserved:.6f}"
                 )
-            if (
-                self.max_cost_usd is not None
-                and self.spent_usd > self.max_cost_usd
-            ):
+            if self.max_cost_usd is not None and self.spent_usd > self.max_cost_usd:
                 raise EvalCostLimitExceeded(
                     f"eval cost limit exceeded after call {self.calls}: "
                     f"${self.spent_usd:.6f} / ${self.max_cost_usd:.6f}"

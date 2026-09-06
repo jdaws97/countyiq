@@ -36,7 +36,16 @@ def test_parse_address_points_skips_missing_key():
 
 
 def test_parse_address_points_preserves_numeric_fields():
-    features = [{"attributes": {"Site_NGUID": "abc", "Add_Number": 123, "Long": -76.7, "Lat": 39.9}}]
+    features = [
+        {
+            "attributes": {
+                "Site_NGUID": "abc",
+                "Add_Number": 123,
+                "Long": -76.7,
+                "Lat": 39.9,
+            }
+        }
+    ]
     records = parse_address_points_features(features)
     assert records[0]["add_number"] == 123
     assert records[0]["long"] == -76.7

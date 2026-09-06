@@ -61,7 +61,9 @@ def test_ops_health_exposes_source_policy_review_state(client):
     assert integrity["projection_mismatch_count"] == 0
 
     municipal = sources["municipal_proceedings"]
-    assert municipal["configured_count"] == 123  # 122 configured sources plus the synthetic fixture body.
+    assert (
+        municipal["configured_count"] == 123
+    )  # 122 configured sources plus the synthetic fixture body.
     assert municipal["active_count"] == 104
     assert municipal["healthy_count"] == 0
     assert municipal["blocked_count"] == 18
@@ -124,11 +126,21 @@ def test_property_report_contract_includes_intelligence_layers(client):
     evidence_by_kind = {item["source_kind"]: item for item in payload["evidence"]}
     assert evidence_by_kind["official_zoning_layer"]["details"]["code"] == "HC"
     assert evidence_by_kind["official_parcel_record"]["source_record_id"] == TEST_PIDN
-    assert evidence_by_kind["official_parcel_record"]["url"] == "https://example.com/parcels/1"
+    assert (
+        evidence_by_kind["official_parcel_record"]["url"]
+        == "https://example.com/parcels/1"
+    )
     assert evidence_by_kind["official_flood_layer"]["details"]["zones"] == ["AE"]
-    assert evidence_by_kind["official_flood_layer"]["details"]["parcel_overlap_pct"] == 100.0
-    assert evidence_by_kind["official_structure_layer"]["details"]["footprint_count"] == 1
-    assert evidence_by_kind["official_tax_listing"]["details"] == {"delinquency_signal": True}
+    assert (
+        evidence_by_kind["official_flood_layer"]["details"]["parcel_overlap_pct"]
+        == 100.0
+    )
+    assert (
+        evidence_by_kind["official_structure_layer"]["details"]["footprint_count"] == 1
+    )
+    assert evidence_by_kind["official_tax_listing"]["details"] == {
+        "delinquency_signal": True
+    }
 
     assert payload["development_momentum"]["score"] == 72
     assert payload["development_momentum"]["opportunity_score"] == 64
@@ -148,10 +160,16 @@ def test_property_report_contract_includes_intelligence_layers(client):
 
     match_types = {row["match_type"] for row in payload["linked_proceedings"]}
     assert match_types == {"pidn", "address"}
-    assert all(row["applicant_name"] == "Alpha Holdings LLC" for row in payload["linked_proceedings"])
+    assert all(
+        row["applicant_name"] == "Alpha Holdings LLC"
+        for row in payload["linked_proceedings"]
+    )
     assert all(row["supporting_text"] for row in payload["linked_proceedings"])
     assert all(row["evidence"]["document_url"] for row in payload["linked_proceedings"])
-    assert all(row["evidence"]["excerpt"] == row["supporting_text"] for row in payload["linked_proceedings"])
+    assert all(
+        row["evidence"]["excerpt"] == row["supporting_text"]
+        for row in payload["linked_proceedings"]
+    )
 
 
 def test_parcel_reference_normalizer_links_alphanumeric_pidns(client):
@@ -248,7 +266,9 @@ def test_feed_contract_combines_parcel_and_development_intelligence(client):
     assert approval_payload["events"][0]["sources"][0]["excerpt"] == (
         "The board approved the variance with conditions."
     )
-    assert approval_payload["events"][0]["sources"][0]["details"]["decision"] == "approved"
+    assert (
+        approval_payload["events"][0]["sources"][0]["details"]["decision"] == "approved"
+    )
     assert approval_payload["events"][0]["sources"][0]["source_record_id"]
     assert approval_payload["events"][0]["sources"][0]["method"]
     assert parcel_payload["events"][0]["category"] == "parcel"
@@ -344,7 +364,9 @@ def test_parcels_near_answers_the_corridor_question(client):
 
     wide = client.get(f"/api/parcels/near?pidn={TEST_PIDN}&radius_m=800")
     tight = client.get(f"/api/parcels/near?pidn={TEST_PIDN}&radius_m=200")
-    by_project = client.get("/api/parcels/near?project_key=project:test-main-street&radius_m=800")
+    by_project = client.get(
+        "/api/parcels/near?project_key=project:test-main-street&radius_m=800"
+    )
     missing = client.get("/api/parcels/near?radius_m=800")
 
     assert wide.status_code == 200
@@ -368,14 +390,21 @@ def test_parcels_near_answers_the_corridor_question(client):
 
     project_payload = by_project.json()
     assert project_payload["anchor_pidns"] == [TEST_PIDN]
-    assert {row["pidn"] for row in project_payload["parcels"]} == {SECOND_PIDN, OTHER_PIDN}
+    assert {row["pidn"] for row in project_payload["parcels"]} == {
+        SECOND_PIDN,
+        OTHER_PIDN,
+    }
 
 
 def test_feed_can_report_activity_near_watched_parcels(client):
     from api.tests.conftest import SECOND_PIDN
 
-    response = client.get(f"/api/feed?near_pidns={SECOND_PIDN}&near_radius_m=400&since_days=3650")
-    far = client.get(f"/api/feed?near_pidns={SECOND_PIDN}&near_radius_m=50&since_days=3650")
+    response = client.get(
+        f"/api/feed?near_pidns={SECOND_PIDN}&near_radius_m=400&since_days=3650"
+    )
+    far = client.get(
+        f"/api/feed?near_pidns={SECOND_PIDN}&near_radius_m=50&since_days=3650"
+    )
 
     assert response.status_code == 200
     events = response.json()["events"]
@@ -422,10 +451,12 @@ def test_watch_changes_require_recent_version_history(client, days_ago, expected
     pidn = "0000000000987"
     with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn:
         with conn.cursor() as cur:
-            cur.execute("""INSERT INTO staging.parcels(pidn, owner_full, valid_from, valid_to)
+            cur.execute(
+                """INSERT INTO staging.parcels(pidn, owner_full, valid_from, valid_to)
                 VALUES (%s, 'Prior owner', NOW() - INTERVAL '90 days', NOW() - %s * INTERVAL '1 day'),
                        (%s, 'Current owner', NOW() - %s * INTERVAL '1 day', NULL)""",
-                (pidn, days_ago, pidn, days_ago))
+                (pidn, days_ago, pidn, days_ago),
+            )
     try:
         response = client.get(f"/api/parcels/summary?pidns={pidn}")
         assert response.status_code == 200
@@ -437,7 +468,9 @@ def test_watch_changes_require_recent_version_history(client, days_ago, expected
 
 
 @pytest.mark.parametrize("legacy_reference", [None, "Multiple parcels in application"])
-def test_structured_multiple_parcel_ids_report_id_match_method(client, legacy_reference):
+def test_structured_multiple_parcel_ids_report_id_match_method(
+    client, legacy_reference
+):
     import psycopg2
     from psycopg2.extras import Json
     from api.tests.conftest import DB_ENV, SECOND_PIDN
@@ -450,20 +483,31 @@ def test_structured_multiple_parcel_ids_report_id_match_method(client, legacy_re
                 JOIN staging.public_proceedings pp ON pp.id=pe.proceeding_id
                 WHERE pp.body_name='Hanover Borough Council' ORDER BY pe.id LIMIT 1
             """)
-            extraction_id,reference,details=cursor.fetchone()
-            cursor.execute("""
+            extraction_id, reference, details = cursor.fetchone()
+            cursor.execute(
+                """
                 UPDATE staging.proceeding_extractions
                 SET parcel_reference=%s, extraction_details=%s
                 WHERE id=%s
-            """,(legacy_reference,Json({"parcel_references":[TEST_PIDN,SECOND_PIDN]}),extraction_id))
+            """,
+                (
+                    legacy_reference,
+                    Json({"parcel_references": [TEST_PIDN, SECOND_PIDN]}),
+                    extraction_id,
+                ),
+            )
     try:
-        response=client.get(f"/api/parcels/{TEST_PIDN}")
-        assert response.status_code==200,response.text
-        linked=response.json()["linked_proceedings"]
-        row=next(item for item in linked if item["body_name"]=='Hanover Borough Council')
-        assert row["match_type"]=='pidn'
+        response = client.get(f"/api/parcels/{TEST_PIDN}")
+        assert response.status_code == 200, response.text
+        linked = response.json()["linked_proceedings"]
+        row = next(
+            item for item in linked if item["body_name"] == "Hanover Borough Council"
+        )
+        assert row["match_type"] == "pidn"
     finally:
         with psycopg2.connect(DB_ENV["DATABASE_URL"]) as connection:
             with connection.cursor() as cursor:
-                cursor.execute("UPDATE staging.proceeding_extractions SET parcel_reference=%s,extraction_details=%s WHERE id=%s",
-                               (reference,Json(details),extraction_id))
+                cursor.execute(
+                    "UPDATE staging.proceeding_extractions SET parcel_reference=%s,extraction_details=%s WHERE id=%s",
+                    (reference, Json(details), extraction_id),
+                )

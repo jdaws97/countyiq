@@ -28,14 +28,20 @@ def _ctx(signals, context_signals):
 
 
 SALE_SIGNAL = {
-    "signal_key": "ownership_change", "signal_weight": 0.1,
-    "source_table": "staging.parcels", "source_id": "x",
-    "distance_m": None, "evidence": {"price": 100000},
+    "signal_key": "ownership_change",
+    "signal_weight": 0.1,
+    "source_table": "staging.parcels",
+    "source_id": "x",
+    "distance_m": None,
+    "evidence": {"price": 100000},
 }
 GROWTH_SIGNAL = {
-    "signal_key": "growth_area", "signal_weight": 0.05,
-    "source_table": "staging.growth_areas", "source_id": "g1",
-    "distance_m": 10.0, "evidence": {"tier": "primary"},
+    "signal_key": "growth_area",
+    "signal_weight": 0.05,
+    "source_table": "staging.growth_areas",
+    "source_id": "g1",
+    "distance_m": 10.0,
+    "evidence": {"tier": "primary"},
 }
 
 

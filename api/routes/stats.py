@@ -50,10 +50,17 @@ def get_stats() -> HomepageStatsResponse:
         tax_breakdown = cur.fetchone()
 
     # Monetary aggregates and the delinquent subset are not additional records.
-    total_records = sum(row[key] for key in (
-        "municipality_count", "flood_zone_count", "liquor_license_count",
-        "address_point_count", "structure_count", "parcel_count",
-    ))
+    total_records = sum(
+        row[key]
+        for key in (
+            "municipality_count",
+            "flood_zone_count",
+            "liquor_license_count",
+            "address_point_count",
+            "structure_count",
+            "parcel_count",
+        )
+    )
 
     return {
         "total_records": total_records,

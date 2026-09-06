@@ -154,7 +154,9 @@ def gather_parcel_batch_context(cursor, pidn: str) -> dict:
             }
         )
 
-    context_signals = [s for s in signals if s["signal_key"] not in INTERPRETIVE_SIGNAL_KEYS]
+    context_signals = [
+        s for s in signals if s["signal_key"] not in INTERPRETIVE_SIGNAL_KEYS
+    ]
     signals = [s for s in signals if s["signal_key"] in INTERPRETIVE_SIGNAL_KEYS]
 
     signal_keys = {s["signal_key"] for s in signals}
@@ -441,9 +443,13 @@ def _format_neighbors(neighbors: list[dict]) -> str:
     lines = [f"ADJACENT PARCELS ({len(neighbors)} neighbors):"]
     # Cap to 15 to avoid huge prompts on dense blocks
     for n in neighbors[:15]:
-        amount = float(n.get('total_owed') or 0)
-        years = int(n.get('years_delinquent') or 0)
-        owed = f" | Positive recorded balance: ${amount:,.2f}" if amount > 0 else " | No positive balance supplied"
+        amount = float(n.get("total_owed") or 0)
+        years = int(n.get("years_delinquent") or 0)
+        owed = (
+            f" | Positive recorded balance: ${amount:,.2f}"
+            if amount > 0
+            else " | No positive balance supplied"
+        )
         lines.append(
             f"- {n.get('pidn', '?')} | {n.get('owner', '?')} | {n.get('acres', 0)} ac"
             f" | Tax claim years: {years}{owed}"
@@ -498,7 +504,8 @@ def _format_precomputed_metrics(context: dict) -> str:
     )
     target_value = float(parcel.get("assessed_value") or 0)
     delinquent_neighbors = sum(
-        float(row.get("total_owed") or 0) > 0 or float(row.get("years_delinquent") or 0) > 0
+        float(row.get("total_owed") or 0) > 0
+        or float(row.get("years_delinquent") or 0) > 0
         for row in neighbors
     )
     metrics: list[tuple[str, int | float | None]] = [
@@ -530,7 +537,9 @@ def _format_precomputed_metrics(context: dict) -> str:
     ]
     lines = ["PRECOMPUTED METRICS (deterministic; do not recompute):"]
     if neighbors:
-        lines.append("Population: adjacent_* includes all intersecting neighbors, including same-owner parcels.")
+        lines.append(
+            "Population: adjacent_* includes all intersecting neighbors, including same-owner parcels."
+        )
     for name, value in metrics:
         suffix = (
             f" [Evidence: {adjacent_ref}]"
@@ -926,7 +935,9 @@ class StaleValidationContext(RuntimeError):
     """The completed inference no longer describes current source context."""
 
 
-def assert_current_validation_context(cursor, pidn: str, expected_source_hash: str) -> None:
+def assert_current_validation_context(
+    cursor, pidn: str, expected_source_hash: str
+) -> None:
     """First operation in the publication transaction; never hold through inference.
 
     The shared lock conflicts with signal replacement/updates until publication

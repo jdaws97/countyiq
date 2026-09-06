@@ -3,7 +3,6 @@
 Maps ArcGIS field names to staging.roads column names.
 """
 
-
 FIELD_MAP = {
     "RCL_NGUID": "rcl_nguid",
     "StreetName": "street_name",

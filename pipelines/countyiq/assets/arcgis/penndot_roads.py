@@ -29,12 +29,22 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["road_id"]
 VALUE_COLUMNS = [
-    "route_number", "road_name", "road_class", "municipality",
-    "speed_limit", "surface_type", "source_url",
+    "route_number",
+    "road_name",
+    "road_class",
+    "municipality",
+    "speed_limit",
+    "surface_type",
+    "source_url",
 ]
 
 EXPECTED_FIELDS = {
-    "ST_RT_NO", "SEG_NO", "STREET_NAME", "FAC_TYPE", "SURF_TYPE", "CTY_CODE",
+    "ST_RT_NO",
+    "SEG_NO",
+    "STREET_NAME",
+    "FAC_TYPE",
+    "SURF_TYPE",
+    "CTY_CODE",
 }
 
 
@@ -51,10 +61,18 @@ def penndot_roads_arcgis(
     """Fetch PennDOT road segments, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key="penndot_open_data", acquisition_method="arcgis_rest", asset_key="penndot_roads_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key="penndot_open_data",
+        acquisition_method="arcgis_rest",
+        asset_key="penndot_roads_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying PennDOT roads for {county.name}: {county.penndot_roads_url}")
+    context.log.info(
+        f"Querying PennDOT roads for {county.name}: {county.penndot_roads_url}"
+    )
 
     raw_features = query_all_features(
         url=county.penndot_roads_url,
@@ -149,7 +167,9 @@ def penndot_roads_schema_drift(database: DatabaseResource) -> AssetCheckResult:
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
             metadata={
-                "missing_fields": MetadataValue.text(str(missing) if missing else "none"),
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                ),
             },
         )
     except requests.exceptions.RequestException as e:

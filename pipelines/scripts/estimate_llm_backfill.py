@@ -33,17 +33,19 @@ def render_report(report: dict) -> str:
     )
     rows = []
     for item in report["passes"]:
-        rows.append((
-            item["key"],
-            "enabled" if item["enabled_in_environment"] else "disabled",
-            _range(item["units_min"], item["units_max"]),
-            _range(item["planning_calls_min"], item["planning_calls_max"]),
-            _money(item["planning_cost_min"], item["planning_cost_max"]),
+        rows.append(
             (
-                f"{item['retry_ceiling_calls']:,} / "
-                f"{_money(item['retry_ceiling_cost'], item['retry_ceiling_cost'])}"
-            ),
-        ))
+                item["key"],
+                "enabled" if item["enabled_in_environment"] else "disabled",
+                _range(item["units_min"], item["units_max"]),
+                _range(item["planning_calls_min"], item["planning_calls_max"]),
+                _money(item["planning_cost_min"], item["planning_cost_max"]),
+                (
+                    f"{item['retry_ceiling_calls']:,} / "
+                    f"{_money(item['retry_ceiling_cost'], item['retry_ceiling_cost'])}"
+                ),
+            )
+        )
 
     widths = [
         max(len(headers[index]), *(len(row[index]) for row in rows))
@@ -60,36 +62,40 @@ def render_report(report: dict) -> str:
     totals = report["totals"]
     profile = report["data_profile"]
     counts = profile["counts"]
-    lines.extend([
-        "",
-        (
-            "Input snapshot: "
-            f"{counts['parcels']:,} parcels, "
-            f"{counts['proceedings']:,} proceedings, "
-            f"{counts['corporate_entities']:,} corporate rows, "
-            f"{counts['development_signals']:,} development signals, "
-            f"{counts['owners']:,} owners"
-        ),
-        f"Planning total: {_range(totals['planning_calls_min'], totals['planning_calls_max'])} calls, "
-        f"{_money(totals['planning_cost_min'], totals['planning_cost_max'])}",
-        f"Retry/output ceiling: {totals['retry_ceiling_calls']:,} calls, "
-        f"{_money(totals['retry_ceiling_cost'], totals['retry_ceiling_cost'])}",
-        "Pass 4 is excluded because it is disabled and not required by the alpha product.",
-        "Runtime gates are status only: planning cost models the hypothetical backfill before enablement.",
-        "Costs use visible output-token assumptions and no-cache pricing; inspect JSON for caveats.",
-    ])
+    lines.extend(
+        [
+            "",
+            (
+                "Input snapshot: "
+                f"{counts['parcels']:,} parcels, "
+                f"{counts['proceedings']:,} proceedings, "
+                f"{counts['corporate_entities']:,} corporate rows, "
+                f"{counts['development_signals']:,} development signals, "
+                f"{counts['owners']:,} owners"
+            ),
+            f"Planning total: {_range(totals['planning_calls_min'], totals['planning_calls_max'])} calls, "
+            f"{_money(totals['planning_cost_min'], totals['planning_cost_max'])}",
+            f"Retry/output ceiling: {totals['retry_ceiling_calls']:,} calls, "
+            f"{_money(totals['retry_ceiling_cost'], totals['retry_ceiling_cost'])}",
+            "Pass 4 is excluded because it is disabled and not required by the alpha product.",
+            "Runtime gates are status only: planning cost models the hypothetical backfill before enablement.",
+            "Costs use visible output-token assumptions and no-cache pricing; inspect JSON for caveats.",
+        ]
+    )
     lines.extend(f"WARNING: {warning}" for warning in profile["warnings"])
     pass0 = report["passes"][0]
     pass0_details = pass0["details"]
-    lines.extend([
-        (
-            "Pass 0 recent-window scenarios: "
-            f"365 days {pass0_details['last_365_days_planning_calls']:,} calls / "
-            f"{_money(pass0_details['last_365_days_planning_cost'], pass0_details['last_365_days_planning_cost'])}; "
-            f"730 days {pass0_details['last_730_days_planning_calls']:,} calls / "
-            f"{_money(pass0_details['last_730_days_planning_cost'], pass0_details['last_730_days_planning_cost'])}"
-        )
-    ])
+    lines.extend(
+        [
+            (
+                "Pass 0 recent-window scenarios: "
+                f"365 days {pass0_details['last_365_days_planning_calls']:,} calls / "
+                f"{_money(pass0_details['last_365_days_planning_cost'], pass0_details['last_365_days_planning_cost'])}; "
+                f"730 days {pass0_details['last_730_days_planning_calls']:,} calls / "
+                f"{_money(pass0_details['last_730_days_planning_cost'], pass0_details['last_730_days_planning_cost'])}"
+            )
+        ]
+    )
     return "\n".join(lines)
 
 

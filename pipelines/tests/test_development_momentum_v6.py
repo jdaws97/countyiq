@@ -29,7 +29,12 @@ def test_opportunity_weights_cover_every_non_label_signal():
     # contributing to it, and exclusions never score.
     expected = signal_keys - set(dm.ACTIVE_PLAN_SIGNAL_KEYS) - {"conservation_easement"}
     assert scored == expected
-    risk = {"flood_zone", "soil_constraint", "zoning_constraint", "environmental_diligence"}
+    risk = {
+        "flood_zone",
+        "soil_constraint",
+        "zoning_constraint",
+        "environmental_diligence",
+    }
     assert all(dm.OPPORTUNITY_WEIGHTS[key] <= 0 for key in risk)
     assert all(dm.OPPORTUNITY_WEIGHTS[key] >= 0 for key in scored - risk)
     assert dm.OPPORTUNITY_WEIGHTS["ag_security"] == 0
@@ -39,7 +44,9 @@ def test_only_conservation_easement_excludes_radar_eligibility():
     sql = dm.build_rebuild_sql()
     assert "BOOL_OR(signal_key = 'conservation_easement')" in sql
     assert "signal_key IN ('conservation_easement', 'ag_security')" not in sql
-    assert "Agricultural Security Area enrollment (not a development prohibition)" in sql
+    assert (
+        "Agricultural Security Area enrollment (not a development prohibition)" in sql
+    )
 
 
 def test_momentum_excludes_optionality_and_opportunity_gate_is_parcel_level():
@@ -60,11 +67,21 @@ def test_history_sql_compares_to_a_snapshot_at_least_one_day_old():
 
 def test_signal_definitions_include_new_deterministic_signals():
     keys = [key for key, _ in _SIGNALS]
-    for key in ("active_subdivision", "nearby_subdivision", "municipal_action", "entity_assemblage"):
+    for key in (
+        "active_subdivision",
+        "nearby_subdivision",
+        "municipal_action",
+        "entity_assemblage",
+    ):
         assert key in keys
     sql = dict(_SIGNALS)
     # Proximity joins narrow with an index-friendly envelope before the exact test.
-    for key in ("nearby_subdivision", "penndot_project", "local_traffic_activity", "environmental_diligence"):
+    for key in (
+        "nearby_subdivision",
+        "penndot_project",
+        "local_traffic_activity",
+        "environmental_diligence",
+    ):
         assert "ST_Expand(" in sql[key], key
     # Extraction linking uses the normalized address function from migration 048.
     assert "public.proceeding_parcel_matches" in sql["municipal_action"]
@@ -83,7 +100,9 @@ def test_business_owner_regex_uses_word_boundaries():
     import re
 
     # PostgreSQL \m / \M are word boundaries; emulate with \b for the check.
-    pattern = re.compile(BUSINESS_OWNER_REGEX.replace(r"\m", r"\b").replace(r"\M", r"\b"), re.IGNORECASE)
+    pattern = re.compile(
+        BUSINESS_OWNER_REGEX.replace(r"\m", r"\b").replace(r"\M", r"\b"), re.IGNORECASE
+    )
     assert pattern.search("RIDGE HOLDINGS LP")
     assert pattern.search("ACME PROPERTIES LLC")
     assert not pattern.search("PHILPOT JOHN")

@@ -28,9 +28,15 @@ depends_on = None
 def upgrade() -> None:
     op.add_column("owners", sa.Column("aliases", ARRAY(sa.Text())), schema="public")
     op.add_column("owners", sa.Column("relationships", JSONB), schema="public")
-    op.add_column("owners", sa.Column("verification_status", sa.Text()), schema="public")
-    op.add_column("owners", sa.Column("verification_reasoning", sa.Text()), schema="public")
-    op.add_column("owners", sa.Column("verified_at", sa.DateTime(timezone=True)), schema="public")
+    op.add_column(
+        "owners", sa.Column("verification_status", sa.Text()), schema="public"
+    )
+    op.add_column(
+        "owners", sa.Column("verification_reasoning", sa.Text()), schema="public"
+    )
+    op.add_column(
+        "owners", sa.Column("verified_at", sa.DateTime(timezone=True)), schema="public"
+    )
 
     # Upsert key for stable owner IDs. The table is rebuilt from a
     # dict keyed by canonical_name, so duplicates cannot exist; wipe any

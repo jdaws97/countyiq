@@ -1,4 +1,5 @@
 """Allow governed policy, recommendation and scoped-decision events."""
+
 from alembic import op
 
 revision = "063"
@@ -11,8 +12,14 @@ _NEW = "'policy_action', 'recommendation', 'withdrawn', 'removed', 'scoped_decis
 
 
 def _replace(types):
-    op.execute("ALTER TABLE public.intelligence_events DROP CONSTRAINT chk_intelligence_events_type")
-    op.execute("ALTER TABLE public.intelligence_events ADD CONSTRAINT chk_intelligence_events_type CHECK (event_type IN (" + types + "))")
+    op.execute(
+        "ALTER TABLE public.intelligence_events DROP CONSTRAINT chk_intelligence_events_type"
+    )
+    op.execute(
+        "ALTER TABLE public.intelligence_events ADD CONSTRAINT chk_intelligence_events_type CHECK (event_type IN ("
+        + types
+        + "))"
+    )
 
 
 def upgrade():

@@ -37,7 +37,13 @@ def traffic_counts_arcgis(
 ) -> MaterializeResult:
     """Fetch traffic count segments, upsert to staging.traffic_counts."""
     county = get_county_config()
-    authorization = authorize_source(database, source_key="penndot_open_data", acquisition_method="arcgis_rest", asset_key="traffic_counts_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key="penndot_open_data",
+        acquisition_method="arcgis_rest",
+        asset_key="traffic_counts_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
 
@@ -65,13 +71,17 @@ def traffic_counts_arcgis(
 
     context.log.info(f"Total: {len(all_features)} traffic segments")
 
-    s3.archive(f"{county.s3_prefix}/arcgis/traffic_counts",
-               {"features": all_features}, filename="traffic_counts.json")
+    s3.archive(
+        f"{county.s3_prefix}/arcgis/traffic_counts",
+        {"features": all_features},
+        filename="traffic_counts.json",
+    )
 
     if len(all_features) < county.traffic_counts_min_records:
         raise RuntimeError(
             f"Only {len(all_features)} traffic segments "
-            f"(expected >= {county.traffic_counts_min_records})")
+            f"(expected >= {county.traffic_counts_min_records})"
+        )
 
     # Upsert with geometry
     cur = database.cursor()
@@ -81,7 +91,9 @@ def traffic_counts_arcgis(
         conn.autocommit = False
 
     try:
-        cur.execute("UPDATE staging.traffic_counts SET valid_to = NOW() WHERE valid_to IS NULL")
+        cur.execute(
+            "UPDATE staging.traffic_counts SET valid_to = NOW() WHERE valid_to IS NULL"
+        )
         expired = cur.rowcount
 
         inserted = 0
@@ -90,12 +102,24 @@ def traffic_counts_arcgis(
             geom = f.get("geometry")
             if not geom or "paths" not in geom:
                 continue
-            geojson = json.dumps({"type": "MultiLineString", "coordinates": geom["paths"]})
-            cur.execute("""
+            geojson = json.dumps(
+                {"type": "MultiLineString", "coordinates": geom["paths"]}
+            )
+            cur.execute(
+                """
                 INSERT INTO staging.traffic_counts (objectid, route_number, aadt, truck_aadt, segment_length, source_url, geom)
                 VALUES (%s, %s, %s, %s, %s, %s, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))
-            """, (a.get("OBJECTID"), a.get("ST_RT_NO"), a.get("CUR_AADT"),
-                  a.get("ADTT_CUR"), a.get("SEG_LNGTH_FEET"), county.traffic_counts_url, geojson))
+            """,
+                (
+                    a.get("OBJECTID"),
+                    a.get("ST_RT_NO"),
+                    a.get("CUR_AADT"),
+                    a.get("ADTT_CUR"),
+                    a.get("SEG_LNGTH_FEET"),
+                    county.traffic_counts_url,
+                    geojson,
+                ),
+            )
             inserted += 1
 
         conn.commit()

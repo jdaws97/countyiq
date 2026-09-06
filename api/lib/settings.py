@@ -20,7 +20,9 @@ def county_metadata() -> dict[str, str]:
         "county_name": os.environ.get("COUNTYIQ_COUNTY_NAME", default_name).strip()
         or default_name,
         "state": os.environ.get("COUNTYIQ_COUNTY_STATE", "PA").strip().upper() or "PA",
-        "product_stage": os.environ.get("COUNTYIQ_PRODUCT_STAGE", "alpha").strip().lower()
+        "product_stage": os.environ.get("COUNTYIQ_PRODUCT_STAGE", "alpha")
+        .strip()
+        .lower()
         or "alpha",
     }
 
@@ -36,15 +38,23 @@ def open_data_source_key() -> str:
 
 def restricted_distress_enabled() -> bool:
     """Whether counsel-reviewed person-linked distress routes may be mounted."""
-    return os.environ.get("COUNTYIQ_ENABLE_RESTRICTED_DISTRESS", "").strip().lower() in {
-        "1", "true", "yes", "on",
+    return os.environ.get(
+        "COUNTYIQ_ENABLE_RESTRICTED_DISTRESS", ""
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
     }
 
 
 def llm_search_enabled() -> bool:
     """Whether public search may spend provider credits on intent parsing."""
     return os.environ.get("COUNTYIQ_SEARCH_LLM_ENABLED", "").strip().lower() in {
-        "1", "true", "yes", "on",
+        "1",
+        "true",
+        "yes",
+        "on",
     }
 
 
@@ -55,7 +65,10 @@ def api_docs_enabled() -> bool:
     when the public documentation routes are disabled.
     """
     return os.environ.get("COUNTYIQ_EXPOSE_API_DOCS", "").strip().lower() in {
-        "1", "true", "yes", "on",
+        "1",
+        "true",
+        "yes",
+        "on",
     }
 
 

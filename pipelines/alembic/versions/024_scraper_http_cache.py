@@ -28,7 +28,9 @@ def upgrade() -> None:
         sa.Column("url", sa.Text(), primary_key=True),
         sa.Column("etag", sa.Text()),
         sa.Column("last_modified", sa.Text()),
-        sa.Column("fetched_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")),
+        sa.Column(
+            "fetched_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()")
+        ),
         schema="meta",
     )
 

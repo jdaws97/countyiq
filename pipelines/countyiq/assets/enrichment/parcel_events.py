@@ -85,22 +85,24 @@ def parcel_events(
             pairs_seen += 1
             pidn, old_version_from, new_version_from = row[0], row[1], row[2]
             n = len(TRACKED_FIELDS)
-            old = dict(zip(TRACKED_FIELDS, row[3:3 + n]))
-            new = dict(zip(TRACKED_FIELDS, row[3 + n:3 + 2 * n]))
+            old = dict(zip(TRACKED_FIELDS, row[3 : 3 + n]))
+            new = dict(zip(TRACKED_FIELDS, row[3 + n : 3 + 2 * n]))
 
             for event in classify_parcel_change(old, new):
                 events_built += 1
                 by_type[event["event_type"]] = by_type.get(event["event_type"], 0) + 1
-                rows_to_insert.append((
-                    pidn,
-                    event["event_type"],
-                    event["confidence"],
-                    event["event_date"],
-                    new_version_from,  # detected_at
-                    old_version_from,
-                    new_version_from,
-                    json.dumps(event["evidence"]),
-                ))
+                rows_to_insert.append(
+                    (
+                        pidn,
+                        event["event_type"],
+                        event["confidence"],
+                        event["event_date"],
+                        new_version_from,  # detected_at
+                        old_version_from,
+                        new_version_from,
+                        json.dumps(event["evidence"]),
+                    )
+                )
 
             if len(rows_to_insert) >= _FETCH_BATCH:
                 execute_batch(cur, _INSERT_SQL, rows_to_insert, page_size=1000)

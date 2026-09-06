@@ -279,7 +279,8 @@ export interface ReasonSignal {
   is_risk: boolean
 }
 
-export type DevelopmentSignalValue = string | number | boolean | string[] | number[] | null | undefined
+export type DevelopmentSignalValue =
+  string | number | boolean | string[] | number[] | null | undefined
 export type DevelopmentSignalEvidence = Record<string, unknown>
 
 export interface SignalFact {

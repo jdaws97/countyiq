@@ -29,13 +29,27 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["project_id"]
 VALUE_COLUMNS = [
-    "project_name", "description", "status", "project_type",
-    "start_date", "end_date", "cost", "municipality", "county", "data", "source_url",
+    "project_name",
+    "description",
+    "status",
+    "project_type",
+    "start_date",
+    "end_date",
+    "cost",
+    "municipality",
+    "county",
+    "data",
+    "source_url",
 ]
 
 EXPECTED_FIELDS = {
-    "PROJ_ID", "PROJECT_TITLE", "IMPROVEMENT_CODE_DESC", "PROJ_STATUS_DESC",
-    "PROJ_CLASS", "PHS_EST_COST_AM", "COUNTY_NAME",
+    "PROJ_ID",
+    "PROJECT_TITLE",
+    "IMPROVEMENT_CODE_DESC",
+    "PROJ_STATUS_DESC",
+    "PROJ_CLASS",
+    "PHS_EST_COST_AM",
+    "COUNTY_NAME",
 }
 
 
@@ -52,7 +66,13 @@ def penndot_projects_arcgis(
     """Fetch PennDOT projects from multiple MapServer layers, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key="penndot_open_data", acquisition_method="arcgis_rest", asset_key="penndot_projects_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key="penndot_open_data",
+        acquisition_method="arcgis_rest",
+        asset_key="penndot_projects_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
     context.log.info(
@@ -73,7 +93,9 @@ def penndot_projects_arcgis(
         context.log.info(f"Layer {layer_id}: {len(features)} features")
         all_features.extend(features)
 
-    context.log.info(f"Fetched {len(all_features)} total raw features across all layers")
+    context.log.info(
+        f"Fetched {len(all_features)} total raw features across all layers"
+    )
 
     s3.archive(f"{county.s3_prefix}/penndot/projects", all_features)
 
@@ -160,7 +182,9 @@ def penndot_projects_schema_drift(database: DatabaseResource) -> AssetCheckResul
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,
             metadata={
-                "missing_fields": MetadataValue.text(str(missing) if missing else "none"),
+                "missing_fields": MetadataValue.text(
+                    str(missing) if missing else "none"
+                ),
             },
         )
     except requests.exceptions.RequestException as e:

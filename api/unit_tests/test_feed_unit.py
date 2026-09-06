@@ -49,10 +49,19 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
                     "url": "https://example.com/meeting",
                     "document_url": "https://example.com/minutes.pdf",
                     "excerpt": "The commission approved the plan.",
-                    "details": {"decision": "approved", "record_status": "decision",
-                                "conditions": ["Submit a traffic study"],
-                                "milestones": [{"kind": "hearing", "text": "September 20, 2026", "date": "2026-09-20"}],
-                                "supports": ["condition:0", "milestone:0"]},
+                    "details": {
+                        "decision": "approved",
+                        "record_status": "decision",
+                        "conditions": ["Submit a traffic study"],
+                        "milestones": [
+                            {
+                                "kind": "hearing",
+                                "text": "September 20, 2026",
+                                "date": "2026-09-20",
+                            }
+                        ],
+                        "supports": ["condition:0", "milestone:0"],
+                    },
                 }
             ],
             "interpretation_kind": "llm",
@@ -140,8 +149,13 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
     assert "municipality ILIKE ANY(%(municipalities)s::text[])" in feed_sql
     # A watched entity or municipality counts as a watched match, not only a
     # watched parcel or project.
-    assert feed_sql.count("watched_owner.owner_id = ANY(%(boost_entity_ids)s::integer[])") == 2
-    assert feed_sql.count("municipality ILIKE ANY(%(boost_municipalities)s::text[])") == 2
+    assert (
+        feed_sql.count("watched_owner.owner_id = ANY(%(boost_entity_ids)s::integer[])")
+        == 2
+    )
+    assert (
+        feed_sql.count("municipality ILIKE ANY(%(boost_municipalities)s::text[])") == 2
+    )
     assert "priority_score DESC" in feed_sql
     assert feed_params == {
         "text_query": None,

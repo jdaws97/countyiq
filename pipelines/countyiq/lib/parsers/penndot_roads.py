@@ -3,7 +3,6 @@
 Maps ArcGIS field names to staging.penndot_roads column names.
 """
 
-
 FIELD_MAP = {
     "ST_RT_NO": "route_number",
     "STREET_NAME": "road_name",

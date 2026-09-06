@@ -34,11 +34,11 @@ __all__ = ["classify_entity", "classify_group", "owners"]
 
 # Suffixes to strip for normalization
 _ENTITY_SUFFIXES = re.compile(
-    r'\s+(LLC|INC|CORP|CORPORATION|LTD|LP|LLP|LLLP|PA|'
-    r'TRUST|ESTATE|EST|ETAL|ET\s*AL|'
-    r'JR|SR|II|III|IV|MD|ESQ|PHD|DDS|'
-    r'CO|COMPANY|ASSOC|ASSOCIATION|FOUNDATION|'
-    r'REVOCABLE|IRREVOCABLE|LIVING|FAMILY)\s*\.?\s*$',
+    r"\s+(LLC|INC|CORP|CORPORATION|LTD|LP|LLP|LLLP|PA|"
+    r"TRUST|ESTATE|EST|ETAL|ET\s*AL|"
+    r"JR|SR|II|III|IV|MD|ESQ|PHD|DDS|"
+    r"CO|COMPANY|ASSOC|ASSOCIATION|FOUNDATION|"
+    r"REVOCABLE|IRREVOCABLE|LIVING|FAMILY)\s*\.?\s*$",
     re.IGNORECASE,
 )
 
@@ -70,17 +70,17 @@ def normalize_name(name: str) -> str:
         return ""
     n = name.upper().strip()
     # Remove content in parentheses
-    n = re.sub(r'\([^)]*\)', '', n)
+    n = re.sub(r"\([^)]*\)", "", n)
     # Strip entity suffixes (iteratively — "SMITH LLC INC" → "SMITH")
     for _ in range(3):
         prev = n
-        n = _ENTITY_SUFFIXES.sub('', n).strip()
+        n = _ENTITY_SUFFIXES.sub("", n).strip()
         if n == prev:
             break
     # Collapse whitespace
-    n = re.sub(r'\s+', ' ', n).strip()
+    n = re.sub(r"\s+", " ", n).strip()
     # Remove trailing punctuation
-    n = n.rstrip('.,;:&-')
+    n = n.rstrip(".,;:&-")
     return n.strip()
 
 
@@ -92,8 +92,8 @@ def normalize_mail_addr(addr: str | None) -> str:
     """
     if not addr:
         return ""
-    a = re.sub(r'[^A-Z0-9 ]', ' ', addr.upper())
-    a = re.sub(r'\s+', ' ', a).strip()
+    a = re.sub(r"[^A-Z0-9 ]", " ", addr.upper())
+    a = re.sub(r"\s+", " ", a).strip()
     return a if len(a) >= _MIN_MAIL_ADDR_LEN else ""
 
 
@@ -130,9 +130,7 @@ def _shared_business_address_groups(
             if address:
                 addr_index.setdefault(address, set()).add(key)
     return {
-        address: sorted(keys)
-        for address, keys in addr_index.items()
-        if len(keys) >= 2
+        address: sorted(keys) for address, keys in addr_index.items() if len(keys) >= 2
     }
 
 
@@ -206,7 +204,9 @@ def owner_resolution(
             if normed:
                 norm_groups.setdefault(normed, []).append(raw)
 
-        log.info(f"Normalized {len(raw_rows)} raw names into {len(norm_groups)} name groups")
+        log.info(
+            f"Normalized {len(raw_rows)} raw names into {len(norm_groups)} name groups"
+        )
 
         # ------------------------------------------------------------------
         # Step 2: detect shared business addresses, but do not merge on address
@@ -223,14 +223,16 @@ def owner_resolution(
         log.info(
             "Shared-address review evidence: %d addresses across %d business groups; "
             "0 automatic merges",
-            len(ambiguous_addresses), ambiguous_business_groups,
+            len(ambiguous_addresses),
+            ambiguous_business_groups,
         )
         for address, keys in sorted(
             ambiguous_addresses.items(), key=lambda item: len(item[1]), reverse=True
         )[:5]:
             log.warning(
                 "Mailing address is shared by %d business groups and was not merged: %s",
-                len(keys), address[:60],
+                len(keys),
+                address[:60],
             )
 
         # ------------------------------------------------------------------
@@ -246,7 +248,14 @@ def owner_resolution(
         """)
         graph_rows = cur.fetchall()
         graph_merges = 0
-        for g_canonical, linked, relationships, status, reasoning, verified_at in graph_rows:
+        for (
+            g_canonical,
+            linked,
+            relationships,
+            status,
+            reasoning,
+            verified_at,
+        ) in graph_rows:
             names = [g_canonical] + list(linked or [])
             keys = []
             for name in names:
@@ -284,7 +293,7 @@ def owner_resolution(
         for key in norm_groups:
             clusters.setdefault(uf.find(key), []).append(key)
 
-        map_rows = []      # (raw_name, canonical_name, match_tier, confidence)
+        map_rows = []  # (raw_name, canonical_name, match_tier, confidence)
         cluster_rows = []  # per-owner metadata
         for members in clusters.values():
             raws = [raw for key in members for raw in norm_groups[key]]
@@ -305,20 +314,21 @@ def owner_resolution(
             alias_pool = [r for r in raws if r != canonical]
             if meta:
                 alias_pool.extend(
-                    n for n in meta["linked_names"]
-                    if n != canonical and n not in raws
+                    n for n in meta["linked_names"] if n != canonical and n not in raws
                 )
             aliases = list(dict.fromkeys(alias_pool)) or None
 
-            cluster_rows.append((
-                canonical,
-                entity_type,
-                aliases,
-                _json_or_none(meta["relationships"]) if meta else None,
-                meta["verification_status"] if meta else None,
-                meta["verification_reasoning"] if meta else None,
-                meta["verified_at"] if meta else None,
-            ))
+            cluster_rows.append(
+                (
+                    canonical,
+                    entity_type,
+                    aliases,
+                    _json_or_none(meta["relationships"]) if meta else None,
+                    meta["verification_status"] if meta else None,
+                    meta["verification_reasoning"] if meta else None,
+                    meta["verified_at"] if meta else None,
+                )
+            )
 
             for key in members:
                 if key in graph_merged and key != canonical_key:
@@ -419,7 +429,9 @@ def owner_resolution(
             )
         """)
         owners_removed = cur.rowcount
-        log.info(f"Upserted {owner_count} owners, removed {owners_removed} stale owners")
+        log.info(
+            f"Upserted {owner_count} owners, removed {owners_removed} stale owners"
+        )
 
         # ------------------------------------------------------------------
         # Step 6: link parcels to owners
@@ -494,7 +506,9 @@ def owner_resolution(
             ON CONFLICT (source_type, source_id) DO NOTHING
         """)
         plcb_scoped = cur.rowcount
-        log.info(f"Linked {plcb_scoped} PLCB licenses via municipality-scoped matching (>0.6)")
+        log.info(
+            f"Linked {plcb_scoped} PLCB licenses via municipality-scoped matching (>0.6)"
+        )
 
         # Fallback: unscoped at a higher threshold for licenses not matched above
         cur.execute("SET LOCAL pg_trgm.similarity_threshold = 0.75")
@@ -518,7 +532,9 @@ def owner_resolution(
             ON CONFLICT (source_type, source_id) DO NOTHING
         """)
         plcb_unscoped = cur.rowcount
-        log.info(f"Linked {plcb_unscoped} additional PLCB licenses via unscoped matching (>0.75)")
+        log.info(
+            f"Linked {plcb_unscoped} additional PLCB licenses via unscoped matching (>0.75)"
+        )
 
         conn.commit()
 
@@ -535,12 +551,8 @@ def owner_resolution(
             "owner_count": MetadataValue.int(owner_count),
             "owners_removed": MetadataValue.int(owners_removed),
             "addr_group_merges": MetadataValue.int(0),
-            "ambiguous_shared_addresses": MetadataValue.int(
-                len(ambiguous_addresses)
-            ),
-            "ambiguous_business_groups": MetadataValue.int(
-                ambiguous_business_groups
-            ),
+            "ambiguous_shared_addresses": MetadataValue.int(len(ambiguous_addresses)),
+            "ambiguous_business_groups": MetadataValue.int(ambiguous_business_groups),
             "graph_group_merges": MetadataValue.int(graph_merges),
             "parcel_links": MetadataValue.int(parcel_links),
             "tax_claim_links": MetadataValue.int(tax_links),

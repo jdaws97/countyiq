@@ -18,5 +18,7 @@ def test_quantizations_pin_reaches_provider_prefs():
 
 
 def test_no_pin_leaves_provider_prefs_untouched():
-    payload = build_openrouter_payload(HarnessConfig(model_path="z-ai/glm-5.2"), "hello")
+    payload = build_openrouter_payload(
+        HarnessConfig(model_path="z-ai/glm-5.2"), "hello"
+    )
     assert "quantizations" not in payload.get("provider", {})

@@ -4,6 +4,7 @@ Revision ID: 010
 Revises: 009
 Create Date: 2026-03-30
 """
+
 from alembic import op
 
 revision = "010"
@@ -57,9 +58,15 @@ def upgrade() -> None:
             geom geometry(Point, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_planning_subdiv_geom ON staging.planning_subdivisions USING GIST (geom)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_planning_subdiv_sequ ON staging.planning_subdivisions (sequ_num)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_planning_subdiv_date ON staging.planning_subdivisions (date_rcvd DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_planning_subdiv_geom ON staging.planning_subdivisions USING GIST (geom)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_planning_subdiv_sequ ON staging.planning_subdivisions (sequ_num)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_planning_subdiv_date ON staging.planning_subdivisions (date_rcvd DESC)"
+    )
 
     # --- staging.ecodev_candidates (underutilized parcels, ~70, PIDN-linked) ---
     op.execute("""
@@ -90,7 +97,9 @@ def upgrade() -> None:
             geom geometry(MultiPolygon, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_ecodev_pidn ON staging.ecodev_candidates (pidn)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ecodev_pidn ON staging.ecodev_candidates (pidn)"
+    )
 
     # --- staging.growth_areas (growth zones, ~27) ---
     op.execute("""
@@ -104,7 +113,9 @@ def upgrade() -> None:
             geom geometry(MultiPolygon, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_growth_areas_geom ON staging.growth_areas USING GIST (geom)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_growth_areas_geom ON staging.growth_areas USING GIST (geom)"
+    )
 
     # --- staging.future_landuse (future land use zones, ~1.6K) ---
     op.execute("""
@@ -119,7 +130,9 @@ def upgrade() -> None:
             geom geometry(MultiPolygon, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_future_landuse_geom ON staging.future_landuse USING GIST (geom)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_future_landuse_geom ON staging.future_landuse USING GIST (geom)"
+    )
 
     # --- staging.conservation_easements (easements, ~960, PIDN-linked) ---
     op.execute("""
@@ -139,7 +152,9 @@ def upgrade() -> None:
             geom geometry(MultiPolygon, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_conservation_pidn ON staging.conservation_easements (pidn)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conservation_pidn ON staging.conservation_easements (pidn)"
+    )
 
     # --- staging.ag_security (ag security areas, ~4.5K, PIDN-linked) ---
     op.execute("""
@@ -159,7 +174,9 @@ def upgrade() -> None:
             geom geometry(MultiPolygon, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_ag_security_pidn ON staging.ag_security (pidn)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ag_security_pidn ON staging.ag_security (pidn)"
+    )
 
     # --- staging.cdbg_housing (CDBG housing projects, ~63) ---
     op.execute("""
@@ -177,7 +194,9 @@ def upgrade() -> None:
             geom geometry(Point, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_cdbg_housing_geom ON staging.cdbg_housing USING GIST (geom)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cdbg_housing_geom ON staging.cdbg_housing USING GIST (geom)"
+    )
 
     # --- public.development_signals (parcel-linked signal evidence) ---
     op.execute("""
@@ -193,8 +212,12 @@ def upgrade() -> None:
             observed_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dev_signals_pidn ON public.development_signals (pidn)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dev_signals_key ON public.development_signals (signal_key)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dev_signals_pidn ON public.development_signals (pidn)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dev_signals_key ON public.development_signals (signal_key)"
+    )
 
     # --- public.development_momentum (scored parcel snapshot) ---
     op.execute("""
@@ -212,8 +235,12 @@ def upgrade() -> None:
             computed_at TIMESTAMPTZ DEFAULT NOW()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dev_momentum_score ON public.development_momentum (score DESC) WHERE eligible = TRUE")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dev_momentum_opportunity ON public.development_momentum (opportunity_score DESC) WHERE eligible = TRUE AND NOT has_active_plan")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dev_momentum_score ON public.development_momentum (score DESC) WHERE eligible = TRUE"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dev_momentum_opportunity ON public.development_momentum (opportunity_score DESC) WHERE eligible = TRUE AND NOT has_active_plan"
+    )
 
 
 def downgrade() -> None:

@@ -11,27 +11,41 @@ before(async () => {
     response.setHeader('Content-Type', 'application/json')
     response.end(JSON.stringify({ path: request.url }))
   })
-  await new Promise(resolve => api.listen(0, '127.0.0.1', resolve))
+  await new Promise((resolve) => api.listen(0, '127.0.0.1', resolve))
   vite = await createServer({
     logLevel: 'silent',
-    server: { host: '127.0.0.1', port: 0, strictPort: false, open: false,
-      proxy: { '/api': { target: `http://127.0.0.1:${api.address().port}`, changeOrigin: true } } },
+    server: {
+      host: '127.0.0.1',
+      port: 0,
+      strictPort: false,
+      open: false,
+      proxy: { '/api': { target: `http://127.0.0.1:${api.address().port}`, changeOrigin: true } },
+    },
   })
   await vite.listen()
   port = vite.httpServer.address().port
 })
 after(async () => {
   await vite?.close()
-  if (api) await new Promise(resolve => api.close(resolve))
+  if (api) await new Promise((resolve) => api.close(resolve))
 })
 function request(host, path) {
   return new Promise((resolve, reject) => {
-    http.get({ hostname: '127.0.0.1', port, path, headers: { Host: `${host}:${port}` } }, response => {
-      let body = ''
-      response.setEncoding('utf8')
-      response.on('data', chunk => { body += chunk })
-      response.on('end', () => resolve({ status: response.statusCode, headers: response.headers, body }))
-    }).on('error', reject)
+    http
+      .get(
+        { hostname: '127.0.0.1', port, path, headers: { Host: `${host}:${port}` } },
+        (response) => {
+          let body = ''
+          response.setEncoding('utf8')
+          response.on('data', (chunk) => {
+            body += chunk
+          })
+          response.on('end', () =>
+            resolve({ status: response.statusCode, headers: response.headers, body }),
+          )
+        },
+      )
+      .on('error', reject)
   })
 }
 test('app API root and descendants reach the API rather than HTML', async () => {

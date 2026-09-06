@@ -39,6 +39,9 @@ jobs:
       - name: Install locked pipeline dependencies
         run: uv sync --project pipelines --locked --extra dev
 
+      - name: Check Python formatting
+        run: uv run --project pipelines ruff format --check --output-format concise api pipelines
+
       - name: Import smoke test
         run: uv run --project pipelines python -c "from countyiq.definitions import defs; print('definitions OK')"
 
@@ -165,6 +168,10 @@ jobs:
       - name: Audit frontend dependencies
         working-directory: frontend
         run: npm audit --audit-level=high
+
+      - name: Check frontend formatting
+        working-directory: frontend
+        run: npm run format:check
 
       - name: Type check
         working-directory: frontend

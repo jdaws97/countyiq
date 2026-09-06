@@ -48,7 +48,9 @@ REVIEWED_STATUS = "rubric_reviewed"
 # Live sampling can use only keys this rubric covers. Municipal-action cases
 # have separate source-reviewed feature fixtures; never silently assign them
 # another signal's rubric. The historical vacancy rubric remains replayable.
-EXPANDED_INTERPRETIVE_SIGNALS = tuple(key for key in INTERPRETIVE_SIGNALS if key != "municipal_action")
+EXPANDED_INTERPRETIVE_SIGNALS = tuple(
+    key for key in INTERPRETIVE_SIGNALS if key != "municipal_action"
+)
 SELECTION_QUERY = """
 WITH per_pidn AS (
     SELECT pidn,
@@ -504,10 +506,13 @@ def _select(rows: list[dict]) -> list[dict]:
 def build_payload() -> dict:
     conn = _db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute(SELECTION_QUERY, {
-        "signals": list(EXPANDED_INTERPRETIVE_SIGNALS),
-        "all_interpretive_signals": list(INTERPRETIVE_SIGNALS),
-    })
+    cur.execute(
+        SELECTION_QUERY,
+        {
+            "signals": list(EXPANDED_INTERPRETIVE_SIGNALS),
+            "all_interpretive_signals": list(INTERPRETIVE_SIGNALS),
+        },
+    )
     selected = _select([dict(row) for row in cur.fetchall()])
     if len(selected) != 100:
         raise RuntimeError(f"Expected 100 expanded cases, found {len(selected)}")

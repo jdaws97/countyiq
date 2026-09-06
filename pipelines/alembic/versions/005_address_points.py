@@ -4,6 +4,7 @@ Revision ID: 005
 Revises: 004
 Create Date: 2026-03-21
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -36,18 +37,42 @@ def upgrade() -> None:
         sa.Column("place_type", sa.String(50)),
         sa.Column("long", sa.Float),
         sa.Column("lat", sa.Float),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("site_nguid", "valid_from"),
         schema="staging",
     )
-    op.execute("SELECT AddGeometryColumn('staging', 'address_points', 'geom', 4326, 'POINT', 2)")
-    op.create_index("idx_addr_pts_geom", "address_points", ["geom"], schema="staging", postgresql_using="gist")
-    op.create_index("idx_addr_pts_street", "address_points", ["street_name"], schema="staging")
-    op.create_index("idx_addr_pts_muni", "address_points", ["inc_muni"], schema="staging")
-    op.create_index("idx_addr_pts_postcode", "address_points", ["post_code"], schema="staging")
-    op.create_index("idx_addr_pts_current", "address_points", ["site_nguid"], schema="staging",
-                     postgresql_where=sa.text("valid_to IS NULL"))
+    op.execute(
+        "SELECT AddGeometryColumn('staging', 'address_points', 'geom', 4326, 'POINT', 2)"
+    )
+    op.create_index(
+        "idx_addr_pts_geom",
+        "address_points",
+        ["geom"],
+        schema="staging",
+        postgresql_using="gist",
+    )
+    op.create_index(
+        "idx_addr_pts_street", "address_points", ["street_name"], schema="staging"
+    )
+    op.create_index(
+        "idx_addr_pts_muni", "address_points", ["inc_muni"], schema="staging"
+    )
+    op.create_index(
+        "idx_addr_pts_postcode", "address_points", ["post_code"], schema="staging"
+    )
+    op.create_index(
+        "idx_addr_pts_current",
+        "address_points",
+        ["site_nguid"],
+        schema="staging",
+        postgresql_where=sa.text("valid_to IS NULL"),
+    )
 
 
 def downgrade() -> None:

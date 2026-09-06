@@ -28,28 +28,36 @@ def _resolved(address: str):
     ],
 )
 def test_non_public_source_urls_are_rejected(monkeypatch, url):
-    monkeypatch.setattr(socket, "getaddrinfo", lambda *_args, **_kwargs: _resolved("127.0.0.1"))
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *_args, **_kwargs: _resolved("127.0.0.1")
+    )
 
     with pytest.raises(UnsafeSourceAddressError):
         assert_public_http_url(url)
 
 
 def test_hostname_resolving_to_private_address_is_rejected(monkeypatch):
-    monkeypatch.setattr(socket, "getaddrinfo", lambda *_args, **_kwargs: _resolved("10.1.2.3"))
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *_args, **_kwargs: _resolved("10.1.2.3")
+    )
 
     with pytest.raises(UnsafeSourceAddressError, match="non_public_address"):
         assert_public_http_url("https://public-looking.example/data")
 
 
 def test_public_https_address_is_allowed(monkeypatch):
-    monkeypatch.setattr(socket, "getaddrinfo", lambda *_args, **_kwargs: _resolved("93.184.216.34"))
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *_args, **_kwargs: _resolved("93.184.216.34")
+    )
 
     assert_public_http_url("https://example.com/data") is None
 
 
 def test_private_redirect_is_rejected_before_second_request(monkeypatch):
     def resolve(hostname, *_args, **_kwargs):
-        address = "169.254.169.254" if hostname == "169.254.169.254" else "93.184.216.34"
+        address = (
+            "169.254.169.254" if hostname == "169.254.169.254" else "93.184.216.34"
+        )
         return _resolved(address)
 
     monkeypatch.setattr(socket, "getaddrinfo", resolve)

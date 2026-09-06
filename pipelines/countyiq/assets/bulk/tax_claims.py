@@ -136,6 +136,7 @@ def tax_claims(
         context.log.info(f"Parsed {len(records)} tax claim records")
     finally:
         import shutil
+
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     if not records:

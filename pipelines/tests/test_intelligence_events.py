@@ -79,16 +79,24 @@ def test_project_key_is_stable_and_sensitive_to_project_identity():
         "body_name": "Test Township ZHB",
     }
     assert make_project_key(**kwargs) == make_project_key(**kwargs)
-    assert make_project_key(**kwargs) != make_project_key(**{**kwargs, "parcel_reference": "2 MAIN ST"})
+    assert make_project_key(**kwargs) != make_project_key(
+        **{**kwargs, "parcel_reference": "2 MAIN ST"}
+    )
     assert make_project_key(**kwargs) == make_project_key(
         **{**kwargs, "body_name": "Test Township Planning Commission"}
     )
 
 
 def test_municipality_is_derived_from_public_body_name():
-    assert municipality_from_body_name("Spring Garden Township Planning Commission") == "Spring Garden Township"
+    assert (
+        municipality_from_body_name("Spring Garden Township Planning Commission")
+        == "Spring Garden Township"
+    )
     assert municipality_from_body_name("York City Council") == "York City"
-    assert municipality_from_body_name("Monaghan Twp Board of Supervisors") == "Monaghan Twp"
+    assert (
+        municipality_from_body_name("Monaghan Twp Board of Supervisors")
+        == "Monaghan Twp"
+    )
     assert municipality_from_body_name("York Twp Board of Commissioners") == "York Twp"
 
 
@@ -200,7 +208,12 @@ def test_development_event_uses_cached_llm_interpretation_and_evidence():
         }
     )
     assert event["event_type"] == "approval"
-    assert set(event["event_tags"]) >= {"application", "hearing", "approval", "condition"}
+    assert set(event["event_tags"]) >= {
+        "application",
+        "hearing",
+        "approval",
+        "condition",
+    }
     assert event["interpretation_kind"] == "llm"
     assert event["interpretation_model"] == "test-model"
     assert event["project_key"].startswith("project:")

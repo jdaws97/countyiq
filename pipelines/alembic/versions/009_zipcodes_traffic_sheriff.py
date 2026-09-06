@@ -4,6 +4,7 @@ Revision ID: 009
 Revises: 008
 Create Date: 2026-03-30
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -24,8 +25,12 @@ def upgrade() -> None:
             geom geometry(MultiPolygon, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_zipcodes_geom ON staging.zipcodes USING GIST (geom)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_zipcodes_code ON staging.zipcodes (zipcode)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_zipcodes_geom ON staging.zipcodes USING GIST (geom)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_zipcodes_code ON staging.zipcodes (zipcode)"
+    )
 
     # Traffic counts (PennDOT ArcGIS)
     op.execute("""
@@ -40,7 +45,9 @@ def upgrade() -> None:
             geom geometry(MultiLineString, 4326)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_traffic_geom ON staging.traffic_counts USING GIST (geom)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_traffic_geom ON staging.traffic_counts USING GIST (geom)"
+    )
 
     # Sheriff sales (Playwright scraper)
     op.create_table(
@@ -55,13 +62,20 @@ def upgrade() -> None:
         sa.Column("status", sa.String(30)),
         sa.Column("status_date", sa.Date),
         sa.Column("sale_date", sa.Date),
-        sa.Column("valid_from", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "valid_from",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("valid_to", sa.DateTime(timezone=True)),
         sa.PrimaryKeyConstraint("case_no", "valid_from"),
         schema="staging",
     )
     op.create_index("idx_sheriff_status", "sheriff_sales", ["status"], schema="staging")
-    op.create_index("idx_sheriff_address", "sheriff_sales", ["property_address"], schema="staging")
+    op.create_index(
+        "idx_sheriff_address", "sheriff_sales", ["property_address"], schema="staging"
+    )
 
 
 def downgrade() -> None:

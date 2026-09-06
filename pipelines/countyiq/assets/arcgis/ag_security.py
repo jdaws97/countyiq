@@ -25,8 +25,16 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["pidn"]
 VALUE_COLUMNS = [
-    "resolution", "res_date", "res_acres", "book", "page",
-    "instrument", "last_review", "flag", "district", "source_url",
+    "resolution",
+    "res_date",
+    "res_acres",
+    "book",
+    "page",
+    "instrument",
+    "last_review",
+    "flag",
+    "district",
+    "source_url",
 ]
 
 
@@ -43,10 +51,18 @@ def ag_security_arcgis(
     """Fetch ag security area polygons, archive to S3, SCD2 upsert with geometry."""
 
     county = get_county_config()
-    authorization = authorize_source(database, source_key=county_open_data_source_key(), acquisition_method="arcgis_rest", asset_key="ag_security_arcgis", dagster_run_id=context.run_id)
+    authorization = authorize_source(
+        database,
+        source_key=county_open_data_source_key(),
+        acquisition_method="arcgis_rest",
+        asset_key="ag_security_arcgis",
+        dagster_run_id=context.run_id,
+    )
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
-    context.log.info(f"Querying ArcGIS ag security areas for {county.name}: {county.arcgis_ag_security_url}")
+    context.log.info(
+        f"Querying ArcGIS ag security areas for {county.name}: {county.arcgis_ag_security_url}"
+    )
 
     raw_features = query_all_features(
         url=county.arcgis_ag_security_url,
@@ -105,18 +121,26 @@ def _parse(raw_features: list[dict]) -> list[dict]:
             continue
         res_date_raw = a.get("RES_DATE")
         last_review_raw = a.get("LAST_REVIEW")
-        records.append({
-            "pidn": str(pidn).strip(),
-            "resolution": a.get("RESOLUTION"),
-            "res_date": datetime.fromtimestamp(res_date_raw / 1000, tz=timezone.utc) if res_date_raw else None,
-            "res_acres": a.get("RES_ACRES"),
-            "book": a.get("BOOK"),
-            "page": a.get("PAGE"),
-            "instrument": a.get("INSTRUMENT"),
-            "last_review": datetime.fromtimestamp(last_review_raw / 1000, tz=timezone.utc) if last_review_raw else None,
-            "flag": a.get("FLAG"),
-            "district": a.get("DISTRICT"),
-        })
+        records.append(
+            {
+                "pidn": str(pidn).strip(),
+                "resolution": a.get("RESOLUTION"),
+                "res_date": datetime.fromtimestamp(res_date_raw / 1000, tz=timezone.utc)
+                if res_date_raw
+                else None,
+                "res_acres": a.get("RES_ACRES"),
+                "book": a.get("BOOK"),
+                "page": a.get("PAGE"),
+                "instrument": a.get("INSTRUMENT"),
+                "last_review": datetime.fromtimestamp(
+                    last_review_raw / 1000, tz=timezone.utc
+                )
+                if last_review_raw
+                else None,
+                "flag": a.get("FLAG"),
+                "district": a.get("DISTRICT"),
+            }
+        )
     return records
 
 

@@ -30,15 +30,15 @@ from countyiq.lib.pass_llm_config import (
 from countyiq.resources.database import make_database_resource
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PASS2_REVIEW_FIXTURE = REPO_ROOT / "pipelines/eval/fixtures/p2_expanded_stability20.json"
+PASS2_REVIEW_FIXTURE = (
+    REPO_ROOT / "pipelines/eval/fixtures/p2_expanded_stability20.json"
+)
 
 
 def _repository_schema_heads() -> tuple[str, ...]:
     """Return the Alembic heads declared by the checked-out repository."""
     config = Config(str(REPO_ROOT / "pipelines/alembic.ini"))
-    config.set_main_option(
-        "script_location", str(REPO_ROOT / "pipelines/alembic")
-    )
+    config.set_main_option("script_location", str(REPO_ROOT / "pipelines/alembic"))
     return tuple(sorted(ScriptDirectory.from_config(config).get_heads()))
 
 
@@ -144,8 +144,9 @@ def _gate_pass_rate(database, pass_number: int, *, days: int = 30) -> dict:
     one-off 20-case human receipt.
     """
 
-    rows = database.execute(
-        """
+    rows = (
+        database.execute(
+            """
         SELECT
             (SELECT COUNT(*) FROM meta.intelligence_inference_history
               WHERE pass_number = %(pass_number)s AND decision_origin = 'model'
@@ -154,8 +155,10 @@ def _gate_pass_rate(database, pass_number: int, *, days: int = 30) -> dict:
               WHERE pass_number = %(pass_number)s
                 AND rejected_at >= NOW() - MAKE_INTERVAL(days => %(days)s)) AS rejected
         """,
-        {"pass_number": pass_number, "days": days},
-    ) or []
+            {"pass_number": pass_number, "days": days},
+        )
+        or []
+    )
     row = rows[0] if rows else (0, 0)
     produced = int(row["produced"] if isinstance(row, dict) else row[0]) or 0
     rejected = int(row["rejected"] if isinstance(row, dict) else row[1]) or 0
@@ -180,15 +183,18 @@ def _gate_pass_rate(database, pass_number: int, *, days: int = 30) -> dict:
 
 
 def _pass_has_accepted_history(database, pass_number: int) -> bool:
-    rows = database.execute(
-        """
+    rows = (
+        database.execute(
+            """
         SELECT EXISTS (
             SELECT 1 FROM meta.intelligence_inference_history
             WHERE pass_number = %s AND disposition = 'accepted' AND decision_origin = 'model'
         )
         """,
-        (pass_number,),
-    ) or []
+            (pass_number,),
+        )
+        or []
+    )
     row = rows[0] if rows else None
     if row is None:
         return False
@@ -211,8 +217,9 @@ def build_report(
     integrity_rows = []
     integrity_error = None
     if expected_revision is not None and revision == expected_revision:
-        integrity_rows = database.execute(
-            """
+        integrity_rows = (
+            database.execute(
+                """
             SELECT integrity.*, rejection.rejection_count,
                    rejection.rejections_last_24h,
                    rejection.latest_rejection_at,
@@ -236,7 +243,9 @@ def build_report(
                     ) AS test_rejection_count
             ) AS fixtures
             """
-        ) or []
+            )
+            or []
+        )
     else:
         if expected_revision is None:
             integrity_error = (
@@ -253,16 +262,29 @@ def build_report(
     if expected_revision is not None and revision == expected_revision:
         gate_rate = _gate_pass_rate(database, target_pass)
         first_run = not _pass_has_accepted_history(database, target_pass)
-    integrity = dict(integrity_rows[0]) if integrity_rows and isinstance(integrity_rows[0], dict) else None
+    integrity = (
+        dict(integrity_rows[0])
+        if integrity_rows and isinstance(integrity_rows[0], dict)
+        else None
+    )
     if integrity is None and integrity_rows:
         keys = (
-            "history_count", "accepted_count", "quarantined_count",
-            "human_resolution_inference_count", "contradiction_count",
-            "unresolved_contradiction_count", "resolved_contradiction_count",
-            "oldest_unresolved_at", "projection_count",
-            "unlinked_projection_count", "projection_mismatch_count",
-            "rejection_count", "rejections_last_24h", "latest_rejection_at",
-            "test_history_count", "test_rejection_count",
+            "history_count",
+            "accepted_count",
+            "quarantined_count",
+            "human_resolution_inference_count",
+            "contradiction_count",
+            "unresolved_contradiction_count",
+            "resolved_contradiction_count",
+            "oldest_unresolved_at",
+            "projection_count",
+            "unlinked_projection_count",
+            "projection_mismatch_count",
+            "rejection_count",
+            "rejections_last_24h",
+            "latest_rejection_at",
+            "test_history_count",
+            "test_rejection_count",
         )
         integrity = dict(zip(keys, integrity_rows[0], strict=True))
 
@@ -270,9 +292,7 @@ def build_report(
     item_limit = resolve_pass_item_limit(target_pass)
     backfill_mode = _truthy(f"COUNTYIQ_PASS{target_pass}_BACKFILL_MODE")
     archive_probe = probe_llm_archive_destination()
-    max_cost_usd = _positive_float(
-        f"COUNTYIQ_PASS{target_pass}_MAX_COST_USD"
-    )
+    max_cost_usd = _positive_float(f"COUNTYIQ_PASS{target_pass}_MAX_COST_USD")
     max_price_prompt = _positive_float("COUNTYIQ_MAX_PRICE_PROMPT")
     max_price_completion = _positive_float("COUNTYIQ_MAX_PRICE_COMPLETION")
     authorization = _backfill_authorization_check(
@@ -299,7 +319,9 @@ def build_report(
         "cumulative_authorization": authorization,
         "archive_strict": _truthy("COUNTYIQ_ARCHIVE_STRICT"),
         "archive_probe": archive_probe,
-        "openrouter_key_configured": bool(os.environ.get("OPENROUTER_API_KEY", "").strip()),
+        "openrouter_key_configured": bool(
+            os.environ.get("OPENROUTER_API_KEY", "").strip()
+        ),
     }
     controls_ok = bool(
         controls["only_target_pass_enabled"]
@@ -337,6 +359,7 @@ def build_report(
             "reason": "no additional expanded-label receipt required for this pass",
         }
     from countyiq.lib.quality_release import check_quality_release
+
     quality_release = check_quality_release(target_pass)
     gate_rate_ok = gate_rate is None or bool(gate_rate["ok"])
     estimate_error = None

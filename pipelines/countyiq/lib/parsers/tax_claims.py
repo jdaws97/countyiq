@@ -127,7 +127,11 @@ def parse_tax_claims_text(text: str) -> list[dict]:
             # District totals are followed by orphan COUNTY/SCHOOL/MUNICIPAL
             # lines that look like authority rows. Clear parcel state so they
             # don't attach to the last property.
-            if "TOTAL FOR DISTRICT" in line or "TOTAL PARCEL" in line or "GRAND TOTAL" in line:
+            if (
+                "TOTAL FOR DISTRICT" in line
+                or "TOTAL PARCEL" in line
+                or "GRAND TOTAL" in line
+            ):
                 current_parcel_id = ""
             continue
 
@@ -150,11 +154,21 @@ def parse_tax_claims_text(text: str) -> list[dict]:
             current_address = ""
             owner_line_pending = True
             address_line_pending = False
-            records.append(_make_record(
-                m, 3, current_parcel_id, current_pidn, current_unit,
-                current_year, district_code, district_name,
-                "", "", report_date,
-            ))
+            records.append(
+                _make_record(
+                    m,
+                    3,
+                    current_parcel_id,
+                    current_pidn,
+                    current_unit,
+                    current_year,
+                    district_code,
+                    district_name,
+                    "",
+                    "",
+                    report_date,
+                )
+            )
             continue
 
         # Owner name line — may also contain SCHOOL authority data
@@ -170,11 +184,21 @@ def parse_tax_claims_text(text: str) -> list[dict]:
                         break
                     r["owner_name"] = current_owner
                 # Also capture the authority data from this line
-                records.append(_make_record(
-                    m_ta, 2, current_parcel_id, current_pidn, current_unit,
-                    current_year, district_code, district_name,
-                    current_owner, "", report_date,
-                ))
+                records.append(
+                    _make_record(
+                        m_ta,
+                        2,
+                        current_parcel_id,
+                        current_pidn,
+                        current_unit,
+                        current_year,
+                        district_code,
+                        district_name,
+                        current_owner,
+                        "",
+                        report_date,
+                    )
+                )
                 continue
             # Pure text owner line (no embedded authority)
             if not _AUTH_ONLY_LINE.match(line) and not _YEAR_AUTH_LINE.match(line):
@@ -199,11 +223,21 @@ def parse_tax_claims_text(text: str) -> list[dict]:
                         break
                     r["property_address"] = current_address
                 # Capture the authority data
-                records.append(_make_record(
-                    m_ta, 2, current_parcel_id, current_pidn, current_unit,
-                    current_year, district_code, district_name,
-                    current_owner, current_address, report_date,
-                ))
+                records.append(
+                    _make_record(
+                        m_ta,
+                        2,
+                        current_parcel_id,
+                        current_pidn,
+                        current_unit,
+                        current_year,
+                        district_code,
+                        district_name,
+                        current_owner,
+                        current_address,
+                        report_date,
+                    )
+                )
                 continue
             # Pure text address line
             if not _AUTH_ONLY_LINE.match(line) and not _YEAR_AUTH_LINE.match(line):
@@ -219,21 +253,41 @@ def parse_tax_claims_text(text: str) -> list[dict]:
         m = _YEAR_AUTH_LINE.match(line)
         if m and current_parcel_id:
             current_year = int(m.group(1))
-            records.append(_make_record(
-                m, 2, current_parcel_id, current_pidn, current_unit,
-                current_year, district_code, district_name,
-                current_owner, current_address, report_date,
-            ))
+            records.append(
+                _make_record(
+                    m,
+                    2,
+                    current_parcel_id,
+                    current_pidn,
+                    current_unit,
+                    current_year,
+                    district_code,
+                    district_name,
+                    current_owner,
+                    current_address,
+                    report_date,
+                )
+            )
             continue
 
         # Authority-only continuation (same year, next authority)
         m = _AUTH_ONLY_LINE.match(line)
         if m and current_parcel_id:
-            records.append(_make_record(
-                m, 1, current_parcel_id, current_pidn, current_unit,
-                current_year, district_code, district_name,
-                current_owner, current_address, report_date,
-            ))
+            records.append(
+                _make_record(
+                    m,
+                    1,
+                    current_parcel_id,
+                    current_pidn,
+                    current_unit,
+                    current_year,
+                    district_code,
+                    district_name,
+                    current_owner,
+                    current_address,
+                    report_date,
+                )
+            )
             continue
 
     # Deduplicate by composite key — keep the record with the higher total
@@ -252,10 +306,17 @@ def parse_tax_claims_text(text: str) -> list[dict]:
 
 
 def _make_record(
-    m, auth_group: int,
-    parcel_id: str, pidn: str, unit: str, year: int,
-    dist_code: str, dist_name: str,
-    owner: str, address: str, report_date: date | None,
+    m,
+    auth_group: int,
+    parcel_id: str,
+    pidn: str,
+    unit: str,
+    year: int,
+    dist_code: str,
+    dist_name: str,
+    owner: str,
+    address: str,
+    report_date: date | None,
 ) -> dict:
     """Build a record dict from a regex match."""
     g = auth_group

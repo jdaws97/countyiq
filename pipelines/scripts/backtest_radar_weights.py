@@ -66,7 +66,12 @@ from countyiq.lib.county_config import get_county_config
 LABEL_SIGNAL_KEYS = {"active_subdivision", "nearby_subdivision"}
 EXCLUSION_KEYS = {"conservation_easement"}
 CONTEXT_ONLY_KEYS = {"ag_security"}
-RISK_KEYS = {"flood_zone", "soil_constraint", "zoning_constraint", "environmental_diligence"}
+RISK_KEYS = {
+    "flood_zone",
+    "soil_constraint",
+    "zoning_constraint",
+    "environmental_diligence",
+}
 
 # Current (score_version 5) opportunity weights, reconstructed from the
 # signal weights and the v5 formula so precision@K has a baseline.
@@ -115,14 +120,18 @@ def build_signals(cur, params: dict, log) -> dict[str, int]:
         if key in LABEL_SIGNAL_KEYS:
             continue
         started = time.monotonic()
-        cur.execute(sql.replace("public.development_signals", "backtest_signals"), params)
+        cur.execute(
+            sql.replace("public.development_signals", "backtest_signals"), params
+        )
         counts[key] = cur.rowcount
         log(f"  {key}: {cur.rowcount:,} rows ({time.monotonic() - started:.1f}s)")
     cur.execute("CREATE INDEX ON backtest_signals (pidn, signal_key)")
     return counts
 
 
-def build_labels(cur, *, label_months: int, on_parcel_m: int, corridor_m: int, clean_years: int, log):
+def build_labels(
+    cur, *, label_months: int, on_parcel_m: int, corridor_m: int, clean_years: int, log
+):
     started = time.monotonic()
     # Eligible parcels go into an indexed temp table. A multiply-referenced
     # CTE would be materialised without an index, turning each spatial join
@@ -167,7 +176,11 @@ def build_labels(cur, *, label_months: int, on_parcel_m: int, corridor_m: int, c
           AND b.date_rcvd <= NOW()
         GROUP BY e.pidn
         """,
-        {"on_parcel_m": on_parcel_m, "on_parcel_deg": on_parcel_m * 1.5e-5, "label_months": label_months},
+        {
+            "on_parcel_m": on_parcel_m,
+            "on_parcel_deg": on_parcel_m * 1.5e-5,
+            "label_months": label_months,
+        },
     )
     cur.execute("CREATE INDEX ON backtest_positives (pidn)")
     cur.execute(
@@ -221,7 +234,9 @@ def build_labels(cur, *, label_months: int, on_parcel_m: int, corridor_m: int, c
     return dict(row)
 
 
-def fetch_patterns(cur, feature_keys: list[str]) -> list[tuple[tuple[int, ...], int, int]]:
+def fetch_patterns(
+    cur, feature_keys: list[str]
+) -> list[tuple[tuple[int, ...], int, int]]:
     """Return grouped rows: (pattern, positives, total) for the fit population."""
     columns = []
     for key in feature_keys:
@@ -269,6 +284,7 @@ def fetch_patterns(cur, feature_keys: list[str]) -> list[tuple[tuple[int, ...], 
 # --------------------------------------------------------------------------
 # Pure-Python statistics
 # --------------------------------------------------------------------------
+
 
 def _solve(matrix: list[list[float]], vector: list[float]) -> list[float]:
     n = len(vector)
@@ -395,7 +411,9 @@ def precision_at_k(scored: list[tuple[float, int, int]], k: int) -> float:
     return hits / max(taken, 1)
 
 
-def score_quantiles(scored: list[tuple[float, int, int]], quantiles: list[float]) -> dict[str, float]:
+def score_quantiles(
+    scored: list[tuple[float, int, int]], quantiles: list[float]
+) -> dict[str, float]:
     ordered = sorted(scored, key=lambda item: -item[0])
     total = sum(t for _, _, t in ordered)
     result = {}
@@ -415,6 +433,7 @@ def score_quantiles(scored: list[tuple[float, int, int]], quantiles: list[float]
 # --------------------------------------------------------------------------
 # Reporting
 # --------------------------------------------------------------------------
+
 
 def propose_weights(feature_keys: list[str], coefs: list[float]) -> dict[str, float]:
     """Scale coefficients to opportunity weights on a 0–1 raw scale.
@@ -485,7 +504,9 @@ def write_markdown(path: Path, report: dict) -> None:
         "|---|---|" + "---|" * len(report["top_k"]),
     ]
     for name, metrics in report["ranking"].items():
-        cells = " | ".join(f"{metrics['precision_at'][str(k)]:.3%}" for k in report["top_k"])
+        cells = " | ".join(
+            f"{metrics['precision_at'][str(k)]:.3%}" for k in report["top_k"]
+        )
         lines.append(f"| {name} | {metrics['auc']:.4f} | {cells} |")
     lines += [
         "",
@@ -545,7 +566,8 @@ def main() -> int:
             log=log,
         )
         feature_keys = [
-            key for key, _ in _SIGNALS
+            key
+            for key, _ in _SIGNALS
             if key not in LABEL_SIGNAL_KEYS
             and key not in EXCLUSION_KEYS
             and key not in CONTEXT_ONLY_KEYS
@@ -559,7 +581,9 @@ def main() -> int:
     total = sum(t for _, _, t in patterns)
     total_pos = sum(p for _, p, _ in patterns)
     base_rate = total_pos / total if total else 0.0
-    log(f"  {len(patterns):,} distinct patterns over {total:,} parcels ({total_pos:,} positives)")
+    log(
+        f"  {len(patterns):,} distinct patterns over {total:,} parcels ({total_pos:,} positives)"
+    )
 
     log("Fitting ridge logistic regression")
     beta = fit_logistic(patterns, len(feature_keys), ridge=args.ridge)
@@ -570,11 +594,15 @@ def main() -> int:
         return sum(weights.get(key, 0.0) * x for key, x in zip(feature_keys, pattern))
 
     fitted_scored = [
-        (sum(c * x for c, x in zip(coefs, pattern)), pos, tot) for pattern, pos, tot in patterns
+        (sum(c * x for c, x in zip(coefs, pattern)), pos, tot)
+        for pattern, pos, tot in patterns
     ]
-    proposed_scored = [(pattern_score(proposed, pattern), pos, tot) for pattern, pos, tot in patterns]
+    proposed_scored = [
+        (pattern_score(proposed, pattern), pos, tot) for pattern, pos, tot in patterns
+    ]
     current_scored = [
-        (pattern_score(CURRENT_OPPORTUNITY_WEIGHTS, pattern), pos, tot) for pattern, pos, tot in patterns
+        (pattern_score(CURRENT_OPPORTUNITY_WEIGHTS, pattern), pos, tot)
+        for pattern, pos, tot in patterns
     ]
     ranking = {}
     for name, scored in (
@@ -615,7 +643,9 @@ def main() -> int:
 
     report = {
         "generated_at": datetime.now(UTC).isoformat(),
-        "county": county.key if hasattr(county, "key") else os.environ.get("COUNTY", "york"),
+        "county": county.key
+        if hasattr(county, "key")
+        else os.environ.get("COUNTY", "york"),
         "parameters": {
             "label_months": args.label_months,
             "on_parcel_m": on_parcel_m,
@@ -637,7 +667,9 @@ def main() -> int:
         "proposed_weights": proposed,
         "ranking": ranking,
         "top_k": args.top_k,
-        "proposed_score_quantiles": score_quantiles(proposed_scored, [0.001, 0.005, 0.01, 0.02, 0.05, 0.10]),
+        "proposed_score_quantiles": score_quantiles(
+            proposed_scored, [0.001, 0.005, 0.01, 0.02, 0.05, 0.10]
+        ),
         "caveats": [
             (
                 "Signals are computed on the current snapshot, not the parcel state "
@@ -663,7 +695,9 @@ def main() -> int:
 
     if args.output_json:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
-        args.output_json.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+        args.output_json.write_text(
+            json.dumps(report, indent=2, default=str), encoding="utf-8"
+        )
         log(f"Wrote {args.output_json}")
     if args.output_md:
         args.output_md.parent.mkdir(parents=True, exist_ok=True)
@@ -673,11 +707,16 @@ def main() -> int:
     log("")
     log("Proposed opportunity weights:")
     for row in signals_report:
-        log(f"  {row['key']:28s} coef={row['coefficient']:+.3f} lift={row['lift']:.2f} -> {row['proposed_weight']:+.2f}")
+        log(
+            f"  {row['key']:28s} coef={row['coefficient']:+.3f} lift={row['lift']:.2f} -> {row['proposed_weight']:+.2f}"
+        )
     for name, metrics in ranking.items():
-        log(f"  {name:22s} AUC={metrics['auc']:.4f} " + " ".join(
-            f"P@{k}={metrics['precision_at'][str(k)]:.3%}" for k in args.top_k
-        ))
+        log(
+            f"  {name:22s} AUC={metrics['auc']:.4f} "
+            + " ".join(
+                f"P@{k}={metrics['precision_at'][str(k)]:.3%}" for k in args.top_k
+            )
+        )
     return 0
 
 

@@ -32,6 +32,7 @@ def test_parcel_proceeding_address_match_is_normalized_and_municipality_scoped()
 # format_parcel_context
 # ---------------------------------------------------------------------------
 
+
 class TestFormatParcelContext:
     """Tests for format_parcel_context(row: dict) -> dict."""
 
@@ -57,9 +58,18 @@ class TestFormatParcelContext:
     def test_returns_expected_keys(self):
         result = format_parcel_context(self._full_row())
         expected_keys = {
-            "pidn", "owner", "address", "assessed_value", "acres",
-            "property_class", "sale_date", "sale_price", "previous_owner",
-            "municipality", "school_district", "source_url",
+            "pidn",
+            "owner",
+            "address",
+            "assessed_value",
+            "acres",
+            "property_class",
+            "sale_date",
+            "sale_price",
+            "previous_owner",
+            "municipality",
+            "school_district",
+            "source_url",
         }
         assert set(result.keys()) == expected_keys
 
@@ -79,15 +89,17 @@ class TestFormatParcelContext:
         assert result["source_url"] == "https://example.com/parcel/67012345678901"
 
     def test_none_string_fields_become_empty_string(self):
-        result = format_parcel_context(self._full_row(
-            owner_full=None,
-            propadr=None,
-            prev_owner=None,
-            municipality=None,
-            school_dis=None,
-            saledt=None,
-            source_url=None,
-        ))
+        result = format_parcel_context(
+            self._full_row(
+                owner_full=None,
+                propadr=None,
+                prev_owner=None,
+                municipality=None,
+                school_dis=None,
+                saledt=None,
+                source_url=None,
+            )
+        )
         assert result["owner"] == ""
         assert result["address"] == ""
         assert result["previous_owner"] == ""
@@ -97,11 +109,13 @@ class TestFormatParcelContext:
         assert result["source_url"] == ""
 
     def test_none_numeric_fields_become_zero(self):
-        result = format_parcel_context(self._full_row(
-            aprtotal=None,
-            acres=None,
-            price=None,
-        ))
+        result = format_parcel_context(
+            self._full_row(
+                aprtotal=None,
+                acres=None,
+                price=None,
+            )
+        )
         assert result["assessed_value"] == 0
         assert result["acres"] == 0
         assert result["sale_price"] == 0
@@ -117,6 +131,7 @@ class TestFormatParcelContext:
 # ---------------------------------------------------------------------------
 # format_tax_claims_context
 # ---------------------------------------------------------------------------
+
 
 class TestFormatTaxClaimsContext:
     """Tests for format_tax_claims_context(rows: list[dict]) -> list[dict]."""
@@ -171,6 +186,7 @@ class TestFormatTaxClaimsContext:
 # format_entity_context
 # ---------------------------------------------------------------------------
 
+
 class TestFormatEntityContext:
     """Tests for format_entity_context(row: dict | None) -> dict."""
 
@@ -197,8 +213,13 @@ class TestFormatEntityContext:
     def test_expected_keys_when_found(self):
         result = format_entity_context(self._row())
         expected_keys = {
-            "found", "entity_id", "canonical_name", "entity_type",
-            "linked_names", "relationships", "verification_status",
+            "found",
+            "entity_id",
+            "canonical_name",
+            "entity_type",
+            "linked_names",
+            "relationships",
+            "verification_status",
         }
         assert set(result.keys()) == expected_keys
 
@@ -232,6 +253,7 @@ class TestFormatEntityContext:
 # format_portfolio_context
 # ---------------------------------------------------------------------------
 
+
 class TestFormatPortfolioContext:
     """Tests for format_portfolio_context(rows: list[dict]) -> list[dict]."""
 
@@ -251,7 +273,13 @@ class TestFormatPortfolioContext:
 
     def test_expected_keys(self):
         result = format_portfolio_context([self._row()])
-        assert set(result[0].keys()) == {"pidn", "address", "assessed_value", "sale_date", "sale_price"}
+        assert set(result[0].keys()) == {
+            "pidn",
+            "address",
+            "assessed_value",
+            "sale_date",
+            "sale_price",
+        }
 
     def test_maps_fields_correctly(self):
         result = format_portfolio_context([self._row()])
@@ -262,7 +290,9 @@ class TestFormatPortfolioContext:
         assert result[0]["sale_price"] == 195000.0
 
     def test_none_values_handled(self):
-        result = format_portfolio_context([self._row(propadr=None, aprtotal=None, saledt=None, price=None)])
+        result = format_portfolio_context(
+            [self._row(propadr=None, aprtotal=None, saledt=None, price=None)]
+        )
         assert result[0]["address"] == ""
         assert result[0]["assessed_value"] == 0
         assert result[0]["sale_date"] == ""
@@ -272,6 +302,7 @@ class TestFormatPortfolioContext:
 # ---------------------------------------------------------------------------
 # format_proceedings_context
 # ---------------------------------------------------------------------------
+
 
 class TestFormatProceedingsContext:
     """Tests for format_proceedings_context(rows: list[dict]) -> list[dict]."""
@@ -296,9 +327,17 @@ class TestFormatProceedingsContext:
     def test_expected_keys(self):
         result = format_proceedings_context([self._row()])
         assert set(result[0].keys()) == {
-            "type", "applicant", "parcel", "decision",
-            "meeting_date", "body", "source_url", "supporting_text",
-            "proceeding_id", "extraction_id", "active_inference_id",
+            "type",
+            "applicant",
+            "parcel",
+            "decision",
+            "meeting_date",
+            "body",
+            "source_url",
+            "supporting_text",
+            "proceeding_id",
+            "extraction_id",
+            "active_inference_id",
         }
 
     def test_maps_fields_correctly(self):
@@ -310,7 +349,10 @@ class TestFormatProceedingsContext:
         assert result[0]["meeting_date"] == "2024-06-15"
         assert result[0]["body"] == "York City Zoning Board"
         assert result[0]["source_url"] == "https://example.com/proceeding/1"
-        assert result[0]["supporting_text"] == "The variance was approved subject to conditions."
+        assert (
+            result[0]["supporting_text"]
+            == "The variance was approved subject to conditions."
+        )
 
     def test_none_meeting_date_becomes_empty_string(self):
         result = format_proceedings_context([self._row(meeting_date=None)])
@@ -321,10 +363,18 @@ class TestFormatProceedingsContext:
         assert result[0]["meeting_date"] == "2024-06-15"
 
     def test_none_string_fields_become_empty(self):
-        result = format_proceedings_context([self._row(
-            applicant_name=None, parcel_reference=None,
-            decision=None, body_name=None, source_url=None, supporting_text=None,
-        )])
+        result = format_proceedings_context(
+            [
+                self._row(
+                    applicant_name=None,
+                    parcel_reference=None,
+                    decision=None,
+                    body_name=None,
+                    source_url=None,
+                    supporting_text=None,
+                )
+            ]
+        )
         assert result[0]["applicant"] == ""
         assert result[0]["parcel"] == ""
         assert result[0]["decision"] == ""
@@ -336,6 +386,7 @@ class TestFormatProceedingsContext:
 # ---------------------------------------------------------------------------
 # format_neighbors_context
 # ---------------------------------------------------------------------------
+
 
 class TestFormatNeighborsContext:
     """Tests for format_neighbors_context(rows: list[dict]) -> list[dict]."""
@@ -359,8 +410,13 @@ class TestFormatNeighborsContext:
     def test_expected_keys(self):
         result = format_neighbors_context([self._row()])
         assert set(result[0].keys()) == {
-            "pidn", "owner", "assessed_value", "acres",
-            "property_class", "total_owed", "years_delinquent",
+            "pidn",
+            "owner",
+            "assessed_value",
+            "acres",
+            "property_class",
+            "total_owed",
+            "years_delinquent",
         }
 
     def test_maps_fields_correctly(self):
@@ -374,10 +430,18 @@ class TestFormatNeighborsContext:
         assert result[0]["years_delinquent"] == 2
 
     def test_none_values_handled(self):
-        result = format_neighbors_context([self._row(
-            owner_full=None, aprtotal=None, acres=None,
-            class_=None, total_owed=None, years_delinquent=None,
-        )])
+        result = format_neighbors_context(
+            [
+                self._row(
+                    owner_full=None,
+                    aprtotal=None,
+                    acres=None,
+                    class_=None,
+                    total_owed=None,
+                    years_delinquent=None,
+                )
+            ]
+        )
         assert result[0]["owner"] == ""
         assert result[0]["assessed_value"] == 0
         assert result[0]["acres"] == 0
@@ -395,6 +459,7 @@ class TestFormatNeighborsContext:
 # ---------------------------------------------------------------------------
 # format_corporate_context
 # ---------------------------------------------------------------------------
+
 
 class TestFormatCorporateContext:
     """Tests for format_corporate_context(rows: list[dict]) -> list[dict]."""
@@ -417,8 +482,12 @@ class TestFormatCorporateContext:
     def test_expected_keys(self):
         result = format_corporate_context([self._row()])
         assert set(result[0].keys()) == {
-            "entity_name", "entity_number", "status",
-            "formation_date", "office_address", "source_url",
+            "entity_name",
+            "entity_number",
+            "status",
+            "formation_date",
+            "office_address",
+            "source_url",
         }
 
     def test_maps_fields_correctly(self):
@@ -435,10 +504,16 @@ class TestFormatCorporateContext:
         assert result[0]["formation_date"] == ""
 
     def test_none_string_fields_become_empty(self):
-        result = format_corporate_context([self._row(
-            entity_number=None, status=None,
-            office_address=None, source_url=None,
-        )])
+        result = format_corporate_context(
+            [
+                self._row(
+                    entity_number=None,
+                    status=None,
+                    office_address=None,
+                    source_url=None,
+                )
+            ]
+        )
         assert result[0]["entity_number"] == ""
         assert result[0]["status"] == ""
         assert result[0]["office_address"] == ""
@@ -448,6 +523,7 @@ class TestFormatCorporateContext:
 # ---------------------------------------------------------------------------
 # compute_input_hash
 # ---------------------------------------------------------------------------
+
 
 class TestComputeInputHash:
     """Tests for compute_input_hash(data: dict) -> str."""

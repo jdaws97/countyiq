@@ -169,9 +169,7 @@ def test_pass1_manual_job_refreshes_candidate_inputs(asset_graph):
 def test_pass3_manual_jobs_keep_parcel_and_owner_budgets_separate(asset_graph):
     from countyiq.jobs import brief_generation_refresh, owner_briefs_refresh
 
-    assert set(_resolve(brief_generation_refresh, asset_graph)) == {
-        "brief_generation"
-    }
+    assert set(_resolve(brief_generation_refresh, asset_graph)) == {"brief_generation"}
     assert set(_resolve(owner_briefs_refresh, asset_graph)) == {"owner_briefs"}
 
 
@@ -205,10 +203,7 @@ def test_paused_assets_are_absent_from_every_schedule(asset_graph):
 
 
 def test_retired_scout_runtime_is_not_registered(defs, asset_graph):
-    asset_names = {
-        key.to_user_string()
-        for key in asset_graph.get_all_asset_keys()
-    }
+    asset_names = {key.to_user_string() for key in asset_graph.get_all_asset_keys()}
     job_names = {job.name for job in defs.jobs}
 
     assert not asset_names.intersection(

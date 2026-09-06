@@ -17,7 +17,7 @@ branch_labels = None
 depends_on = None
 
 
-_MUNICIPALITY_SOURCES = json.loads(r'''[
+_MUNICIPALITY_SOURCES = json.loads(r"""[
   {
     "source_key": "hanover_borough_council",
     "municipality_name": "HANOVER",
@@ -1238,7 +1238,7 @@ _MUNICIPALITY_SOURCES = json.loads(r'''[
     "terms_review_status": "restricted",
     "notes": "Minutes are available only through eCode360; collection remains paused under the commercial-use restriction review."
   }
-]''')
+]""")
 
 # The source snapshot predates the canonical YCPC suffix normalization used by
 # the application.  Normalize council-only labels here so the seeded policies
@@ -1247,15 +1247,13 @@ for _source in _MUNICIPALITY_SOURCES:
     if _source["municipality_name"] is None:
         continue
     _municipality_name = _source["municipality_name"].strip().upper()
-    if (
-        _source["proceeding_type"] == "borough_council"
-        and not _municipality_name.endswith(" BORO")
-    ):
+    if _source[
+        "proceeding_type"
+    ] == "borough_council" and not _municipality_name.endswith(" BORO"):
         _municipality_name = f"{_municipality_name} BORO"
-    elif (
-        _source["proceeding_type"] == "city_council"
-        and not _municipality_name.endswith(" CITY")
-    ):
+    elif _source[
+        "proceeding_type"
+    ] == "city_council" and not _municipality_name.endswith(" CITY"):
         _municipality_name = f"{_municipality_name} CITY"
     _source["municipality_name"] = _municipality_name
 

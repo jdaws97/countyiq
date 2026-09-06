@@ -4,5 +4,7 @@ import HomePage from './pages/HomePage'
 import './styles/marketing.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><HomePage /></React.StrictMode>,
+  <React.StrictMode>
+    <HomePage />
+  </React.StrictMode>,
 )

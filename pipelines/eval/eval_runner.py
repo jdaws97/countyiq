@@ -24,7 +24,11 @@ from pathlib import Path
 import psycopg2
 import psycopg2.extras
 
-from countyiq.lib.llm_harness import HarnessConfig, get_preset_for_model, detect_model_family
+from countyiq.lib.llm_harness import (
+    HarnessConfig,
+    get_preset_for_model,
+    detect_model_family,
+)
 from countyiq.lib.pass2_batched_validation import (
     build_batched_signal_prompt,
     gather_parcel_batch_context,
@@ -143,6 +147,7 @@ SIGNALS_FOR_PIDN_SQL = """
 # DB connection
 # ---------------------------------------------------------------------------
 
+
 def get_connection():
     """Return a psycopg2 connection using environment variables."""
     return psycopg2.connect(
@@ -157,6 +162,7 @@ def get_connection():
 # ---------------------------------------------------------------------------
 # Pass 2 BATCHED evaluation — one LLM call validates ALL signals on a parcel
 # ---------------------------------------------------------------------------
+
 
 def run_pass2_batched(
     cursor, config: HarnessConfig, pidn: str, ledger: EvalCostLedger
@@ -204,9 +210,7 @@ def run_pass2_batched(
         # Retry path: recover signals the LLM dropped or failed to parse
         retry_keys = set(parsed.get("missing", [])) | set(parsed.get("errors", []))
         if retry_keys:
-            retry_signals = [
-                s for s in ctx["signals"] if s["signal_key"] in retry_keys
-            ]
+            retry_signals = [s for s in ctx["signals"] if s["signal_key"] in retry_keys]
             retry_attempted = len(retry_signals)
             retry_prompt = build_batched_signal_prompt(
                 ctx, signals_override=retry_signals
@@ -261,9 +265,8 @@ def run_pass2_batched(
 # Pass 3 evaluation
 # ---------------------------------------------------------------------------
 
-def run_pass3(
-    cursor, config: HarnessConfig, pidn: str, ledger: EvalCostLedger
-) -> dict:
+
+def run_pass3(cursor, config: HarnessConfig, pidn: str, ledger: EvalCostLedger) -> dict:
     """Run Pass 3 (brief generation) for a parcel.
 
     Returns a result dict with: success, elapsed_seconds, raw_output,
@@ -312,6 +315,7 @@ def run_pass3(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -398,15 +402,15 @@ Examples:
         "--pidns-file",
         default=None,
         help="File with one PIDN per line — evaluate exactly these parcels instead "
-             "of a fresh random sample. Use one shared file across models so every "
-             "model sees identical parcels (cross-model comparability).",
+        "of a fresh random sample. Use one shared file across models so every "
+        "model sees identical parcels (cross-model comparability).",
     )
     parser.add_argument(
         "--quantizations",
         default=None,
         help="Comma-separated provider quantization allowlist (e.g. 'fp8,bf16,fp16'). "
-             "Needed for models whose cheapest OpenRouter hosts serve degraded FP4 "
-             "(documented for GLM-5.2).",
+        "Needed for models whose cheapest OpenRouter hosts serve degraded FP4 "
+        "(documented for GLM-5.2).",
     )
     parser.add_argument(
         "--reasoning-effort",
@@ -447,15 +451,23 @@ Examples:
 
     # Load the model's recommended preset and apply any CLI overrides
     family = detect_model_family(model_path_str)
-    preset = get_preset_for_model(model_path_str, thinking=args.thinking, reasoning_task=True)
+    preset = get_preset_for_model(
+        model_path_str, thinking=args.thinking, reasoning_task=True
+    )
 
     resolved_params = {
-        "temperature": args.temperature if args.temperature is not None else preset["temperature"],
+        "temperature": args.temperature
+        if args.temperature is not None
+        else preset["temperature"],
         "top_p": args.top_p if args.top_p is not None else preset["top_p"],
         "top_k": args.top_k if args.top_k is not None else preset["top_k"],
         "min_p": args.min_p if args.min_p is not None else preset["min_p"],
-        "presence_penalty": args.presence_penalty if args.presence_penalty is not None else preset["presence_penalty"],
-        "repeat_penalty": args.repeat_penalty if args.repeat_penalty is not None else preset["repeat_penalty"],
+        "presence_penalty": args.presence_penalty
+        if args.presence_penalty is not None
+        else preset["presence_penalty"],
+        "repeat_penalty": args.repeat_penalty
+        if args.repeat_penalty is not None
+        else preset["repeat_penalty"],
     }
 
     print(f"Model:      {model_name}")
@@ -463,7 +475,9 @@ Examples:
     print(f"Pass:       {args.pass_num}")
     print(f"Limit:      {args.limit}")
     print(f"Thinking:   {'ON' if args.thinking else 'OFF'}")
-    print(f"Sampling:   temp={resolved_params['temperature']}  top_p={resolved_params['top_p']}  top_k={resolved_params['top_k']}  min_p={resolved_params['min_p']}  pres_pen={resolved_params['presence_penalty']}  rep_pen={resolved_params['repeat_penalty']}")
+    print(
+        f"Sampling:   temp={resolved_params['temperature']}  top_p={resolved_params['top_p']}  top_k={resolved_params['top_k']}  min_p={resolved_params['min_p']}  pres_pen={resolved_params['presence_penalty']}  rep_pen={resolved_params['repeat_penalty']}"
+    )
     print(f"Output dir: {output_dir}")
     print()
 
@@ -487,7 +501,8 @@ Examples:
 
     quantizations = (
         tuple(q.strip() for q in args.quantizations.split(",") if q.strip())
-        if args.quantizations else None
+        if args.quantizations
+        else None
     )
     known_prices = EVAL_MODEL_PRICE_CEILINGS.get(model_path_str, (None, None))
     price_prompt = args.max_price_prompt or known_prices[0]
@@ -576,12 +591,14 @@ Examples:
                     rows = cursor.fetchall()
                     if rows:
                         top = dict(rows[0])
-                        all_parcels.append({
-                            "pidn": pidn,
-                            "top_signal": top.get("signal_key", ""),
-                            "category": "fixed",
-                            "signal_count": len(rows),
-                        })
+                        all_parcels.append(
+                            {
+                                "pidn": pidn,
+                                "top_signal": top.get("signal_key", ""),
+                                "category": "fixed",
+                                "signal_count": len(rows),
+                            }
+                        )
             else:
                 print("Loading test parcels from dataset...")
                 try:
@@ -605,7 +622,9 @@ Examples:
                 sys.exit(0)
 
             test_parcels = all_parcels[: args.limit]
-            print(f"Found {len(all_parcels)} parcels in dataset; evaluating {len(test_parcels)}.")
+            print(
+                f"Found {len(all_parcels)} parcels in dataset; evaluating {len(test_parcels)}."
+            )
             print()
 
             # ------------------------------------------------------------------
@@ -636,24 +655,30 @@ Examples:
                     checkpoint_results()
                     break
 
-                status_str = "OK" if outcome["success"] else f"FAIL ({outcome.get('error', '')[:60]})"
+                status_str = (
+                    "OK"
+                    if outcome["success"]
+                    else f"FAIL ({outcome.get('error', '')[:60]})"
+                )
                 print(f"-> {status_str}  [{outcome['elapsed_seconds']:.1f}s]")
 
-                results.append({
-                    "pidn": pidn,
-                    "category": category,
-                    "signal_count": signal_count,
-                    "top_signal": top_signal,
-                    "model_name": model_name,
-                    "pass_num": args.pass_num,
-                    "success": outcome["success"],
-                    "elapsed_seconds": outcome["elapsed_seconds"],
-                    "raw_output": outcome["raw_output"],
-                    "parsed_output": outcome["parsed_output"],
-                    "error": outcome["error"],
-                    "usage": outcome.get("usage"),
-                    "retry_usage": outcome.get("retry_usage"),
-                })
+                results.append(
+                    {
+                        "pidn": pidn,
+                        "category": category,
+                        "signal_count": signal_count,
+                        "top_signal": top_signal,
+                        "model_name": model_name,
+                        "pass_num": args.pass_num,
+                        "success": outcome["success"],
+                        "elapsed_seconds": outcome["elapsed_seconds"],
+                        "raw_output": outcome["raw_output"],
+                        "parsed_output": outcome["parsed_output"],
+                        "error": outcome["error"],
+                        "usage": outcome.get("usage"),
+                        "retry_usage": outcome.get("retry_usage"),
+                    }
+                )
                 checkpoint_results()
 
     conn.close()
@@ -666,13 +691,10 @@ Examples:
     total = len(results)
     succeeded = sum(1 for r in results if r["success"])
     failed = total - succeeded
-    avg_time = (
-        sum(r["elapsed_seconds"] for r in results) / total if total else 0.0
-    )
+    avg_time = sum(r["elapsed_seconds"] for r in results) / total if total else 0.0
 
     json_valid = sum(
-        1 for r in results
-        if r["success"] and isinstance(r.get("parsed_output"), dict)
+        1 for r in results if r["success"] and isinstance(r.get("parsed_output"), dict)
     )
 
     print()
@@ -680,9 +702,17 @@ Examples:
     print(f"SUMMARY — {model_name}  Pass {args.pass_num}")
     print("=" * 60)
     print(f"  Total evaluated : {total}")
-    print(f"  Succeeded       : {succeeded}  ({succeeded / total * 100:.1f}% success rate)" if total else "  Succeeded       : 0")
+    print(
+        f"  Succeeded       : {succeeded}  ({succeeded / total * 100:.1f}% success rate)"
+        if total
+        else "  Succeeded       : 0"
+    )
     print(f"  Failed          : {failed}")
-    print(f"  JSON valid      : {json_valid}  ({json_valid / total * 100:.1f}%)" if total else "  JSON valid      : 0")
+    print(
+        f"  JSON valid      : {json_valid}  ({json_valid / total * 100:.1f}%)"
+        if total
+        else "  JSON valid      : 0"
+    )
     print(f"  Avg time/parcel : {avg_time:.1f}s")
     print(f"  Results written : {output_file}")
     print()
@@ -693,6 +723,7 @@ Examples:
             if not r["success"]:
                 print(f"  pidn={r['pidn']}  error={r.get('error', '')[:80]}")
         print()
+
 
 if __name__ == "__main__":
     main()

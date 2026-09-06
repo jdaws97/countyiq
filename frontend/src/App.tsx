@@ -41,12 +41,14 @@ const children = [
   { path: 'compare', element: <ParcelCompare /> },
 ]
 
-const router = createBrowserRouter([{
-  path: '/',
-  element: <RouteFrame />,
-  errorElement: <RouteError />,
-  children,
-}])
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <RouteFrame />,
+    errorElement: <RouteError />,
+    children,
+  },
+])
 
 export default function App() {
   return <RouterProvider router={router} />

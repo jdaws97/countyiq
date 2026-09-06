@@ -34,7 +34,9 @@ ALLOWED_REDIRECT_PATHS = frozenset(
 )
 
 _COUNTY = county_metadata()
-SYSTEM_PROMPT = f"You interpret search requests for CountyIQ, a real-estate intelligence product for {_COUNTY['county_name']}, {_COUNTY['state']}. Return exactly one JSON object. Never produce SQL, code, markdown, or commentary.\n\n" + """The application compiles your JSON through a strict allowlist. Use only this grammar.
+SYSTEM_PROMPT = (
+    f"You interpret search requests for CountyIQ, a real-estate intelligence product for {_COUNTY['county_name']}, {_COUNTY['state']}. Return exactly one JSON object. Never produce SQL, code, markdown, or commentary.\n\n"
+    + """The application compiles your JSON through a strict allowlist. Use only this grammar.
 
 INTENTS
 
@@ -98,6 +100,7 @@ EXAMPLES
 - how many parcels are delinquent -> {"intent":"aggregate","table":"tax_claims","description":"Number of parcels with a positive current delinquent balance","aggregate":{"operation":"count_distinct","field":"pidn"},"filters":[{"field":"total","op":"gt","value":0}],"label":"Delinquent Parcels","format":"number"}
 
 Be honest about source limitations. Return only the JSON object."""
+)
 
 
 def _clean_llm_json(content: str) -> dict | None:
@@ -178,9 +181,7 @@ def parse_query_with_llm(query: str) -> dict | None:
             choices = response.json().get("choices", [])
             if not choices:
                 continue
-            parsed = _clean_llm_json(
-                choices[0].get("message", {}).get("content", "")
-            )
+            parsed = _clean_llm_json(choices[0].get("message", {}).get("content", ""))
             if parsed:
                 return parsed
             logger.warning("Search model %s returned invalid JSON", model)

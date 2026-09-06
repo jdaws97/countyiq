@@ -37,8 +37,9 @@ def list_unresolved_contradictions(database, *, limit: int = 50) -> list[dict]:
     """Return a bounded oldest-first operator queue without source payloads."""
 
     limit = min(max(int(limit), 1), 500)
-    rows = database.execute(
-        """
+    rows = (
+        database.execute(
+            """
         SELECT
             c.contradiction_id, c.pass_number, c.output_kind, c.subject_key,
             c.decision_key, c.source_hash, c.prior_inference_id,
@@ -56,12 +57,22 @@ def list_unresolved_contradictions(database, *, limit: int = 50) -> list[dict]:
         ORDER BY c.detected_at, c.contradiction_id
         LIMIT %s
         """,
-        (limit,),
-    ) or []
+            (limit,),
+        )
+        or []
+    )
     keys = (
-        "contradiction_id", "pass_number", "output_kind", "subject_key",
-        "decision_key", "source_hash", "prior_inference_id",
-        "challenger_inference_id", "reason", "detected_at", "prior_model",
+        "contradiction_id",
+        "pass_number",
+        "output_kind",
+        "subject_key",
+        "decision_key",
+        "source_hash",
+        "prior_inference_id",
+        "challenger_inference_id",
+        "reason",
+        "detected_at",
+        "prior_model",
         "challenger_model",
     )
     return [
@@ -73,8 +84,9 @@ def list_unresolved_contradictions(database, *, limit: int = 50) -> list[dict]:
 def get_contradiction(database, contradiction_id: int) -> dict | None:
     """Return the complete immutable evidence needed for human review."""
 
-    rows = database.execute(
-        """
+    rows = (
+        database.execute(
+            """
         SELECT
             row_to_json(c) AS contradiction,
             row_to_json(prior) AS prior,
@@ -91,14 +103,18 @@ def get_contradiction(database, contradiction_id: int) -> dict | None:
           USING (contradiction_id)
         WHERE c.contradiction_id = %s
         """,
-        (contradiction_id,),
-    ) or []
+            (contradiction_id,),
+        )
+        or []
+    )
     if not rows:
         return None
     row = rows[0]
     if isinstance(row, dict):
         return dict(row)
-    return dict(zip(("contradiction", "prior", "challenger", "resolution"), row, strict=True))
+    return dict(
+        zip(("contradiction", "prior", "challenger", "resolution"), row, strict=True)
+    )
 
 
 def resolve_contradiction(
@@ -186,17 +202,24 @@ def resolve_contradiction(
             LIMIT 1
             """,
             (
-                contradiction["pass_number"], contradiction["output_kind"],
-                contradiction["subject_key"], contradiction["decision_key"],
+                contradiction["pass_number"],
+                contradiction["output_kind"],
+                contradiction["subject_key"],
+                contradiction["decision_key"],
             ),
         )
         latest = cur.fetchone()
-        if latest is None or latest["inference_id"] != contradiction["prior_inference_id"]:
+        if (
+            latest is None
+            or latest["inference_id"] != contradiction["prior_inference_id"]
+        ):
             raise ContradictionResolutionError(
                 "the prior inference is no longer current; review the newer version"
             )
 
-        current_source_hash = _current_source_hash(cur, contradiction, prior, challenger)
+        current_source_hash = _current_source_hash(
+            cur, contradiction, prior, challenger
+        )
         if current_source_hash != contradiction["source_hash"]:
             raise ContradictionResolutionError(
                 "current source evidence no longer matches this contradiction; rerun the pass"
@@ -237,14 +260,23 @@ def resolve_contradiction(
             RETURNING inference_id
             """,
             (
-                contradiction["subject_key"], contradiction["pass_number"],
-                contradiction["output_kind"], contradiction["decision_key"],
-                contradiction["source_hash"], challenger["input_hash"],
-                selected["requested_model"], selected["served_model"],
-                selected["provider"], selected["prompt_version"],
-                content_hash(payload), decision_fingerprint, canonical_json(payload),
-                canonical_json(citations), canonical_json(evidence_refs),
-                contradiction["prior_inference_id"], decision_origin,
+                contradiction["subject_key"],
+                contradiction["pass_number"],
+                contradiction["output_kind"],
+                contradiction["decision_key"],
+                contradiction["source_hash"],
+                challenger["input_hash"],
+                selected["requested_model"],
+                selected["served_model"],
+                selected["provider"],
+                selected["prompt_version"],
+                content_hash(payload),
+                decision_fingerprint,
+                canonical_json(payload),
+                canonical_json(citations),
+                canonical_json(evidence_refs),
+                contradiction["prior_inference_id"],
+                decision_origin,
                 selected["inference_id"],
             ),
         )
@@ -270,7 +302,10 @@ def resolve_contradiction(
             RETURNING resolution_id
             """,
             (
-                contradiction_id, resolution, resolved_by.strip(), rationale.strip(),
+                contradiction_id,
+                resolution,
+                resolved_by.strip(),
+                rationale.strip(),
                 resolved_inference_id,
             ),
         )
@@ -288,7 +323,8 @@ def resolve_contradiction(
                     input_hash = EXCLUDED.input_hash, error_message = NULL
                 """,
                 (
-                    contradiction["subject_key"], contradiction["pass_number"],
+                    contradiction["subject_key"],
+                    contradiction["pass_number"],
                     challenger["input_hash"],
                 ),
             )
@@ -307,10 +343,14 @@ def _candidate_names(prior: dict, challenger: dict) -> list[str]:
     refs = list(prior.get("evidence_refs") or []) + list(
         challenger.get("evidence_refs") or []
     )
-    return sorted({ref.split(":", 1)[1] for ref in refs if ref.startswith("candidate:")})
+    return sorted(
+        {ref.split(":", 1)[1] for ref in refs if ref.startswith("candidate:")}
+    )
 
 
-def _current_source_hash(cur, contradiction: dict, prior: dict, challenger: dict) -> str:
+def _current_source_hash(
+    cur, contradiction: dict, prior: dict, challenger: dict
+) -> str:
     kind = contradiction["output_kind"]
     subject_key = contradiction["subject_key"]
     if kind == "proceeding_extraction":
@@ -335,20 +375,26 @@ def _current_source_hash(cur, contradiction: dict, prior: dict, challenger: dict
         raw_text = row["raw_text"] or ""
         if len(raw_text.strip()) >= _MIN_RAW_TEXT_CHARS:
             verification_text = raw_text[:_MAX_RAW_TEXT_CHARS]
-            source_version = content_hash({
-                "document_content_hash": row["content_hash"],
-                "raw_text_hash": content_hash(verification_text),
-            })
+            source_version = content_hash(
+                {
+                    "document_content_hash": row["content_hash"],
+                    "raw_text_hash": content_hash(verification_text),
+                }
+            )
         else:
             source_version = row["content_hash"]
         if not source_version:
             return ""
-        return content_hash({
-            "proceeding_id": row["id"], "body_name": row["body_name"],
-            "meeting_date": row["meeting_date"],
-            "proceeding_type": row["proceeding_type"],
-            "document_url": row["document_url"], "source_version": source_version,
-        })
+        return content_hash(
+            {
+                "proceeding_id": row["id"],
+                "body_name": row["body_name"],
+                "meeting_date": row["meeting_date"],
+                "proceeding_type": row["proceeding_type"],
+                "document_url": row["document_url"],
+                "source_version": source_version,
+            }
+        )
 
     if kind == "entity_verification":
         from countyiq.lib.intelligence_common import compute_input_hash
@@ -393,20 +439,27 @@ def _current_source_hash(cur, contradiction: dict, prior: dict, challenger: dict
         owner = dict(owner)
         cur.execute(PORTFOLIO_EVIDENCE_QUERY, {"pidns": owner["pidns"] or []})
         evidence_rows = [dict(row) for row in cur.fetchall()]
-        return content_hash({
-            "owner": owner,
-            "evidence": [
-                {
-                    key: row.get(key)
-                    for key in (
-                        "pidn", "signal_key", "validation_status",
-                        "adjusted_significance", "validation_reasoning",
-                        "evidence_data", "confidence", "municipality",
-                    )
-                }
-                for row in evidence_rows
-            ],
-        })
+        return content_hash(
+            {
+                "owner": owner,
+                "evidence": [
+                    {
+                        key: row.get(key)
+                        for key in (
+                            "pidn",
+                            "signal_key",
+                            "validation_status",
+                            "adjusted_significance",
+                            "validation_reasoning",
+                            "evidence_data",
+                            "confidence",
+                            "municipality",
+                        )
+                    }
+                    for row in evidence_rows
+                ],
+            }
+        )
 
     raise ContradictionResolutionError(f"unsupported output kind: {kind}")
 
@@ -444,7 +497,9 @@ def _apply_projection(
 
     payload = challenger["payload"]
     if kind == "proceeding_extraction":
-        _project_proceeding(cur, contradiction, challenger, payload, resolved_inference_id)
+        _project_proceeding(
+            cur, contradiction, challenger, payload, resolved_inference_id
+        )
     elif kind == "entity_verification":
         _project_entities(cur, prior, challenger, payload, resolved_inference_id)
     elif kind == "signal_validation":
@@ -459,7 +514,9 @@ def _apply_projection(
         )
 
 
-def _project_proceeding(cur, contradiction, challenger, payload, inference_id: int) -> None:
+def _project_proceeding(
+    cur, contradiction, challenger, payload, inference_id: int
+) -> None:
     from countyiq.lib.intelligence_events import normalize_development_tags
     from countyiq.lib.proceeding_contract import details_for
 
@@ -480,16 +537,18 @@ def _project_proceeding(cur, contradiction, challenger, payload, inference_id: i
             what_happens_next=extraction.get("what_happens_next"),
             upcoming_date=extraction.get("upcoming_date"),
             record_status=extraction.get("record_status"),
-                decision_scope=extraction.get("decision_scope"),
+            decision_scope=extraction.get("decision_scope"),
         )
-        related_entities = list(dict.fromkeys(
-            value.strip()
-            for value in [
-                extraction.get("applicant_name"),
-                *(extraction.get("related_entities") or []),
-            ]
-            if isinstance(value, str) and value.strip()
-        ))
+        related_entities = list(
+            dict.fromkeys(
+                value.strip()
+                for value in [
+                    extraction.get("applicant_name"),
+                    *(extraction.get("related_entities") or []),
+                ]
+                if isinstance(value, str) and value.strip()
+            )
+        )
         confidence = {"high": 0.9, "medium": 0.6, "low": 0.3}.get(
             extraction.get("confidence", "low"), 0.3
         )
@@ -508,15 +567,26 @@ def _project_proceeding(cur, contradiction, challenger, payload, inference_id: i
             )
             """,
             (
-                proceeding_id, extraction.get("extraction_type"),
-                extraction.get("applicant_name"), extraction.get("parcel_reference"),
-                extraction.get("current_zoning"), extraction.get("proposed_zoning"),
-                extraction.get("decision"), canonical_json(conditions) if conditions else None,
-                extraction.get("supporting_text"), confidence, model_used, event_tags,
-                extraction.get("project_name"), related_entities,
-                extraction.get("what_happened"), extraction.get("why_it_matters"),
-                extraction.get("what_happens_next"), extraction.get("upcoming_date"),
-                inference_id, canonical_json(details_for(extraction)),
+                proceeding_id,
+                extraction.get("extraction_type"),
+                extraction.get("applicant_name"),
+                extraction.get("parcel_reference"),
+                extraction.get("current_zoning"),
+                extraction.get("proposed_zoning"),
+                extraction.get("decision"),
+                canonical_json(conditions) if conditions else None,
+                extraction.get("supporting_text"),
+                confidence,
+                model_used,
+                event_tags,
+                extraction.get("project_name"),
+                related_entities,
+                extraction.get("what_happened"),
+                extraction.get("why_it_matters"),
+                extraction.get("what_happens_next"),
+                extraction.get("upcoming_date"),
+                inference_id,
+                canonical_json(details_for(extraction)),
             ),
         )
     if not extractions:
@@ -569,17 +639,23 @@ def _project_entities(cur, prior, challenger, payload, inference_id: int) -> Non
             ) VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, NOW(), %s)
             """,
             (
-                entity.get("canonical_name", ""), entity.get("entity_type", "unknown"),
+                entity.get("canonical_name", ""),
+                entity.get("entity_type", "unknown"),
                 entity_candidate_names(entity) or None,
                 canonical_json(_merge_linked_sources({}, linked_records)),
-                canonical_json(_merge_relationships([], entity.get("relationships", []))),
+                canonical_json(
+                    _merge_relationships([], entity.get("relationships", []))
+                ),
                 "verified" if entity.get("confidence", 0) >= 0.7 else "tentative",
-                entity.get("reasoning", ""), inference_id,
+                entity.get("reasoning", ""),
+                inference_id,
             ),
         )
 
 
-def _project_signals(cur, contradiction, challenger, payload, inference_id: int) -> None:
+def _project_signals(
+    cur, contradiction, challenger, payload, inference_id: int
+) -> None:
     from countyiq.assets.enrichment.signal_validation_batched import (
         UPSERT_EVIDENCE_QUERY,
     )
@@ -608,17 +684,21 @@ def _project_signals(cur, contradiction, challenger, payload, inference_id: int)
         cur.execute(
             UPSERT_EVIDENCE_QUERY,
             {
-                "pidn": pidn, "signal_key": signal_key,
+                "pidn": pidn,
+                "signal_key": signal_key,
                 "claim": (
                     f"{signal_key} classified {validation['validation_status']} with "
                     f"{validation['adjusted_significance']} significance"
                 ),
                 "evidence_data": canonical_json(source["evidence"] or {}),
-                "source_url": None, "internal_url": f"/property/{pidn}",
+                "source_url": None,
+                "internal_url": f"/property/{pidn}",
                 "validation_status": validation["validation_status"],
                 "adjusted_significance": validation["adjusted_significance"],
                 "validation_reasoning": validation["reasoning"],
-                "cross_references": canonical_json(validation.get("cross_references", [])),
+                "cross_references": canonical_json(
+                    validation.get("cross_references", [])
+                ),
                 "validated_at": datetime.now(UTC).isoformat(),
                 "model_version": challenger["requested_model"].split("|", 1)[0],
                 "prompt_version": challenger["prompt_version"],
@@ -638,29 +718,37 @@ def _project_parcel_brief(
     from countyiq.assets.enrichment.brief_generation import UPSERT_BRIEF_QUERY
 
     pidn = contradiction["subject_key"]
-    cur.execute("SELECT COUNT(*) AS count FROM public.evidence WHERE pidn = %s", (pidn,))
+    cur.execute(
+        "SELECT COUNT(*) AS count FROM public.evidence WHERE pidn = %s", (pidn,)
+    )
     signal_count = cur.fetchone()["count"]
     cur.execute(
         UPSERT_BRIEF_QUERY,
         {
-            "pidn": pidn, "brief_text": payload["brief"],
+            "pidn": pidn,
+            "brief_text": payload["brief"],
             "assessment": payload["assessment"],
             "assessment_reasoning": payload.get("assessment_reasoning", ""),
             "key_questions": payload.get("key_questions", []),
             "signal_count": signal_count,
             "citations": canonical_json(payload.get("citations", [])),
-            "pass_metadata": canonical_json({
-                "origin": "human_resolution", "resolved_by": resolved_by,
-                "recommendation": payload.get("recommendation"),
-                "urgency": payload.get("urgency"),
-                "evidence_strength": payload.get("evidence_strength"),
-                "top_signal_key": payload.get("top_signal_key"),
-                "top_risk": payload.get("top_risk"),
-            }),
+            "pass_metadata": canonical_json(
+                {
+                    "origin": "human_resolution",
+                    "resolved_by": resolved_by,
+                    "recommendation": payload.get("recommendation"),
+                    "urgency": payload.get("urgency"),
+                    "evidence_strength": payload.get("evidence_strength"),
+                    "top_signal_key": payload.get("top_signal_key"),
+                    "top_risk": payload.get("top_risk"),
+                }
+            ),
             "generated_at": datetime.now(UTC).isoformat(),
             "model_version": challenger["requested_model"].split("|", 1)[0],
-            "prompt_version": challenger["prompt_version"], "n_trials": 1,
-            "trial_agreement": None, "confidence": payload.get("confidence"),
+            "prompt_version": challenger["prompt_version"],
+            "n_trials": 1,
+            "trial_agreement": None,
+            "confidence": payload.get("confidence"),
             "active_inference_id": inference_id,
         },
     )
@@ -686,22 +774,29 @@ def _project_owner_brief(
         UPSERT_OWNER_BRIEF,
         {
             "canonical_name": current["canonical_name"],
-            "owner_id": current["owner_id"], "brief_text": payload["brief_text"],
+            "owner_id": current["owner_id"],
+            "brief_text": payload["brief_text"],
             "portfolio_strategy": payload["portfolio_strategy"],
             "concentration_notes": payload["concentration_notes"],
             "key_pattern": payload["key_pattern"],
-            "recommendation": payload["recommendation"], "urgency": payload["urgency"],
+            "recommendation": payload["recommendation"],
+            "urgency": payload["urgency"],
             "top_risk": payload["top_risk"],
             "evidence_strength": payload["evidence_strength"],
             "citations": canonical_json(payload.get("citations", [])),
             "parcel_citations": canonical_json(payload.get("parcel_citations", [])),
             "n_parcels": current["n_parcels"],
             "model_version": challenger["requested_model"].split("|", 1)[0],
-            "prompt_version": challenger["prompt_version"], "n_trials": 1,
-            "trial_agreement": None, "confidence": payload.get("confidence"),
-            "pass_metadata": canonical_json({
-                "origin": "human_resolution", "resolved_by": resolved_by,
-            }),
+            "prompt_version": challenger["prompt_version"],
+            "n_trials": 1,
+            "trial_agreement": None,
+            "confidence": payload.get("confidence"),
+            "pass_metadata": canonical_json(
+                {
+                    "origin": "human_resolution",
+                    "resolved_by": resolved_by,
+                }
+            ),
             "generated_at": datetime.now(UTC).isoformat(),
             "active_inference_id": inference_id,
         },

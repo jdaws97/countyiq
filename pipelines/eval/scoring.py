@@ -28,7 +28,9 @@ def _normalized(value: Any) -> str:
     text = value if isinstance(value, str) else json.dumps(value, sort_keys=True)
     text = re.sub(
         r"(?<=\d)\s+(million|billion|thousand)\b",
-        lambda match: {"million": "m", "billion": "b", "thousand": "k"}[match[1].lower()],
+        lambda match: {"million": "m", "billion": "b", "thousand": "k"}[
+            match[1].lower()
+        ],
         text,
         flags=re.I,
     )
@@ -85,7 +87,8 @@ def _ordered_token_match(value: Any, alternative: str, max_gap: int = 6) -> bool
 def _contains_any(value: Any, alternatives: list[str]) -> bool:
     haystack = _normalized(value)
     return any(
-        f" {_normalized(alternative)} " in f" {haystack} " or _ordered_token_match(value, alternative)
+        f" {_normalized(alternative)} " in f" {haystack} "
+        or _ordered_token_match(value, alternative)
         for alternative in alternatives
     )
 
@@ -96,10 +99,13 @@ def _forbidden_assertions(value: Any, claims: list[str]) -> list[str]:
     # Preserve decimal numbers, and prevent a disclaimer in one contrastive
     # clause from concealing an assertion in the next.
     segments = [
-        part for part in re.split(
+        part
+        for part in re.split(
             r"(?<!\d)\.|\.(?!\d)|[!?;\n]+|\b(?:but|however|yet|although)\b",
-            text, flags=re.I,
-        ) if part.strip()
+            text,
+            flags=re.I,
+        )
+        if part.strip()
     ]
     found = []
     negations = {

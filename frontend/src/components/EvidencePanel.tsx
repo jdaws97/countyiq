@@ -6,14 +6,12 @@ import { openEvidenceReceipt, sourceLinkLabel } from '../lib/evidence'
 import { formatLabel, formatShortDate } from '../lib/format'
 import type { EvidenceItem } from '../types/api'
 
-
 function citationLookupKey(kind: string, value: string, group?: string): string {
   if (kind.toLowerCase() === 'evidence') {
     return `evidence:${group ?? ''}:${value}`.toLowerCase()
   }
   return `${kind}:${value}`.toLowerCase()
 }
-
 
 export function CitedText({ text, evidence }: { text: string; evidence: EvidenceItem[] }) {
   const byCitation = new Map(
@@ -24,7 +22,9 @@ export function CitedText({ text, evidence }: { text: string; evidence: Evidence
   let cursor = 0
   for (const match of text.matchAll(token)) {
     const start = match.index ?? 0
-    if (start > cursor) nodes.push(text.slice(cursor, start))
+    if (start > cursor) {
+      nodes.push(text.slice(cursor, start))
+    }
     const key = match[1]
       ? citationLookupKey(match[1], match[2].trim())
       : citationLookupKey('evidence', match[4].trim(), match[3].trim())
@@ -46,16 +46,31 @@ export function CitedText({ text, evidence }: { text: string; evidence: Evidence
     }
     cursor = start + match[0].length
   }
-  if (cursor < text.length) nodes.push(text.slice(cursor))
-  return <>{nodes.map((node, index) => <Fragment key={index}>{node}</Fragment>)}</>
+  if (cursor < text.length) {
+    nodes.push(text.slice(cursor))
+  }
+  return (
+    <>
+      {nodes.map((node, index) => (
+        <Fragment key={index}>{node}</Fragment>
+      ))}
+    </>
+  )
 }
 
-
 function displayValue(value: unknown): string {
-  if (value == null || value === '') return '—'
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (typeof value === 'number') return value.toLocaleString()
-  if (Array.isArray(value)) return value.map(displayValue).join(', ')
+  if (value == null || value === '') {
+    return '—'
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No'
+  }
+  if (typeof value === 'number') {
+    return value.toLocaleString()
+  }
+  if (Array.isArray(value)) {
+    return value.map(displayValue).join(', ')
+  }
   if (typeof value === 'object') {
     const record = value as Record<string, unknown>
     if ('old' in record || 'new' in record) {
@@ -69,7 +84,6 @@ function displayValue(value: unknown): string {
   return String(value)
 }
 
-
 export default function EvidencePanel({
   items,
   title = 'Evidence receipts',
@@ -79,7 +93,9 @@ export default function EvidencePanel({
   title?: string
   intro?: string
 }) {
-  if (items.length === 0) return null
+  if (items.length === 0) {
+    return null
+  }
 
   return (
     <div>
@@ -90,10 +106,19 @@ export default function EvidencePanel({
       <div className="evidence-list">
         {items.map((item, index) => {
           const originalHref = item.document_url ?? item.url
-          const facts = Object.entries(item.details ?? {}).filter(([key]) => ![
-            'contract_version', 'evidence_spans', 'supports', 'source_sha256',
-            'passage_ids', 'identity_status', 'discovery_eligible', 'location_status',
-          ].includes(key))
+          const facts = Object.entries(item.details ?? {}).filter(
+            ([key]) =>
+              ![
+                'contract_version',
+                'evidence_spans',
+                'supports',
+                'source_sha256',
+                'passage_ids',
+                'identity_status',
+                'discovery_eligible',
+                'location_status',
+              ].includes(key),
+          )
           const confidenceLabel = /proceeding|extraction/.test(item.source_kind)
             ? 'extraction confidence'
             : item.source_kind === 'validated_signal'
@@ -107,14 +132,22 @@ export default function EvidencePanel({
             <details id={item.evidence_id} key={item.evidence_id} className="evidence-receipt">
               <summary>
                 <span className="evidence-receipt-title">
-                  <Badge color="var(--accent-gold)" mono>E{index + 1}</Badge>
+                  <Badge color="var(--accent-gold)" mono>
+                    E{index + 1}
+                  </Badge>
                   <span className="evidence-receipt-label">{item.label}</span>
                   <Badge color="var(--text-muted)">{formatLabel(item.source_kind)}</Badge>
-                  {item.confidence != null && <Badge color="var(--text-muted)">{Math.round(item.confidence * 100)}% {confidenceLabel}</Badge>}
+                  {item.confidence != null && (
+                    <Badge color="var(--text-muted)">
+                      {Math.round(item.confidence * 100)}% {confidenceLabel}
+                    </Badge>
+                  )}
                 </span>
               </summary>
               <div className="evidence-receipt-body">
-                {item.excerpt && <blockquote className="evidence-excerpt">{item.excerpt}</blockquote>}
+                {item.excerpt && (
+                  <blockquote className="evidence-excerpt">{item.excerpt}</blockquote>
+                )}
                 {facts.length > 0 && (
                   <div className="evidence-facts">
                     {facts.map(([key, value]) => (
@@ -130,11 +163,15 @@ export default function EvidencePanel({
                 </div>
                 {item.caveat && <div className="evidence-caveat">{item.caveat}</div>}
                 <div className="evidence-footer">
-                  {item.source_record_id && <span className="mono">record {item.source_record_id}</span>}
+                  {item.source_record_id && (
+                    <span className="mono">record {item.source_record_id}</span>
+                  )}
                   {dates.length > 0 && <span>{dates.join(' · ')}</span>}
                   {item.internal_url && <Link to={item.internal_url}>Open CountyIQ record →</Link>}
                   {originalHref && (
-                    <a href={originalHref} target="_blank" rel="noreferrer">{sourceLinkLabel(originalHref)}</a>
+                    <a href={originalHref} target="_blank" rel="noreferrer">
+                      {sourceLinkLabel(originalHref)}
+                    </a>
                   )}
                   {!originalHref && <span>Original source link unavailable</span>}
                 </div>

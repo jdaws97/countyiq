@@ -27,8 +27,14 @@ from countyiq.resources.storage import S3StorageResource
 
 KEY_COLUMNS = ["case_no", "property_address"]
 VALUE_COLUMNS = [
-    "plaintiff", "defendant", "zip_code",
-    "municipality", "judgment_amount", "status", "status_date", "source_url",
+    "plaintiff",
+    "defendant",
+    "zip_code",
+    "municipality",
+    "judgment_amount",
+    "status",
+    "status_date",
+    "source_url",
 ]
 
 _USER_AGENT = "Mozilla/5.0 (compatible; CountyIQ/1.0; +https://countyiq.app)"
@@ -76,7 +82,7 @@ def parse_sheriff_sale_page(html: str) -> list[dict]:
             # City is the last word group before PA
             city_match = re.search(r"([A-Z][A-Z ]+)$", before_zip)
             if city_match:
-                street = before_zip[:before_zip.rfind(city_match.group(1))].strip()
+                street = before_zip[: before_zip.rfind(city_match.group(1))].strip()
 
         # Parse judgment
         judgment_clean = judgment_text.replace("$", "").replace(",", "").strip()
@@ -92,17 +98,19 @@ def parse_sheriff_sale_page(html: str) -> list[dict]:
             except ValueError:
                 pass
 
-        records.append({
-            "case_no": case_no,
-            "plaintiff": plaintiff[:500],
-            "defendant": defendant[:500],
-            "property_address": street[:200],
-            "zip_code": zip_code,
-            "municipality": municipality[:100],
-            "judgment_amount": judgment,
-            "status": status_base,
-            "status_date": status_date,
-        })
+        records.append(
+            {
+                "case_no": case_no,
+                "plaintiff": plaintiff[:500],
+                "defendant": defendant[:500],
+                "property_address": street[:200],
+                "zip_code": zip_code,
+                "municipality": municipality[:100],
+                "judgment_amount": judgment,
+                "status": status_base,
+                "status_date": status_date,
+            }
+        )
 
     return records
 
@@ -145,7 +153,9 @@ def sheriff_sales_scrape(
     html = response.text
 
     context.log.info("Page loaded, parsing...")
-    s3.archive(f"{county.s3_prefix}/scrapers/sheriff_sales", html, filename="listing.html")
+    s3.archive(
+        f"{county.s3_prefix}/scrapers/sheriff_sales", html, filename="listing.html"
+    )
 
     records = parse_sheriff_sale_page(html)
     for rec in records:
@@ -186,7 +196,9 @@ def sheriff_sales_scrape(
     finally:
         cur.close()
 
-    active = sum(1 for r in records if r["status"] == "Active" or r["status"] == "Active (P)")
+    active = sum(
+        1 for r in records if r["status"] == "Active" or r["status"] == "Active (P)"
+    )
     total_judgment = sum(r["judgment_amount"] or 0 for r in records)
 
     return MaterializeResult(
