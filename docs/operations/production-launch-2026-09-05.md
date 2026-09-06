@@ -1,7 +1,8 @@
 # Production launch record — September 5, 2026
 
 The private application is live at **https://app.countyiq.net** on commit
-`2deb61d8f4f91185358d7c0da8484f8b3f13e085`, deployed at 23:40:13 UTC. All six
+`35f0dadf2b88245e594d56d20cc06e0fb62a4c37`, deployed September 6 at 00:18:47 UTC
+(September 5 locally). All six
 services are running; authenticated public readiness returns HTTP 200 with
 `{"status":"ok"}`. The same service credential receives a customer challenge
 on `/api/session` (302), so it cannot access customer workspaces. **Full
@@ -9,8 +10,9 @@ backfill is not approved.** The user authorized product iteration, bounded canar
 pushes to main and deployment; full backfill remains a separate user decision.
 
 The immutable release receipt is
-`/var/lib/countyiq/releases/20260905T234012Z-2deb61d8f4f91185358d7c0da8484f8b3f13e085.env`.
-Its rollback backup is `20260905T233840Z-pre-deploy-2deb61d8f4f9`. PostgreSQL
+`/var/lib/countyiq/releases/20260906T001847Z-35f0dadf2b88245e594d56d20cc06e0fb62a4c37.env`.
+Its rollback backup is `20260906T001713Z-pre-deploy-35f0dadf2b88`, which includes
+the completed metadata cleanup. PostgreSQL
 and the API have no host port; Dagster is bound only to loopback.
 
 ## Data and recovery
@@ -306,7 +308,8 @@ The refreshed local plan exactly matched the reviewed September 5 plan and both
 parser hashes. A protected local custom-format database backup was created before
 application. The production plan then matched the local plan exactly, including
 every original source fingerprint and review decision. Its recovery point is the
-release's remotely verified pre-deployment backup above. The R2 cost guard passed
+remotely verified backup `20260905T233840Z-pre-deploy-2deb61d8f4f9`, taken before
+the metadata changes. The R2 cost guard passed
 at 4,822,699,881 bytes against the 8 GB ceiling before production application.
 
 Both databases now have 3,511 ready and 2,948 held current documents at metadata
@@ -333,7 +336,13 @@ failures. No model is qualified and no further paid repeat is pending.
 
 The reviewed follow-up preserves signalization-upgrade scope and a formal plan
 after an unsupported physical label is removed. All 1,453 pipeline unit/regression
-tests pass. This follow-up has not yet been deployed at this point in the record.
+tests pass. All six main CI jobs pass in
+[run 34000760904](https://github.com/jdaws97/countyiq/actions/runs/34000760904),
+and the follow-up is deployed at the revision above with schema 066 unchanged.
+Authenticated public readiness passes, the readiness credential still receives
+a 302 customer challenge on `/api/session`, and the running Dagster container
+reports all five paid flags false. Optional AI search remains false. Release
+and verification logs are under `output/production-readiness-2026-09-05/scope-followup/`.
 The live customer check remains unverified: Windows browser inspection failed
 before connecting. The destination inbox for `hello@countyiq.net` is awaiting
 user input; no routing or outreach was sent. Marketing remains Access-gated.
