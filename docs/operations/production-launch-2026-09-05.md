@@ -346,3 +346,11 @@ and verification logs are under `output/production-readiness-2026-09-05/scope-fo
 The live customer check remains unverified: Windows browser inspection failed
 before connecting. The destination inbox for `hello@countyiq.net` is awaiting
 user input; no routing or outreach was sent. Marketing remains Access-gated.
+
+An offline source-range prototype subsequently passed 16 boundary tests and
+exactly reconstructed all 5,399 current documents with text. Its serialized input
+is 50.8% larger and separated consent-vote linkage remains unresolved, so it is
+not wired into production. The [interface study](../research/model-comparison-2026-09-05.md#offline-source-range-interface-study)
+records the controls, corpus evidence and next experiment. No additional model
+call, serving change or deployment was required; the live revision above remains
+current.

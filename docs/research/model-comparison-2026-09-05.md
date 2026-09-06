@@ -585,3 +585,44 @@ reference labels or overwrite failed responses. No model, paid flag, quality
 receipt or full-backfill decision changed. Complete artifacts and the detailed
 source review are in `fair-model-comparison/pass0-varied-holdout/`; the reasoning
 control is in `pass0-reasoning-diagnostic/`.
+
+## Offline source-range interface study
+
+The experimental `pipelines/eval/evidence_ranges.py` lets a caller recover a
+continuous original quotation from first/last source-unit IDs. Units follow
+original lines, splitting unusually long lines at word boundaries. They preserve
+PDF list markers, whitespace, punctuation and Unicode offsets. The caller retains
+the original UTF-8 source hash; unknown IDs, different source fingerprints,
+reversed ranges and old passage versions fail. This is an evaluation module,
+with no production caller, schema replacement or response repair.
+
+A read-only audit of all 6,459 current local proceedings finds 5,399 with text
+and 1,060 with null text. All 5,399 text documents reconstruct exactly, totaling
+40,612,535 source characters. The current passage JSON totals 42,621,427
+characters; the experimental line JSON totals 64,251,822, **50.8% larger**.
+The per-document median increase is 53.5%. These are serialized character
+measurements, not measured tokenizer usage, latency or model cost.
+
+Five manually selected controls establish representation behavior, not model
+accuracy. The broken Heidelberg identifier remains broken, while its interrupted
+road sentence can be recovered exactly without asking a model to transcribe the
+list marker. A York application heading and body can share a continuous range.
+The Hanover signalization motion and result retain their existing semantic pass.
+The whole consent range preserves all intervening items but still fails the
+current decision gate: nested proposed motions are not independently recorded
+votes. Selecting a broader quotation does not establish which decision belongs
+to which item. An adversarial neighboring-motion control remains rejected.
+
+The prototype's 16 tests pass. Original responses, source snapshots and frozen
+references are unchanged. This study made **zero calls / $0 additional spend**;
+the cumulative total remains 222 calls / $0.356703542. Artifacts, the corpus
+audit and its read-only runner are in `fair-model-comparison/source-range-study/`.
+
+Do not adopt this representation yet. It removes one copying obligation but
+adds substantial input and does not solve consent linkage, malformed identities,
+missed matters or unsupported action sentences. The next municipal experiment
+must distinguish separately cited item, motion and outcome evidence, explicitly
+test excluded/intervening items and retain the original source ranges. Shorter
+selector serialization can be measured offline before spending. Qualification
+still requires fresh model outputs and source review; hand-selected ranges cannot
+stand in for either.
