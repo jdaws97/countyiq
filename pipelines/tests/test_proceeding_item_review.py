@@ -16,6 +16,7 @@ def simple(source, summary=None):
                 parcel_references=[], project_reference=None)
     item["what_happened"]["text"] = summary or source
     item["relevance"].update(category="context_only", scope="unknown", source_text=source)
+    item["relevance"]["basis"]["text"] = source
     return wire
 
 
@@ -155,6 +156,53 @@ def test_interior_context_does_not_establish_a_current_physical_proposal(excerpt
     item["relevance"].update(category="development", scope="redevelopment", source_text=excerpt)
     result = hydrate_claims(wire, source)[0]
     assert not result["discovery_eligible"]
+
+
+@pytest.mark.parametrize("scope", ["signalization upgrade", "traffic signal system upgrade"])
+def test_signal_upgrade_procurement_retains_physical_scope_without_implying_completion(scope):
+    source = f"SYNTHETIC AGENDA. Maple Avenue {scope} project: consider readvertising after no bids were received."
+    wire = simple(source)
+    item = wire["extractions"][0]
+    item["project_reference"] = {"text": f"Maple Avenue {scope} project",
+                                 "passage_ids": item["what_happened"]["passage_ids"]}
+    item["relevance"].update(category="public_works", scope="capital_project")
+    result = hydrate_claims(wire, source)[0]
+    assert result["discovery_eligible"]
+    assert result["relevance_scope"] == "capital_project"
+    assert result["record_status"] == "scheduled" and result["decision"] is None
+
+
+def test_model_rationale_cannot_turn_signal_timing_maintenance_into_capital_upgrade():
+    source = "SYNTHETIC AGENDA. Maple Avenue: routine traffic signal timing maintenance."
+    wire = simple(source, "The Maple Avenue traffic signal system upgrade is scheduled.")
+    item = wire["extractions"][0]
+    item["relevance"].update(category="public_works", scope="capital_project")
+    result = hydrate_claims(wire, source)[0]
+    assert not result["discovery_eligible"]
+
+
+@pytest.mark.parametrize("guessed_scope", ["new_construction", "expansion", "redevelopment"])
+def test_formal_plan_remains_discoverable_after_unsupported_physical_scope_is_removed(guessed_scope):
+    source = "SYNTHETIC AGENDA. Maple Commerce Center preliminary/final land development plan: review."
+    wire = simple(source)
+    item = wire["extractions"][0]
+    item["project_reference"] = {"text": "Maple Commerce Center",
+                                 "passage_ids": item["what_happened"]["passage_ids"]}
+    item["relevance"].update(category="development", scope=guessed_scope)
+    result = hydrate_claims(wire, source)[0]
+    assert result["discovery_eligible"]
+    assert result["relevance_scope"] == "plan_review"
+    assert result["decision"] is None
+
+
+def test_formal_plan_time_extension_does_not_establish_new_development_scope():
+    source = "SYNTHETIC AGENDA. Time extension for Maple Commerce Center land development plan."
+    wire = simple(source)
+    item = wire["extractions"][0]
+    item["project_reference"] = {"text": "Maple Commerce Center",
+                                 "passage_ids": item["what_happened"]["passage_ids"]}
+    item["relevance"].update(category="development", scope="new_construction")
+    assert not hydrate_claims(wire, source)[0]["discovery_eligible"]
 
 
 def test_neighbor_compliance_report_does_not_suppress_bess_policy():

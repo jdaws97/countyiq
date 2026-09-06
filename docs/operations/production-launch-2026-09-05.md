@@ -110,8 +110,8 @@ workspace and cross-session persistence verification remain outstanding.
 ## LLM qualification and cost
 
 The [model comparison](../research/model-comparison-2026-09-05.md) contains the
-current source reviews and preserved raw results: 210 evaluation-only calls,
-$0.322589861 total. None issued a quality receipt or wrote serving intelligence.
+current source reviews and preserved raw results: 222 evaluation-only calls,
+$0.356703542 total. None issued a quality receipt or wrote serving intelligence.
 
 The harness now uses explicit model-appropriate reasoning and sampling settings.
 Removing factual examples from the shared citation prompt materially improved
@@ -320,3 +320,20 @@ approves model quality or full backfill; all five paid passes and AI search rema
 disabled. Evidence is under `output/production-readiness-2026-09-05/metadata-v6/`:
 `apply-local-plan.json`, `production-plan.json`, `apply-local-result.log`,
 `verify-local-result.json`, `production-apply.log`, and `production-verify.log`.
+
+## Varied-source qualification follow-up
+
+Nine calls on three previously unused documents and a three-call reasoning
+control cost $0.034113681. All are terminal. The references were frozen before
+responses, and original failures and hashes are preserved. All three models have
+source/citation/recall gaps; raising reasoning on the same Heidelberg input did
+not improve acceptance. The [comparison](../research/model-comparison-2026-09-05.md#varied-documents-and-reasoning-control)
+separates actual factual errors from PDF-layout, passage-boundary and output-budget
+failures. No model is qualified and no further paid repeat is pending.
+
+The reviewed follow-up preserves signalization-upgrade scope and a formal plan
+after an unsupported physical label is removed. All 1,453 pipeline unit/regression
+tests pass. This follow-up has not yet been deployed at this point in the record.
+The live customer check remains unverified: Windows browser inspection failed
+before connecting. The destination inbox for `hello@countyiq.net` is awaiting
+user input; no routing or outreach was sent. Marketing remains Access-gated.

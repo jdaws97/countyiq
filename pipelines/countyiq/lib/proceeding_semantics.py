@@ -301,8 +301,6 @@ def relevance_projection(category, scope, basis, evidence, *, summary='', source
     # alone does not establish a development proposal.
     formal_plan = source_identity and re.search(r"\bland development plan\b", grounded, re.I)
     administrative_plan = re.search(r"bond|surety|time.extension|deed|dedication|lot consolidation|lot.line|minor subdivision", negative_context, re.I)
-    if formal_plan and not administrative_plan and category == "context_only" and scope == "unknown":
-        category, scope = "development", "plan_review"
     if category == "development" and scope == "plan_review" and not (formal_plan and not administrative_plan):
         category, scope = "context_only", "unknown"
     if category == "development" and scope == "new_construction":
@@ -327,6 +325,10 @@ def relevance_projection(category, scope, basis, evidence, *, summary='', source
                 and not (scope == "conversion" and adaptive_reuse)
                 and not (scope == "redevelopment" and interior_work)):
             category, scope = "context_only", "unknown"
+    # Keep the stated plan when an unsupported physical-work label is removed.
+    # This establishes review of a plan, never the guessed construction scope.
+    if formal_plan and not administrative_plan and category == "context_only" and scope == "unknown":
+        category, scope = "development", "plan_review"
     if category == "landuse_policy" and scope == "policy_change":
         subject = re.search(r"zon(?:e|ing)|rezon|comprehensive plan|land use plan|ZO Sections?|wireless communications facilities|stormwater|"
                             r"agricultural security|ag security|data[ -]?cent(?:er|re)|"
@@ -354,11 +356,14 @@ def relevance_projection(category, scope, basis, evidence, *, summary='', source
         # road-program payments remain context; bond/developer agreements were
         # already demoted above and cannot be rescued by a rationale.
         named_upgrade = re.search(r"\b(?:WWTP|wastewater treatment plant|water treatment plant|pump station|generator).{0,35}\bupgrade\b", grounded, re.I)
+        signal_upgrade = re.search(
+            r"\b(?:signalization|traffic (?:signal|light)s?)(?: system)?\s+upgrade\b",
+            evidence, re.I)
         park_phase = re.search(r"\bpark\s+phase\s+(?:[IVX]+|\d+)\b.{0,20}\bproject\b", grounded, re.I)
         named_capital_grant = re.search(
             r"(?i:grant).{0,110}(?:(?i:pump station)|[A-Z][\w.'-]+ (?:Street|Road|Lane|Bridge))",
             grounded)  # Capitalized source location; a funding program alone is insufficient.
-        if (administration and not named_upgrade) or not (physical or named_upgrade or park_phase or named_capital_grant):
+        if (administration and not (named_upgrade or signal_upgrade)) or not (physical or named_upgrade or signal_upgrade or park_phase or named_capital_grant):
             category, scope = "context_only", "project_milestone"
     positive = ((category == "development" and scope in {
         "new_construction", "expansion", "conversion", "redevelopment", "new_lots", "plan_review"})

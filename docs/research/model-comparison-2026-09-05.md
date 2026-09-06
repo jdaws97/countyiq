@@ -526,3 +526,62 @@ matched regression after the findings informed changes, not an unseen source
 sample or full-pass qualification. No serving writes, quality receipts, model
 default changes or backfill occurred. Metadata version 6 was subsequently
 applied and verified locally and in production; it does not qualify these models.
+
+## Varied documents and reasoning control
+
+The next nine matched calls used three previously unused full sources: Hanover
+Council minutes of July 22, York City's August 20 zoning agenda and Heidelberg's
+September 2 agenda. All passed current dispatch checks. References were frozen
+before responses; exact text/hash searches found no match in the earlier release
+comparison or committed fixtures. This is selected coverage with primary-agent
+labels, not independent human gold or a representative sample. Ambiguous
+relevance boundaries were declared before dispatch rather than scored as failures.
+
+The run cost **$0.020810951**, with unchanged low reasoning, 16,384-token output
+allowance and FP8 constraints for the open models. Original item acceptance was:
+
+| Model | Cost for three documents | Hanover / York / Heidelberg accepted records |
+| --- | ---: | --- |
+| Luna | $0.009168230 | 1 / 6 / 1 |
+| GLM 5.3 Flash | $0.006732520 | 0 / 6 / 2 |
+| DeepSeek 0731 | $0.004910201 | 0 / 0 / 2 |
+
+None passes the complete-document gate. Source review separates the causes:
+
+- All models miss or improperly combine the separate Hanover litigation matter;
+  Luna also misses the Mustang Pointe settlement. DeepSeek attaches a court case
+  and parties to that settlement without explicit source binding. Its action
+  quotations use ellipses. Luna and GLM understand the consent approvals but omit
+  the separate carried-vote or authority evidence required by their selected quotes.
+- Luna and GLM recognize all seven York applications without manufacturing votes.
+  Both put one identifier in the adjacent passage containing the item's body;
+  that record is rejected. GLM also misses both clear conversion discovery labels
+  by selecting generic use-permission clauses. DeepSeek's OpenInference response
+  uses all 16,384 output tokens as reasoning and returns whitespace after 463.412s.
+- All three recognize Heidelberg's subjects, but isolated PDF list markers
+  interrupt identifiers and exact quotations. The normalized text returned by
+  each model fails literal membership. DeepSeek also falsely says committee
+  members were appointed; a scheduled status field does not correct that sentence.
+
+Two projection defects are fixed without rewriting responses. Exact evidence of
+a signalization upgrade now retains capital scope. A stated formal development
+plan remains `plan_review` after an unsupported construction label is removed;
+administrative time extensions remain context. Offline replay changes Luna's
+accepted Hanover infrastructure item from context to discovery. It does not repair
+the consent citations or qualify that document. All **1,453 pipeline unit/regression
+tests** pass, including source-scope, invented-scope and administrative boundaries.
+
+A three-call repeat of Heidelberg changed only reasoning from low to high, with
+the exact same prompts, source and reference. It cost **$0.013302730**. Luna and
+GLM each retain only one record; DeepSeek again exhausts all 16,384 tokens on
+reasoning. More reasoning does not solve the representation problems in this test.
+The cumulative review is **222 calls / $0.356703542**. All calls are terminal,
+with no reserved spend remaining and no generation retries.
+
+Before further paid municipal repeats, improve source representation and the
+evidence contract for separated consent votes with offline provenance checks.
+Do not silently join ambiguous identifiers, borrow another item's vote, change
+reference labels or overwrite failed responses. No model, paid flag, quality
+receipt or full-backfill decision changed. Complete artifacts and the detailed
+source review are in `fair-model-comparison/pass0-varied-holdout/`; the reasoning
+control is in `pass0-reasoning-diagnostic/`.
