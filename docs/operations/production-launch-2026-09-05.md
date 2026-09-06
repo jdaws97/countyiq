@@ -1,7 +1,7 @@
 # Production launch record — September 5, 2026
 
 The private application is live at **https://app.countyiq.net** on commit
-`35f0dadf2b88245e594d56d20cc06e0fb62a4c37`, deployed September 6 at 00:18:47 UTC
+`ee6c6eea4116496b91815ff34ca2f055b6bb6ac6`, deployed September 6 at 01:41:17 UTC
 (September 5 locally). All six
 services are running; authenticated public readiness returns HTTP 200 with
 `{"status":"ok"}`. The same service credential receives a customer challenge
@@ -10,8 +10,8 @@ backfill is not approved.** The user authorized product iteration, bounded canar
 pushes to main and deployment; full backfill remains a separate user decision.
 
 The immutable release receipt is
-`/var/lib/countyiq/releases/20260906T001847Z-35f0dadf2b88245e594d56d20cc06e0fb62a4c37.env`.
-Its rollback backup is `20260906T001713Z-pre-deploy-35f0dadf2b88`, which includes
+`/var/lib/countyiq/releases/20260906T014117Z-ee6c6eea4116496b91815ff34ca2f055b6bb6ac6.env`.
+Its rollback backup is `20260906T013941Z-pre-deploy-ee6c6eea4116`, which includes
 the completed metadata cleanup. PostgreSQL
 and the API have no host port; Dagster is bound only to loopback.
 
@@ -338,7 +338,7 @@ The reviewed follow-up preserves signalization-upgrade scope and a formal plan
 after an unsupported physical label is removed. All 1,453 pipeline unit/regression
 tests pass. All six main CI jobs pass in
 [run 34000760904](https://github.com/jdaws97/countyiq/actions/runs/34000760904),
-and the follow-up is deployed at the revision above with schema 066 unchanged.
+and the follow-up was deployed at `35f0dad` with schema 066 unchanged.
 Authenticated public readiness passes, the readiness credential still receives
 a 302 customer challenge on `/api/session`, and the running Dagster container
 reports all five paid flags false. Optional AI search remains false. Release
@@ -403,3 +403,14 @@ expectation; the full passing run includes its corrected expected rejection.
 Evidence is under `fair-model-comparison/pass1-schema-stability/` and
 `output/playwright/pass1-provenance/`. This review does not enable a paid pass,
 approve model quality or authorize full backfill.
+
+This change is deployed at the revision recorded at the top of this document.
+All six main jobs pass in [CI run 34004351321](https://github.com/jdaws97/countyiq/actions/runs/34004351321).
+The separate [Security run 34004351303](https://github.com/jdaws97/countyiq/actions/runs/34004351303)
+fails while uploading CodeQL results because code scanning is disabled for the
+repository; no clean security-analysis result is claimed. Deployment remotely
+verified the rollback backup and retained schema 066. Post-deployment checks
+confirm the exact image tags, all six running services, authenticated public
+readiness, the service credential's 302 customer-session challenge, all five paid
+flags false and optional AI search false. Logs and the verification script are
+under `output/production-readiness-2026-09-05/owner-verification/`.
