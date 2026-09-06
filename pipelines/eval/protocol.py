@@ -22,6 +22,7 @@ from countyiq.lib.pass2_batched_validation import BATCHED_VALIDATION_SYSTEM_PROM
 from countyiq.lib.pass3_brief_generation import BRIEF_GENERATION_SYSTEM_PROMPT
 from countyiq.lib.pass_llm_config import build_pass_harness_config
 from countyiq.lib.pass_schemas import (
+    PASS1_ENTITY_VERIFICATION_SCHEMA,
     PASS2_BATCHED_VALIDATION_SCHEMA,
     PASS3_BRIEF_SCHEMA,
 )
@@ -53,6 +54,8 @@ PASS_EVAL_PROTOCOLS = {
         reasoning_task=True,
         default_thinking=True,
         system_prompt=ENTITY_VERIFICATION_SYSTEM_PROMPT,
+        json_schema=PASS1_ENTITY_VERIFICATION_SCHEMA,
+        schema_name="pass1_entity_verification",
     ),
     2: PassEvalProtocol(
         max_tokens=4096,

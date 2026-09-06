@@ -131,8 +131,9 @@ def test_owner_brief_citations_resolve_to_signal_and_parcel_receipts():
 
 
 class _EntityEvidenceCursor:
-    def __init__(self):
+    def __init__(self, responses=None):
         self.queries: list[str] = []
+        self.responses = list(responses or [[]])
 
     def execute(self, sql: str, params: dict[str, object]) -> None:
         self.queries.append(sql)
@@ -147,15 +148,7 @@ class _EntityEvidenceCursor:
         }
 
     def fetchall(self) -> list[dict]:
-        return [
-            {
-                "pidn": "123",
-                "propadr": "1 Main St",
-                "municipality": "Test Township",
-                "source_url": "https://example.com/parcels/123",
-                "valid_from": "2026-08-30T08:00:00Z",
-            }
-        ]
+        return self.responses.pop(0)
 
 
 def test_entity_evidence_omits_business_records_when_source_policy_disallows_use():
@@ -168,4 +161,91 @@ def test_entity_evidence_omits_business_records_when_source_policy_disallows_use
     )
 
     assert [item["citation_key"] for item in items] == ["evidence:parcels:123"]
+    assert items[0]["internal_url"] == "/property/123"
+    assert items[0]["caveat"] is None
     assert not any("staging.corporate_entities" in query for query in cursor.queries)
+
+
+def _entity_evidence(corporate_rows):
+    cursor = _EntityEvidenceCursor(
+        [
+            [],
+            corporate_rows,
+        ]
+    )
+    return _fetch_entity_verification_evidence(
+        cursor,
+        "Alpha Holdings LLC",
+        allow_corporate_evidence=True,
+    )
+
+
+def test_entity_evidence_labels_negative_business_lookup_without_registry_claim():
+    item = _entity_evidence(
+        [
+            {
+                "entity_name": "Alpha Holdings LLC",
+                "entity_number": "Alpha Holdings LLC",
+                "status": "not_found_in_current_dos_dataset",
+                "source_url": "https://example.com/lookup",
+                "valid_from": "2026-08-30T08:00:00Z",
+            }
+        ]
+    )[-1]
+
+    assert item["label"] == "CountyIQ business lookup · Alpha Holdings LLC"
+    assert item["source_kind"] == "dataset_lookup_result"
+    assert "No matching row was found" in item["caveat"]
+    assert item["details"]["status"] == "not_found_in_current_dos_dataset"
+
+
+def test_entity_evidence_keeps_present_business_row_as_official_with_operations_caveat():
+    item = _entity_evidence(
+        [
+            {
+                "entity_name": "Alpha Holdings LLC",
+                "entity_number": "12345",
+                "status": "active",
+                "source_url": "https://example.com/record/12345",
+                "valid_from": "2026-08-30T08:00:00Z",
+            }
+        ]
+    )[-1]
+
+    assert item["source_kind"] == "official_business_record"
+    assert "does not establish current business operations" in item["caveat"]
+
+
+def test_entity_evidence_missing_business_row_is_governed_reference():
+    item = _entity_evidence([])[-1]
+
+    assert item["label"] == "Business record reference · Alpha Holdings LLC"
+    assert item["source_kind"] == "governed_record_reference"
+    assert "current source row is unavailable" in item["caveat"]
+
+
+def test_entity_evidence_does_not_use_parcel_row_for_business_name_collision():
+    cursor = _EntityEvidenceCursor(
+        [
+            [
+                {
+                    "pidn": "Alpha Holdings LLC",
+                    "propadr": "1 Main St",
+                    "source_url": "https://example.com/parcels/collision",
+                    "valid_from": "2026-08-30T08:00:00Z",
+                }
+            ],
+            [],
+        ]
+    )
+    items = _fetch_entity_verification_evidence(
+        cursor, "Alpha Holdings LLC", allow_corporate_evidence=True
+    )
+
+    corporate = next(
+        item
+        for item in items
+        if item["citation_key"] == "evidence:corporate_entities:Alpha Holdings LLC"
+    )
+    assert corporate["source_kind"] == "governed_record_reference"
+    assert corporate["url"] is None

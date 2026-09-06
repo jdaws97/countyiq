@@ -229,6 +229,8 @@ def entity_verification(
     abstentions_total = 0
     demotions_total = 0
     trial_calls = 0
+    trial_validation_rejections = 0
+    escalation_validation_rejections = 0
     voting_early_stops = 0
     voting_calls_saved = 0
     escalations = 0
@@ -306,12 +308,13 @@ def entity_verification(
             ):
                 break
 
-            # Invoke the LLM (N trials; N=1 by default).
+            # Only source-validated responses can vote or supply a projection.
             trial_parses: list[dict] = (
                 [deterministic_resolution]
                 if deterministic_resolution is not None
                 else []
             )
+            trial_results = []
             last_error: str | None = None
             decision_result = None
             decision_model = (
@@ -359,8 +362,35 @@ def entity_verification(
                         trial_parsed["error"],
                     )
                     continue
+                trial_errors = validate_entity_membership(
+                    trial_parsed, records, cluster_names
+                )
+                if trial_errors:
+                    trial_validation_rejections += 1
+                    last_error = "; ".join(trial_errors)
+                    record_validation_rejection(
+                        database,
+                        subject_key=cluster_key,
+                        pass_number=1,
+                        output_kind="entity_verification",
+                        source_hash=source_hash,
+                        input_hash=input_hash,
+                        requested_model=execution_identity,
+                        prompt_version=PROMPT_VERSION,
+                        errors=[
+                            f"trial {trial_idx + 1}: {error}" for error in trial_errors
+                        ],
+                    )
+                    log.warning(
+                        "Cluster %s trial %d/%d failed source validation: %s",
+                        cluster_key,
+                        trial_idx + 1,
+                        n_trials,
+                        last_error,
+                    )
+                    continue
                 trial_parses.append(trial_parsed)
-                decision_result = result
+                trial_results.append(result)
                 remaining_trials = n_trials - (trial_idx + 1)
                 if (
                     adaptive_voting
@@ -394,7 +424,16 @@ def entity_verification(
                 continue
 
             # Majority pair-vote across trials; disagreement → abstain.
-            parsed = merge_entity_trial_partitions(trial_parses, cluster_names)
+            parsed = merge_entity_trial_partitions(
+                trial_parses,
+                cluster_names,
+                target_trials=1 if deterministic_resolution is not None else n_trials,
+            )
+            if trial_results:
+                representative_index = parsed["trial_stats"][
+                    "representative_trial_index"
+                ]
+                decision_result = trial_results[representative_index]
             demoted_here = (parsed.get("trial_stats") or {}).get("demoted_entities", 0)
             if demoted_here:
                 demotions_total += demoted_here
@@ -412,7 +451,13 @@ def entity_verification(
                     esc_parsed = parse_entity_verification_output(
                         esc_result.parsed or {}
                     )
-                    if "error" not in esc_parsed:
+                    if "error" in esc_parsed:
+                        escalation_errors = [esc_parsed["error"]]
+                    else:
+                        escalation_errors = validate_entity_membership(
+                            esc_parsed, records, cluster_names
+                        )
+                    if not escalation_errors:
                         parsed = esc_parsed
                         decision_result = esc_result
                         decision_model = escalation_config.model_path
@@ -423,10 +468,24 @@ def entity_verification(
                             escalation_config.model_path,
                         )
                     else:
+                        escalation_validation_rejections += 1
+                        record_validation_rejection(
+                            database,
+                            subject_key=cluster_key,
+                            pass_number=1,
+                            output_kind="entity_verification",
+                            source_hash=source_hash,
+                            input_hash=input_hash,
+                            requested_model=escalation_config.model_path,
+                            prompt_version=PROMPT_VERSION,
+                            errors=[
+                                f"escalation: {error}" for error in escalation_errors
+                            ],
+                        )
                         log.warning(
                             "Escalation output invalid for %s: %s — keeping primary",
                             cluster_key,
-                            esc_parsed["error"],
+                            "; ".join(escalation_errors),
                         )
                 else:
                     log.warning(
@@ -620,6 +679,12 @@ def entity_verification(
             "n_trials": MetadataValue.int(n_trials),
             "adaptive_voting": MetadataValue.bool(adaptive_voting),
             "llm_trial_calls": MetadataValue.int(trial_calls),
+            "trial_validation_rejections": MetadataValue.int(
+                trial_validation_rejections
+            ),
+            "escalation_validation_rejections": MetadataValue.int(
+                escalation_validation_rejections
+            ),
             "voting_early_stops": MetadataValue.int(voting_early_stops),
             "voting_calls_saved": MetadataValue.int(voting_calls_saved),
             "deterministic_clusters": MetadataValue.int(deterministic_clusters),
@@ -699,12 +764,10 @@ def _merge_relationships(existing, incoming) -> list[dict]:
 
 
 def _candidate_names(entity: dict) -> list[str]:
-    linked_records = entity.get("linked_records", {})
+    # The validated partition owns identity. Source citations must not add
+    # names outside the group that participated in the majority vote.
     return _merge_unique_strings(
-        [entity.get("canonical_name", "")],
         entity.get("member_names", []),
-        linked_records.get("corporate_entities", []),
-        linked_records.get("proceedings", []),
     )
 
 

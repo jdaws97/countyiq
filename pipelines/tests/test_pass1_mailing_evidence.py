@@ -20,4 +20,4 @@ def test_pass1_parcel_context_includes_mailing_address():
         ]
     )
     assert "Mailing address: 99 OAK ST YORK PA 17401" in text
-    assert CONTEXT_FORMAT_VERSION == "parcel-mailing-address-v2"
+    assert CONTEXT_FORMAT_VERSION == "registry-lookup-provenance-v3"

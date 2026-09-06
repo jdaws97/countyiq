@@ -3,10 +3,19 @@
 **Decision: qualify the best route on the user's existing OpenRouter account;
 do not switch every pass yet.** Direct Luna Batch remains an untested option
 requiring a separate account and key, not a prerequisite for this work. GLM 5.3 Flash is the stronger
-current alternative model, with entity verification the first pass to qualify.
-DeepSeek V4 Flash 0731 needs more work on provider routing, reasoning allocation
-and the output contract before it is a dependable default.
+current alternative model to investigate. The latest strict-schema ownership
+repeat still finds source errors in its explanations despite correct groupings.
+Luna is more consistent on the tested source-ID/citation contract, but shares a
+prompt-induced relationship defect. DeepSeek V4 Flash 0731 needs more work on
+provider routing, reasoning allocation and the output contract before it is a
+dependable default.
 This review does not approve a quality receipt or a backfill.
+
+**Correction to earlier Pass 1 results:** the shared evaluation configuration
+requested JSON-object output without the production strict schema. Settings were
+matched between models but did not fully match production. Preserve those results
+as historical diagnostics; the strict-schema repeat below supersedes their format
+comparison. No historical response, source or reference answer was changed.
 
 ## Controlled comparison
 
@@ -626,3 +635,69 @@ test excluded/intervening items and retain the original source ranges. Shorter
 selector serialization can be measured offline before spending. Qualification
 still requires fresh model outputs and source review; hand-selected ranges cannot
 stand in for either.
+
+## Pass 1 schema, voting and source provenance
+
+The corrected evaluation now sends the production Pass 1 schema and schema name.
+Twenty-seven calls cover the same three full owner components, with three trials
+per model/component, high reasoning, 16,384 output tokens, FP8 for the open models
+and no generation retries. The source, requests, settings, references and code
+were frozen before dispatch. These are previously reviewed sources, not an unseen
+holdout. All calls finished at 01:31:33 UTC on September 6, with no reserved spend.
+
+| Model | Nine-call cost | Source-ID/citation gate | Components reaching fixed quorum | Median / worst seconds |
+| --- | ---: | ---: | ---: | ---: |
+| Luna | $0.043352550 | 9/9 | 3/3 | 21.691 / 92.743 |
+| GLM 5.3 Flash | $0.018850500 | 8/9 | 3/3 | 58.310 / 124.546 |
+| DeepSeek 0731 | $0.011548110 | 2/9 | 1/3 | 85.323 / 309.725 |
+
+This run costs **$0.073751160**; cumulative review is now **249 calls /
+$0.430454702**. GLM used Reka, Luna used OpenAI, and DeepSeek used five
+OpenInference and four Baidu responses. These are billed costs, including failed
+outputs; one whitespace response was billed at zero despite a nonzero separately
+reported upstream cost. Provider and cache differences preclude treating these
+small totals as full-backfill unit prices.
+
+Every original output was reviewed against the complete source rows. The two
+valid DeepSeek responses are source-supported Baidu results for A-1/Otter Creek.
+Its other responses have missing/combined citations, corrupted identifiers or
+no final output; one Baidu call spends all 16,384 tokens on reasoning. The small,
+uncontrolled provider split does not establish the cause of those failures.
+
+GLM gets the company partitions right but sometimes attributes the abbreviated
+Otter Creek owner's Greenbriar Road address to the other records, which actually
+use Hilton Avenue. It also calls an LP an LLC in one trial and infers an
+operational relationship from a shared address/attention line in another. One
+Stoltzfus trial assigns Steven E another owner's parcel; the new source-owner
+gate rejects it. Repeated pair agreement does not fix any of this prose.
+
+All three models expose a shared prompt defect: it explicitly required a
+co-owner relationship from an individual name appearing inside a joint owner
+name. Those sources have different mailing addresses and no independent identity
+anchor. The prompt is corrected after the frozen run to describe the printed
+overlap without requiring that edge. It also distinguishes absent from conflicting
+middle initials, limits joint-owner legal-form claims, and forbids inferring
+adjacency from street numbers. This correction has not received a fresh paid
+test; the original prompts and outputs remain in the frozen archive.
+
+Production validation now rejects each invalid trial before voting or adaptive
+stopping. Failed calls cannot lower the configured majority threshold. Selected
+payloads retain their own provider metadata; invalid escalations preserve the
+valid primary result and receive separate rejection receipts. Record IDs must
+belong to the group's printed source names, canonical names must be group members,
+and relationship targets must be candidates. These checks establish provenance
+and voting integrity, not sentence-level factual accuracy.
+
+The API and evidence panel distinguish an imported business-dataset lookup miss,
+an actual registry row and an unavailable reference. No-match results no longer
+appear as official business records, and lookup/registry status does not imply
+current operations. Desktop and 390px mobile fixtures generated through the
+actual API receipt function verify the three labels and caveats. They do not
+constitute served production intelligence or customer sign-in verification.
+
+No model, quality receipt or full backfill is approved. The full review and
+unchanged original responses are in `fair-model-comparison/pass1-schema-stability/`,
+including `source-review.md`, `results.json`, `protocol.json`, `reference.json`
+and `frozen-input-files/`. The next ownership evaluation must test the corrected
+relationship instruction on varied sources and review the selected aggregate's
+prose as well as its partition. A successful ID/citation gate is insufficient.

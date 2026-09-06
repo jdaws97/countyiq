@@ -23,6 +23,36 @@ ENTITY_VERIFICATION_PROMPT_TEXT = (
 )
 
 
+def test_corporate_lookup_miss_is_not_presented_as_a_registration_record():
+    records = {
+        "corporate_entities": [
+            {
+                "entity_name": "MISSING LLC",
+                "status": "not_found_in_current_dos_dataset",
+            },
+            {
+                "entity_name": "REGISTERED LLC",
+                "entity_number": "123",
+                "status": "Active",
+                "office_address": "10 MAIN ST",
+            },
+        ]
+    }
+    prompt = build_entity_cluster_prompt(records)
+    lookup_line = next(line for line in prompt.splitlines() if "MISSING LLC" in line)
+    registration_line = next(
+        line for line in prompt.splitlines() if "REGISTERED LLC" in line
+    )
+
+    assert "corporate_entities:MISSING LLC" in lookup_line
+    assert "CountyIQ lookup" in lookup_line
+    assert "not a registration record" in lookup_line
+    assert "(#" not in lookup_line
+    assert "(#123)" in registration_line
+    assert "Status: Active" in registration_line
+    assert "Office: 10 MAIN ST" in registration_line
+
+
 def test_deterministic_tier_accepts_only_anchored_legal_name_variants():
     records = {
         "candidate_names": ["ACME, L.L.C.", "ACME LLC"],
@@ -220,7 +250,7 @@ class TestBuildEntityClusterPrompt:
         assert "PARCEL RECORDS:" in result
         assert "TAX CLAIM RECORDS:" not in result
         assert "PLCB LICENSES:" not in result
-        assert "PA DOS CORPORATE RECORDS:" not in result
+        assert "PA DOS CORPORATE RECORDS AND COUNTYIQ LOOKUP RESULTS:" not in result
         assert "PUBLIC PROCEEDINGS:" not in result
 
     def test_all_sections_present_with_full_data(self, sample_records):
@@ -228,7 +258,7 @@ class TestBuildEntityClusterPrompt:
         assert "PARCEL RECORDS:" in result
         assert "TAX CLAIM RECORDS:" in result
         assert "PLCB LICENSES:" in result
-        assert "PA DOS CORPORATE RECORDS:" in result
+        assert "PA DOS CORPORATE RECORDS AND COUNTYIQ LOOKUP RESULTS:" in result
         assert "PUBLIC PROCEEDINGS:" in result
 
     def test_empty_records_returns_no_records(self):

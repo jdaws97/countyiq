@@ -400,23 +400,13 @@ _LINKED_RECORD_KEYS = {
     "proceedings": ("proceedings", "applicant_name"),
 }
 
-
-def _known_entity_names(records: dict, cluster_names: Iterable[str]) -> set[str]:
-    names = {str(name).strip() for name in cluster_names if str(name).strip()}
-    fields = {
-        "parcels": ("owner_full", "prev_owner"),
-        "tax_claims": ("owner_name",),
-        "plcb_licenses": ("licensee", "premises_owner"),
-        "corporate_entities": ("entity_name",),
-        "proceedings": ("applicant_name",),
-    }
-    for source, source_fields in fields.items():
-        for row in records.get(source, []) or []:
-            for field in source_fields:
-                value = row.get(field) if isinstance(row, dict) else None
-                if isinstance(value, str) and value.strip():
-                    names.add(value.strip())
-    return names
+_LINKED_RECORD_OWNER_FIELDS = {
+    "parcels": ("owner_full",),
+    "tax_claims": ("owner_name",),
+    "plcb_licenses": ("licensee", "premises_owner"),
+    "corporate_entities": ("entity_name",),
+    "proceedings": ("applicant_name",),
+}
 
 
 def validate_entity_membership(
@@ -424,26 +414,28 @@ def validate_entity_membership(
     records: dict,
     cluster_names: list[str],
 ) -> list[str]:
-    """Reject fabricated identifiers and overlapping entity partitions."""
+    """Reject fabricated identifiers, misassigned records and overlapping partitions."""
 
     errors: list[str] = []
-    known_names = _known_entity_names(records, cluster_names)
     cluster_set = {name.strip() for name in cluster_names if name and name.strip()}
     claimed_by: dict[str, int] = {}
     accounted_for: set[str] = set()
-    entity_canonicals = {
-        str(entity.get("canonical_name") or "").strip()
-        for entity in parsed.get("entities", [])
-        if isinstance(entity, dict)
-    }
 
     allowed_by_key: dict[str, set[str]] = {}
+    record_names_by_key: dict[str, dict[str, set[str]]] = {}
     for key, (source, field) in _LINKED_RECORD_KEYS.items():
-        allowed_by_key[key] = {
-            str(row.get(field)).strip()
-            for row in records.get(source, []) or []
-            if isinstance(row, dict) and row.get(field) is not None
-        }
+        record_names: dict[str, set[str]] = {}
+        for row in records.get(source, []) or []:
+            if not isinstance(row, dict) or row.get(field) is None:
+                continue
+            identifier = str(row[field]).strip()
+            names = record_names.setdefault(identifier, set())
+            for owner_field in _LINKED_RECORD_OWNER_FIELDS[key]:
+                value = row.get(owner_field)
+                if isinstance(value, str) and value.strip():
+                    names.add(value.strip())
+        allowed_by_key[key] = set(record_names)
+        record_names_by_key[key] = record_names
     allowed_evidence_refs = {"trial:voting"}
     allowed_evidence_refs.update(f"candidate:{name}" for name in cluster_set)
     for key, identifiers in allowed_by_key.items():
@@ -468,9 +460,9 @@ def validate_entity_membership(
 
     for entity_index, entity in enumerate(parsed.get("entities", [])):
         canonical = str(entity.get("canonical_name") or "").strip()
-        if not canonical or canonical not in known_names:
+        if not canonical or canonical not in cluster_set:
             errors.append(
-                f"entity {entity_index} canonical_name was not present in the input"
+                f"entity {entity_index} canonical_name was not in the candidate cluster"
             )
         validate_cited_text(entity.get("reasoning"), f"entity {entity_index} reasoning")
 
@@ -478,6 +470,11 @@ def validate_entity_membership(
         if not isinstance(members, list) or not members:
             errors.append(f"entity {entity_index} has no explicit member_names")
             members = []
+        member_set = {member for member in members if isinstance(member, str)}
+        if canonical not in member_set:
+            errors.append(
+                f"entity {entity_index} canonical_name is not one of its member_names"
+            )
         for member in members:
             if not isinstance(member, str) or member not in cluster_set:
                 errors.append(
@@ -508,22 +505,28 @@ def validate_entity_membership(
                     f"entity {entity_index} linked_records.{key} is not a list"
                 )
                 continue
-            fabricated = {
-                str(value).strip() for value in values if str(value).strip()
-            } - allowed
+            identifiers = {str(value).strip() for value in values if str(value).strip()}
+            fabricated = identifiers - allowed
             if fabricated:
                 errors.append(
                     f"entity {entity_index} linked_records.{key} contains identifiers absent from input: {sorted(fabricated)}"
                 )
+            misassigned = {
+                identifier
+                for identifier in identifiers & allowed
+                if not record_names_by_key[key][identifier] & member_set
+            }
+            if misassigned:
+                errors.append(
+                    f"entity {entity_index} linked_records.{key} has no source-name "
+                    f"match to its member_names: {sorted(misassigned)}"
+                )
 
         for rel in entity.get("relationships", []) or []:
             target = rel.get("related_entity") if isinstance(rel, dict) else None
-            if (
-                not isinstance(target, str)
-                or target.strip() not in known_names | entity_canonicals
-            ):
+            if not isinstance(target, str) or target not in cluster_set:
                 errors.append(
-                    f"entity {entity_index} relationship target was not present in the input"
+                    f"entity {entity_index} relationship target was not in the candidate cluster"
                 )
             if isinstance(rel, dict):
                 validate_cited_text(

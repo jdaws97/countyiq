@@ -330,12 +330,15 @@ You will be given records from multiple data sources that may belong to the same
 TASKS:
 1. GROUP records that belong to the same real-world entity (person or organization). Consider name variations, abbreviations, and common patterns (e.g., "SMITH JOHN A" and "J A SMITH HOLDINGS LLC" may be related).
 2. IDENTIFY relationship structures — e.g., an individual who controls an LLC, or multiple LLCs sharing an office address with the same registered agent.
-3. FLAG any matches you REJECT — cases where similar names are clearly different entities.
+3. FLAG proposed matches the records do not support, and state unresolved identity questions without claiming the records prove distinct people or businesses.
 
 Every candidate name must be accounted for: place it in exactly one entity's
 member_names, or name it in rejected_matches/abstentions. Copy member_names and
 all linked-record identifiers exactly from the input. Never invent or normalize
 an identifier. canonical_name must also be a name present in the input.
+Choose canonical_name from that entity's member_names. Link only records whose
+printed owner, licensee, premises owner, entity name, or applicant belongs to
+those members; another candidate's valid identifier is not evidence for this group.
 Every reasoning field, relationship evidence string, and rejection/abstention
 reason must cite one or more printed refs inline as
 [Evidence: group:identifier]; end each factual sentence with its marker.
@@ -360,14 +363,27 @@ RULES FOR NAMES, RELATIONSHIPS, AND CITATIONS:
   under abstentions with the conflict stated.
 - An individual owner name and a joint owner name that includes that
   individual (for example "SMITH KAREN E" and "SMITH PERRY S & KAREN E") are
-  separate entities: the owner of record differs. Keep them in separate
-  entities, do not abstain on the pair, and link them with a relationship of
-  type co_owner_of from the individual to the joint owner, citing the parcel
-  records that show each name. The same applies to a person and a joint
-  name that pairs them with a different co-owner.
+  separate owner-of-record groups. Keep their records separate. A repeated
+  name alone does not establish that the individually recorded owner is the
+  person named in the joint record; do not emit co_owner_of without independent
+  source evidence establishing that identity and the co-ownership role.
+  Describe the printed-name overlap and unresolved identity in cited reasoning.
+  A joint owner name alone does not establish a partnership or a single person;
+  use entity_type unknown unless the source establishes its legal form.
+- A missing middle initial is not a conflicting middle initial. Different names
+  or addresses can leave a proposed merge unsupported without proving that the
+  records identify distinct people. State that limit when rejecting a merge.
 - Reasoning states what the records show. Do not add interpretation such as
   "consistent with", "suggesting", or motive; if a fact is not in a record,
-  say the records do not establish it.
+  say the records do not establish it. Consecutive street numbers do not establish
+  parcel adjacency. Cite each address against the record that actually prints it;
+  do not attribute one member's address to every record in a group.
+- A CountyIQ registry lookup with not_found_in_current_dos_dataset means no
+  matching row was found in that dataset. It is not a corporate registration,
+  proof of nonexistence or proof of a distinct legal entity. A row marked
+  present_in_current_dos_dataset does not establish current operating status.
+  An attention line or a title inside an owner name is not independent evidence
+  of an officer, registered agent, beneficial owner, or controlling relationship.
 
 OUTPUT FORMAT:
 {{
@@ -432,7 +448,7 @@ ENTITY_VERIFICATION_SYSTEM_PROMPT = (
 )
 
 
-CONTEXT_FORMAT_VERSION = "parcel-mailing-address-v2"
+CONTEXT_FORMAT_VERSION = "registry-lookup-provenance-v3"
 
 
 PROMPT_VERSION = hashlib.sha256(
@@ -536,6 +552,14 @@ def _format_corporate(entities: list[dict]) -> str:
     lines = []
     for e in entities:
         name = _safe_str(e.get("entity_name"))
+        if e.get("status") == "not_found_in_current_dos_dataset":
+            lines.append(
+                f"- Evidence ref: corporate_entities:{name} | "
+                f"CountyIQ lookup for {name}: no matching row found in the "
+                "current PA DOS dataset. This is a lookup result, not a "
+                "registration record or proof that an entity does not exist."
+            )
+            continue
         number = _safe_str(e.get("entity_number"))
         status = _safe_str(e.get("status"))
         formed = _safe_str(e.get("formation_date"))
@@ -617,7 +641,9 @@ def build_entity_cluster_prompt(records: dict) -> str:
     # Corporate entities — conditional
     corp_text = _format_corporate(records.get("corporate_entities", []))
     if corp_text:
-        sections.append(f"PA DOS CORPORATE RECORDS:\n{corp_text}")
+        sections.append(
+            f"PA DOS CORPORATE RECORDS AND COUNTYIQ LOOKUP RESULTS:\n{corp_text}"
+        )
 
     # Proceedings — conditional
     proc_text = _format_proceedings(records.get("proceedings", []))
@@ -799,7 +825,7 @@ def entity_trial_majority_decided(
     verdicts = [_trial_pair_verdicts(t, cluster_names) for t in trials_parsed]
     all_pairs = sorted(verdicts[0].keys()) if verdicts else []
     if not all_pairs:
-        return True
+        return len(trials_parsed) > target_trials // 2
 
     majority_threshold = target_trials // 2
     for pair in all_pairs:
@@ -813,6 +839,8 @@ def entity_trial_majority_decided(
 def merge_entity_trial_partitions(
     trials_parsed: list[dict],
     cluster_names: list[str],
+    *,
+    target_trials: int | None = None,
 ) -> dict:
     """Aggregate N parsed Pass 1 runs by majority pair voting.
 
@@ -821,16 +849,34 @@ def merge_entity_trial_partitions(
     contain a pair WITHOUT strict-majority support is demoted to an
     abstention. No merge beyond what a trial itself proposed is created.
 
-    Returns a parsed-output-shaped dict with an extra ``trial_stats`` key:
-    ``{"n_trials", "pair_agreement", "demoted_entities"}``.
+    Only source-validated trials may be supplied. Production passes the
+    configured trial count so failed calls cannot lower the merge threshold.
+    A majority of that configured count must be valid before publication.
+    Omitting target_trials retains the historical offline replay behavior.
+
+    The representative index refers to this list of validated trials, allowing
+    callers to retain the provider metadata of the payload actually selected.
     """
     n = len(trials_parsed)
+    target = n if target_trials is None else target_trials
+    if isinstance(target, bool) or not isinstance(target, int) or target < 1:
+        raise ValueError("target_trials must be a positive integer")
+    if n > target:
+        raise ValueError("Validated trials exceed the configured trial count")
+    required = target // 2 + 1
+    if n < required:
+        raise ValueError(
+            f"Insufficient validated trials: {n} received; "
+            f"{required} required for {target} configured trials"
+        )
     if n == 1:
         result = dict(trials_parsed[0])
         result["trial_stats"] = {
             "n_trials": 1,
             "pair_agreement": 1.0,
             "demoted_entities": 0,
+            "target_trials": target,
+            "representative_trial_index": 0,
         }
         return result
 
@@ -840,7 +886,7 @@ def merge_entity_trial_partitions(
     majority: dict[tuple[str, str], bool] = {}
     for pair in all_pairs:
         same_votes = sum(1 for v in verdicts if v.get(pair, False))
-        majority[pair] = same_votes * 2 > n  # strict majority
+        majority[pair] = same_votes * 2 > target
 
     # Representative trial = the one most consistent with the majority.
     def _agreement(v: dict) -> float:
@@ -870,7 +916,8 @@ def merge_entity_trial_partitions(
                     "names": members,
                     "reason": (
                         f"cross-trial disagreement: {len(unsupported)} pair(s) in this "
-                        f"grouping lacked majority support across {n} trials "
+                        f"grouping lacked majority support across {target} configured "
+                        f"trials ({n} validated) "
                         "[Evidence: trial:voting]"
                     ),
                 }
@@ -887,6 +934,8 @@ def merge_entity_trial_partitions(
             "n_trials": n,
             "pair_agreement": round(sum(agreements) / n, 3) if n else 1.0,
             "demoted_entities": len(demoted),
+            "target_trials": target,
+            "representative_trial_index": rep_idx,
         },
     }
     return result

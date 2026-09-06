@@ -81,6 +81,12 @@ function displayValue(value: unknown): string {
       .map(([key, item]) => `${formatLabel(key)}: ${displayValue(item)}`)
       .join(' · ')
   }
+  if (value === 'not_found_in_current_dos_dataset') {
+    return 'No matching row in the imported Pennsylvania business dataset'
+  }
+  if (value === 'present_in_current_dos_dataset') {
+    return 'Found in the imported Pennsylvania business dataset'
+  }
   return String(value)
 }
 

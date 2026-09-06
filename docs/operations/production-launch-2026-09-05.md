@@ -371,3 +371,35 @@ frontend build. The existing map-bundle size warning remains. This source cleanu
 does not change model settings, enable a paid pass or require a production
 deployment; the live revision recorded above remains current. Local evidence is
 under `output/readability-2026-09-05/`.
+
+## Owner verification and business-source provenance
+
+Pass 1 now validates every trial before it can vote, fixes the quorum to the
+configured trial count, and preserves the selected payload's provider metadata.
+Unknown or misassigned source IDs cannot participate in identity decisions.
+Invalid escalation outputs retain the valid primary decision and are separately
+recorded. Relationship targets must be candidates, and source references cannot
+silently add owner names to the selected group.
+
+The [strict-schema comparison](../research/model-comparison-2026-09-05.md#pass-1-schema-voting-and-source-provenance)
+corrects the earlier evaluation's missing production schema. All 27 calls are
+terminal, costing $0.073751160. Correct pair groupings still contain unsupported
+prose and relationships; no model is qualified. A prompt that required co-owner
+edges from overlapping names was corrected after the frozen run, preserving the
+tested code and original responses. That correction requires fresh source review
+before any quality receipt can be approved.
+
+The customer evidence panel now distinguishes a business-dataset lookup miss,
+a registry record and a missing source reference. Desktop and mobile checks used
+explicitly synthetic profiles generated through the current API receipt code;
+they verify source labels and caveats without claiming a production intelligence
+or authenticated-customer test. Browser-only intercepts were removed afterward.
+
+Validation passes: 1,500 pipeline unit/regression tests, all 124 API unit tests,
+the Dagster definitions smoke check, and the targeted database test that removes
+stale entity-cluster membership. Frontend TypeScript, ESLint and the pinned
+formatters pass. The new candidate-target rule also caught an outdated test
+expectation; the full passing run includes its corrected expected rejection.
+Evidence is under `fair-model-comparison/pass1-schema-stability/` and
+`output/playwright/pass1-provenance/`. This review does not enable a paid pass,
+approve model quality or authorize full backfill.

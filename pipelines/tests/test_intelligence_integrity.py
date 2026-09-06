@@ -2,6 +2,8 @@
 
 from unittest.mock import Mock
 
+import pytest
+
 from countyiq.lib.intelligence_integrity import (
     content_hash,
     inference_input_hash,
@@ -129,6 +131,39 @@ def test_identity_membership_accepts_exact_partition() -> None:
     )
 
 
+@pytest.mark.parametrize("candidate_target", [False, True])
+def test_relationship_targets_require_candidate_membership(candidate_target) -> None:
+    records = _entity_records()
+    records["parcels"][0]["prev_owner"] = "FORMER OWNER"
+    parsed = _valid_entity_partition()
+    parsed["entities"][0]["relationships"] = [
+        {
+            "related_entity": "FORMER OWNER",
+            "relationship_type": "shares_address_with",
+            "evidence": "The source prints this name [Evidence: parcels:P1].",
+        }
+    ]
+    candidates = ["ACME LLC", "ACME HOLDINGS"]
+    if candidate_target:
+        candidates.append("FORMER OWNER")
+        parsed["abstentions"] = [
+            {
+                "names": ["FORMER OWNER"],
+                "reason": "Its identity is unresolved [Evidence: parcels:P1].",
+            }
+        ]
+
+    errors = validate_entity_membership(parsed, records, candidates)
+
+    if candidate_target:
+        # This gate establishes name provenance, not relationship semantics.
+        assert errors == []
+    else:
+        assert errors == [
+            "entity 0 relationship target was not in the candidate cluster"
+        ]
+
+
 def test_identity_membership_rejects_fabricated_id_and_overlap() -> None:
     parsed = _valid_entity_partition()
     parsed["entities"][0]["linked_records"]["parcels"] = ["MADE-UP"]
@@ -162,6 +197,84 @@ def test_identity_membership_requires_complete_accounting() -> None:
         parsed, _entity_records(), ["ACME LLC", "ACME HOLDINGS"]
     )
     assert any("not accounted for" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("group", "record", "identifier"),
+    [
+        ("parcels", {"pidn": "OTHER", "owner_full": "THIRD LLC"}, "OTHER"),
+        ("tax_claims", {"pidn": "OTHER", "owner_name": "THIRD LLC"}, "OTHER"),
+        (
+            "plcb_licenses",
+            {"license_number": "OTHER", "licensee": "THIRD LLC"},
+            "OTHER",
+        ),
+        ("corporate_entities", {"entity_name": "THIRD LLC"}, "THIRD LLC"),
+        ("proceedings", {"applicant_name": "THIRD LLC"}, "THIRD LLC"),
+    ],
+)
+def test_identity_membership_rejects_real_record_belonging_to_another_group(
+    group, record, identifier
+) -> None:
+    records = _entity_records()
+    records[group].append(record)
+    parsed = _valid_entity_partition()
+    parsed["entities"][0]["linked_records"][group].append(identifier)
+    parsed["abstentions"] = [
+        {
+            "names": ["THIRD LLC"],
+            "reason": "Its identity is unresolved [Evidence: candidate:THIRD LLC].",
+        }
+    ]
+
+    errors = validate_entity_membership(
+        parsed, records, ["ACME LLC", "ACME HOLDINGS", "THIRD LLC"]
+    )
+
+    assert len(errors) == 1
+    assert f"linked_records.{group} has no source-name match" in errors[0]
+    assert identifier in errors[0]
+
+
+def test_identity_membership_does_not_assign_a_parcel_through_previous_owner() -> None:
+    records = _entity_records()
+    records["parcels"] = [
+        {"pidn": "P1", "owner_full": "NEW OWNER", "prev_owner": "ACME LLC"}
+    ]
+    errors = validate_entity_membership(
+        _valid_entity_partition(), records, ["ACME LLC", "ACME HOLDINGS"]
+    )
+    assert any("linked_records.parcels has no source-name match" in e for e in errors)
+
+
+def test_identity_membership_accepts_license_premises_owner_link() -> None:
+    records = _entity_records()
+    records["plcb_licenses"] = [
+        {
+            "license_number": "123",
+            "licensee": "TENANT LLC",
+            "premises_owner": "ACME LLC",
+        }
+    ]
+    parsed = _valid_entity_partition()
+    parsed["entities"][0]["linked_records"]["plcb_licenses"] = ["123"]
+
+    assert (
+        validate_entity_membership(parsed, records, ["ACME LLC", "ACME HOLDINGS"]) == []
+    )
+
+
+def test_identity_canonical_cannot_be_a_known_name_outside_its_group() -> None:
+    records = _entity_records()
+    records["parcels"][0]["prev_owner"] = "PREVIOUS OWNER"
+    parsed = _valid_entity_partition()
+    parsed["entities"][0]["canonical_name"] = "PREVIOUS OWNER"
+
+    errors = validate_entity_membership(parsed, records, ["ACME LLC", "ACME HOLDINGS"])
+    assert errors == [
+        "entity 0 canonical_name was not in the candidate cluster",
+        "entity 0 canonical_name is not one of its member_names",
+    ]
 
 
 def _signal_validations() -> list[dict]:

@@ -274,23 +274,65 @@ def _fetch_entity_verification_evidence(
 
     for group, identifiers in linked_sources.items():
         for identifier in identifiers:
-            record = (
-                parcel_by_id.get(identifier) or corporate_by_name.get(identifier) or {}
-            )
+            if group == "parcels":
+                record = parcel_by_id.get(identifier, {})
+            elif group == "corporate_entities":
+                record = corporate_by_name.get(identifier, {})
+            else:
+                record = {}
             citation_key = f"evidence:{group}:{identifier}"
+            method = "CountyIQ used this exact governed record identifier in the entity-verification decision."
+            caveat = (
+                None
+                if record.get("source_url")
+                else "Row-level source display is unavailable under the current source-use policy."
+            )
             if group == "parcels":
                 label = f"County parcel {identifier}"
                 internal_url = f"/property/{identifier}"
                 source_kind = "official_parcel_record"
+                caveat = None
                 details = {
                     key: record.get(key)
                     for key in ("propadr", "municipality")
                     if record.get(key) is not None
                 }
             elif group == "corporate_entities":
-                label = f"Pennsylvania business record · {identifier}"
                 internal_url = None
-                source_kind = "official_business_record"
+                status = record.get("status")
+                if not record:
+                    label = f"Business record reference · {identifier}"
+                    source_kind = "governed_record_reference"
+                    method = (
+                        "CountyIQ retained this business name from the entity-verification "
+                        "decision, but the current source row was unavailable."
+                    )
+                    caveat = (
+                        "The current source row is unavailable. This reference does not "
+                        "establish that the business is registered or operating."
+                    )
+                elif status == "not_found_in_current_dos_dataset":
+                    label = f"CountyIQ business lookup · {identifier}"
+                    source_kind = "dataset_lookup_result"
+                    method = (
+                        "CountyIQ performed a name lookup in the imported Pennsylvania "
+                        "business dataset."
+                    )
+                    caveat = (
+                        "No matching row was found in the imported dataset. This does not "
+                        "establish whether the business is registered or operating."
+                    )
+                else:
+                    label = f"Pennsylvania business record · {identifier}"
+                    source_kind = "official_business_record"
+                    method = (
+                        "CountyIQ used this exact governed business record identifier in "
+                        "the entity-verification decision."
+                    )
+                    caveat = (
+                        "Pennsylvania registry status does not establish current business "
+                        "operations."
+                    )
                 details = {
                     key: record.get(key)
                     for key in (
@@ -317,12 +359,8 @@ def _fetch_entity_verification_evidence(
                 details=details,
                 effective_at=record.get("valid_from"),
                 observed_at=verified_at,
-                method="CountyIQ used this exact governed record identifier in the entity-verification decision.",
-                caveat=(
-                    None
-                    if record.get("source_url") or internal_url
-                    else "Row-level source display is unavailable under the current source-use policy."
-                ),
+                method=method,
+                caveat=caveat,
             )
             serialize_temporal_fields(item, "effective_at", "observed_at")
             items.append(item)

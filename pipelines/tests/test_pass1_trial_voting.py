@@ -5,6 +5,8 @@ voting — majority pair verdicts win, disagreement demotes to abstention —
 plus the COUNTYIQ_PASS1_ESCALATION_MODEL cascade from docs/open-items.md.
 """
 
+import pytest
+
 from countyiq.lib.intelligence_common import fetch_prior_pass_hashes
 from countyiq.lib.llm_harness import HarnessConfig
 from countyiq.lib.pass_llm_config import resolve_escalation_config
@@ -41,6 +43,35 @@ NAMES = ["ALPHA LLC", "BETA LLC", "GAMMA LLC"]
 
 
 class TestMergeEntityTrialPartitions:
+    @pytest.mark.parametrize(("valid", "target"), [(1, 3), (2, 5)])
+    def test_failed_trials_cannot_reduce_publication_quorum(self, valid, target):
+        grouped = _parsed([_entity("ALPHA LLC", corporate=["BETA LLC"])])
+        with pytest.raises(ValueError, match="Insufficient validated trials"):
+            merge_entity_trial_partitions(
+                [grouped] * valid, ["ALPHA LLC", "BETA LLC"], target_trials=target
+            )
+
+    def test_failed_trials_cannot_turn_two_votes_into_five_trial_majority(self):
+        grouped = _parsed([_entity("ALPHA LLC", corporate=["BETA LLC"])])
+        split = _parsed([_entity("ALPHA LLC"), _entity("BETA LLC")])
+        result = merge_entity_trial_partitions(
+            [grouped, grouped, split],
+            ["ALPHA LLC", "BETA LLC"],
+            target_trials=5,
+        )
+        assert result["entities"] == split["entities"]
+        assert result["trial_stats"]["representative_trial_index"] == 2
+        assert result["trial_stats"]["target_trials"] == 5
+        assert result["trial_stats"]["n_trials"] == 3
+
+    def test_three_valid_merge_votes_are_enough_for_five_trial_quorum(self):
+        grouped = _parsed([_entity("ALPHA LLC", corporate=["BETA LLC"])])
+        result = merge_entity_trial_partitions(
+            [grouped] * 3, ["ALPHA LLC", "BETA LLC"], target_trials=5
+        )
+        assert result["entities"] == grouped["entities"]
+        assert result["trial_stats"]["target_trials"] == 5
+
     def test_single_trial_passthrough(self):
         t = _parsed([_entity("ALPHA LLC", corporate=["BETA LLC"])])
         merged = merge_entity_trial_partitions([t], NAMES)
@@ -138,7 +169,8 @@ class TestEntityTrialMajorityDecided:
 
     def test_single_name_cluster_has_no_ambiguous_pairs(self):
         one = _parsed([_entity("ALPHA LLC")])
-        assert entity_trial_majority_decided([one], ["ALPHA LLC"], target_trials=3)
+        assert not entity_trial_majority_decided([one], ["ALPHA LLC"], target_trials=3)
+        assert entity_trial_majority_decided([one, one], ["ALPHA LLC"], target_trials=3)
 
 
 class TestResolveEscalationConfig:

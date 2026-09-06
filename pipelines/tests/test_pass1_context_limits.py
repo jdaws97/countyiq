@@ -98,7 +98,12 @@ def _run_asset(monkeypatch, pairs, *, prompt, prior=None):
         lambda output: {"entities": [], "rejected_matches": [], "abstentions": []},
     )
     monkeypatch.setattr(
-        pass1, "merge_entity_trial_partitions", lambda parsed, names: parsed[0]
+        pass1,
+        "merge_entity_trial_partitions",
+        lambda parsed, names, **kwargs: {
+            **parsed[0],
+            "trial_stats": {"representative_trial_index": 0},
+        },
     )
     monkeypatch.setattr(pass1, "validate_entity_membership", lambda *args: [])
     monkeypatch.setattr(

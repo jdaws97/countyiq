@@ -9,6 +9,7 @@ from countyiq.lib.llm_harness import HarnessResult
 from countyiq.lib.pass1_entity_verification import ENTITY_VERIFICATION_SYSTEM_PROMPT
 from countyiq.lib.pass2_batched_validation import BATCHED_VALIDATION_SYSTEM_PROMPT
 from countyiq.lib.pass_schemas import (
+    PASS1_ENTITY_VERIFICATION_SCHEMA,
     PASS2_BATCHED_VALIDATION_SCHEMA,
     PASS3_BRIEF_SCHEMA,
 )
@@ -65,6 +66,8 @@ def test_pass1_eval_uses_production_system_and_effort():
         "openai/gpt-5.6-luna", 1, archive_label="test"
     )
     assert config.system_prompt == ENTITY_VERIFICATION_SYSTEM_PROMPT
+    assert config.json_schema == PASS1_ENTITY_VERIFICATION_SCHEMA
+    assert config.schema_name == "pass1_entity_verification"
     assert config.reasoning_effort == "high"
     assert config.thinking is True
 
