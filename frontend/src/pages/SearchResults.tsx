@@ -27,7 +27,7 @@ function matchStrength(score: number) {
     return 'Exact'
   }
   if (score >= 0.65) {
-    return 'Strong'
+    return 'Similar'
   }
   return 'Possible'
 }
@@ -97,7 +97,7 @@ export default function SearchResults() {
             marginBottom: 4,
           }}
         >
-          Search Results
+          Search
         </h1>
         <form
           onSubmit={handleSearch}
@@ -171,12 +171,13 @@ export default function SearchResults() {
               display: 'inline-block',
             }}
           >
-            AI: {description}
+            {description}
           </p>
         )}
       </div>
 
       <CaseSearchMatches query={query} />
+      {!loading && results.length > 0 && <h2>Property & place matches</h2>}
       {/* Results */}
       {/* Aggregate result */}
       {!loading && mode === 'aggregate' && aggValue && (
@@ -241,7 +242,7 @@ export default function SearchResults() {
               marginBottom: 8,
             }}
           >
-            No parcels or places found for "{query}"
+            No matching property addresses for "{query}"
           </strong>
           <span style={{ fontSize: 14, lineHeight: 1.6 }}>
             Try an owner name in either order, a street address with or without the ZIP code, or a

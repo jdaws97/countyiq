@@ -29,6 +29,7 @@ export interface OwnerParcel {
   saledt: string | null
   price: NumericLike
   school_dis: string | null
+  municipality: string | null
 }
 
 export interface DelinquencyRecord {
@@ -338,6 +339,22 @@ export interface ParcelBrief {
   generated_at: string | null
 }
 
+export interface RecordBrief {
+  method: 'source_records'
+  version: number
+  headline: string
+  findings: {
+    signal_key: string
+    category: 'activity' | 'constraint' | 'context'
+    title: string
+    text: string
+    caveat: string | null
+  }[]
+  questions: string[]
+  signal_count: number
+  source_updated_at: string | null
+}
+
 export interface CountyNarrative {
   narrative_id: number
   title: string
@@ -394,6 +411,41 @@ export interface EvidenceItem {
   method: string
   caveat: string | null
   confidence: number | null
+}
+
+export interface RecordDate {
+  date: string | null
+  time: string | null
+  label: string
+  status: 'proposed' | 'scheduled' | 'expected' | 'deadline' | 'historical'
+  quote: string
+  source_id: string
+}
+
+export interface RecordClassification {
+  event_type: string
+  record_status:
+    | 'proposed'
+    | 'scheduled'
+    | 'recommendation'
+    | 'decision'
+    | 'update'
+    | 'withdrawn'
+    | 'removed'
+    | 'unknown'
+  matter_category: string
+  decision_scope: string | null
+  dates: RecordDate[]
+}
+
+export interface SourceExplanationData {
+  headline: string
+  summary: string
+  next_step: string | null
+  citation_evidence: EvidenceItem[]
+  generated_at: string
+  model: string | null
+  record: RecordClassification | null
 }
 
 export type IntelligenceSource = EvidenceItem
@@ -496,10 +548,61 @@ export interface PropertyReport {
   zoning?: ZoningInfo | null
   development_momentum: DevelopmentMomentum | null
   parcel_brief: ParcelBrief | null
+  record_brief: RecordBrief | null
   related_narratives: CountyNarrative[]
   intelligence_summary: IntelligenceSummary | null
   linked_proceedings: LinkedProceeding[]
   evidence: EvidenceItem[]
+  municipal_evidence: MunicipalEvidenceResponse
+  source_explanation?: SourceExplanationData | null
+}
+
+export interface MunicipalEvidenceCoverage {
+  total_documents: number
+  eligible_documents: number
+  reviewed_documents: number
+  awaiting_read_documents: number
+  review_required_documents: number
+  blocked_documents: number
+  future_documents: number
+  failed_documents: number
+  documents_with_passages: number
+  latest_meeting_date: string | null
+  latest_reviewed_meeting_date: string | null
+  last_source_observed_at: string | null
+  last_reviewed_at: string | null
+}
+
+export interface MunicipalEvidencePassage {
+  text: string
+  page: number | null
+}
+
+export interface MunicipalEvidencePropertyMatch {
+  pidn: string
+  address: string | null
+  match_method: 'pidn' | 'address'
+}
+
+export interface MunicipalEvidenceCard {
+  id: string
+  event_key: string
+  title: string
+  body_name: string
+  meeting_date: string
+  proceeding_type: string
+  document_url: string
+  passages: MunicipalEvidencePassage[]
+  source_text_sha256: string
+  matched_properties: MunicipalEvidencePropertyMatch[]
+  observed_at: string
+  explanation?: SourceExplanationData | null
+}
+
+export interface MunicipalEvidenceResponse {
+  cards: MunicipalEvidenceCard[]
+  more: boolean
+  coverage: MunicipalEvidenceCoverage
 }
 
 export interface MunicipalityProfile {

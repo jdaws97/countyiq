@@ -1,0 +1,211 @@
+.municipal-evidence {
+  margin-bottom: 24px;
+}
+
+.municipal-evidence-heading {
+  margin-bottom: 14px;
+}
+
+.municipal-evidence-heading h2,
+.municipal-evidence-heading p,
+.municipal-evidence-card h3 {
+  margin: 0;
+}
+
+.municipal-evidence-heading h2 {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.municipal-evidence-heading p,
+.municipal-evidence-status,
+.municipal-evidence-more {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.municipal-evidence-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.municipal-evidence-status button,
+.municipal-evidence-more button {
+  padding: 3px 8px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.municipal-evidence-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.municipal-evidence-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.municipal-evidence-card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.municipal-evidence-meta,
+.municipal-evidence-type,
+.municipal-evidence-page {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.municipal-evidence-meta {
+  margin-bottom: 5px;
+  color: var(--text-muted);
+}
+
+.municipal-evidence-card h3 {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.municipal-evidence-type {
+  flex: 0 0 auto;
+  padding: 3px 5px;
+  color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-cyan) 12%, transparent);
+  border-radius: 3px;
+}
+
+.municipal-evidence-preview,
+.municipal-evidence-passages blockquote {
+  margin: 12px 0 0;
+  padding-left: 10px;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.municipal-evidence-passages {
+  margin-top: 10px;
+}
+
+.municipal-evidence-card .source-explanation {
+  margin-top: 12px;
+  margin-bottom: 0;
+  padding: 12px;
+}
+
+.municipal-evidence-card .source-explanation h3 {
+  font-size: 15px;
+}
+
+.municipal-evidence-receipts {
+  margin-top: 10px;
+}
+
+.municipal-evidence-receipts summary {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.municipal-evidence-passages summary {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.municipal-evidence-page {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-muted);
+}
+
+.municipal-evidence-source-link {
+  margin-top: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.municipal-evidence-more {
+  margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+  .municipal-evidence-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.municipal-evidence-coverage {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--accent-blue) 5%, var(--bg-card));
+  border-left: 3px solid var(--accent-blue);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.municipal-evidence-coverage-counts,
+.municipal-evidence-coverage-dates,
+.municipal-evidence-citation,
+.municipal-evidence-properties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.municipal-evidence-coverage-counts strong {
+  color: var(--text-primary);
+}
+
+.municipal-evidence-coverage-dates,
+.municipal-evidence-citation {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.municipal-evidence-citation {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+}
+
+.municipal-evidence-properties {
+  flex-direction: column;
+  margin-top: 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.municipal-evidence-properties > span {
+  color: var(--text-secondary);
+}

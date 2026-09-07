@@ -78,3 +78,31 @@ test('fitting a polygon keeps its distant corners on screen and caps zoom', () =
     assert.ok(x > 0 && x < size.width && y > 0 && y < size.height)
   }
 })
+
+test('a selected boundary fits beside a desktop panel and above a phone sheet', () => {
+  const polygon = {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [-76.65, 39.92],
+        [-76.65, 39.93],
+        [-76.64, 39.93],
+        [-76.64, 39.92],
+        [-76.65, 39.92],
+      ],
+    ],
+  }
+  for (const [size, obscured] of [
+    [{ width: 1072, height: 832 }, { right: 360 }],
+    [{ width: 390, height: 784 }, { bottom: 590 }],
+  ]) {
+    const fitted = fitGeometry(fallback, size, polygon, obscured)
+    assert.ok(fitted)
+    const viewport = new WebMercatorViewport({ ...fitted, ...size })
+    for (const point of polygon.coordinates[0]) {
+      const [x, y] = viewport.project(point)
+      assert.ok(x > 0 && x < size.width - (obscured.right ?? 0))
+      assert.ok(y > 0 && y < size.height - (obscured.bottom ?? 0))
+    }
+  }
+})

@@ -1,0 +1,141 @@
+.property-section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 12px 0;
+  margin: 12px 0 24px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.property-overview {
+  margin: 28px 0;
+  scroll-margin-top: calc(var(--nav-height, 80px) + 20px);
+}
+.property-overview h2 {
+  margin-bottom: 16px;
+}
+.property-overview-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.property-overview-facts > div {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+.property-overview-facts span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.property-overview-facts strong {
+  font-size: 18px;
+}
+.property-overview-constraints {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+.property-overview-constraints article {
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.property-overview h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.property-overview p {
+  margin: 8px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.property-overview .property-context-note {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.property-connections {
+  margin-top: 20px;
+}
+.property-connections > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 0;
+}
+.property-connections > div > span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.property-record-details,
+.property-context-explanation,
+.property-municipal-library {
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+}
+.property-record-details > summary,
+.property-context-explanation > summary,
+.property-municipal-library > summary {
+  padding: 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.property-record-details > .property-record-details-content,
+.property-context-explanation > div,
+.property-municipal-library > section {
+  padding: 0 16px 16px;
+}
+#property-activity,
+#property-records,
+#property-sources {
+  scroll-margin-top: calc(var(--nav-height, 80px) + 20px);
+}
+.property-supplementary-actions {
+  position: relative;
+}
+.property-supplementary-actions > summary {
+  cursor: pointer;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+.property-supplementary-actions[open] > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+}
+@media (max-width: 600px) {
+  .property-overview-facts {
+    gap: 10px;
+  }
+  .property-overview-facts strong {
+    font-size: 15px;
+  }
+  .property-overview-constraints {
+    grid-template-columns: 1fr;
+  }
+  .property-overview-constraints article {
+    padding: 14px;
+  }
+  .property-toolbar {
+    align-items: flex-start;
+  }
+}
+@media print {
+  .property-section-nav {
+    display: none;
+  }
+  .property-record-details > .property-record-details-content {
+    display: block;
+  }
+}

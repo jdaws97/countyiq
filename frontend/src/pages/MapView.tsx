@@ -5,10 +5,11 @@ import { DeckGL } from '@deck.gl/react'
 import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { PickingInfo, MapViewState } from '@deck.gl/core'
 import type { Feature, Geometry } from 'geojson'
-import Nav from '../components/Nav'
 import LayerToggle, { type LayerConfig } from '../components/LayerToggle'
+import WorkspaceShell from '../components/WorkspaceShell'
 import { ButtonLink } from '../components/ui'
-import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, formatShortDate } from '../lib/format'
+import EvidencePanel from '../components/EvidencePanel'
 import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
 import { fitGeometry, splitBounds, urlView, visibleBounds, type MapSize } from '../lib/mapViewport'
 import type {
@@ -194,11 +195,25 @@ export default function MapView() {
   const [currentZoom, setCurrentZoom] = useState(initialViewState.zoom)
   const [hoverInfo, setHoverInfo] = useState<PickingInfo | null>(null)
 
-  const [selectedPidn, setSelectedPidn] = useState<string | null>(null)
+  const [selectedPidn, setSelectedPidn] = useState<string | null>(() =>
+    searchParams.get('highlight'),
+  )
   const [propertyReport, setPropertyReport] = useState<PropertyReport | null>(null)
-  const [reportLoading, setReportLoading] = useState(false)
+  const [reportLoading, setReportLoading] = useState(() => Boolean(searchParams.get('highlight')))
   const [reportFailed, setReportFailed] = useState(false)
   const panelOpen = selectedPidn !== null
+  const adjacentPidns = useMemo(
+    () =>
+      new Set(
+        (propertyReport?.source_explanation?.citation_evidence ?? [])
+          .filter(
+            (item) =>
+              item.citation_key.includes(':adjacent_') && typeof item.details?.pidn === 'string',
+          )
+          .map((item) => String(item.details.pidn)),
+      ),
+    [propertyReport],
+  )
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewStateRef = useRef<MapViewState | null>(null)
@@ -549,7 +564,20 @@ export default function MapView() {
     if (!feature?.geometry) {
       return
     }
-    const fitted = fitGeometry(viewStateRef.current || viewState, mapSize, feature.geometry)
+    const panel = mapCanvasRef.current?.querySelector<HTMLElement>('.map-property-panel')
+    const panelIsBelow = panel && panel.clientWidth >= mapSize.width - 1
+    const obscured =
+      panelOpen && panel
+        ? panelIsBelow
+          ? { bottom: panel.clientHeight }
+          : { right: panel.clientWidth }
+        : {}
+    const fitted = fitGeometry(
+      viewStateRef.current || viewState,
+      mapSize,
+      feature.geometry,
+      obscured,
+    )
     if (!fitted) {
       return
     }
@@ -564,7 +592,7 @@ export default function MapView() {
       fetchParcels(fitted)
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [highlightPidn, parcelData, mapSize, viewState, fetchParcels])
+  }, [highlightPidn, parcelData, mapSize, viewState, fetchParcels, panelOpen])
 
   useEffect(() => {
     if (!selectedPidn) {
@@ -668,6 +696,9 @@ export default function MapView() {
             if (highlightPidn && pidn === highlightPidn) {
               return [216, 169, 75, 65]
             }
+            if (pidn && adjacentPidns.has(pidn)) {
+              return [216, 169, 75, 95]
+            }
             if (parcelFilter === 'vacant_delinquent') {
               return [216, 169, 75, 150]
             }
@@ -686,6 +717,9 @@ export default function MapView() {
             }
             if (highlightPidn && pidn === highlightPidn) {
               return [174, 115, 19, 255]
+            }
+            if (pidn && adjacentPidns.has(pidn)) {
+              return [174, 115, 19, 230]
             }
             if (parcelFilter === 'vacant_delinquent') {
               return [216, 169, 75, 230]
@@ -712,8 +746,8 @@ export default function MapView() {
           autoHighlight: true,
           highlightColor: [255, 255, 255, 60],
           updateTriggers: {
-            getFillColor: [parcelFilter, highlightPidn, selectedPidn],
-            getLineColor: [parcelFilter, highlightPidn, selectedPidn],
+            getFillColor: [parcelFilter, highlightPidn, selectedPidn, adjacentPidns],
+            getLineColor: [parcelFilter, highlightPidn, selectedPidn, adjacentPidns],
             getLineWidth: [highlightPidn, selectedPidn],
           },
         }),
@@ -846,6 +880,7 @@ export default function MapView() {
     parcelFilter,
     highlightPidn,
     selectedPidn,
+    adjacentPidns,
     selectParcel,
     darkMap,
   ])
@@ -869,11 +904,7 @@ export default function MapView() {
   }
 
   return (
-    <div
-      className="map-shell"
-      style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
-    >
-      <Nav />
+    <WorkspaceShell wide className="map-shell">
       <div
         ref={mapCanvasRef}
         className="map-canvas"
@@ -1009,64 +1040,22 @@ export default function MapView() {
         )}
 
         {currentZoom >= MIN_PARCEL_ZOOM && (
-          <div
-            className="map-filter-bar"
-            style={{
-              position: 'absolute',
-              bottom: 24,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 10,
-              display: 'flex',
-              gap: 2,
-              background: 'var(--bg-panel)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              padding: 4,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-            }}
-          >
-            {(
-              [
-                { key: 'all', label: 'All Parcels', color: 'var(--accent-blue)' },
-                { key: 'delinquent', label: 'Delinquent', color: 'var(--accent-red)' },
-                { key: 'vacant', label: 'Vacancy screen', color: 'var(--accent-green)' },
-                {
-                  key: 'vacant_delinquent',
-                  label: 'Vacancy + tax signal',
-                  color: 'var(--accent-gold)',
-                },
-                { key: 'radar', label: 'Radar', color: 'var(--accent-cyan)' },
-              ] as const
-            ).map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                aria-pressed={parcelFilter === f.key}
-                onClick={() => {
-                  if (parcelFilter !== f.key) {
-                    setParcelFilter(f.key)
-                    setParcelData(null)
-                  }
-                }}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: 6,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  letterSpacing: 0.5,
-                  background: parcelFilter === f.key ? f.color : 'transparent',
-                  color: parcelFilter === f.key ? '#0a0e1a' : 'var(--text-secondary)',
-                  fontWeight: parcelFilter === f.key ? 700 : 400,
-                  transition: 'all 0.15s',
-                }}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+          <label className="map-filter-bar map-screen-control">
+            Show on map
+            <select
+              value={parcelFilter}
+              onChange={(event) => {
+                setParcelFilter(event.target.value as ParcelFilter)
+                setParcelData(null)
+              }}
+            >
+              <option value="all">All properties</option>
+              <option value="radar">Property shortlist</option>
+              <option value="delinquent">Tax-claim listings</option>
+              <option value="vacant">Vacancy screening</option>
+              <option value="vacant_delinquent">Vacancy & tax-claim screening</option>
+            </select>
+          </label>
         )}
 
         {parcelsEnabled &&
@@ -1172,7 +1161,7 @@ export default function MapView() {
           )}
         </div>
       </div>
-    </div>
+    </WorkspaceShell>
   )
 }
 
@@ -1284,32 +1273,53 @@ function PropertyPanel({
         <CloseButton onClick={onClose} />
       </div>
       <ButtonLink className="map-parcel-report" tone="primary" to={`/property/${p.pidn}`}>
-        Open property & evidence →
+        Open property report →
       </ButtonLink>
-      {radar && (
+      {radar?.top_signal && (
         <div className="map-parcel-signals">
-          <div className="property-radar-scores">
-            <div>
-              <span>Opportunity</span>
-              <strong>{radar.opportunity_score}</strong>
-            </div>
-            <div>
-              <span>Momentum</span>
-              <strong>{radar.score}</strong>
-            </div>
-            <div>
-              <span>Site</span>
-              <strong>{radar.site_readiness_score}</strong>
-            </div>
-          </div>
-          {radar.top_signal && <p>{radar.top_signal}</p>}
+          <h3>Recorded context</h3>
+          <p>{radar.top_signal}</p>
+        </div>
+      )}
+      {(report.source_explanation?.citation_evidence ?? []).some((item) =>
+        item.citation_key.includes(':adjacent_'),
+      ) && (
+        <div className="map-investigation-context">
+          <h3>Adjoining · same recorded owner</h3>
+          <p>Gold parcels mark the adjoining ownership records currently visible on the map.</p>
+          {(report.source_explanation?.citation_evidence ?? [])
+            .filter((item) => item.citation_key.includes(':adjacent_'))
+            .map((item) => (
+              <div key={item.evidence_id}>
+                <Link to={`/property/${encodeURIComponent(String(item.details.pidn))}`}>
+                  {String(item.details.address ?? item.details.pidn)}
+                </Link>
+                {typeof item.details.last_recorded_sale_date === 'string' && (
+                  <p>Recorded sale {formatShortDate(item.details.last_recorded_sale_date)}</p>
+                )}
+                <EvidencePanel items={[item]} title="View ownership source" />
+              </div>
+            ))}
+        </div>
+      )}
+      {radar?.signals?.nearby_subdivision && (
+        <div className="map-investigation-context">
+          <h3>Nearby planning record</h3>
+          <p>{radar.signals.nearby_subdivision.presentation?.summary}</p>
+          <p>This is a nearby inventory point; it does not establish a project on this property.</p>
+          {radar.signals.nearby_subdivision.evidence_receipt && (
+            <EvidencePanel
+              items={[radar.signals.nearby_subdivision.evidence_receipt]}
+              title="View planning source"
+            />
+          )}
         </div>
       )}
       <div className="map-parcel-facts">
         <DataField label="Acres" value={p.acres != null ? Number(p.acres).toFixed(2) : '—'} />
         <DataField label="Assessed value" value={formatCurrency(p.aprtotal)} />
         <DataField label="Recorded sale" value={formatCurrency(p.price)} />
-        <DataField label="Sale date" value={p.saledt || '—'} />
+        <DataField label="Sale date" value={formatShortDate(p.saledt) || '—'} />
       </div>
       <ul className="map-parcel-context">
         <li>

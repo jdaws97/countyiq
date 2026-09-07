@@ -1,8 +1,9 @@
 """Municipality listing and profile endpoints."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from api.lib.database import get_cursor
+from api.lib.municipal_evidence import fetch_municipal_evidence
 from api.lib.municipality_names import (
     muni_name_to_pattern,
     municipality_event_patterns,
@@ -15,6 +16,13 @@ from api.lib.source_policy import require_source_use, source_use_allowed
 PIPELINE_WINDOW_DAYS = 365
 
 router = APIRouter(tags=["municipalities"])
+
+
+@router.get("/{name}/evidence")
+def get_municipal_evidence(name: str, limit: int = Query(12, ge=1, le=100)) -> dict:
+    with get_cursor() as cur:
+        require_source_use(cur, "public_proceedings", "derived_product")
+        return fetch_municipal_evidence(cur, municipality=name, limit=limit)
 
 
 def _fetch_municipality_stats(cur, municipality_name: str) -> dict:
@@ -71,7 +79,7 @@ def _fetch_development_pipeline(cur, municipality_name: str) -> dict | None:
     cur.execute(
         """
         SELECT event_type, COUNT(*) AS count
-        FROM public.intelligence_events
+        FROM public.current_intelligence_events
         WHERE category = 'development'
           AND municipality IS NOT NULL
           AND UPPER(municipality) LIKE ANY(%(patterns)s)
@@ -88,7 +96,7 @@ def _fetch_development_pipeline(cur, municipality_name: str) -> dict | None:
             f"""
             SELECT event_key, event_type, title, event_date, project_key, project_name,
                    related_pidns
-            FROM public.intelligence_events
+            FROM public.current_intelligence_events
             WHERE category = 'development'
               AND municipality IS NOT NULL
               AND UPPER(municipality) LIKE ANY(%(patterns)s)
@@ -149,7 +157,7 @@ def _fetch_radar_top(cur, municipality_name: str, *, limit: int = 8) -> list[dic
         """
         SELECT dm.pidn, p.propadr, p.acres, dm.opportunity_score, dm.score,
                dm.top_signal, dm.opportunity_delta, dm.is_new
-        FROM public.development_momentum dm
+        FROM public.current_development_momentum dm
         JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
         WHERE dm.eligible = TRUE
           AND dm.has_active_plan = FALSE

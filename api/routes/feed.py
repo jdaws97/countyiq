@@ -1,5 +1,6 @@
 """Unified evidence-backed intelligence feed."""
 
+import re
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query
@@ -11,7 +12,6 @@ from api.lib.response_types import IntelligenceFeedResponse
 from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import open_data_source_key, restricted_distress_enabled
 from api.lib.source_policy import require_source_use
-
 
 router = APIRouter(tags=["feed"])
 
@@ -34,6 +34,7 @@ _ALLOWED_EVENT_TYPES = {
     "withdrawn",
     "removed",
     "scoped_decision",
+    "municipal_record",
 }
 
 
@@ -256,6 +257,7 @@ def _resolve_entity_links(cur, rows: list[dict]) -> dict[str, dict]:
 
 @router.get("")
 def intelligence_feed(
+    text_query: Annotated[str | None, Query(alias="q", max_length=160)] = None,
     category: Literal["parcel", "development"] | None = Query(default=None),
     event_type: str | None = Query(
         default=None,
@@ -344,6 +346,7 @@ def fetch_feed(
     matter_category: str | None = None,
 ) -> IntelligenceFeedResponse:
     """Return parcel facts and LLM-extracted development events in one contract."""
+    text_query = (text_query or "").strip() or None
     filters = [
         """
         (
@@ -371,7 +374,7 @@ def fetch_feed(
             AND COALESCE(source_evidence->0->'details'->>'change_kind', '') = 'new'
             AND detected_at = (
                 SELECT MIN(baseline.detected_at)
-                FROM public.intelligence_events AS baseline
+                FROM public.current_intelligence_events AS baseline
                 WHERE baseline.source_kind = 'delinquency_event'
             )
         )
@@ -396,17 +399,43 @@ def fetch_feed(
         filters.append(
             "source_evidence->0->'details'->>'matter_category' = %(matter_category)s"
         )
-    elif not any((pidns, project_keys, entity_names, entity_ids, event_keys)):
+    elif not any(
+        (pidns, project_keys, entity_names, entity_ids, event_keys, text_query)
+    ):
         # Discovery suppresses context-only matters; explicit history stays complete.
         filters.append(
             "source_evidence->0->'details'->>'discovery_eligible' IS DISTINCT FROM 'false'"
         )
     if text_query:
         filters.append(
-            "(strpos(lower(COALESCE(project_name,'')), lower(%(text_query)s))>0 OR strpos(lower(title),lower(%(text_query)s))>0)"
+            """
+            (
+                strpos(lower(COALESCE(project_name, '')), lower(%(text_query)s)) > 0
+                OR strpos(lower(title), lower(%(text_query)s)) > 0
+                OR strpos(lower(COALESCE(what_happened, '')), lower(%(text_query)s)) > 0
+                OR EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(COALESCE(source_evidence, '[]'::jsonb)) source
+                    WHERE strpos(lower(COALESCE(source->>'excerpt', '')), lower(%(text_query)s)) > 0
+                       OR (
+                           %(reference_query)s <> ''
+                           AND strpos(
+                               regexp_replace(lower(COALESCE(source->>'excerpt', '')), '[^a-z0-9]', '', 'g'),
+                               %(reference_query)s
+                           ) > 0
+                       )
+                )
+            )
+            """
         )
+    reference_query = re.sub(r"[^a-z0-9]", "", (text_query or "").lower())
+    if len(reference_query) < 5 or not (
+        re.search(r"[a-z]", reference_query) and re.search(r"[0-9]", reference_query)
+    ):
+        reference_query = ""
     params: dict[str, object] = {
         "text_query": text_query,
+        "reference_query": reference_query,
         "matter_category": matter_category,
         "fetch_limit": limit + 1,
         "offset": offset,
@@ -527,7 +556,7 @@ def fetch_feed(
                 interpretation_generated_at,
                 ({_PRIORITY_SQL})::integer AS priority_score,
                 ({_WATCHED_MATCH_SQL}) AS watched_match
-            FROM public.intelligence_events
+            FROM public.current_intelligence_events AS intelligence_events
             WHERE {" AND ".join(filters)}
             ORDER BY {order_clause}
             LIMIT %(fetch_limit)s OFFSET %(offset)s

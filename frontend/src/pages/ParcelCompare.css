@@ -1,0 +1,122 @@
+.comparison-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--accent-gold) 8%, var(--bg-panel));
+  border: 1px solid color-mix(in srgb, var(--accent-gold) 35%, var(--border));
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+
+.comparison-table {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.comparison-row {
+  display: grid;
+  grid-template-columns: 160px repeat(var(--comparison-column-count), minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+}
+
+.comparison-row:first-child {
+  border-top: 0;
+}
+
+.comparison-label,
+.comparison-cell {
+  min-width: 0;
+  padding: 14px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.comparison-label {
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  font: 700 11px/1.4 var(--font-sans);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.comparison-cell {
+  border-left: 1px solid var(--border);
+}
+
+.comparison-row-emphasize .comparison-cell {
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.comparison-property {
+  display: grid;
+  gap: 6px;
+}
+
+.comparison-property > a {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.comparison-property > span {
+  color: var(--text-muted);
+  font: 12px var(--font-mono);
+}
+
+.comparison-property .ciq-button {
+  justify-self: start;
+  min-height: 30px;
+  padding: 4px 9px;
+}
+
+@media (max-width: 680px) {
+  .comparison-notice {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .comparison-table {
+    border-radius: var(--radius);
+  }
+
+  .comparison-row {
+    display: block;
+    padding: 0;
+  }
+
+  .comparison-label {
+    display: block;
+    padding-bottom: 8px;
+  }
+
+  .comparison-cell {
+    display: grid;
+    gap: 6px;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .comparison-row:first-child .comparison-cell:first-of-type {
+    border-top: 0;
+  }
+
+  .comparison-cell::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font: 700 11px/1.4 var(--font-sans);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .comparison-row-emphasize .comparison-cell {
+    font-size: 16px;
+  }
+}

@@ -5,9 +5,10 @@ import BackButton from '../components/BackButton'
 import Badge from '../components/Badge'
 import EvidencePanel, { CitedText } from '../components/EvidencePanel'
 import IntelligenceEventCard from '../components/IntelligenceEventCard'
+import OwnerRecordSummary from '../components/OwnerRecordSummary'
 import PageShell from '../components/PageShell'
 import Section from '../components/Section'
-import { formatCurrencyCompact } from '../lib/format'
+import { formatCurrencyCompact, formatShortDate } from '../lib/format'
 import { getPropertyClassLabel } from '../lib/propertyLabels'
 import { useFetchJson } from '../lib/useFetchJson'
 import { isEntityWatched, toggleEntityWatch } from '../lib/watchlist'
@@ -119,7 +120,9 @@ export default function OwnerProfile() {
       <BackButton onClick={() => navigate(-1)} />
 
       <div style={{ marginBottom: 32 }}>
-        <div className="record-eyebrow">{entityView ? 'Entity case file' : 'Owner profile'}</div>
+        <div className="record-eyebrow">
+          {entityView ? 'Organization & ownership' : 'Owner profile'}
+        </div>
         <h1 className="page-title">{owner.canonical_name}</h1>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <Badge color="var(--accent-blue)">{formatEntityTypeLabel(owner.entity_type)}</Badge>
@@ -131,7 +134,9 @@ export default function OwnerProfile() {
                   : 'var(--accent-gold)'
               }
             >
-              {owner.verification_status === 'verified' ? 'Verified Entity' : 'Tentative Entity'}
+              {owner.verification_status === 'verified'
+                ? 'Identity checked'
+                : 'Identity unconfirmed'}
             </Badge>
           )}
           {delinq.total_owed > 0 && (
@@ -152,56 +157,10 @@ export default function OwnerProfile() {
             className="watch-button"
             aria-pressed={watched}
           >
-            {watched ? '★ Watching entity' : '☆ Watch entity'}
+            {watched ? '★ Watching owner' : '☆ Watch owner'}
           </button>
         </div>
       </div>
-
-      {(owner.aliases && owner.aliases.length > 0) ||
-      owner.verification_reasoning ||
-      data.verification_evidence.length > 0 ? (
-        <Section title="Entity Context">
-          {owner.aliases && owner.aliases.length > 0 && (
-            <div style={{ marginBottom: owner.verification_reasoning ? 14 : 0 }}>
-              <div className="record-label">Known Aliases</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {owner.aliases.map((alias) => (
-                  <Badge key={alias} color="var(--accent-cyan)">
-                    {alias}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-          {owner.verification_reasoning && (
-            <div>
-              <div className="record-label">Why These Records Are Linked</div>
-              <div
-                style={{
-                  fontFamily: 'var(--font-sans)',
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                <CitedText
-                  text={owner.verification_reasoning}
-                  evidence={data.verification_evidence}
-                />
-              </div>
-            </div>
-          )}
-          {data.verification_evidence.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <EvidencePanel
-                items={data.verification_evidence}
-                title="Records used to verify this entity"
-                intro="These governed record identifiers are the factual inputs to the entity-linking decision."
-              />
-            </div>
-          )}
-        </Section>
-      ) : null}
 
       {data.relationships.length > 0 && (
         <Section title={`Known relationships (${data.relationships.length})`}>
@@ -278,7 +237,9 @@ export default function OwnerProfile() {
         </Section>
       )}
 
-      <Section title="Recent intelligence">
+      <OwnerRecordSummary parcels={portfolio.parcels} />
+
+      <Section title="Linked activity">
         {intelligence.loading && (
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
             Loading related changes…
@@ -300,8 +261,8 @@ export default function OwnerProfile() {
                 color: 'var(--text-secondary)',
               }}
             >
-              No parcel or municipal events are linked to this entity yet. That absence is explicit;
-              CountyIQ does not invent a narrative when the source record is thin.
+              No activity is linked to these owner records in the available coverage. Review the
+              property records below or watch this owner for future updates.
             </div>
           )}
         {(intelligence.data?.events.length ?? 0) > 0 && (
@@ -330,9 +291,6 @@ export default function OwnerProfile() {
             )}
             {data.brief.urgency && data.brief.urgency !== 'none' && (
               <Badge color="var(--accent-gold)">{formatBriefLabel(data.brief.urgency)}</Badge>
-            )}
-            {data.brief.evidence_strength && (
-              <Badge color="var(--accent-cyan)">evidence: {data.brief.evidence_strength}</Badge>
             )}
           </div>
           {data.brief.key_pattern && (
@@ -389,19 +347,10 @@ export default function OwnerProfile() {
               <EvidencePanel
                 items={data.brief.citation_evidence}
                 title="Verify the portfolio brief"
-                intro="Inline references resolve to the validated signals and exact parcels used in this synthesis."
+                intro="Open a reference to check the underlying public record."
               />
             </div>
           )}
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
-            {data.brief.confidence !== null
-              ? `confidence ${(data.brief.confidence * 100).toFixed(0)}% · `
-              : ''}
-            {data.brief.model_version ?? 'model unknown'}
-            {data.brief.generated_at
-              ? ` · ${new Date(data.brief.generated_at).toLocaleDateString()}`
-              : ''}
-          </div>
         </Section>
       )}
 
@@ -446,37 +395,77 @@ export default function OwnerProfile() {
       )}
 
       <Section title={`Properties (${portfolio.parcel_count})`}>
-        <div className="data-table">
-          <div
-            className="data-table-head"
-            style={{ gridTemplateColumns: '140px 1fr 110px 110px 90px', minWidth: 580 }}
-          >
-            <div>PIDN</div>
-            <div>Address</div>
-            <div className="cell-right">Assessed</div>
-            <div className="cell-right">Sale Price</div>
-            <div className="cell-right">Class</div>
-          </div>
-          {portfolio.parcels.map((p) => (
-            <Link
-              key={p.pidn}
-              to={`/property/${p.pidn}`}
-              className="data-table-row"
-              style={{ gridTemplateColumns: '140px 1fr 110px 110px 90px', minWidth: 580 }}
-            >
-              <div className="cell-id">{p.pidn}</div>
-              <div className="cell-strong">{p.propadr || '--'}</div>
-              <div className="cell-right">
-                {formatCurrencyCompact(p.aprtotal, { allowBillions: true })}
+        <div className="owner-property-list">
+          {portfolio.parcels.map((parcel) => (
+            <Link key={parcel.pidn} to={`/property/${parcel.pidn}`} className="owner-property-row">
+              <div>
+                <strong>{parcel.propadr || `Parcel ${parcel.pidn}`}</strong>
+                <span>
+                  {parcel.municipality} · {getPropertyClassLabel(parcel.class)}
+                </span>
               </div>
-              <div className="cell-right">
-                {formatCurrencyCompact(p.price, { allowBillions: true })}
+              <div>
+                <span>Last recorded sale</span>
+                <strong>{formatShortDate(parcel.saledt) ?? 'Date unavailable'}</strong>
+                <span>{formatCurrencyCompact(parcel.price, { allowBillions: true })}</span>
               </div>
-              <div className="cell-right cell-muted">{getPropertyClassLabel(p.class)}</div>
+              <div>
+                <span>Assessed value</span>
+                <strong>{formatCurrencyCompact(parcel.aprtotal, { allowBillions: true })}</strong>
+              </div>
             </Link>
           ))}
         </div>
       </Section>
+
+      {(owner.aliases && owner.aliases.length > 0) ||
+      owner.verification_reasoning ||
+      data.verification_evidence.length > 0 ? (
+        <details className="record-disclosure">
+          <summary>Names and record connections</summary>
+          <Section title="Names and record connections">
+            {owner.aliases && owner.aliases.length > 0 && (
+              <div style={{ marginBottom: owner.verification_reasoning ? 14 : 0 }}>
+                <div className="record-label">Known Aliases</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {owner.aliases.map((alias) => (
+                    <Badge key={alias} color="var(--accent-cyan)">
+                      {alias}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {owner.verification_reasoning && (
+              <div>
+                <div className="record-label">Why These Records Are Linked</div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  <CitedText
+                    text={owner.verification_reasoning}
+                    evidence={data.verification_evidence}
+                  />
+                </div>
+              </div>
+            )}
+            {data.verification_evidence.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <EvidencePanel
+                  items={data.verification_evidence}
+                  title="Records used to verify this entity"
+                  intro="Inspect the public records supporting these name and ownership connections."
+                />
+              </div>
+            )}
+          </Section>
+        </details>
+      ) : null}
 
       {delinq.records.length > 0 && (
         <Section
@@ -551,7 +540,7 @@ export default function OwnerProfile() {
                     color: 'var(--text-muted)',
                   }}
                 >
-                  {l.match_tier} · {Math.round((l.confidence || 0) * 100)}%
+                  Linked license record
                 </div>
               </div>
             ))}

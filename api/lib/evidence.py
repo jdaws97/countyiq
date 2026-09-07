@@ -265,7 +265,11 @@ def normalize_source_evidence(
     return evidence_item(
         record_query=record_query,
         scope=scope,
-        citation_key=f"source:{index + 1}",
+        citation_key=(
+            f"evidence:source:{source['explanation_source_id']}"
+            if source.get("explanation_source_id")
+            else f"source:{index + 1}"
+        ),
         label=_text(source.get("label")) or "Official source",
         source_kind=source_kind,
         source_record_id=source_record_id,

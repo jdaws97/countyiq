@@ -2,13 +2,14 @@ import { Suspense, useEffect, useState } from 'react'
 import { startWatchSync, watchSyncState, syncWatches } from '../lib/watchSync'
 import { recordInvestigation } from '../lib/investigationState'
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
+import SourceViewerProvider from './SourceViewer'
 
 const ROUTE_TITLES: Array<[RegExp, string]> = [
   [/^\/$/, 'Your Workspace — CountyIQ'],
   [/^\/app$/, 'Your Workspace — CountyIQ'],
   [/^\/organizations/, 'Organizations — CountyIQ'],
-  [/^\/feed/, 'Intelligence Feed — CountyIQ'],
-  [/^\/radar/, 'Development Radar — CountyIQ'],
+  [/^\/feed/, 'Activity workspace — CountyIQ'],
+  [/^\/radar/, 'Property screening — CountyIQ'],
   [/^\/municipalities/, 'Municipalities — CountyIQ'],
   [/^\/map/, 'Property Map — CountyIQ'],
   [/^\/watch/, 'Watched Intelligence — CountyIQ'],
@@ -60,7 +61,9 @@ export default function RouteFrame() {
           key={session.account?.user?.id ?? 'guest'}
           fallback={<div className="route-loading">Loading CountyIQ…</div>}
         >
-          <Outlet />
+          <SourceViewerProvider>
+            <Outlet />
+          </SourceViewerProvider>
         </Suspense>
       )}
     </>

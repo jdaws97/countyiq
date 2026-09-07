@@ -8,7 +8,7 @@ import { useCountyMeta } from '../lib/useCountyMeta'
 const NAV_ITEMS = [
   { to: '/', label: 'Workspace' },
   { to: '/feed', label: 'Activity' },
-  { to: '/radar', label: 'Radar' },
+  { to: '/radar', label: 'Screening' },
   { to: '/map', label: 'Map' },
   { to: '/watch', label: 'Watches' },
 ]

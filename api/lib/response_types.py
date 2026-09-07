@@ -178,6 +178,24 @@ class ParcelBriefPayload(TypedDict):
     generated_at: str | None
 
 
+class RecordBriefFindingPayload(TypedDict):
+    signal_key: str
+    category: str
+    title: str
+    text: str
+    caveat: str | None
+
+
+class RecordBriefPayload(TypedDict):
+    method: str
+    version: int
+    headline: str
+    findings: list[RecordBriefFindingPayload]
+    questions: list[str]
+    signal_count: int
+    source_updated_at: str | None
+
+
 class CountyNarrativePayload(TypedDict):
     narrative_id: int
     title: str
@@ -366,6 +384,64 @@ class ZoningPayload(TypedDict):
     source_url: str | None
 
 
+class MunicipalPassagePayload(TypedDict):
+    text: str
+    page: int | None
+
+
+class MunicipalPropertyMatchPayload(TypedDict):
+    pidn: str
+    address: str | None
+    match_method: str
+
+
+class SourceExplanationPayload(TypedDict):
+    headline: str
+    summary: str
+    next_step: str | None
+    record: dict[str, object] | None
+    citation_evidence: list[EvidencePayload]
+    generated_at: str
+    model: str | None
+
+
+class MunicipalEvidenceCardPayload(TypedDict):
+    id: str
+    event_key: str
+    title: str
+    body_name: str
+    meeting_date: str
+    proceeding_type: str
+    document_url: str
+    passages: list[MunicipalPassagePayload]
+    source_text_sha256: str
+    matched_properties: list[MunicipalPropertyMatchPayload]
+    observed_at: str
+    explanation: SourceExplanationPayload | None
+
+
+class MunicipalCoveragePayload(TypedDict):
+    total_documents: int
+    eligible_documents: int
+    reviewed_documents: int
+    awaiting_read_documents: int
+    review_required_documents: int
+    blocked_documents: int
+    future_documents: int
+    failed_documents: int
+    documents_with_passages: int
+    latest_meeting_date: str | None
+    latest_reviewed_meeting_date: str | None
+    last_source_observed_at: str | None
+    last_reviewed_at: str | None
+
+
+class MunicipalEvidencePayload(TypedDict):
+    cards: list[MunicipalEvidenceCardPayload]
+    more: bool
+    coverage: MunicipalCoveragePayload
+
+
 class PropertyReportResponse(TypedDict):
     parcel: ParcelPayload
     tax_delinquency: TaxDelinquencyPayload
@@ -375,9 +451,12 @@ class PropertyReportResponse(TypedDict):
     zoning: ZoningPayload | None
     development_momentum: DevelopmentMomentumPayload | None
     parcel_brief: ParcelBriefPayload | None
+    record_brief: RecordBriefPayload | None
+    source_explanation: SourceExplanationPayload | None
     related_narratives: list[CountyNarrativePayload]
     intelligence_summary: IntelligenceSummaryPayload | None
     linked_proceedings: list[LinkedProceedingPayload]
+    municipal_evidence: MunicipalEvidencePayload
     evidence: list[EvidencePayload]
 
 
@@ -532,8 +611,8 @@ class MunicipalityProfileResponse(TypedDict):
     stats: MunicipalityStatsPayload
     delinquency: MunicipalityDelinquencyPayload
     licenses: list[MunicipalityLicenseSummaryPayload]
-    development_pipeline: NotRequired["MunicipalityPipelinePayload | None"]
-    radar_top: NotRequired[list["MunicipalityRadarTopPayload"]]
+    development_pipeline: NotRequired[MunicipalityPipelinePayload | None]
+    radar_top: NotRequired[list[MunicipalityRadarTopPayload]]
 
 
 class HealthResponse(TypedDict):

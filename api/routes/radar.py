@@ -153,7 +153,7 @@ def radar_municipalities(
         cur.execute(
             f"""
             SELECT DISTINCT p.municipality
-            FROM public.development_momentum dm
+            FROM public.current_development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
             WHERE dm.eligible = TRUE
               {plan_clause}
@@ -200,7 +200,7 @@ def _list_view(
         cur.execute(
             f"""
             SELECT {RADAR_ROW_COLUMNS}
-            FROM public.development_momentum dm
+            FROM public.current_development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
             WHERE dm.eligible = TRUE
               {plan_clause}
@@ -373,7 +373,7 @@ def radar_movers(
         cur.execute(
             f"""
             SELECT {RADAR_ROW_COLUMNS}
-            FROM public.development_momentum dm
+            FROM public.current_development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
             WHERE dm.eligible = TRUE
               {plan_clause}
@@ -386,7 +386,7 @@ def radar_movers(
         )
         rows = cur.fetchall()
         cur.execute(
-            "SELECT MAX(previous_computed_at) AS previous_computed_at FROM public.development_momentum"
+            "SELECT MAX(previous_computed_at) AS previous_computed_at FROM public.current_development_momentum"
         )
         previous_row = cur.fetchone() or {}
 
@@ -428,7 +428,7 @@ def development_bbox(
             SELECT dm.pidn, {score_column} AS score, dm.eligible, dm.top_signal,
                    ST_X(ST_Centroid(p.geom)) AS lng,
                    ST_Y(ST_Centroid(p.geom)) AS lat
-            FROM public.development_momentum dm
+            FROM public.current_development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
             WHERE {score_column} >= %(min_score)s
               {plan_clause}

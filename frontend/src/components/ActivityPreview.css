@@ -1,0 +1,118 @@
+.activity-preview {
+  margin: 28px 0;
+}
+.activity-preview-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.activity-preview-heading h2 {
+  margin: 0;
+}
+.activity-preview-heading a,
+.activity-scope-note {
+  font-size: 13px;
+}
+.activity-scope-note {
+  color: var(--text-muted);
+  margin: 8px 0 16px;
+  line-height: 1.6;
+}
+.workspace-entry-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 12px 0;
+  font-size: 14px;
+}
+.workspace-return-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.workspace-return-links a {
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 13px;
+}
+.upcoming-dates {
+  padding: 16px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.upcoming-dates h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.upcoming-dates-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.upcoming-dates-list article {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: 5px;
+  background: var(--bg-card);
+}
+.upcoming-dates-list strong {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.upcoming-dates-list span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.upcoming-dates-list article > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 16px;
+  font-size: 13px;
+}
+.feed-result-summary {
+  margin: 16px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.feed-reset {
+  align-self: end;
+}
+@media (max-width: 600px) {
+  .workspace-entry-links {
+    gap: 10px 16px;
+  }
+  .upcoming-dates-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.feed-record-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.feed-record-search input {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 14px;
+}
+.case-record-matches .intelligence-card h2 {
+  margin-bottom: 8px;
+}

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import PageShell from '../components/PageShell'
 import ReportActions from '../components/ReportActions'
 import { Button, ButtonLink, EmptyState, PageHeader, StatusMessage } from '../components/ui'
-import { formatCurrency } from '../lib/format'
+import { formatCurrency, formatShortDate } from '../lib/format'
+import { comparisonEditingUrl, comparisonUrl, comparisonUrlSelection } from '../lib/comparisonUrl'
 import {
   clearComparison,
   downloadText,
@@ -14,9 +15,20 @@ import {
 } from '../lib/investigationState'
 import { getPropertyClassLabel } from '../lib/propertyLabels'
 import type { PropertyReport } from '../types/api'
+import './ParcelCompare.css'
 
 export default function ParcelCompare() {
-  const [pidns, setPidns] = useState<string[]>(() => getComparison())
+  const location = useLocation()
+  const navigate = useNavigate()
+  const urlSelection = useMemo(() => comparisonUrlSelection(location.search), [location.search])
+  const [storedPidns, setStoredPidns] = useState<string[]>(() => getComparison())
+  const hasTransientSelection = urlSelection.status === 'selection'
+  const pidns = useMemo(() => {
+    if (urlSelection.status === 'selection') {
+      return urlSelection.pidns
+    }
+    return urlSelection.status === 'invalid' ? [] : storedPidns
+  }, [urlSelection, storedPidns])
   const [reports, setReports] = useState<PropertyReport[]>([])
   const [resolvedKey, setResolvedKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -25,10 +37,38 @@ export default function ParcelCompare() {
   const activeReports = reports.filter((report) => pidns.includes(report.parcel.pidn))
 
   useEffect(() => {
-    const refresh = () => setPidns(getComparison())
+    const refresh = () => setStoredPidns(getComparison())
     window.addEventListener('countyiq-investigation-changed', refresh)
     return () => window.removeEventListener('countyiq-investigation-changed', refresh)
   }, [])
+
+  const removeParcel = (pidn: string) => {
+    if (hasTransientSelection) {
+      const next = urlSelection.pidns.filter((item) => item !== pidn)
+      const target = new URL(
+        comparisonUrl(next, window.location.href) ||
+          comparisonEditingUrl(next, window.location.href) ||
+          '/compare?compare=editing',
+        window.location.origin,
+      )
+      navigate(target.pathname + target.search)
+      return
+    }
+    toggleComparison(pidn)
+  }
+
+  const clearParcels = () => {
+    if (hasTransientSelection) {
+      navigate('/compare?compare=editing')
+      return
+    }
+    clearComparison()
+  }
+
+  const shareUrl =
+    activeComparisonUrl(pidns) && typeof window !== 'undefined'
+      ? (comparisonUrl(pidns, window.location.href) ?? undefined)
+      : undefined
 
   useEffect(() => {
     if (pidns.length === 0) {
@@ -114,15 +154,15 @@ export default function ParcelCompare() {
       <PageHeader
         eyebrow="Site diligence workspace"
         title="Parcel Comparison"
-        description="Compare two to four property records side by side. Scores are screening aids; open each case file to inspect its source receipts."
+        description="Compare two to four property records for site investigation: ownership, current zoning, records, and mapped constraints. Open each case file to inspect its source receipts."
         actions={
           activeReports.length > 0 ? (
             <>
               <Button tone="quiet" onClick={exportCsv}>
                 Export CSV
               </Button>
-              <ReportActions label="CountyIQ parcel comparison" />
-              <Button tone="danger" onClick={clearComparison}>
+              {shareUrl && <ReportActions label="CountyIQ parcel comparison" shareUrl={shareUrl} />}
+              <Button tone="danger" onClick={clearParcels}>
                 Clear
               </Button>
             </>
@@ -141,6 +181,12 @@ export default function ParcelCompare() {
       )}
 
       {loading && <StatusMessage>Loading property records…</StatusMessage>}
+      {urlSelection.status === 'invalid' && (
+        <StatusMessage tone="error">
+          This comparison link is invalid. Select parcels from a property report or Radar to start a
+          new comparison.
+        </StatusMessage>
+      )}
       {error && <StatusMessage tone="error">{error}</StatusMessage>}
 
       {!loading && !error && activeReports.length === 0 && (
@@ -155,7 +201,7 @@ export default function ParcelCompare() {
             </>
           }
         >
-          Add parcels from a property report or Development Radar. Your comparison stays in this
+          Add parcels from a property report or property screening. Your comparison stays in this
           browser until you clear it.
         </EmptyState>
       )}
@@ -171,7 +217,7 @@ export default function ParcelCompare() {
                   {report.parcel.propadr || report.parcel.pidn}
                 </Link>
                 <span>{report.parcel.owner_full || 'Owner not displayed'}</span>
-                <Button tone="quiet" onClick={() => toggleComparison(report.parcel.pidn)}>
+                <Button tone="quiet" onClick={() => removeParcel(report.parcel.pidn)}>
                   Remove
                 </Button>
               </div>
@@ -204,7 +250,7 @@ export default function ParcelCompare() {
             label="Last sale"
             reports={activeReports}
             render={(report) =>
-              `${formatCurrency(report.parcel.price)}${report.parcel.saledt ? ` · ${report.parcel.saledt}` : ''}`
+              `${formatCurrency(report.parcel.price)}${report.parcel.saledt ? ` · ${formatShortDate(report.parcel.saledt)}` : ''}`
             }
           />
           <ComparisonRow
@@ -224,6 +270,20 @@ export default function ParcelCompare() {
             }
           />
           <ComparisonRow
+            label="Current zoning"
+            reports={activeReports}
+            render={(report) => {
+              const zoning = [report.zoning?.code, report.zoning?.name].filter(Boolean).join(' · ')
+              return zoning || 'No zoning record loaded'
+            }}
+          />
+          <ComparisonRow
+            label="Site constraints"
+            reports={activeReports}
+            render={siteConstraints}
+          />
+          <ComparisonRow label="Relevant record" reports={activeReports} render={relevantRecord} />
+          <ComparisonRow
             label="Structures"
             reports={activeReports}
             render={(report) =>
@@ -231,15 +291,48 @@ export default function ParcelCompare() {
             }
           />
           <ComparisonRow
-            label="Evidence"
+            label="Records & sources"
             reports={activeReports}
-            render={(report) =>
-              `${report.evidence.length} receipt${report.evidence.length === 1 ? '' : 's'}`
-            }
+            render={(report) => (
+              <Link to={`/property/${report.parcel.pidn}`}>Open property record</Link>
+            )}
           />
         </div>
       )}
     </PageShell>
+  )
+}
+
+function activeComparisonUrl(pidns: string[]): boolean {
+  return pidns.length >= 2 && pidns.length <= 4
+}
+
+function siteConstraints(report: PropertyReport): string {
+  const constraints: string[] = []
+  if (report.flood_zone.in_flood_zone) {
+    constraints.push(`Mapped flood zone ${report.flood_zone.zone || 'present'}`)
+  }
+  constraints.push(...report.soil_profile.considerations.slice(0, 2))
+  if (constraints.length === 0) {
+    return report.soil_profile.units.length === 0
+      ? 'No mapped soil coverage loaded; confirm site conditions.'
+      : 'No mapped constraints summarized; confirm site conditions.'
+  }
+  return constraints.join(' · ')
+}
+
+function relevantRecord(report: PropertyReport): string {
+  const proceeding = report.linked_proceedings[0]
+  if (proceeding) {
+    return [proceeding.proceeding_type, proceeding.decision, proceeding.meeting_date]
+      .filter(Boolean)
+      .join(' · ')
+  }
+  const municipalCard = report.municipal_evidence.cards[0]
+  return (
+    municipalCard?.explanation?.headline ||
+    municipalCard?.title ||
+    'No linked municipal record loaded'
   )
 }
 
@@ -255,12 +348,21 @@ function ComparisonRow({
   emphasize?: boolean
 }) {
   return (
-    <div className={`comparison-row${emphasize ? ' comparison-row-emphasize' : ''}`} role="row">
+    <div
+      className={`comparison-row${emphasize ? ' comparison-row-emphasize' : ''}`}
+      role="row"
+      style={{ '--comparison-column-count': reports.length } as React.CSSProperties}
+    >
       <div className="comparison-label" role="rowheader">
         {label}
       </div>
       {reports.map((report) => (
-        <div key={report.parcel.pidn} className="comparison-cell" role="cell">
+        <div
+          key={report.parcel.pidn}
+          className="comparison-cell"
+          data-label={report.parcel.propadr || `PIDN ${report.parcel.pidn}`}
+          role="cell"
+        >
           {render(report)}
         </div>
       ))}

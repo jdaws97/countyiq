@@ -23,10 +23,10 @@ import type {
 type RadarTab = RadarViewMode | 'movers'
 
 const TABS: { key: RadarTab; label: string }[] = [
-  { key: 'opportunity', label: 'Opportunity' },
-  { key: 'momentum', label: 'Momentum' },
-  { key: 'movers', label: 'Movers' },
-  { key: 'readiness', label: 'Site Screening' },
+  { key: 'opportunity', label: 'Property shortlist' },
+  { key: 'momentum', label: 'Development indicators' },
+  { key: 'movers', label: 'Score changes' },
+  { key: 'readiness', label: 'Site screening' },
 ]
 
 const PARCEL_CLASSES = [
@@ -64,7 +64,7 @@ function scoreColor(s: number): string {
 function scoreOptionsFor(view: RadarTab) {
   if (view === 'opportunity') {
     return [
-      { value: '30', label: '30+ Recommended' },
+      { value: '30', label: '30+' },
       { value: '40', label: '40+' },
       { value: '50', label: '50+' },
       { value: '60', label: '60+' },
@@ -73,7 +73,7 @@ function scoreOptionsFor(view: RadarTab) {
   }
   if (view === 'momentum') {
     return [
-      { value: '30', label: '30+ Recommended' },
+      { value: '30', label: '30+' },
       { value: '40', label: '40+' },
       { value: '50', label: '50+' },
       { value: '60', label: '60+' },
@@ -344,7 +344,7 @@ export default function DevelopmentRadar() {
   const mapLayer = view === 'momentum' ? 'momentum' : 'opportunity'
   const countLabel =
     view === 'opportunity'
-      ? 'opportunities'
+      ? 'screening candidates'
       : view === 'momentum'
         ? 'active sites'
         : view === 'movers'
@@ -375,7 +375,7 @@ export default function DevelopmentRadar() {
             : view === 'momentum'
               ? 'Properties with recorded plans, nearby municipal matters, park designations, recent sales or common ownership of neighboring parcels. A score does not establish a development proposal or an owner’s intent.'
               : view === 'movers'
-                ? 'What changed since the previous radar rebuild. Rising scores mean new evidence arrived; new parcels had no signals at all last time.'
+                ? 'Screening-score changes between recorded snapshots. Open a property to understand the underlying evidence; a score change does not establish new development activity.'
                 : 'Parcel screening from public policy, infrastructure, physical constraints, and diligence records. Verify the linked evidence before relying on a score.'}
         </p>
         <ButtonLink to={`/feed?${municipalActivityParams}`} tone="quiet">
@@ -412,7 +412,7 @@ export default function DevelopmentRadar() {
         >
           {previousComputedAt
             ? `Compared with the radar snapshot from ${formatShortDate(previousComputedAt)}.`
-            : 'No previous snapshot yet. Movers appear after the second weekly radar rebuild.'}
+            : 'Score history is not available yet. Compare changes after another screening snapshot is available.'}
         </div>
       )}
 
@@ -566,7 +566,7 @@ export default function DevelopmentRadar() {
             <div className="cell-right" style={{ paddingRight: 12 }}>
               Assessed value
             </div>
-            <div style={{ paddingLeft: 12 }}>Why It Ranked</div>
+            <div style={{ paddingLeft: 12 }}>Recorded reason</div>
             <div className="cell-right">Compare</div>
           </div>
 

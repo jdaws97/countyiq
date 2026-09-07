@@ -8,6 +8,7 @@ from api.lib.development_radar import (
 )
 
 EXPECTED_SIGNAL_KEYS = {
+    "municipal_record",
     "active_subdivision",
     "nearby_subdivision",
     "economic_development_park",

@@ -62,6 +62,10 @@ and project invariants; do not duplicate its context in child prompts.
 - API: `api/.venv/bin/python -m pytest api/tests -v` against `postgres-test`.
 - Frontend: `npx tsc -b && npm run lint`; add `npm run build` when bundling may
   be affected.
+- Customer UI: read `docs/frontend/customer-experience.md` before changing
+  navigation, page composition, investigation content, or evidence presentation.
+  Preserve its customer journeys and shared components; document intentional
+  changes to that direction and verify the affected journey in a real browser.
 - Database: from `pipelines`, start `docker compose up -d postgres-test`; a new
   volume runs the ordered `init-db/*.sql` scripts automatically before
   `alembic upgrade head`. Use `docker compose down -v` only for an intended
