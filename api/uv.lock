@@ -149,7 +149,7 @@ dev = [
 requires-dist = [
     { name = "fastapi" },
     { name = "psycopg2-binary" },
-    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10,<3" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.13.0,<3" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "typing-extensions" },
