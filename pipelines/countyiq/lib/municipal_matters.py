@@ -428,7 +428,7 @@ def current_matter_source(cur, source):
         FROM public.current_municipal_evidence evidence
         WHERE evidence.proceeding_id = %s AND evidence.event_key = %s
             AND cardinality(evidence.related_pidns) <> 1
-            AND public.municipal_case_reference(evidence.card->>'title') IS NULL
+            AND public.municipal_card_case_reference(evidence.card) IS NULL
             AND COALESCE(evidence.card->>'title', '') !~*
                 '^[0-9]+[[:space:]]+.+[[:space:]](st|street|rd|road|dr|drive|ave|avenue|ln|lane)[.]?$'
         """,

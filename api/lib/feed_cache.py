@@ -48,3 +48,14 @@ class FeedPageCache:
 
 
 feed_pages = FeedPageCache()
+
+
+def read_feed_revision(cursor) -> tuple[tuple, datetime]:
+    """Read the serving revision inside the caller's consistent snapshot."""
+    cursor.execute(
+        "SELECT generation, revision, CURRENT_DATE AS policy_date, NOW() AS checked_at "
+        "FROM meta.feed_cache_revision"
+    )
+    state = cursor.fetchone()
+    revision = (str(state["generation"]), state["revision"], state["policy_date"])
+    return revision, state["checked_at"]

@@ -242,3 +242,105 @@ def test_split_requires_review_and_resolves_atomically_with_watch_guard(decision
         )
     finally:
         connection.close()
+
+
+@pytest.mark.integration
+def test_merge_requires_review_when_combining_established_matter_identities():
+    suffix = uuid4().hex
+    first, second = f"R{suffix}1", f"R{suffix}2"
+    first_source = _source(
+        (first, "2026-01-01", f"P{suffix}1", "The first application requests relief.")
+    )
+    second_source = _source(
+        (second, "2026-02-01", f"P{suffix}2", "The second application requests relief.")
+    )
+    combined_source = _source(
+        (first, "2026-01-01", f"P{suffix}1", "The first application requests relief."),
+        (
+            second,
+            "2026-02-01",
+            f"P{suffix}2",
+            "The second application requests relief.",
+        ),
+    )
+    combined_source["subject_key"] = f"municipal-bundle:merge-{suffix}"
+    config = SimpleNamespace(model_path="test/matter-author")
+    connection = _connect()
+    database = MatterDatabase(connection, first_source)
+    try:
+        first_result = persist_matters(
+            database, first_source, {"matters": [_matter([first])]}, config
+        )
+        first_key = "matter:" + content_hash(first)[:24]
+        assert first_result.accepted
+
+        database.source = second_source
+        second_result = persist_matters(
+            database, second_source, {"matters": [_matter([second])]}, config
+        )
+        second_key = "matter:" + content_hash(second)[:24]
+        assert second_result.accepted
+
+        database.source = combined_source
+        partition = {"matters": [_matter([first]), _matter([second])]}
+        partition_result = persist_matters(database, combined_source, partition, config)
+        assert partition_result.accepted
+        merged = {"matters": [_matter([first, second])]}
+        with pytest.raises(ValueError, match="would merge"):
+            persist_matters(database, combined_source, merged, config)
+
+        review_packet = {
+            "source_hash": content_hash(combined_source),
+            "expected_prior_inference_id": partition_result.inference_id,
+            "expected_aliases": {first: first_key, second: second_key},
+            "proposed_aliases": {first: first_key, second: first_key},
+            "decision_origin": "auto_resolution",
+            "reviewer": "test AI source review",
+            "rationale": "The reviewed bundle establishes one shared matter.",
+        }
+        with pytest.raises(ValueError, match="current accepted source version"):
+            persist_matters(
+                database,
+                combined_source,
+                merged,
+                config,
+                identity_review={
+                    **review_packet,
+                    "expected_prior_inference_id": partition_result.inference_id + 1000,
+                },
+            )
+        reviewed = persist_matters(
+            database,
+            combined_source,
+            merged,
+            config,
+            identity_review=review_packet,
+        )
+        assert not reviewed.accepted
+        assert reviewed.contradiction_id is not None
+        resolved = resolve_contradiction(
+            database,
+            contradiction_id=reviewed.contradiction_id,
+            resolution="accept_challenger",
+            resolved_by="test AI source review",
+            rationale="The reviewed bundle establishes one shared matter.",
+            expected_source_hash=content_hash(combined_source),
+            decision_origin="auto_resolution",
+        )
+        assert database.execute(
+            "SELECT record_key, matter_key FROM meta.municipal_matter_aliases "
+            "WHERE record_key = ANY(%s::text[]) ORDER BY record_key",
+            ([first, second],),
+        ) == [(first, first_key), (second, first_key)]
+        identity_review = database.execute(
+            "SELECT payload->'identity_review', payload->'matters' "
+            "FROM meta.intelligence_inference_history "
+            "WHERE inference_id = %s",
+            (resolved.resolved_inference_id,),
+        )[0]
+        assert identity_review[0] == review_packet
+        assert [
+            key for matter in identity_review[1] for key in matter["record_keys"]
+        ] == [first, second]
+    finally:
+        connection.close()

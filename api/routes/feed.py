@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 
 from api.lib.database import get_cursor
 from api.lib.evidence import normalize_source_evidence
-from api.lib.feed_cache import feed_pages
+from api.lib.feed_cache import feed_pages, read_feed_revision
 from api.lib.matter_accounts import locate_matter_sources, matter_payload
 from api.lib.municipality_names import municipality_event_patterns
 from api.lib.response_types import IntelligenceFeedResponse
@@ -563,17 +563,12 @@ def fetch_feed(
             required_sources.append("public_proceedings")
         for source_key in required_sources:
             require_source_use(cur, source_key, "derived_product", conceal=False)
-        cur.execute(
-            "SELECT generation, revision, CURRENT_DATE AS policy_date, NOW() AS checked_at "
-            "FROM meta.feed_cache_revision"
-        )
-        state = cur.fetchone()
-        revision = (str(state["generation"]), state["revision"], state["policy_date"])
+        revision, checked_at = read_feed_revision(cur)
         cache_key = json.dumps(
             [event_view, filters, params, order_clause, required_sources],
             sort_keys=True,
         )
-        cached = feed_pages.get(cache_key, revision, state["checked_at"])
+        cached = feed_pages.get(cache_key, revision, checked_at)
         if cached is not None:
             rows, entity_links_by_name = cached
         else:
@@ -615,7 +610,7 @@ def fetch_feed(
             locate_feed_sources(cur, rows[:limit])
             locate_matter_sources(cur, rows[:limit])
 
-            expires_at = state["checked_at"] + timedelta(seconds=60)
+            expires_at = checked_at + timedelta(seconds=60)
             feed_pages.put(
                 cache_key, revision, expires_at, (rows, entity_links_by_name)
             )

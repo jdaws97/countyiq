@@ -48,3 +48,29 @@ on the available evidence set. Recheck fresh requests as the historical account
 backfill expands, and retain the source-current withdrawal tests for any further
 incremental serving changes. The browser available to this review was signed out,
 so these results do not claim a completed authenticated live walkthrough.
+
+## Municipality summary and duplicate source versions
+
+The municipality profile repeated current-event validation for counts, recent
+activity, upcoming items, and policy activity. One materialized query now returns
+all four lists, using the same explained accounts and discovery eligibility as
+Activity. Its summary uses the transactional revision cache; the remaining
+profile fields are fetched normally. This also prevents counting an account and
+its underlying raw cards as separate matters. The prepared handler reduced the
+Conewago profile from 10.27 seconds to about 2.2 seconds during active backfill.
+
+The two Conewago moratorium accounts came from the original and amended July 7
+agendas. Both contain the exact named subject, Resolution 2026-13, but their card
+titles omit the reference. Migration 079 also recognizes an ordinance/resolution
+reference when its own selected subject line explicitly names the complete card
+title after a colon. Context passages, neighboring subjects, ambiguous references,
+and title similarity do not qualify. A rollback-only comparison across current
+production evidence changed exactly these two cards into one candidate bundle.
+The subsequent account merge requires an explicit source-hash/alias review and
+retains both source histories. Existing watched identities still require a
+reviewed watch migration.
+
+Verification of this follow-up: 24 focused API/cache/account tests and three real
+database identity-review tests passed; the pipeline suite passed 1,886 tests with
+137 integration tests deselected. Complete candidate rows outside the two
+intentionally regrouped records matched the previous production view exactly.

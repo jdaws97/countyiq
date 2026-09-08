@@ -1,15 +1,18 @@
 """Municipality listing and profile endpoints."""
 
+import json
+from datetime import timedelta
+
 from fastapi import APIRouter, HTTPException, Query
 
 from api.lib.database import get_cursor
+from api.lib.feed_cache import feed_pages, read_feed_revision
 from api.lib.municipal_evidence import fetch_municipal_evidence
 from api.lib.municipality_names import (
     muni_name_to_pattern,
     municipality_event_patterns,
 )
 from api.lib.response_types import MunicipalityProfileResponse, MunicipalitySummary
-from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import open_data_source_key
 from api.lib.source_policy import require_source_use, source_use_allowed
 
@@ -68,84 +71,85 @@ def _fetch_municipality_delinquency(cur, district_pattern: str) -> dict:
 
 
 def _fetch_development_pipeline(cur, municipality_name: str) -> dict | None:
-    """Planning-pipeline summary from the deterministic event table.
-
-    Answers the developer job "what is moving through planning in this
-    municipality" with source-backed events only; nothing here is generated.
-    """
+    """Summarize the same current, explained matters shown by Activity."""
     if not source_use_allowed(cur, "public_proceedings", "derived_product"):
         return None
-    patterns = municipality_event_patterns(municipality_name)
+    patterns = [
+        pattern.upper() for pattern in municipality_event_patterns(municipality_name)
+    ]
+    revision, checked_at = read_feed_revision(cur)
+    cache_key = json.dumps(["municipality_pipeline", patterns, PIPELINE_WINDOW_DAYS])
+    cached = feed_pages.get(cache_key, revision, checked_at)
+    if cached is not None:
+        return cached
     cur.execute(
         """
-        SELECT event_type, COUNT(*) AS count
-        FROM public.current_intelligence_events
-        WHERE category = 'development'
-          AND municipality IS NOT NULL
-          AND UPPER(municipality) LIKE ANY(%(patterns)s)
-          AND COALESCE(event_date, detected_at::date) >= CURRENT_DATE - %(window)s
-        GROUP BY event_type
-        ORDER BY count DESC, event_type
-        """,
-        {"patterns": [p.upper() for p in patterns], "window": PIPELINE_WINDOW_DAYS},
-    )
-    by_type = [dict(row) for row in cur.fetchall()]
-
-    def _matters(where: str, order: str, limit: int) -> list[dict]:
-        cur.execute(
-            f"""
+        WITH municipal_events AS MATERIALIZED (
             SELECT event_key, event_type, title, event_date, project_key, project_name,
-                   related_pidns
-            FROM public.current_intelligence_events
+                related_pidns, event_tags, detected_at,
+                COALESCE(event_date, detected_at::date) AS effective_date
+            FROM public.current_activity_events
             WHERE category = 'development'
-              AND municipality IS NOT NULL
-              AND UPPER(municipality) LIKE ANY(%(patterns)s)
-              AND {where}
-            ORDER BY {order}
-            LIMIT %(limit)s
-            """,
-            {
-                "patterns": [p.upper() for p in patterns],
-                "window": PIPELINE_WINDOW_DAYS,
-                "limit": limit,
-            },
+                AND municipality IS NOT NULL
+                AND UPPER(municipality) LIKE ANY(%(patterns)s)
+                AND COALESCE(event_date, detected_at::date)
+                    >= CURRENT_DATE - GREATEST(%(window)s, 60)
+                AND source_evidence->0->'details'->>'discovery_eligible'
+                    IS DISTINCT FROM 'false'
+        ), counts AS (
+            SELECT event_type, COUNT(*) AS count
+            FROM municipal_events
+            WHERE effective_date >= CURRENT_DATE - %(window)s
+            GROUP BY event_type
+        ), upcoming AS (
+            SELECT * FROM municipal_events
+            WHERE event_tags && ARRAY['upcoming_decision', 'hearing']::text[]
+                AND effective_date >= CURRENT_DATE - 60
+            ORDER BY effective_date DESC, event_key
+            LIMIT 8
+        ), recent AS (
+            SELECT * FROM municipal_events
+            WHERE effective_date >= CURRENT_DATE - %(window)s
+            ORDER BY effective_date DESC, detected_at DESC, event_key
+            LIMIT 12
+        ), policy AS (
+            SELECT * FROM municipal_events
+            WHERE event_tags && ARRAY['policy_action']::text[]
+                AND effective_date >= CURRENT_DATE - %(window)s
+            ORDER BY effective_date DESC, detected_at DESC, event_key
+            LIMIT 8
         )
-        rows = []
-        for row in cur.fetchall():
-            item = dict(row)
-            item["related_pidns"] = list(item.get("related_pidns") or [])
-            serialize_temporal_fields(item, "event_date")
-            rows.append(item)
-        return rows
-
-    upcoming = _matters(
-        "event_tags && ARRAY['upcoming_decision','hearing']::text[] "
-        "AND COALESCE(event_date, detected_at::date) >= CURRENT_DATE - 60",
-        "COALESCE(event_date, detected_at::date) DESC, event_key",
-        8,
+        SELECT
+            COALESCE((
+                SELECT jsonb_agg(to_jsonb(counts) ORDER BY count DESC, event_type)
+                FROM counts
+            ), '[]'::jsonb) AS by_event_type,
+            COALESCE((
+                SELECT jsonb_agg(
+                    to_jsonb(upcoming) - ARRAY['event_tags', 'detected_at', 'effective_date']
+                    ORDER BY effective_date DESC, event_key
+                ) FROM upcoming
+            ), '[]'::jsonb) AS upcoming,
+            COALESCE((
+                SELECT jsonb_agg(
+                    to_jsonb(recent) - ARRAY['event_tags', 'detected_at', 'effective_date']
+                    ORDER BY effective_date DESC, detected_at DESC, event_key
+                ) FROM recent
+            ), '[]'::jsonb) AS recent,
+            COALESCE((
+                SELECT jsonb_agg(
+                    to_jsonb(policy) - ARRAY['event_tags', 'detected_at', 'effective_date']
+                    ORDER BY effective_date DESC, detected_at DESC, event_key
+                ) FROM policy
+            ), '[]'::jsonb) AS policy
+        """,
+        {"patterns": patterns, "window": PIPELINE_WINDOW_DAYS},
     )
-    recent = _matters(
-        "COALESCE(event_date, detected_at::date) >= CURRENT_DATE - %(window)s",
-        "COALESCE(event_date, detected_at::date) DESC, detected_at DESC, event_key",
-        12,
-    )
-    # Municipality-wide decisions (ordinance amendments, comprehensive plan
-    # actions, sewer capacity, moratoria) answer "what is this township up
-    # to" more directly than any single applicant's matter.
-    policy = _matters(
-        "event_tags && ARRAY['policy_action']::text[] "
-        "AND COALESCE(event_date, detected_at::date) >= CURRENT_DATE - %(window)s",
-        "COALESCE(event_date, detected_at::date) DESC, detected_at DESC, event_key",
-        8,
-    )
-    return {
-        "window_days": PIPELINE_WINDOW_DAYS,
-        "total_matters": sum(int(row["count"]) for row in by_type),
-        "by_event_type": by_type,
-        "upcoming": upcoming,
-        "recent": recent,
-        "policy": policy,
-    }
+    result = dict(cur.fetchone())
+    result["window_days"] = PIPELINE_WINDOW_DAYS
+    result["total_matters"] = sum(int(row["count"]) for row in result["by_event_type"])
+    feed_pages.put(cache_key, revision, checked_at + timedelta(seconds=60), result)
+    return result
 
 
 def _fetch_radar_top(cur, municipality_name: str, *, limit: int = 8) -> list[dict]:
@@ -256,7 +260,7 @@ def list_municipalities() -> list[MunicipalitySummary]:
 @router.get("/{name}")
 def get_municipality(name: str) -> MunicipalityProfileResponse:
     """Get a single municipality profile."""
-    with get_cursor() as cur:
+    with get_cursor(snapshot=True) as cur:
         require_source_use(
             cur, open_data_source_key(), "derived_product", conceal=False
         )
