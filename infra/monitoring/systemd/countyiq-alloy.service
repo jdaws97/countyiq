@@ -1,0 +1,36 @@
+[Unit]
+Description=CountyIQ Grafana Cloud metrics and logs collector
+After=network-online.target countyiq-monitor@fast.service
+Wants=network-online.target
+ConditionPathExists=/etc/countyiq/monitoring.env
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/countyiq/monitoring.env
+ExecStart=/opt/countyiq-monitoring/bin/alloy run --server.http.listen-addr=127.0.0.1:12345 --storage.path=/var/lib/countyiq-alloy --disable-reporting /opt/countyiq-monitoring/config.alloy
+Restart=on-failure
+RestartSec=10s
+StateDirectory=countyiq-alloy
+StateDirectoryMode=0700
+UMask=0077
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=128
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Root can read the root-owned Docker log files, but Alloy cannot control Docker.
+InaccessiblePaths=/var/run/docker.sock /etc/countyiq/production.env /etc/countyiq/cloudflared.token
+ReadWritePaths=/var/lib/countyiq-alloy
+
+[Install]
+WantedBy=multi-user.target

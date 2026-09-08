@@ -1,0 +1,11 @@
+[Unit]
+Description=Inspect CountyIQ Docker storage hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Unit=countyiq-monitor@storage.service
+
+[Install]
+WantedBy=timers.target

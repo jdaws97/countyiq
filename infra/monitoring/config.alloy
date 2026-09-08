@@ -1,0 +1,187 @@
+// Only stable, bounded labels leave this host. Grafana Free has 10k series.
+logging {
+	level = "warn"
+}
+
+prometheus.exporter.unix "host" {
+	set_collectors = [
+		"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev",
+		"stat", "textfile", "time", "uname", "vmstat",
+	]
+
+	filesystem {
+		fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|tmpfs)$"
+		mount_points_exclude = "^/(dev|proc|sys|run|var/lib/docker)($|/)"
+		mount_timeout        = "5s"
+	}
+
+	netdev {
+		device_exclude = "^(veth.*|br-.*|docker.*|lo)$"
+	}
+
+	textfile {
+		directory = "/var/lib/countyiq/monitoring/metrics"
+	}
+}
+
+prometheus.scrape "host" {
+	targets         = prometheus.exporter.unix.host.targets
+	scrape_interval = "60s"
+	scrape_timeout  = "10s"
+	sample_limit    = 2500
+	forward_to      = [prometheus.relabel.host.receiver]
+}
+
+prometheus.relabel "host" {
+	forward_to = [prometheus.remote_write.cloud.receiver]
+
+	rule {
+		target_label = "job"
+		replacement  = "countyiq/host"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "countyiq-production"
+	}
+}
+
+prometheus.scrape "collector" {
+	targets         = [{"__address__" = "127.0.0.1:12345"}]
+	scrape_interval = "60s"
+	scrape_timeout  = "10s"
+	sample_limit    = 3000
+	forward_to      = [prometheus.relabel.collector.receiver]
+}
+
+prometheus.relabel "collector" {
+	forward_to = [prometheus.remote_write.cloud.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "(prometheus_remote_storage_(samples_pending|samples_failed_total|samples_dropped_total|queue_highest_sent_timestamp_seconds)|loki_process_dropped_lines_total|loki_write_(dropped_entries_total|sent_entries_total)|prometheus_target_scrapes_exceeded_sample_limit_total|up)"
+		action        = "keep"
+	}
+
+	rule {
+		target_label = "job"
+		replacement  = "countyiq/collector"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "countyiq-production"
+	}
+}
+
+prometheus.remote_write "cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_METRICS_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_METRICS_USER")
+			password = sys.env("GRAFANA_INGEST_TOKEN")
+		}
+
+		queue_config {
+			capacity             = 2500
+			max_shards           = 2
+			max_samples_per_send = 500
+		}
+	}
+
+	wal {
+		truncate_frequency = "5m"
+		min_keepalive_time = "5m"
+		max_keepalive_time = "30m"
+	}
+}
+
+local.file "container_logs" {
+	filename       = "/var/lib/countyiq/monitoring/container-logs.json"
+	is_secret      = false
+	poll_frequency = "60s"
+}
+
+loki.source.file "containers" {
+	targets       = encoding.from_json(local.file.container_logs.content)
+	tail_from_end = true
+	forward_to    = [loki.process.containers.receiver]
+}
+
+loki.process "containers" {
+	forward_to = [loki.write.cloud.receiver]
+
+	stage.docker { }
+
+	stage.decolorize { }
+
+	stage.drop {
+		expression          = "(?i)(GET|HEAD) /(api/ready|api/health|healthz|server_info)([ ?]|$)"
+		drop_counter_reason = "routine_healthcheck"
+	}
+
+	stage.drop {
+		expression          = "(?i)\\bdebug\\b"
+		drop_counter_reason = "debug"
+	}
+	// Drop payload/SQL dumps instead of attempting to redact arbitrary records.
+	stage.drop {
+		expression          = "(?i)(\\[SQL:|\\[parameters:|raw_text|prompt_payload|authorization|cf-access-client-secret|cookie:|password|api[_-]?key|access[_-]?token|secret[_-]?key)"
+		drop_counter_reason = "sensitive_content"
+	}
+
+	stage.replace {
+		expression = "(?i)(postgres(?:ql)?://[^ ]+)"
+		replace    = "[database connection redacted]"
+	}
+
+	stage.replace {
+		expression = "([?][^ \"]+)"
+		replace    = "?[query redacted]"
+	}
+
+	stage.replace {
+		expression = "([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})"
+		replace    = "[email redacted]"
+	}
+
+	stage.replace {
+		expression = "(sk-[a-zA-Z0-9_-]+|glc_[a-zA-Z0-9_=-]+|eyJ[a-zA-Z0-9_.-]{40,})"
+		replace    = "[credential redacted]"
+	}
+
+	stage.drop {
+		longer_than         = "4KB"
+		drop_counter_reason = "oversized"
+	}
+	// Global across all six services: <= roughly 11 GB/month of message payload,
+	// with substantial headroom below the current 50 GB Free allowance.
+	stage.limit {
+		rate  = 1
+		burst = 10
+		drop  = true
+	}
+
+	stage.static_labels {
+		values = {instance = "countyiq-production"}
+	}
+
+	stage.label_keep {
+		values = ["instance", "job", "service", "stream"]
+	}
+}
+
+loki.write "cloud" {
+	endpoint {
+		url                 = sys.env("GRAFANA_LOGS_URL")
+		batch_size          = "256KiB"
+		batch_wait          = "5s"
+		max_backoff_retries = 3
+
+		basic_auth {
+			username = sys.env("GRAFANA_LOGS_USER")
+			password = sys.env("GRAFANA_INGEST_TOKEN")
+		}
+	}
+}
