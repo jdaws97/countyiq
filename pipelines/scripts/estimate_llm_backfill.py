@@ -64,6 +64,7 @@ def render_report(report: dict) -> str:
     counts = profile["counts"]
     lines.extend(
         [
+            f"Profile: {report['profile']}",
             "",
             (
                 "Input snapshot: "
@@ -73,10 +74,14 @@ def render_report(report: dict) -> str:
                 f"{counts['development_signals']:,} development signals, "
                 f"{counts['owners']:,} owners"
             ),
-            f"Planning total: {_range(totals['planning_calls_min'], totals['planning_calls_max'])} calls, "
-            f"{_money(totals['planning_cost_min'], totals['planning_cost_max'])}",
-            f"Retry/output ceiling: {totals['retry_ceiling_calls']:,} calls, "
-            f"{_money(totals['retry_ceiling_cost'], totals['retry_ceiling_cost'])}",
+            (
+                f"Planning total: {_range(totals['planning_calls_min'], totals['planning_calls_max'])} calls, "
+                f"{_money(totals['planning_cost_min'], totals['planning_cost_max'])}"
+            ),
+            (
+                f"Retry/output ceiling: {totals['retry_ceiling_calls']:,} calls, "
+                f"{_money(totals['retry_ceiling_cost'], totals['retry_ceiling_cost'])}"
+            ),
             "Pass 4 is excluded because it is disabled and not required by the alpha product.",
             "Runtime gates are status only: planning cost models the hypothetical backfill before enablement.",
             "Costs use visible output-token assumptions and no-cache pricing; inspect JSON for caveats.",
@@ -93,9 +98,20 @@ def render_report(report: dict) -> str:
                 f"{_money(pass0_details['last_365_days_planning_cost'], pass0_details['last_365_days_planning_cost'])}; "
                 f"730 days {pass0_details['last_730_days_planning_calls']:,} calls / "
                 f"{_money(pass0_details['last_730_days_planning_cost'], pass0_details['last_730_days_planning_cost'])}"
-            )
+            ),
+            (
+                "Pass 0 output assumption: "
+                f"{pass0['assumed_output_tokens_per_call']:,} tokens per call."
+            ),
         ]
     )
+    if report["profile"] in {"records", "explained-records"}:
+        lines.append(
+            "Pass 0 observed eligible records: "
+            f"{pass0_details['observed_eligible_records_last_365_days']:,} in the last 365 days / "
+            f"{pass0_details['observed_eligible_records_per_month_last_365_days']:.2f} per month; "
+            "meeting dates observed, not ingestion growth."
+        )
     return "\n".join(lines)
 
 
@@ -106,6 +122,12 @@ def main() -> int:
         type=int,
         default=50,
         help="Maximum production-shaped prompts sampled per pass (default: 50)",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("intelligence", "records", "explained-records"),
+        default="intelligence",
+        help="Estimate the full intelligence passes or source-record profile (default: intelligence)",
     )
     parser.add_argument(
         "--json",
@@ -129,7 +151,11 @@ def main() -> int:
         # fails at PostgreSQL instead of mutating the backfill database.
         database.execute("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
         try:
-            report = estimate_backfill(database, sample_size=args.sample_size)
+            report = estimate_backfill(
+                database,
+                sample_size=args.sample_size,
+                profile=args.profile,
+            )
         except RuntimeError as exc:
             parser.exit(2, f"estimate unavailable: {exc}\n")
     finally:

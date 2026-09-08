@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 import psycopg2
 import pytest
 
 from api.tests.conftest import DB_ENV, TEST_MUNICIPALITY, TEST_PIDN
+from api.routes import parcels
 
 
 SOIL_IDS = (991001, 991002, 991003)
@@ -110,6 +112,49 @@ def test_parcel_soils_group_fragments_and_preserve_source_receipt(
     receipt_units = {unit["drainage"]: unit for unit in receipt["details"]["map_units"]}
     assert receipt_units["Well drained"]["source_record_ids"] == list(SOIL_IDS[:2])
     assert receipt_units["Well drained"]["map_unit_key"] == "same-map-unit"
+
+
+def test_map_summary_preserves_displayed_facts_without_soil_query(
+    client, spatial_fact_rows, monkeypatch
+):
+    _insert_soils()
+    report_response = client.get(f"/api/parcels/{TEST_PIDN}")
+    assert report_response.status_code == 200
+    report = report_response.json()
+    assert report["soil_profile"]["units"]
+    original_get_cursor = parcels.get_cursor
+
+    class SummaryCursor:
+        def __init__(self, cursor):
+            self.cursor = cursor
+
+        def execute(self, query, params=None):
+            assert "parcel_soil_units" not in query, "Map selection calculated soils"
+            return self.cursor.execute(query, params)
+
+        def __getattr__(self, name):
+            return getattr(self.cursor, name)
+
+    @contextmanager
+    def summary_cursor(**kwargs):
+        with original_get_cursor(**kwargs) as cursor:
+            yield SummaryCursor(cursor)
+
+    monkeypatch.setattr(parcels, "get_cursor", summary_cursor)
+    response = client.get(f"/api/parcels/{TEST_PIDN}/summary")
+    assert response.status_code == 200
+    assert response.json() == {
+        key: report[key]
+        for key in (
+            "parcel",
+            "tax_delinquency",
+            "flood_zone",
+            "structures",
+            "development_momentum",
+            "source_explanation",
+        )
+    }
+    assert client.get("/api/parcels/nonexistent/summary").status_code == 404
 
 
 def test_parcel_zoning_prefers_newest_adoption_then_highest_record_id(

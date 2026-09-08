@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import date
+from itertools import pairwise
 
 import pytest
-
 from countyiq.lib.backfill_estimator import (
     KNOWN_PRICE_PROFILES,
     _cost,
@@ -135,6 +135,198 @@ def test_disabled_runtime_gate_does_not_zero_hypothetical_backfill(monkeypatch):
     assert pass0["planning_cost_min"] > 0
 
 
+def test_records_profile_prices_evidence_reads_and_omits_inferred_passes():
+    report = estimate_backfill(FakeDatabase(), sample_size=10, profile="records")
+
+    assert report["profile"] == "records"
+    pass0, pass1, pass2, pass3, pass3b = report["passes"]
+    assert pass0["key"] == "pass0"
+    assert pass0["planning_calls_min"] == 2
+    assert pass0["planning_calls_max"] == 3
+    assert pass0["retry_ceiling_calls"] == 6
+    assert pass0["runtime_reservation_calls"] == 6
+    assert pass0["details"]["native_text_documents"] == 2
+    assert pass0["details"]["needs_ocr_documents"] == 1
+    assert pass0["details"]["observed_eligible_records_per_month_last_365_days"] >= 0
+    assert pass1["planning_calls_max"] >= 0
+    for estimate in (pass2, pass3, pass3b):
+        assert estimate["planning_calls_min"] == 0
+        assert estimate["planning_calls_max"] == 0
+        assert estimate["details"]["records_profile_omitted"] is True
+
+
+def test_records_profile_value_gate_and_model_routing_are_priced_separately(
+    monkeypatch,
+):
+    from countyiq.lib import backfill_estimator as estimator
+
+    ordinary_substantive_source = "zoning application " + "x" * 300
+    large_substantive_source = "zoning application " + "x" * 16_001
+    financial_substantive_source = (
+        "road project financing " + " ".join("$1,000" for _ in range(12)) + " x" * 100
+    )
+    accounting_only_source = "\n".join(
+        [
+            "Expenses by Vendor Detail",
+            "Vendor Account Amount",
+            "Acme Supplies 100-100 $1,200.00",
+            "County Utility 100-200 $2,300.00",
+            "Road Materials 100-300 $3,400.00",
+            "Vendor detail continued " + "x" * 100,
+        ]
+    )
+
+    class MixedEvidenceDatabase(FakeDatabase):
+        def execute(self, sql: str, params=None):
+            if "FROM staging.public_proceedings pp" in " ".join(sql.split()):
+                return [
+                    (
+                        1,
+                        "Example Township Board",
+                        date(2026, 8, 1),
+                        "board_of_supervisors",
+                        "https://example.test/ordinary.pdf",
+                        ordinary_substantive_source,
+                        "ordinary-hash",
+                    ),
+                    (
+                        2,
+                        "Example Township Board",
+                        date(2026, 8, 1),
+                        "board_of_supervisors",
+                        "https://example.test/large.pdf",
+                        large_substantive_source,
+                        "large-hash",
+                    ),
+                    (
+                        3,
+                        "Example Township Board",
+                        date(2026, 8, 2),
+                        "board_of_supervisors",
+                        "https://example.test/financial.pdf",
+                        financial_substantive_source,
+                        "financial-hash",
+                    ),
+                    (
+                        4,
+                        "Example Township Board",
+                        date(2026, 8, 2),
+                        "board_of_supervisors",
+                        "https://example.test/accounting.pdf",
+                        accounting_only_source,
+                        "accounting-hash",
+                    ),
+                ]
+            return super().execute(sql, params)
+
+    monkeypatch.setattr(
+        estimator, "resolve_pass_model", lambda pass_number: "z-ai/glm-5.3-flash"
+    )
+
+    report = estimate_backfill(
+        MixedEvidenceDatabase(), sample_size=10, profile="records"
+    )
+    pass0 = report["passes"][0]
+
+    assert pass0["planning_calls_min"] == 3
+    assert pass0["planning_calls_max"] == 3
+    assert pass0["retry_ceiling_calls"] == 6
+    assert pass0["max_output_tokens_per_call"] == 8_192
+    assert pass0["details"]["model_counts"] == {
+        "z-ai/glm-5.3-flash": 3,
+    }
+    assert pass0["details"]["output_tokens_by_model"] == {
+        "z-ai/glm-5.3-flash": 1_500,
+    }
+    assert set(pass0["details"]["planning_cost_by_model"]) == {
+        "z-ai/glm-5.3-flash",
+    }
+    assert pass0["details"]["value_gate_skipped_documents"] == 1
+    assert pass0["details"]["value_gate_skip_reasons"] == {"accounting_table_only": 1}
+    assert pass0["details"]["excluded_accounting_characters"] > 0
+    assert pass0["planning_cost_min"] > 0
+    assert pass0["planning_cost_max"] == pass0["planning_cost_min"]
+
+
+def test_evidence_mode_never_applies_structured_keyword_skip(monkeypatch):
+    monkeypatch.setenv("COUNTYIQ_PASS0_MODE", "evidence")
+
+    report = estimate_backfill(FakeDatabase(), sample_size=10)
+
+    pass0 = report["passes"][0]
+    assert pass0["label"] == "Pass 0 municipal evidence reading"
+    assert pass0["details"]["native_text_documents"] == 2
+    assert "deterministic_prefilter_skips" not in pass0["details"]
+
+
+def test_records_evidence_reads_each_large_native_document_once_without_truncation():
+    raw_text = "\n".join(f"Record line {number} " + "x" * 16_000 for number in range(3))
+
+    class MultiWindowDatabase(FakeDatabase):
+        def execute(self, sql: str, params=None):
+            if "FROM staging.public_proceedings pp" in " ".join(sql.split()):
+                return [
+                    (
+                        1,
+                        "Example Township Board",
+                        date(2026, 8, 1),
+                        "board_of_supervisors",
+                        "https://example.test/meeting.pdf",
+                        raw_text,
+                        "long-hash",
+                    )
+                ]
+            return super().execute(sql, params)
+
+    report = estimate_backfill(MultiWindowDatabase(), sample_size=10, profile="records")
+    pass0 = report["passes"][0]
+
+    assert pass0["details"]["complete_source_read_calls"] == 1
+    assert pass0["planning_calls_min"] == 1
+    assert pass0["planning_calls_max"] == 1
+    assert pass0["average_input_tokens"] > 10_000
+
+
+def test_backfill_profile_rejects_unknown_value():
+    with pytest.raises(
+        ValueError, match="profile must be intelligence, records, or explained-records"
+    ):
+        estimate_backfill(FakeDatabase(), profile="unsupported")
+
+
+def test_evidence_ceiling_tracks_output_limit_and_attribution_correction(monkeypatch):
+    class NativeDatabase(FakeDatabase):
+        def execute(self, sql, params=None):
+            rows = super().execute(sql, params)
+            if "FROM staging.public_proceedings pp" in " ".join(sql.split()):
+                return [row for row in rows if len(row[5]) >= 200]
+            return rows
+
+    monkeypatch.setenv("COUNTYIQ_PASS0_MODE", "evidence")
+    monkeypatch.setenv("COUNTYIQ_PASS0_MODEL", "openai/gpt-5.6-luna")
+    monkeypatch.setenv("COUNTYIQ_PASS0_MAX_TOKENS", "8192")
+    ordinary = estimate_backfill(NativeDatabase(), profile="records")["passes"][0]
+    monkeypatch.setenv("COUNTYIQ_PASS0_MAX_TOKENS", "128000")
+    larger = estimate_backfill(NativeDatabase(), profile="records")["passes"][0]
+    assert larger["max_output_tokens_per_call"] == 128000
+    assert larger["max_output_tokens_per_call"] > ordinary["max_output_tokens_per_call"]
+    assert larger["retry_ceiling_calls"] == 2 * larger["planning_calls_max"]
+    assert larger["runtime_reservation_calls"] == larger["retry_ceiling_calls"]
+    assert larger["retry_ceiling_cost"] > ordinary["retry_ceiling_cost"]
+
+
+def test_explained_records_profile_does_not_treat_unmeasured_summaries_as_free():
+    report = estimate_backfill(
+        FakeDatabase(), sample_size=10, profile="explained-records"
+    )
+    _, _, pass2, pass3, pass3b = report["passes"]
+    assert pass2["planning_calls_max"] == pass3b["planning_calls_max"] == 0
+    assert pass3["model"] == "openai/gpt-5.6-luna"
+    assert pass3["planning_cost_max"] is None
+    assert report["totals"]["planning_cost_max"] is None
+    assert pass3["details"]["runtime_mode_required"] == "COUNTYIQ_PASS3_MODE=records"
+
+
 def test_pass3_estimate_binds_the_runtime_rank_limit(monkeypatch):
     class ParameterCheckingDatabase(FakeDatabase):
         def execute(self, sql: str, params=None):
@@ -161,11 +353,13 @@ def test_report_fails_closed_when_pass1_candidate_view_is_unpopulated():
 
 
 def test_pass1_estimate_excludes_runtime_context_deferrals(monkeypatch):
+    monkeypatch.setenv("COUNTYIQ_PASS1_SCOPE", "all")
     from contextlib import nullcontext
+
     from countyiq.lib import backfill_estimator as estimator
 
     large = [f"LARGE {n} LLC" for n in range(41)]
-    pairs = list(zip(large, large[1:])) + [
+    pairs = list(pairwise(large)) + [
         ("SMALL A LLC", "SMALL B LLC"),
         ("LONG A LLC", "LONG B LLC"),
     ]

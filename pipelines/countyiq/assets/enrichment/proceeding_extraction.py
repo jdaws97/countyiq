@@ -7,18 +7,24 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
-from dagster import AssetExecutionContext, MaterializeResult, MetadataValue, asset
+from dagster import (
+    AssetExecutionContext,
+    Field,
+    MaterializeResult,
+    MetadataValue,
+    asset,
+)
 
-from countyiq.lib.intelligence_common import PROCEEDING_USE_ALLOWED_SQL
 from countyiq.lib.county_config import get_county_config, municipality_source_key
 from countyiq.lib.doc_text import extract_text_from_pdf_bytes
 from countyiq.lib.error_budget import check_error_budget
+from countyiq.lib.intelligence_autoresolve import auto_resolve_contradiction
 from countyiq.lib.intelligence_common import (
+    PROCEEDING_USE_ALLOWED_SQL,
     fetch_prior_pass_attempts,
     pass_attempt_priority,
 )
 from countyiq.lib.intelligence_events import normalize_development_tags
-from countyiq.lib.intelligence_autoresolve import auto_resolve_contradiction
 from countyiq.lib.intelligence_integrity import (
     content_hash,
     inference_input_hash,
@@ -27,12 +33,11 @@ from countyiq.lib.intelligence_integrity import (
     record_validation_rejection,
     validate_pass0_extractions,
 )
-from countyiq.lib.proceeding_contract import details_for
-from countyiq.lib.proceeding_quality import VERSION as METADATA_REVIEW_VERSION
 from countyiq.lib.pass0_templates import (
     EXTRACTION_USER_TEMPLATE,
     PASS0_SYSTEM_PROMPT,
     PROMPT_VERSION,
+    document_prompt,
 )
 from countyiq.lib.pass_llm_config import (
     PassHarnessUnavailable,
@@ -45,7 +50,8 @@ from countyiq.lib.proceeding_claims import (
     bind_model_claims,
     review_claims,
 )
-from countyiq.lib.pass0_templates import document_prompt
+from countyiq.lib.proceeding_contract import details_for
+from countyiq.lib.proceeding_quality import VERSION as METADATA_REVIEW_VERSION
 from countyiq.lib.robots import RobotsPolicy
 from countyiq.lib.source_rights import (
     authorize_municipality_sources,
@@ -335,6 +341,13 @@ def _write_proceeding_extractions(
     ),
     deps=["public_proceedings_scrape"],
     kinds={"postgres", "llm"},
+    config_schema={
+        "proceeding_ids": Field(
+            [int],
+            default_value=[],
+            description="Optional fixed document scope for an evidence-mode canary.",
+        ),
+    },
 )
 def proceeding_extraction(
     context: AssetExecutionContext,
@@ -357,6 +370,23 @@ def proceeding_extraction(
         asset_key="proceeding_extraction",
         dagster_run_id=context.run_id,
     )
+
+    mode = os.environ.get("COUNTYIQ_PASS0_MODE", "structured").strip().lower()
+    proceeding_ids = context.op_config.get("proceeding_ids", [])
+    if mode == "evidence":
+        from countyiq.lib.municipal_evidence_pipeline import run_municipal_evidence
+
+        return run_municipal_evidence(
+            context,
+            database,
+            PENDING_PROCEEDINGS_QUERY,
+            municipality_authorizations,
+            proceeding_ids=proceeding_ids,
+        )
+    if proceeding_ids:
+        raise ValueError("A fixed proceeding scope requires evidence mode")
+    if mode != "structured":
+        raise ValueError("COUNTYIQ_PASS0_MODE must be evidence or structured")
 
     try:
         config, invoke_with_retry = resolve_pass_harness(

@@ -5,10 +5,12 @@ import { DeckGL } from '@deck.gl/react'
 import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { PickingInfo, MapViewState } from '@deck.gl/core'
 import type { Feature, Geometry } from 'geojson'
-import Nav from '../components/Nav'
 import LayerToggle, { type LayerConfig } from '../components/LayerToggle'
+import WorkspaceShell from '../components/WorkspaceShell'
 import { ButtonLink } from '../components/ui'
-import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, formatShortDate } from '../lib/format'
+import { appendRadarCriteria, planStatusFor } from '../lib/radarFilters'
+import EvidencePanel from '../components/EvidencePanel'
 import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
 import { fitGeometry, splitBounds, urlView, visibleBounds, type MapSize } from '../lib/mapViewport'
 import type {
@@ -17,13 +19,13 @@ import type {
   ParcelFeatureCollection,
   ParcelFeatureProperties,
   PenndotProjectProperties,
-  PropertyReport,
+  ParcelSummary,
   RadarBboxItem,
   RadarBboxResponse,
   ZoningProperties,
 } from '../types/api'
 
-type RadarBasis = 'opportunity' | 'momentum'
+type RadarBasis = 'opportunity' | 'momentum' | 'readiness'
 type ParcelFilter = 'all' | 'delinquent' | 'vacant' | 'vacant_delinquent' | 'radar'
 interface RadarPoint {
   properties: {
@@ -93,6 +95,7 @@ const STATIC_LAYER_IDS = ['municipalities', 'flood_zones', 'zoning', 'penndot_pr
 
 const URL_LAYER_MAP: Record<string, string> = {
   flood: 'flood_zones',
+  zoning: 'zoning',
   penndot: 'penndot_projects',
   vacant: 'parcels',
   delinquent: 'parcels',
@@ -174,8 +177,26 @@ export default function MapView() {
     return 'all'
   })
   const [radarBasis] = useState<RadarBasis>(() =>
-    searchParams.get('radar') === 'momentum' ? 'momentum' : 'opportunity',
+    searchParams.get('radar') === 'momentum'
+      ? 'momentum'
+      : searchParams.get('radar') === 'readiness'
+        ? 'readiness'
+        : 'opportunity',
   )
+  const radarMinScore = searchParams.get('min_score') ?? '10'
+  const radarMunicipality = searchParams.get('municipality') ?? ''
+  const radarMinAcres = searchParams.get('min_acres') ?? ''
+  const radarMaxAcres = searchParams.get('max_acres') ?? ''
+  const radarParcelClass = searchParams.get('class') ?? ''
+  const radarPlanStatus = planStatusFor(radarBasis, searchParams.get('plan_status'))
+  const radarListParams = appendRadarCriteria(new URLSearchParams({ view: radarBasis }), {
+    minScore: radarMinScore,
+    municipality: radarMunicipality,
+    minAcres: radarMinAcres,
+    maxAcres: radarMaxAcres,
+    parcelClass: radarParcelClass,
+    planStatus: radarPlanStatus,
+  })
   const [radarData, setRadarData] = useState<RadarPoint[] | null>(null)
   const [radarTruncated, setRadarTruncated] = useState(false)
   const [radarStatus, setRadarStatus] = useState<LoadStatus>('idle')
@@ -194,16 +215,31 @@ export default function MapView() {
   const [currentZoom, setCurrentZoom] = useState(initialViewState.zoom)
   const [hoverInfo, setHoverInfo] = useState<PickingInfo | null>(null)
 
-  const [selectedPidn, setSelectedPidn] = useState<string | null>(null)
-  const [propertyReport, setPropertyReport] = useState<PropertyReport | null>(null)
-  const [reportLoading, setReportLoading] = useState(false)
+  const [selectedPidn, setSelectedPidn] = useState<string | null>(() =>
+    searchParams.get('highlight'),
+  )
+  const [propertyReport, setPropertyReport] = useState<ParcelSummary | null>(null)
+  const [reportLoading, setReportLoading] = useState(() => Boolean(searchParams.get('highlight')))
   const [reportFailed, setReportFailed] = useState(false)
   const panelOpen = selectedPidn !== null
+  const adjacentPidns = useMemo(
+    () =>
+      new Set(
+        (propertyReport?.source_explanation?.citation_evidence ?? [])
+          .filter(
+            (item) =>
+              item.citation_key.includes(':adjacent_') && typeof item.details?.pidn === 'string',
+          )
+          .map((item) => String(item.details.pidn)),
+      ),
+    [propertyReport],
+  )
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewStateRef = useRef<MapViewState | null>(null)
   const mapCanvasRef = useRef<HTMLDivElement | null>(null)
   const fittedHighlightRef = useRef<string | null>(null)
+  const centeredHighlightRef = useRef<string | null>(null)
   const userNavigatedRef = useRef(false)
   const parcelRequestRef = useRef(0)
   const radarRequestRef = useRef(0)
@@ -266,7 +302,19 @@ export default function MapView() {
         return
       }
       const bounds = visibleBounds(vs, mapSize)
-      const requestKey = [radarBasis, bounds.west, bounds.south, bounds.east, bounds.north]
+      const requestKey = [
+        radarBasis,
+        radarMinScore,
+        radarMunicipality,
+        radarMinAcres,
+        radarMaxAcres,
+        radarParcelClass,
+        radarPlanStatus,
+        bounds.west,
+        bounds.south,
+        bounds.east,
+        bounds.north,
+      ]
         .map((value) => (typeof value === 'number' ? value.toFixed(6) : value))
         .join(':')
       if (radarPendingKeyRef.current === requestKey || radarLoadedKeyRef.current === requestKey) {
@@ -283,8 +331,21 @@ export default function MapView() {
           east: bounds.east.toFixed(6),
           north: bounds.north.toFixed(6),
           view: radarBasis,
-          min_score: '10',
+          min_score: radarMinScore,
         })
+        if (radarMunicipality) {
+          params.set('municipality', radarMunicipality)
+        }
+        if (radarMinAcres) {
+          params.set('min_acres', radarMinAcres)
+        }
+        if (radarMaxAcres) {
+          params.set('max_acres', radarMaxAcres)
+        }
+        if (radarParcelClass) {
+          params.set('class', radarParcelClass)
+        }
+        params.set('plan_status', radarPlanStatus)
         return fetch(`/api/radar/development/bbox?${params}`).then((response) => {
           if (!response.ok) {
             throw new Error(`${response.status}`)
@@ -338,7 +399,16 @@ export default function MapView() {
           }
         })
     },
-    [radarBasis, mapSize],
+    [
+      radarBasis,
+      radarMinScore,
+      radarMunicipality,
+      radarMinAcres,
+      radarMaxAcres,
+      radarParcelClass,
+      radarPlanStatus,
+      mapSize,
+    ],
   )
 
   const fetchParcels = useCallback(
@@ -537,7 +607,7 @@ export default function MapView() {
     if (
       !highlightPidn ||
       userNavigatedRef.current ||
-      fittedHighlightRef.current === highlightPidn ||
+      centeredHighlightRef.current === highlightPidn ||
       !parcelData
     ) {
       return
@@ -549,7 +619,20 @@ export default function MapView() {
     if (!feature?.geometry) {
       return
     }
-    const fitted = fitGeometry(viewStateRef.current || viewState, mapSize, feature.geometry)
+    const panel = mapCanvasRef.current?.querySelector<HTMLElement>('.map-property-panel')
+    const panelIsBelow = panel && panel.clientWidth >= mapSize.width - 1
+    const obscured =
+      panelOpen && panel
+        ? panelIsBelow
+          ? { bottom: panel.clientHeight }
+          : { right: panel.clientWidth }
+        : {}
+    const fitted = fitGeometry(
+      viewStateRef.current || viewState,
+      mapSize,
+      feature.geometry,
+      obscured,
+    )
     if (!fitted) {
       return
     }
@@ -564,23 +647,46 @@ export default function MapView() {
       fetchParcels(fitted)
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [highlightPidn, parcelData, mapSize, viewState, fetchParcels])
+  }, [highlightPidn, parcelData, mapSize, viewState, fetchParcels, panelOpen])
 
   useEffect(() => {
     if (!selectedPidn) {
       return
     }
     let cancelled = false
-    fetch(`/api/parcels/${encodeURIComponent(selectedPidn)}`)
+    const controller = new AbortController()
+    fetch(`/api/parcels/${encodeURIComponent(selectedPidn)}/summary`, {
+      signal: controller.signal,
+    })
       .then((r) => {
         if (!r.ok) {
           throw new Error(`${r.status}`)
         }
         return r.json()
       })
-      .then((data: PropertyReport) => {
+      .then((data: ParcelSummary) => {
         if (!cancelled) {
           setPropertyReport(data)
+          const parcel = data.parcel
+          if (
+            highlightPidn &&
+            !userNavigatedRef.current &&
+            centeredHighlightRef.current !== highlightPidn &&
+            parcel.lat != null &&
+            parcel.lng != null
+          ) {
+            const fitted = {
+              ...(viewStateRef.current || viewState),
+              latitude: parcel.lat,
+              longitude: parcel.lng,
+              zoom: 16,
+            }
+            centeredHighlightRef.current = highlightPidn
+            viewStateRef.current = fitted
+            setViewState(fitted)
+            setCurrentZoom(fitted.zoom)
+            fetchParcels(fitted)
+          }
         }
       })
       .catch(() => {
@@ -596,8 +702,9 @@ export default function MapView() {
       })
     return () => {
       cancelled = true
+      controller.abort()
     }
-  }, [selectedPidn])
+  }, [fetchParcels, highlightPidn, selectedPidn, viewState])
 
   const handleToggle = useCallback((id: string) => {
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)))
@@ -668,6 +775,9 @@ export default function MapView() {
             if (highlightPidn && pidn === highlightPidn) {
               return [216, 169, 75, 65]
             }
+            if (pidn && adjacentPidns.has(pidn)) {
+              return [216, 169, 75, 95]
+            }
             if (parcelFilter === 'vacant_delinquent') {
               return [216, 169, 75, 150]
             }
@@ -686,6 +796,9 @@ export default function MapView() {
             }
             if (highlightPidn && pidn === highlightPidn) {
               return [174, 115, 19, 255]
+            }
+            if (pidn && adjacentPidns.has(pidn)) {
+              return [174, 115, 19, 230]
             }
             if (parcelFilter === 'vacant_delinquent') {
               return [216, 169, 75, 230]
@@ -712,8 +825,8 @@ export default function MapView() {
           autoHighlight: true,
           highlightColor: [255, 255, 255, 60],
           updateTriggers: {
-            getFillColor: [parcelFilter, highlightPidn, selectedPidn],
-            getLineColor: [parcelFilter, highlightPidn, selectedPidn],
+            getFillColor: [parcelFilter, highlightPidn, selectedPidn, adjacentPidns],
+            getLineColor: [parcelFilter, highlightPidn, selectedPidn, adjacentPidns],
             getLineWidth: [highlightPidn, selectedPidn],
           },
         }),
@@ -846,6 +959,7 @@ export default function MapView() {
     parcelFilter,
     highlightPidn,
     selectedPidn,
+    adjacentPidns,
     selectParcel,
     darkMap,
   ])
@@ -869,11 +983,7 @@ export default function MapView() {
   }
 
   return (
-    <div
-      className="map-shell"
-      style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
-    >
-      <Nav />
+    <WorkspaceShell wide className="map-shell">
       <div
         ref={mapCanvasRef}
         className="map-canvas"
@@ -923,6 +1033,36 @@ export default function MapView() {
         </Link>
 
         <LayerToggle layers={layers} onToggle={handleToggle} availability={layerAvailability} />
+
+        {parcelFilter === 'radar' && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 76,
+              right: 16,
+              zIndex: 10,
+              display: 'grid',
+              gap: 6,
+              maxWidth: 340,
+              padding: 12,
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              boxShadow: 'var(--shadow-card)',
+              fontSize: 12,
+            }}
+          >
+            <strong>Radar screen</strong>
+            <span>
+              {radarBasis} · score {radarMinScore}+ · {radarPlanStatus} recorded linked plan
+              {radarMunicipality ? ` · ${radarMunicipality}` : ''}
+              {radarMinAcres ? ` · ${radarMinAcres}+ acres` : ''}
+              {radarMaxAcres ? ` · up to ${radarMaxAcres} acres` : ''}
+              {radarParcelClass ? ` · class ${radarParcelClass}` : ''}
+            </span>
+            <Link to={`/radar?${radarListParams}`}>Return to screening list</Link>
+          </div>
+        )}
 
         {parcelsEnabled && currentZoom >= MIN_PARCEL_ZOOM && mapStatus !== 'idle' && (
           <div className="map-data-status" data-state={mapStatus} role="status" aria-live="polite">
@@ -1009,64 +1149,22 @@ export default function MapView() {
         )}
 
         {currentZoom >= MIN_PARCEL_ZOOM && (
-          <div
-            className="map-filter-bar"
-            style={{
-              position: 'absolute',
-              bottom: 24,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 10,
-              display: 'flex',
-              gap: 2,
-              background: 'var(--bg-panel)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              padding: 4,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-            }}
-          >
-            {(
-              [
-                { key: 'all', label: 'All Parcels', color: 'var(--accent-blue)' },
-                { key: 'delinquent', label: 'Delinquent', color: 'var(--accent-red)' },
-                { key: 'vacant', label: 'Vacancy screen', color: 'var(--accent-green)' },
-                {
-                  key: 'vacant_delinquent',
-                  label: 'Vacancy + tax signal',
-                  color: 'var(--accent-gold)',
-                },
-                { key: 'radar', label: 'Radar', color: 'var(--accent-cyan)' },
-              ] as const
-            ).map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                aria-pressed={parcelFilter === f.key}
-                onClick={() => {
-                  if (parcelFilter !== f.key) {
-                    setParcelFilter(f.key)
-                    setParcelData(null)
-                  }
-                }}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: 6,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  letterSpacing: 0.5,
-                  background: parcelFilter === f.key ? f.color : 'transparent',
-                  color: parcelFilter === f.key ? '#0a0e1a' : 'var(--text-secondary)',
-                  fontWeight: parcelFilter === f.key ? 700 : 400,
-                  transition: 'all 0.15s',
-                }}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+          <label className="map-filter-bar map-screen-control">
+            Show on map
+            <select
+              value={parcelFilter}
+              onChange={(event) => {
+                setParcelFilter(event.target.value as ParcelFilter)
+                setParcelData(null)
+              }}
+            >
+              <option value="all">All properties</option>
+              <option value="radar">Property shortlist</option>
+              <option value="delinquent">Tax-claim listings</option>
+              <option value="vacant">Vacancy screening</option>
+              <option value="vacant_delinquent">Vacancy & tax-claim screening</option>
+            </select>
+          </label>
         )}
 
         {parcelsEnabled &&
@@ -1172,7 +1270,7 @@ export default function MapView() {
           )}
         </div>
       </div>
-    </div>
+    </WorkspaceShell>
   )
 }
 
@@ -1211,7 +1309,7 @@ function PropertyPanel({
   failed,
   onClose,
 }: {
-  report: PropertyReport | null
+  report: ParcelSummary | null
   loading: boolean
   failed: boolean
   onClose: () => void
@@ -1284,32 +1382,53 @@ function PropertyPanel({
         <CloseButton onClick={onClose} />
       </div>
       <ButtonLink className="map-parcel-report" tone="primary" to={`/property/${p.pidn}`}>
-        Open property & evidence →
+        Open property report →
       </ButtonLink>
-      {radar && (
+      {radar?.top_signal && (
         <div className="map-parcel-signals">
-          <div className="property-radar-scores">
-            <div>
-              <span>Opportunity</span>
-              <strong>{radar.opportunity_score}</strong>
-            </div>
-            <div>
-              <span>Momentum</span>
-              <strong>{radar.score}</strong>
-            </div>
-            <div>
-              <span>Site</span>
-              <strong>{radar.site_readiness_score}</strong>
-            </div>
-          </div>
-          {radar.top_signal && <p>{radar.top_signal}</p>}
+          <h3>Recorded context</h3>
+          <p>{radar.top_signal}</p>
+        </div>
+      )}
+      {(report.source_explanation?.citation_evidence ?? []).some((item) =>
+        item.citation_key.includes(':adjacent_'),
+      ) && (
+        <div className="map-investigation-context">
+          <h3>Adjoining · same recorded owner</h3>
+          <p>Gold parcels mark the adjoining ownership records currently visible on the map.</p>
+          {(report.source_explanation?.citation_evidence ?? [])
+            .filter((item) => item.citation_key.includes(':adjacent_'))
+            .map((item) => (
+              <div key={item.evidence_id}>
+                <Link to={`/property/${encodeURIComponent(String(item.details.pidn))}`}>
+                  {String(item.details.address ?? item.details.pidn)}
+                </Link>
+                {typeof item.details.last_recorded_sale_date === 'string' && (
+                  <p>Recorded sale {formatShortDate(item.details.last_recorded_sale_date)}</p>
+                )}
+                <EvidencePanel items={[item]} title="View ownership source" />
+              </div>
+            ))}
+        </div>
+      )}
+      {radar?.signals?.nearby_subdivision && (
+        <div className="map-investigation-context">
+          <h3>Nearby planning record</h3>
+          <p>{radar.signals.nearby_subdivision.presentation?.summary}</p>
+          <p>This is a nearby inventory point; it does not establish a project on this property.</p>
+          {radar.signals.nearby_subdivision.evidence_receipt && (
+            <EvidencePanel
+              items={[radar.signals.nearby_subdivision.evidence_receipt]}
+              title="View planning source"
+            />
+          )}
         </div>
       )}
       <div className="map-parcel-facts">
         <DataField label="Acres" value={p.acres != null ? Number(p.acres).toFixed(2) : '—'} />
         <DataField label="Assessed value" value={formatCurrency(p.aprtotal)} />
         <DataField label="Recorded sale" value={formatCurrency(p.price)} />
-        <DataField label="Sale date" value={p.saledt || '—'} />
+        <DataField label="Sale date" value={formatShortDate(p.saledt) || '—'} />
       </div>
       <ul className="map-parcel-context">
         <li>
@@ -1424,7 +1543,12 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
     return (
       <div style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-primary)' }}>
         <div style={{ fontWeight: 600, marginBottom: 2 }}>
-          {p.radar_basis === 'momentum' ? 'Momentum' : 'Opportunity'} score {p.radar_score}
+          {p.radar_basis === 'momentum'
+            ? 'Momentum'
+            : p.radar_basis === 'readiness'
+              ? 'Site screening'
+              : 'Opportunity'}{' '}
+          score {p.radar_score}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
           {p.top_signal || 'No headline signal'}

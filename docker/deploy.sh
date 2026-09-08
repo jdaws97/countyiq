@@ -82,10 +82,16 @@ countyiq_require_command rclone
 
 RELEASE_DIR="${COUNTYIQ_RELEASE_DIR:-/var/lib/countyiq/releases}"
 RESTORE_RECEIPT_DIR="${COUNTYIQ_RESTORE_RECEIPT_DIR:-/var/lib/countyiq/restore-drills}"
+BACKFILL_STATE_DIR="${COUNTYIQ_BACKFILL_STATE_DIR:-/var/lib/countyiq/intelligence}"
 CURRENT_RELEASE="$RELEASE_DIR/current.env"
 CURRENT_RESTORE_RECEIPT="$RESTORE_RECEIPT_DIR/current.env"
 RESTORE_MAX_AGE_DAYS="${COUNTYIQ_RESTORE_DRILL_MAX_AGE_DAYS:-120}"
+if [[ ! "$BACKFILL_STATE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+    echo "COUNTYIQ_BACKFILL_STATE_DIR must be an absolute path using safe characters" >&2
+    exit 1
+fi
 install -d -o root -g root -m 700 "$RELEASE_DIR" "$RESTORE_RECEIPT_DIR"
+install -d -o 10001 -g 10001 -m 700 "$BACKFILL_STATE_DIR"
 
 if [ "$INITIAL_DEPLOY" = true ]; then
     if [ -f "$CURRENT_RELEASE" ]; then
@@ -173,6 +179,48 @@ SERVICES_STOPPED=false
 MIGRATION_STARTED=false
 MIGRATION_COMPLETED=false
 RELEASE_RECORDED=false
+OPERATION_UNIT_BACKUP_DIRECTORY=""
+
+backup_operation_units() {
+    local unit_name
+    local source_path
+
+    OPERATION_UNIT_BACKUP_DIRECTORY="$(mktemp -d "$RELEASE_DIR/.operation-units.XXXXXX")"
+    for unit_name in \
+        countyiq-backup.service \
+        countyiq-backup.timer \
+        countyiq-cost-guard.service \
+        countyiq-cost-guard.timer; do
+        source_path="/etc/systemd/system/$unit_name"
+        if [ -f "$source_path" ]; then
+            cp -p -- "$source_path" "$OPERATION_UNIT_BACKUP_DIRECTORY/$unit_name"
+            touch "$OPERATION_UNIT_BACKUP_DIRECTORY/$unit_name.present"
+        fi
+    done
+}
+
+restore_operation_units() {
+    local unit_name
+    local destination_path
+
+    for unit_name in \
+        countyiq-backup.service \
+        countyiq-backup.timer \
+        countyiq-cost-guard.service \
+        countyiq-cost-guard.timer; do
+        destination_path="/etc/systemd/system/$unit_name"
+        if [ -f "$OPERATION_UNIT_BACKUP_DIRECTORY/$unit_name.present" ]; then
+            install -o root -g root -m 644 \
+                "$OPERATION_UNIT_BACKUP_DIRECTORY/$unit_name" \
+                "$destination_path"
+        else
+            rm -f -- "$destination_path"
+        fi
+    done
+    systemctl daemon-reload || true
+    rm -rf -- "$OPERATION_UNIT_BACKUP_DIRECTORY"
+    OPERATION_UNIT_BACKUP_DIRECTORY=""
+}
 
 read_schema_revision() {
     countyiq_read_schema_revision "${COMPOSE[@]}"
@@ -212,6 +260,9 @@ on_exit() {
         return
     fi
     echo "Deployment failed; no release receipt was promoted." >&2
+    if [ -n "$OPERATION_UNIT_BACKUP_DIRECTORY" ]; then
+        restore_operation_units
+    fi
     if [ "$SERVICES_STOPPED" = true ]; then
         local current_schema="unknown"
         current_schema="$(read_schema_revision || true)"
@@ -292,7 +343,13 @@ if [ -n "${COUNTYIQ_PUBLIC_READY_URL:-}" ]; then
     countyiq_check_public_readiness "$COUNTYIQ_PUBLIC_READY_URL"
 fi
 
-echo "[7/8] Writing the immutable release receipt..."
+echo "[7/8] Installing operation units for this exact release checkout..."
+backup_operation_units
+"$SCRIPT_DIR/install-operation-units.sh" \
+    --repository-root "$REPO_ROOT" \
+    --env-file "$ENVIRONMENT_FILE"
+
+echo "[8/8] Writing the immutable release receipt..."
 receipt_timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 receipt_file="$RELEASE_DIR/${receipt_timestamp}-${DEPLOY_REF}.env"
 if [ -e "$receipt_file" ]; then
@@ -324,6 +381,8 @@ cp "$receipt_file" "$current_temp"
 chmod 400 "$current_temp"
 mv "$current_temp" "$CURRENT_RELEASE"
 RELEASE_RECORDED=true
+rm -rf -- "$OPERATION_UNIT_BACKUP_DIRECTORY"
+OPERATION_UNIT_BACKUP_DIRECTORY=""
 
 echo "[8/8] Deployment complete."
 echo "Release receipt: $receipt_file"

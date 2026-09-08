@@ -1,0 +1,510 @@
+.workspace-shell {
+  --workspace-sidebar-width: 208px;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+
+.workspace-shell-sidebar {
+  overflow-y: auto;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  display: flex;
+  width: var(--workspace-sidebar-width);
+  flex-direction: column;
+  padding: 22px 14px 16px;
+  color: #edf4ed;
+  background: #153e3b;
+}
+
+.workspace-shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 23px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.workspace-shell-brand:hover {
+  color: #fff;
+  text-decoration: none;
+}
+
+.workspace-shell-brand-mark {
+  display: grid;
+  width: 33px;
+  height: 33px;
+  place-items: center;
+  border: 1px solid rgba(237, 244, 237, 0.42);
+  border-radius: 7px;
+  color: #d8ed6d;
+  font-family: var(--font-serif);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.workspace-shell-brand strong,
+.workspace-shell-brand small {
+  display: block;
+}
+
+.workspace-shell-brand strong {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  line-height: 1;
+}
+
+.workspace-shell-brand small {
+  margin-top: 4px;
+  color: rgba(237, 244, 237, 0.68);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.workspace-shell-navigation {
+  display: grid;
+  gap: 18px;
+}
+
+.workspace-shell-nav-group h2 {
+  margin: 0 0 5px;
+  padding: 0 9px;
+  color: rgba(237, 244, 237, 0.53);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.workspace-shell-nav-group > div {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-shell-nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 37px;
+  padding: 7px 9px;
+  border-radius: 5px;
+  color: rgba(237, 244, 237, 0.81);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.workspace-shell-nav-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+}
+
+.workspace-shell-nav-link-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.13);
+  font-weight: 600;
+}
+
+.workspace-shell-nav-link-active::before {
+  position: absolute;
+  left: -14px;
+  width: 3px;
+  height: 18px;
+  border-radius: 0 2px 2px 0;
+  background: #d8ed6d;
+  content: '';
+}
+
+.workspace-shell-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.workspace-shell-controls {
+  display: grid;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid rgba(237, 244, 237, 0.16);
+}
+
+.workspace-shell-county {
+  padding: 0 9px 10px;
+}
+
+.workspace-shell-county span,
+.workspace-shell-county strong {
+  display: block;
+}
+
+.workspace-shell-county span {
+  color: rgba(237, 244, 237, 0.54);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-shell-county strong {
+  margin-top: 3px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workspace-shell-control,
+.workspace-shell-account {
+  min-height: 31px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 4px;
+  color: rgba(237, 244, 237, 0.78);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.workspace-shell-control {
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.workspace-shell-control:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+}
+
+.workspace-shell-account {
+  overflow: hidden;
+  color: rgba(237, 244, 237, 0.58);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-shell-content {
+  min-width: 0;
+  min-height: 100vh;
+  margin-left: var(--workspace-sidebar-width);
+}
+
+.workspace-shell-utilitybar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 68px;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.workspace-shell-utilitybar > p {
+  min-width: 145px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workspace-shell-search {
+  position: relative;
+  display: flex;
+  width: min(420px, 45vw);
+  margin-left: auto;
+}
+
+.workspace-shell-search input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 8px 12px 8px 35px;
+  border: 1px solid var(--border);
+  border-radius: 5px 0 0 5px;
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  font-size: 13px;
+}
+
+.workspace-shell-search input:focus {
+  border-color: var(--accent);
+  outline: none;
+  background: var(--bg-card);
+}
+
+.workspace-shell-search button {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-left: 0;
+  border-radius: 0 5px 5px 0;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workspace-shell-search button:hover {
+  background: var(--bg-card-hover);
+}
+
+.workspace-shell-search-icon {
+  position: absolute;
+  top: 11px;
+  left: 12px;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  pointer-events: none;
+  stroke: var(--text-muted);
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.workspace-shell-utility-account {
+  max-width: 190px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-shell-menu-button,
+.workspace-shell-drawer-layer {
+  display: none;
+}
+
+.workspace-shell .workspace-shell-main {
+  width: auto;
+  min-height: calc(100vh - 68px);
+  margin: 0 auto;
+  padding: 40px 32px 72px;
+}
+
+.workspace-shell .workspace-shell-main.map-shell {
+  display: flex;
+  height: calc(100vh - 68px);
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  .workspace-shell-sidebar {
+    display: none;
+  }
+
+  .workspace-shell-content {
+    margin-left: 0;
+  }
+
+  .workspace-shell-utilitybar {
+    gap: 10px;
+    min-height: 60px;
+    padding: 0 16px;
+  }
+
+  .workspace-shell-utilitybar > p,
+  .workspace-shell-utility-account {
+    display: none;
+  }
+
+  .workspace-shell-menu-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 6px 0 0;
+    border: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .workspace-shell-menu-button span {
+    font-size: 19px;
+    line-height: 1;
+  }
+
+  .workspace-shell-search {
+    width: auto;
+    flex: 1;
+    margin-left: 0;
+  }
+
+  .workspace-shell-search input {
+    height: 38px;
+    font-size: 13px;
+  }
+
+  .workspace-shell-search button {
+    height: 38px;
+    padding-inline: 9px;
+  }
+
+  .workspace-shell .workspace-shell-main {
+    min-height: calc(100vh - 60px);
+    padding: 24px 16px 48px;
+  }
+
+  .workspace-shell .workspace-shell-main.map-shell {
+    height: calc(100dvh - 60px) !important;
+  }
+
+  .workspace-shell-drawer-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: block;
+  }
+
+  .workspace-shell-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: 0;
+    background: rgba(7, 22, 21, 0.54);
+    cursor: default;
+  }
+
+  .workspace-shell-drawer {
+    position: relative;
+    display: flex;
+    width: min(320px, calc(100vw - 38px));
+    min-height: 100%;
+    max-height: 100dvh;
+    overflow-y: auto;
+    flex-direction: column;
+    padding: 18px 14px 16px;
+    color: #edf4ed;
+    background: #153e3b;
+    box-shadow: 14px 0 35px rgba(0, 0, 0, 0.25);
+  }
+
+  .workspace-shell-drawer-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px 16px;
+    font-family: var(--font-serif);
+    font-size: 20px;
+  }
+
+  .workspace-shell-drawer-heading button {
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 4px;
+    color: inherit;
+    background: transparent;
+    cursor: pointer;
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  .workspace-shell-drawer-heading button:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .workspace-shell-search-compact {
+    width: 100%;
+    margin: 0 0 21px;
+  }
+
+  .workspace-shell-search-compact input {
+    color: #edf4ed;
+    border-color: rgba(237, 244, 237, 0.28);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .workspace-shell-search-compact input::placeholder {
+    color: rgba(237, 244, 237, 0.64);
+  }
+
+  .workspace-shell-search-compact button {
+    color: #153e3b;
+    border-color: #d8ed6d;
+    background: #d8ed6d;
+  }
+
+  .workspace-shell-search-compact .workspace-shell-search-icon {
+    stroke: rgba(237, 244, 237, 0.7);
+  }
+}
+
+@media print {
+  .workspace-shell-sidebar,
+  .workspace-shell-utilitybar,
+  .workspace-shell-drawer-layer {
+    display: none !important;
+  }
+
+  .workspace-shell-content {
+    margin-left: 0;
+  }
+
+  .workspace-shell .workspace-shell-main {
+    max-width: none !important;
+    min-height: 0;
+    padding: 0 !important;
+  }
+}
+.map-screen-control {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: var(--shadow-card);
+}
+.map-screen-control select {
+  max-width: 220px;
+  min-width: 0;
+  padding: 6px;
+  color: var(--accent-ink);
+  border: 0;
+  background: var(--bg-panel);
+  font: 600 12px var(--font-sans);
+}
+@media (max-width: 600px) {
+  .map-screen-control {
+    gap: 8px;
+    padding: 8px;
+    max-width: calc(100% - 32px);
+  }
+  .map-screen-control select {
+    max-width: 170px;
+  }
+}

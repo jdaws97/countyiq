@@ -27,7 +27,11 @@ def test_opportunity_weights_cover_every_non_label_signal():
     scored = set(dm.OPPORTUNITY_WEIGHTS)
     # Own-plan / own-matter signals zero the opportunity score instead of
     # contributing to it, and exclusions never score.
-    expected = signal_keys - set(dm.ACTIVE_PLAN_SIGNAL_KEYS) - {"conservation_easement"}
+    expected = (
+        signal_keys
+        - set(dm.ACTIVE_PLAN_SIGNAL_KEYS)
+        - {"conservation_easement", "municipal_record"}
+    )
     assert scored == expected
     risk = {
         "flood_zone",

@@ -6,6 +6,7 @@ the json_object fallback on 404 (no provider supports strict schema),
 and the Pass 1 abstention channel.
 """
 
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from unittest import mock
@@ -268,10 +269,11 @@ def test_strict_schema_global_kill_switch(monkeypatch):
 def _http_error(status: int):
     resp = mock.Mock()
     resp.status_code = status
+    resp.text = "No eligible provider"
     return requests.exceptions.HTTPError(response=resp)
 
 
-def test_404_falls_back_to_json_object_once():
+def test_404_falls_back_to_json_object_once_only_when_explicitly_enabled():
     """No provider supports the strict schema -> retry downgraded, tagged."""
     calls = []
 
@@ -291,7 +293,14 @@ def test_404_falls_back_to_json_object_once():
         return resp
 
     config = HarnessConfig(
-        model_path="x/y", json_schema=PASS2_BATCHED_VALIDATION_SCHEMA
+        model_path="x/y",
+        json_schema=PASS2_BATCHED_VALIDATION_SCHEMA,
+        allow_schema_fallback=True,
+        provider_only=("test-provider",),
+        provider_allow_fallbacks=False,
+        provider_quantizations=("fp8",),
+        max_price_prompt=0.16,
+        max_price_completion=0.55,
     )
     with (
         mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}),
@@ -304,7 +313,35 @@ def test_404_falls_back_to_json_object_once():
     assert meta["schema_fallback"] is True
     assert len(calls) == 2
     assert calls[1]["response_format"] == {"type": "json_object"}
-    assert "provider" not in calls[1]
+    assert calls[1]["provider"] == {
+        "only": ["test-provider"],
+        "allow_fallbacks": False,
+        "quantizations": ["fp8"],
+        "max_price": {"prompt": 0.16, "completion": 0.55},
+    }
+    assert (
+        json.dumps(PASS2_BATCHED_VALIDATION_SCHEMA, sort_keys=True)
+        in calls[1]["messages"][0]["content"]
+    )
+    assert meta["effective_request"]["response_format"] == {"type": "json_object"}
+    assert meta["strict_request_sha256"] != meta["request_sha256"]
+
+
+def test_strict_schema_404_fails_closed_by_default():
+    config = HarnessConfig(
+        model_path="x/y", json_schema=PASS2_BATCHED_VALIDATION_SCHEMA
+    )
+    with (
+        mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}),
+        mock.patch.object(
+            llm_harness, "_post_with_backoff", side_effect=_http_error(404)
+        ) as post,
+    ):
+        raw, error, metadata = llm_harness._invoke_openrouter(config, "prompt")
+    assert raw == "" and "No eligible provider" in error
+    assert post.call_count == 1
+    assert not metadata.get("schema_fallback")
+    assert metadata["effective_request"]["response_format"]["type"] == "json_schema"
 
 
 def test_usage_meta_captured():
@@ -508,6 +545,63 @@ def test_missing_key_not_retried():
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize(
+    "effort, expected",
+    [("max", "high"), ("high", "low"), ("low", "low"), (None, "low")],
+)
+def test_glm_truncation_retry_uses_only_supported_efforts(effort, expected):
+    configs = []
+
+    def fake_invoke(config, prompt, **kwargs):
+        configs.append(config)
+        return llm_harness.HarnessResult(
+            raw_output="", parsed=None, success=False, error="finish_reason=length"
+        )
+
+    with mock.patch.object(llm_harness, "invoke", side_effect=fake_invoke):
+        llm_harness.invoke_with_retry(
+            HarnessConfig(
+                model_path="z-ai/glm-5.3-flash",
+                reasoning_effort=effort,
+                max_tokens=4096,
+            ),
+            "prompt",
+            retries=1,
+        )
+    assert len(configs) == 2
+    assert configs[1].reasoning_effort == expected
+    assert configs[1].max_tokens == 8192
+    assert build_openrouter_payload(configs[1], "prompt")["reasoning"] == {
+        "effort": expected
+    }
+
+
+def test_strict_archive_requires_key_before_paid_transport(monkeypatch):
+    monkeypatch.setenv("COUNTYIQ_ARCHIVE_STRICT", "true")
+    with (
+        mock.patch.object(llm_harness, "_invoke_openrouter") as invoke_provider,
+        pytest.raises(RuntimeError, match="archive key is missing"),
+    ):
+        llm_harness.invoke(
+            HarnessConfig(model_path="x/y", archive_label="municipal_evidence"),
+            "prompt",
+        )
+    invoke_provider.assert_not_called()
+
+
+def test_unsupported_glm_effort_is_rejected_before_transport():
+    with (
+        mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "test"}),
+        mock.patch.object(llm_harness, "_post_with_backoff") as post,
+        pytest.raises(ValueError, match="low, high, or max"),
+    ):
+        llm_harness.invoke(
+            HarnessConfig(model_path="z-ai/glm-5.3-flash", reasoning_effort="medium"),
+            "prompt",
+        )
+    post.assert_not_called()
+
+
 def test_http_error_preserves_provider_body_when_post_raises():
     response = requests.Response()
     response.status_code = 400
@@ -523,7 +617,8 @@ def test_http_error_preserves_provider_body_when_post_raises():
             HarnessConfig(model_path="x/y"), "p"
         )
     assert "Unsupported schema keyword: uniqueItems" in detail
-    assert metadata == {}
+    assert metadata["effective_request"]["model"] == "x/y"
+    assert len(metadata["request_sha256"]) == 64
 
 
 @pytest.mark.parametrize(

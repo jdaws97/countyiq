@@ -45,6 +45,35 @@ BUSINESS_OWNER_REGEX = (
 )
 
 _SIGNALS: list[tuple[str, str]] = [
+    # A literal mention is useful investigation context, not an approval or a
+    # calibrated opportunity score. Keep the source date/type and exact wording.
+    (
+        "municipal_record",
+        """
+        INSERT INTO public.development_signals
+            (pidn, signal_key, signal_weight, source_table, source_id, distance_m, evidence)
+        SELECT DISTINCT ON (reference.pidn)
+            reference.pidn, 'municipal_record', 0,
+            'public.current_municipal_evidence', source.event_key, NULL,
+            jsonb_build_object(
+                'event_key', source.event_key,
+                'title', source.card->>'title',
+                'meeting_date', source.meeting_date,
+                'document_kind', source.payload->>'document_kind',
+                'body_name', source.body_name,
+                'source_url', source.document_url,
+                'document_url', source.document_url,
+                'passages', source.card->'passages',
+                'matched_properties', source.matched_properties,
+                'source_text_sha256', source.payload->>'source_text_sha256'
+            )
+        FROM public.current_municipal_evidence source
+        CROSS JOIN LATERAL unnest(source.related_pidns) reference(pidn)
+        WHERE source.meeting_date >= CURRENT_DATE - INTERVAL '24 months'
+        ORDER BY reference.pidn, source.meeting_date DESC,
+                 source.proceeding_id DESC, source.card_position
+        """,
+    ),
     # ── HIGH-VALUE DIRECT SIGNALS ──────────────────────────────────────
     # 1. active_subdivision — a believable plan point ON the parcel (inside the
     #    polygon or within 30 m of it), received in the last 3 years. This is
@@ -1006,6 +1035,7 @@ def build_signal_params(county) -> dict:
         "structures_arcgis",
         "zoning_arcgis",
         "proceeding_extraction",
+        "municipal_evidence_linking",
     ],
     description="Spatial-join radar layers to parcels \u2192 public.development_signals",
     kinds={"postgres"},

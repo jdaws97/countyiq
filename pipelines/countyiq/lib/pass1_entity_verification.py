@@ -78,6 +78,80 @@ ENTITY_CANDIDATE_PAIRS_READY_QUERY = """
       AND c.relname = 'entity_candidate_pairs'
 """
 
+ENTITY_REGISTRATION_ROWS_QUERY = """
+    SELECT entity_name, entity_number
+    FROM staging.corporate_entities
+    WHERE valid_to IS NULL AND entity_number IS NOT NULL
+"""
+
+ACTIVE_ENTITY_NAMES_QUERY = """
+    SELECT DISTINCT p.owner_full
+    FROM staging.parcels p
+    JOIN public.development_signals signal USING (pidn)
+    WHERE p.valid_to IS NULL
+      AND signal.signal_key IN ('active_subdivision', 'municipal_action')
+      AND p.owner_full IS NOT NULL
+
+    UNION
+
+    SELECT DISTINCT p.owner_full
+    FROM public.current_municipal_evidence evidence
+    CROSS JOIN LATERAL unnest(evidence.related_pidns) reference(pidn)
+    JOIN staging.parcels p ON p.pidn = reference.pidn AND p.valid_to IS NULL
+    WHERE evidence.meeting_date >= CURRENT_DATE - INTERVAL '24 months'
+      AND p.owner_full IS NOT NULL
+"""
+
+ACQUISITION_ENTITY_NAMES_QUERY = """
+    SELECT DISTINCT p.owner_full
+    FROM staging.parcels p
+    JOIN public.development_signals signal USING (pidn)
+    WHERE p.valid_to IS NULL AND p.owner_full IS NOT NULL
+      AND signal.signal_key IN ('ownership_change', 'entity_assemblage')
+"""
+
+WATCHED_ENTITY_NAMES_QUERY = """
+    SELECT DISTINCT p.owner_full
+    FROM staging.parcels p
+    WHERE p.valid_to IS NULL AND p.owner_full IS NOT NULL
+      AND (
+          EXISTS (SELECT 1 FROM public.watch_items watch
+                  WHERE watch.kind = 'parcel' AND watch.subject_key = p.pidn)
+          OR EXISTS (
+              SELECT 1 FROM public.watch_items watch
+              JOIN public.owners owner ON owner.owner_id::text = watch.subject_key
+              WHERE watch.kind = 'entity'
+                AND (lower(btrim(p.owner_full)) = lower(btrim(owner.canonical_name))
+                     OR lower(btrim(p.owner_full)) = ANY(ARRAY(
+                         SELECT lower(btrim(alias)) FROM unnest(owner.aliases) alias)))
+          )
+      )
+"""
+
+
+def priority_entity_names(database, clusters: list[list[str]]) -> set[str]:
+    """Prioritize public records; private watch/account details never enter prompts."""
+
+    def names(query: str) -> set[str]:
+        rows = database.execute(query) or []
+        return {row["owner_full"] if isinstance(row, dict) else row[0] for row in rows}
+
+    acquisition_names = names(ACQUISITION_ENTITY_NAMES_QUERY)
+    organization_activity = {
+        name for name in acquisition_names if is_organization_name(name)
+    }
+    for cluster in clusters:
+        if cluster_involves_organization(cluster):
+            # A purchase may use the abbreviation lacking the LLC/INC marker.
+            # Prioritize verification of the whole candidate group; this is
+            # neither identity proof nor permission to merge its members.
+            organization_activity.update(acquisition_names.intersection(cluster))
+    return (
+        names(ACTIVE_ENTITY_NAMES_QUERY)
+        | organization_activity
+        | names(WATCHED_ENTITY_NAMES_QUERY)
+    )
+
 
 # =============================================================================
 # CLUSTER SELECTION
@@ -121,6 +195,56 @@ def select_pass1_clusters(
     return kept, len(clusters) - len(kept)
 
 
+def resolve_pass1_scope() -> str:
+    """Prioritize paid ambiguity work that can change a current investigation.
+
+    Exact registration facts remain eligible across the county. ``all`` is an
+    explicit opt-in to the much larger speculative alias backfill; the ordinary
+    owner directory and recorded-name portfolios do not depend on that work.
+    Activity includes municipal mentions, organizational acquisitions and the
+    public owners of explicitly watched properties or owner records.
+    """
+    scope = os.environ.get("COUNTYIQ_PASS1_SCOPE", "active_records").strip().lower()
+    if scope not in {"active_records", "all"}:
+        raise ValueError("COUNTYIQ_PASS1_SCOPE must be active_records or all")
+    return scope
+
+
+def select_pass1_work(
+    clusters: list[list[str]],
+    registration_rows: list[dict],
+    activity_names: set[str],
+    *,
+    scope: str,
+    allow_llm: bool,
+) -> tuple[list[list[str]], set[str]]:
+    """Keep whole candidate clusters; never trim a partition to fit a budget."""
+    if scope not in {"active_records", "all"}:
+        raise ValueError("Unsupported entity-verification scope")
+    registrations_by_key: dict[str, list[dict]] = {}
+    for row in registration_rows:
+        key = _legal_name_key(str(row.get("entity_name") or ""))
+        registrations_by_key.setdefault(key, []).append(row)
+    selected = []
+    deterministic_keys = set()
+    for names in clusters:
+        rows = [
+            row
+            for key in {_legal_name_key(name) for name in names}
+            for row in registrations_by_key.get(key, [])
+        ]
+        anchored = build_deterministic_entity_resolution(
+            {"corporate_entities": rows}, names
+        )
+        if anchored is not None:
+            deterministic_keys.add(stable_cluster_key(names))
+        if anchored is not None or (
+            allow_llm and (scope == "all" or activity_names.intersection(names))
+        ):
+            selected.append(names)
+    return selected, deterministic_keys
+
+
 def stable_cluster_key(cluster_names: list[str]) -> str:
     """Return a deterministic tracking key for a candidate entity cluster."""
     canonical_names = sorted(
@@ -132,110 +256,122 @@ def stable_cluster_key(cluster_names: list[str]) -> str:
     return f"entity_cluster:{digest}"
 
 
-DETERMINISTIC_VARIANT_VERSION = "exact-pa-dos-legal-name-v1"
+DETERMINISTIC_VARIANT_VERSION = "exact-pa-dos-legal-partition-v2"
 
 
 def _legal_name_key(name: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "", name.upper())
 
 
+def _registered_entity_type(legal_key: str) -> str | None:
+    for suffix, kind in (
+        ("PLLC", "llc"),
+        ("LLC", "llc"),
+        ("CORPORATION", "corporation"),
+        ("CORP", "corporation"),
+        ("INC", "corporation"),
+        ("LLP", "partnership"),
+        ("LP", "partnership"),
+        ("LTD", "corporation"),
+        ("PC", "corporation"),
+    ):
+        if legal_key.endswith(suffix):
+            return kind
+    return None
+
+
 def build_deterministic_entity_resolution(
     records: dict,
     cluster_names: list[str],
 ) -> dict | None:
-    """Resolve only punctuation/case variants of one anchored legal entity.
+    """Partition exact registered legal names without inferring affiliation.
 
     This tier deliberately excludes natural people, trusts, suffix-stripped
-    similarities, shared-address candidates, and conflicting PA DOS entity
-    numbers. Every other cluster remains in the LLM voting path.
+    similarities, and conflicting PA DOS entity numbers. Punctuation/case
+    variants of an anchored name may merge. Different names with different
+    registration numbers stay separate even when they share an office address.
+    Every unanchored or ambiguous cluster remains unresolved by this tier.
     """
 
     names = sorted({name.strip() for name in cluster_names if name and name.strip()})
-    if len(names) < 2 or len({_legal_name_key(name) for name in names}) != 1:
+    if len(names) < 2:
         return None
-    legal_key = _legal_name_key(names[0])
-    entity_type = next(
-        (
-            kind
-            for suffix, kind in (
-                ("PLLC", "llc"),
-                ("LLC", "llc"),
-                ("CORPORATION", "corporation"),
-                ("CORP", "corporation"),
-                ("INC", "corporation"),
-                ("LLP", "partnership"),
-                ("LP", "partnership"),
-                ("LTD", "corporation"),
-                ("PC", "corporation"),
-            )
-            if legal_key.endswith(suffix)
-        ),
-        None,
-    )
-    if entity_type is None:
-        return None
-
+    names_by_key: dict[str, list[str]] = {}
+    for name in names:
+        names_by_key.setdefault(_legal_name_key(name), []).append(name)
     corporate_rows = records.get("corporate_entities", []) or []
-    matching_corporate = [
-        row
-        for row in corporate_rows
-        if _legal_name_key(str(row.get("entity_name") or "")) == legal_key
-    ]
-    entity_numbers = {
-        str(row.get("entity_number")).strip()
-        for row in matching_corporate
-        if row.get("entity_number") is not None
-        and str(row.get("entity_number")).strip()
+    entities = []
+    used_numbers = set()
+    record_fields = {
+        "parcels": ("pidn", ("owner_full",)),
+        "tax_claims": ("pidn", ("owner_name",)),
+        "plcb_licenses": ("license_number", ("licensee", "premises_owner")),
+        "corporate_entities": ("entity_name", ("entity_name",)),
+        "proceedings": ("applicant_name", ("applicant_name",)),
     }
-    if not matching_corporate or len(entity_numbers) != 1:
-        return None
-
-    canonical_name = sorted(
-        {
-            str(row.get("entity_name")).strip()
+    for legal_key, members in sorted(names_by_key.items()):
+        entity_type = _registered_entity_type(legal_key)
+        matching_corporate = [
+            row
+            for row in corporate_rows
+            if _legal_name_key(str(row.get("entity_name") or "")) == legal_key
+        ]
+        entity_numbers = {
+            str(row["entity_number"]).strip()
             for row in matching_corporate
-            if str(row.get("entity_name") or "").strip() in names
+            if row.get("entity_number") is not None
+            and str(row["entity_number"]).strip()
         }
-        or set(names)
-    )[0]
-
-    def identifiers(source: str, field: str) -> list[str]:
-        return sorted(
+        if entity_type is None or len(entity_numbers) != 1:
+            return None
+        entity_number = next(iter(entity_numbers))
+        if entity_number in used_numbers:
+            # A registration with different legal names needs its name-history
+            # evidence; this tier never guesses the current/historical alias.
+            return None
+        used_numbers.add(entity_number)
+        anchored_names = sorted(
             {
-                str(row.get(field)).strip()
-                for row in records.get(source, []) or []
-                if row.get(field) is not None and str(row.get(field)).strip()
+                str(row.get("entity_name") or "").strip()
+                for row in matching_corporate
+                if str(row.get("entity_name") or "").strip() in members
+                and str(row.get("entity_number") or "").strip() == entity_number
             }
         )
-
-    entity_number = next(iter(entity_numbers))
-    candidate_refs = " ".join(f"[Evidence: candidate:{name}]" for name in names)
-    corporate_ref = f"[Evidence: corporate_entities:{canonical_name}]"
-    reasoning = (
-        "The candidate names differ only by case, spacing, or punctuation "
-        f"and map to PA DOS entity number {entity_number} "
-        f"{candidate_refs} {corporate_ref}."
-    )
-    return {
-        "entities": [
+        if not anchored_names:
+            return None
+        canonical_name = anchored_names[0]
+        linked_records = {}
+        for source, (identifier_field, name_fields) in record_fields.items():
+            linked_records[source] = sorted(
+                {
+                    str(row[identifier_field]).strip()
+                    for row in records.get(source, []) or []
+                    if row.get(identifier_field) is not None
+                    and str(row[identifier_field]).strip()
+                    and any(row.get(field) in members for field in name_fields)
+                }
+            )
+        candidate_refs = " ".join(f"[Evidence: candidate:{name}]" for name in members)
+        corporate_ref = f"[Evidence: corporate_entities:{canonical_name}]"
+        reasoning = (
+            f"These recorded legal-name spellings map to PA DOS entity number "
+            f"{entity_number}; only case, spacing and punctuation are normalized "
+            f"{candidate_refs} {corporate_ref}."
+        )
+        entities.append(
             {
                 "canonical_name": canonical_name,
-                "member_names": names,
+                "member_names": members,
                 "entity_type": entity_type,
                 "confidence": 1.0,
                 "reasoning": reasoning,
-                "linked_records": {
-                    "parcels": identifiers("parcels", "pidn"),
-                    "tax_claims": identifiers("tax_claims", "pidn"),
-                    "plcb_licenses": identifiers("plcb_licenses", "license_number"),
-                    "corporate_entities": identifiers(
-                        "corporate_entities", "entity_name"
-                    ),
-                    "proceedings": identifiers("proceedings", "applicant_name"),
-                },
+                "linked_records": linked_records,
                 "relationships": [],
             }
-        ],
+        )
+    return {
+        "entities": entities,
         "rejected_matches": [],
         "abstentions": [],
         "resolution_tier": DETERMINISTIC_VARIANT_VERSION,

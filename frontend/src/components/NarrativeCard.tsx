@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import Badge from './Badge'
 import EvidencePanel, { CitedText } from './EvidencePanel'
-import { openEvidenceReceipt } from '../lib/evidence'
+import { useSourceViewer } from '../lib/useSourceViewer'
 import { formatLabel, formatShortDate } from '../lib/format'
 import type { CountyNarrative } from '../types/api'
 
@@ -32,6 +32,7 @@ export default function NarrativeCard({
   showAffectedPidns?: boolean
   titleAs?: 'h2' | 'h3'
 }) {
+  const openSource = useSourceViewer()
   const affected = narrative.affected_pidns ?? []
   const pidnsToShow = affected.slice(0, 10)
   const extraPidns = affected.length - pidnsToShow.length
@@ -145,7 +146,10 @@ export default function NarrativeCard({
                 <a
                   key={citation}
                   href={`#${receipt.evidence_id}`}
-                  onClick={() => openEvidenceReceipt(receipt.evidence_id)}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    openSource(narrative.citation_evidence, index)
+                  }}
                   style={{ textDecoration: 'none' }}
                 >
                   <Badge color="var(--accent-cyan)">

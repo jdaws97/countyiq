@@ -47,6 +47,7 @@ GROWTH_SIGNAL = {
 
 def test_context_only_set_matches_eval_findings():
     assert CONTEXT_ONLY_SIGNALS == {
+        "municipal_record",
         "nearby_subdivision",
         "growth_area",
         "development_overlay",

@@ -119,6 +119,7 @@ def test_deterministic_enrichment_job_excludes_paid_passes(asset_graph):
     from countyiq.jobs import deterministic_enrichment_refresh
 
     assert set(_resolve(deterministic_enrichment_refresh, asset_graph)) == {
+        "municipal_evidence_linking",
         "municipality_join",
         "entity_candidate_pairs_refresh",
         "development_signals",
@@ -158,6 +159,7 @@ def test_pass1_manual_job_refreshes_candidate_inputs(asset_graph):
     from countyiq.jobs import entity_verification_refresh
 
     assert set(_resolve(entity_verification_refresh, asset_graph)) == {
+        "municipal_evidence_linking",
         "municipality_join",
         "entity_candidate_pairs_refresh",
         "entity_verification",

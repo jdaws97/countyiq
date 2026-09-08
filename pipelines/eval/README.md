@@ -4,6 +4,12 @@ Production does not import this directory. Evaluation has two deliberately
 separate lanes; see `fixtures/README.md` for provenance and remaining coverage
 limits.
 
+Pass 0's separate redesign research uses `pass0_experiment.py`; see
+[the current discovery design](../../docs/research/pass0-discovery.md).
+Its supported modes are discovery, independent inventory, inventory-based full
+interpretation and the full-document facts comparison. It preserves frozen
+inputs and a durable paid-call cap; it does not replace production extraction.
+
 ## Frozen regression
 
 The default challenger lane uses byte-identical, fingerprinted inputs and human
@@ -126,6 +132,36 @@ cd pipelines
 paired cases for repeat trials. `eval.complete_pass2_result` can reconstruct a
 partially checkpointed concurrent run from its archives and dispatch only
 genuinely missing outputs; it is a recovery tool, not part of a normal run.
+
+## Record-explanation calibration
+
+`record_explanations_canary` uses the same model-default builder and record
+contract as production. Every paid run requires `--provider` with one exact
+OpenRouter provider slug; routing fallback is disabled. Use separate output
+directories for different providers, efforts, or token limits. A changed request
+cannot resume an existing cohort. The existing cumulative authorization ledger
+must remain in place; do not reset it between comparisons.
+
+GLM defaults to temperature 1, top-p 0.95, and low reasoning with 4,096 output
+tokens. `--reasoning-effort high` or `max` defaults to 8,192; `--max-tokens` is an
+explicit override. GLM rejects `medium` and `none`. DeepSeek accepts `none` for
+non-thinking comparison. FP8 is required for the GLM and DeepSeek record runs.
+
+```bash
+.venv/bin/python -m eval.record_explanations_canary \
+  /path/to/frozen-cases.json /path/to/new-cohort \
+  --budget /path/to/existing-authorization.json \
+  --model z-ai/glm-5.3-flash --provider EXACT_PROVIDER_SLUG \
+  --reasoning-effort low
+```
+
+For matching production routing, set `COUNTYIQ_PASS3_PROVIDER_ONLY` and
+`COUNTYIQ_PASS3_PROVIDER_ORDER` to that same slug, and
+`COUNTYIQ_PASS3_PROVIDER_ALLOW_FALLBACKS=false`. The provider price ceilings,
+reasoning effort, and explicit token limit must also match the evaluated request.
+Record explanations never downgrade strict schema. Format success remains
+separate from the reviewed factual-quality receipt, which is invalidated by
+shared harness or routing-policy changes.
 
 ## Files
 

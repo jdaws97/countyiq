@@ -118,18 +118,33 @@ export function fitGeometry(
   viewState: MapViewState,
   size: MapSize,
   geometry: Geometry,
+  obscured: { right?: number; bottom?: number } = {},
 ): MapViewState | null {
   const bounds = geometryBounds(geometry)
   if (!bounds) {
     return null
   }
+  const availableWidth = size.width - (obscured.right ?? 0)
+  const availableHeight = size.height - (obscured.bottom ?? 0)
+  if (availableWidth < 50 || availableHeight < 50) {
+    return null
+  }
+  const margin = Math.min(
+    80,
+    Math.max(16, Math.round(Math.min(availableWidth, availableHeight) * 0.1)),
+  )
   const fitted = viewport(viewState, size).fitBounds(
     [
       [bounds.west, bounds.south],
       [bounds.east, bounds.north],
     ],
     {
-      padding: Math.min(80, Math.max(24, Math.round(Math.min(size.width, size.height) * 0.1))),
+      padding: {
+        top: margin,
+        left: margin,
+        right: margin + (obscured.right ?? 0),
+        bottom: margin + (obscured.bottom ?? 0),
+      },
       maxZoom: 17,
     },
   )

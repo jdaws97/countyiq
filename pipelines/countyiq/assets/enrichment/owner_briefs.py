@@ -9,6 +9,7 @@ reading N parcel briefs independently.
 
 import hashlib
 import json
+import os
 from dataclasses import replace
 from datetime import UTC, datetime
 
@@ -80,6 +81,13 @@ def owner_briefs(
     database: DatabaseResource,
 ) -> MaterializeResult:
     log = context.log
+    if os.environ.get("COUNTYIQ_PASS3_MODE", "legacy").strip().lower() == "records":
+        return MaterializeResult(
+            metadata={
+                "status": "skipped",
+                "reason": "Record explanation mode is enabled",
+            }
+        )
 
     # Projection cleanup is deterministic and must still run when Pass 3 is
     # disabled or unavailable.

@@ -15,7 +15,6 @@ Requires ``COUNTYIQ_PASS1_ENABLED=true``; model selection is independent.
 
 import json
 import os
-import traceback
 from datetime import UTC, datetime
 
 from dagster import (
@@ -44,6 +43,7 @@ from countyiq.lib.pass1_entity_verification import (
     CANDIDATE_CLUSTERS_QUERY,
     DETERMINISTIC_VARIANT_VERSION,
     ENTITY_CANDIDATE_PAIRS_READY_QUERY,
+    ENTITY_REGISTRATION_ROWS_QUERY,
     ENTITY_VERIFICATION_SYSTEM_PROMPT,
     PROMPT_VERSION,
     build_deterministic_entity_resolution,
@@ -52,7 +52,10 @@ from countyiq.lib.pass1_entity_verification import (
     gather_cluster_records,
     merge_entity_trial_partitions,
     parse_entity_verification_output,
+    priority_entity_names,
+    resolve_pass1_scope,
     select_pass1_clusters,
+    select_pass1_work,
     stable_cluster_key,
 )
 from countyiq.lib.pass_llm_config import (
@@ -155,7 +158,12 @@ def entity_verification(
             schema_name="pass1_entity_verification",
         )
     except PassHarnessUnavailable as exc:
-        return _skipped_result(exc.reason)
+        log.info(
+            "Paid Pass 1 unavailable (%s); checking exact registrations only",
+            exc.reason,
+        )
+        config = None
+        invoke_with_retry = None
     item_budget = PassItemBudget(1)
 
     # ------------------------------------------------------------------
@@ -163,6 +171,8 @@ def entity_verification(
     # ------------------------------------------------------------------
     ready_rows = database.execute(ENTITY_CANDIDATE_PAIRS_READY_QUERY) or []
     if not ready_rows or not bool(ready_rows[0][0]):
+        if config is None:
+            return _skipped_result("candidate pairs are not populated")
         raise RuntimeError(
             "public.entity_candidate_pairs is not populated; run "
             "entity_candidate_pairs_refresh before enabling Pass 1"
@@ -183,12 +193,34 @@ def entity_verification(
         )
 
     clusters, person_only_skipped = select_pass1_clusters(_build_clusters(pairs))
+    total_candidates = len(clusters)
+    scope = resolve_pass1_scope()
+    if scope != "all" or config is None:
+        registration_rows = database.execute(ENTITY_REGISTRATION_ROWS_QUERY) or []
+        registrations = [
+            dict(row)
+            if isinstance(row, dict)
+            else {"entity_name": row[0], "entity_number": row[1]}
+            for row in registration_rows
+        ]
+        activity_names = (
+            priority_entity_names(database, clusters) if config is not None else set()
+        )
+        clusters, _ = select_pass1_work(
+            clusters,
+            registrations,
+            activity_names,
+            scope=scope,
+            allow_llm=config is not None,
+        )
+    scope_deferred = total_candidates - len(clusters)
     log.info(
         "Stage A complete: %d pairs → %d clusters (%d person-only clusters skipped)",
         len(pairs),
         len(clusters),
         person_only_skipped,
     )
+    log.info("Pass 1 scope=%s; %d other clusters deferred", scope, scope_deferred)
 
     # One upfront fetch of prior input hashes replaces a per-cluster SELECT
     # inside the loop.
@@ -212,8 +244,10 @@ def entity_verification(
     # Optional escalation cascade (docs/open-items.md): clusters the primary
     # model abstains on are re-run through a stronger model. Off unless
     # COUNTYIQ_PASS1_ESCALATION_MODEL is set.
-    escalation_config = resolve_escalation_config(config, pass_number=1)
-    if n_trials > 1:
+    escalation_config = (
+        resolve_escalation_config(config, pass_number=1) if config is not None else None
+    )
+    if n_trials > 1 and config is not None:
         log.info("Pass 1: N=%d trial partition voting enabled", n_trials)
     if escalation_config is not None:
         log.info(
@@ -279,6 +313,11 @@ def entity_verification(
                 records,
                 cluster_names,
             )
+            if deterministic_resolution is None and config is None:
+                # An anchor may have changed since selection. A disabled paid
+                # path cannot turn that race into an unbudgeted model call.
+                scope_deferred += 1
+                continue
             execution_identity = (
                 DETERMINISTIC_VARIANT_VERSION
                 if deterministic_resolution is not None
@@ -642,10 +681,7 @@ def entity_verification(
             )
             break
         except Exception as exc:
-            log.warning(
-                f"Error processing cluster {cluster_names[:2]}: {exc}\n"
-                f"{traceback.format_exc()}"
-            )
+            log.exception("Error processing cluster %s", cluster_names[:2])
             _update_pass_status(
                 database,
                 cluster_key,
@@ -674,8 +710,12 @@ def entity_verification(
     return MaterializeResult(
         metadata={
             "status": MetadataValue.text("complete"),
-            "model": MetadataValue.text(config.model_path),
-            "thinking": MetadataValue.bool(config.thinking),
+            "model": MetadataValue.text(
+                config.model_path if config else DETERMINISTIC_VARIANT_VERSION
+            ),
+            "thinking": MetadataValue.bool(config.thinking if config else False),
+            "scope": MetadataValue.text(scope),
+            "clusters_deferred_scope": MetadataValue.int(scope_deferred),
             "n_trials": MetadataValue.int(n_trials),
             "adaptive_voting": MetadataValue.bool(adaptive_voting),
             "llm_trial_calls": MetadataValue.int(trial_calls),

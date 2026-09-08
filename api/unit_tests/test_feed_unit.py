@@ -159,6 +159,7 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
     assert "priority_score DESC" in feed_sql
     assert feed_params == {
         "text_query": None,
+        "reference_query": "",
         "matter_category": None,
         "fetch_limit": 2,
         "offset": 2,

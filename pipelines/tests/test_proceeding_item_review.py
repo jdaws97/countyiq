@@ -601,7 +601,7 @@ def test_partial_projection_preserves_rejected_claims_for_operator_review(
     monkeypatch.setattr(module, "check_error_budget", lambda *a, **k: None)
     log = SimpleNamespace(info=lambda *a: None, warning=lambda *a: None)
     result = module.proceeding_extraction.op.compute_fn.decorated_fn(
-        SimpleNamespace(log=log, run_id="synthetic"), Database()
+        SimpleNamespace(log=log, run_id="synthetic", op_config={}), Database()
     )
     assert len(calls["projection"]["extractions"]) == 1
     assert calls["inference"]["payload"]["model_claims"] == wire

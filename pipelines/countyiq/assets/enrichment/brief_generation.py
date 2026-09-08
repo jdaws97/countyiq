@@ -163,6 +163,8 @@ def brief_generation(
     database: DatabaseResource,
 ) -> MaterializeResult:
     log = context.log
+    if os.environ.get("COUNTYIQ_PASS3_MODE", "legacy").strip().lower() == "records":
+        return _skipped_result("Record explanation mode uses source bundles")
     rank_limit = resolve_brief_rank_limit()
     briefs_retracted = _retract_unservable_briefs(database, rank_limit=rank_limit)
     if briefs_retracted:

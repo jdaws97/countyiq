@@ -32,6 +32,8 @@ COPY --chown=countyiq:countyiq pipelines/countyiq/ ./countyiq/
 COPY --chown=countyiq:countyiq pipelines/alembic.ini ./
 COPY --chown=countyiq:countyiq pipelines/alembic/ ./alembic/
 COPY --chown=countyiq:countyiq pipelines/init-db/ ./init-db/
+COPY --chown=countyiq:countyiq pipelines/scripts/ ./scripts/
+COPY --chown=countyiq:countyiq pipelines/eval/ ./eval/
 RUN uv sync --locked --no-dev --no-editable && uv cache clean
 
 # Dagster config

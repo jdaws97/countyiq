@@ -9,13 +9,14 @@ import ReportActions from '../components/ReportActions'
 import Section from '../components/Section'
 import { Button, StatusMessage } from '../components/ui'
 import { downloadText, toCsv } from '../lib/investigationState'
-import { openEvidenceReceipt } from '../lib/evidence'
+import { useSourceViewer } from '../lib/useSourceViewer'
 import { formatLabel } from '../lib/format'
 import { useFetchJson } from '../lib/useFetchJson'
 import { isProjectWatched, toggleProjectWatch } from '../lib/watchlist'
 import type { IntelligenceEntityLink, ProjectCaseResponse } from '../types/api'
 
 export default function ProjectCaseFile() {
+  const openSource = useSourceViewer()
   const { key = '' } = useParams<{ key: string }>()
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(() => new Set())
   const expandEvent = (eventKey: string, expanded = true) => {
@@ -27,13 +28,6 @@ export default function ProjectCaseFile() {
         next.delete(eventKey)
       }
       return next
-    })
-  }
-  const openRecord = (eventKey: string, evidenceId: string) => {
-    expandEvent(eventKey)
-    requestAnimationFrame(() => {
-      openEvidenceReceipt(evidenceId)
-      document.getElementById(evidenceId)?.scrollIntoView({ block: 'center' })
     })
   }
   const [, setWatchRevision] = useState(0)
@@ -89,6 +83,13 @@ export default function ProjectCaseFile() {
     return Array.from(byId.values())
   }, [events])
 
+  const openRecord = (eventKey: string, evidenceId: string) => {
+    const sources = events.find((event) => event.event_key === eventKey)?.sources ?? []
+    const index = sources.findIndex((source) => source.evidence_id === evidenceId)
+    if (index >= 0) {
+      openSource([...sources], index)
+    }
+  }
   const exportCsv = () => {
     const scope = data?.has_more
       ? 'Partial export: additional events exist outside this view'
@@ -242,7 +243,10 @@ export default function ProjectCaseFile() {
                     {item.body && <> — {item.body}</>}
                     {item.matter && <> · {item.matter.replace(/_/g, ' ')}</>}{' '}
                     <a
-                      onClick={() => openRecord(item.event_key, item.evidence_id)}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        openRecord(item.event_key, item.evidence_id)
+                      }}
                       href={'#' + item.evidence_id}
                     >
                       Verify record ({item.record_date ?? 'undated'}) →
@@ -260,7 +264,10 @@ export default function ProjectCaseFile() {
                   <li key={`${item.event_key}-${i}`}>
                     <strong>{item.text}</strong> — {item.status}{' '}
                     <a
-                      onClick={() => openRecord(item.event_key, item.evidence_id)}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        openRecord(item.event_key, item.evidence_id)
+                      }}
                       href={'#' + item.evidence_id}
                     >
                       Source ({item.record_date ?? 'undated'}) →
@@ -282,7 +289,10 @@ export default function ProjectCaseFile() {
                     </strong>{' '}
                     — {item.status}{' '}
                     <a
-                      onClick={() => openRecord(item.event_key, item.evidence_id)}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        openRecord(item.event_key, item.evidence_id)
+                      }}
                       href={'#' + item.evidence_id}
                     >
                       Source ({item.record_date ?? 'undated'}) →

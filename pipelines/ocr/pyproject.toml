@@ -1,0 +1,20 @@
+[project]
+name = "countyiq-pass0-ocr"
+version = "0.1.0"
+description = "Isolated local PDF preparation for CountyIQ Pass 0"
+requires-python = ">=3.11"
+dependencies = [
+    "docling-slim[convert-core,format-pdf,models-local,feat-ocr-rapidocr-onnx]==2.126.0",
+    "omegaconf>=2.3.1",
+    "torch==2.14.0",
+    "torchvision==0.29.0",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

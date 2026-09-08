@@ -4,6 +4,7 @@
 # A missing footprint cannot establish vacancy, occupancy or availability.
 CONTEXT_ONLY_SIGNALS = frozenset(
     {
+        "municipal_record",
         "nearby_subdivision",
         "economic_development_park",
         "tax_distress",

@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import pytest
-
+from countyiq.lib.intelligence_integrity import validate_entity_membership
 from countyiq.lib.pass1_entity_verification import (
     ENTITY_VERIFICATION_SYSTEM_PROMPT,
     ENTITY_VERIFICATION_USER_TEMPLATE,
@@ -95,6 +95,52 @@ def test_deterministic_tier_refuses_people_and_conflicting_entity_numbers():
             ["ACME LLC", "ACME, L.L.C."],
         )
         is None
+    )
+
+
+def test_distinct_registrations_stay_separate_and_keep_only_their_own_records():
+    names = ["ACME LLC", "ACME, L.L.C.", "BETA LLC"]
+    records = {
+        "candidate_names": names,
+        "parcels": [
+            {"pidn": "P1", "owner_full": "ACME LLC"},
+            {"pidn": "P2", "owner_full": "BETA LLC"},
+        ],
+        "corporate_entities": [
+            {
+                "entity_name": "ACME LLC",
+                "entity_number": "123",
+                "office_address": "1 MAIN ST",
+            },
+            {
+                "entity_name": "BETA LLC",
+                "entity_number": "456",
+                "office_address": "1 MAIN ST",
+            },
+        ],
+    }
+    result = build_deterministic_entity_resolution(records, names)
+    assert result is not None
+    assert validate_entity_membership(result, records, names) == []
+    entities = {entity["canonical_name"]: entity for entity in result["entities"]}
+    assert entities["ACME LLC"]["member_names"] == ["ACME LLC", "ACME, L.L.C."]
+    assert entities["ACME LLC"]["linked_records"]["parcels"] == ["P1"]
+    assert entities["BETA LLC"]["linked_records"]["parcels"] == ["P2"]
+    assert all(entity["relationships"] == [] for entity in entities.values())
+
+
+@pytest.mark.parametrize("second_number", [None, "123"])
+def test_deterministic_partition_requires_every_name_to_have_an_unambiguous_anchor(
+    second_number,
+):
+    records = {
+        "corporate_entities": [
+            {"entity_name": "ACME LLC", "entity_number": "123"},
+            {"entity_name": "BETA LLC", "entity_number": second_number},
+        ]
+    }
+    assert (
+        build_deterministic_entity_resolution(records, ["ACME LLC", "BETA LLC"]) is None
     )
 
 

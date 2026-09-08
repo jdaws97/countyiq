@@ -88,7 +88,7 @@ def test_environment_publisher_accepts_product_host_before_contacting_remote(
         "COUNTYIQ_TRUSTED_HOSTS": trusted_host,
         "COUNTYIQ_ARCHIVE_STRICT": "true",
         "COUNTYIQ_BACKUP_BUCKET_LOCK_CONFIRMED": "true",
-        "COUNTYIQ_R2_HARD_LIMIT_BYTES": "8000000000",
+        "COUNTYIQ_R2_HARD_LIMIT_BYTES": "20000000000",
         **{f"COUNTYIQ_PASS{i}_ENABLED": "false" for i in range(5)},
         **{
             name: "synthetic-value"

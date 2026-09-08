@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from './ui'
 
-export default function ReportActions({ label }: { label: string }) {
+export default function ReportActions({ label, shareUrl }: { label: string; shareUrl?: string }) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -12,9 +12,7 @@ export default function ReportActions({ label }: { label: string }) {
         return
       }
       receipts = Array.from(
-        document.querySelectorAll<HTMLDetailsElement>(
-          'details.evidence-receipt, details.property-signal-details',
-        ),
+        document.querySelectorAll<HTMLDetailsElement>('details.evidence-receipt'),
       ).map((receipt) => [receipt, receipt.open])
       for (const [receipt] of receipts) {
         receipt.open = true
@@ -36,12 +34,13 @@ export default function ReportActions({ label }: { label: string }) {
   }, [])
 
   const share = async () => {
-    const payload = { title: label, text: `${label} — CountyIQ`, url: window.location.href }
+    const url = shareUrl || window.location.href
+    const payload = { title: label, text: `${label} — CountyIQ`, url }
     try {
       if (navigator.share) {
         await navigator.share(payload)
       } else {
-        await navigator.clipboard.writeText(window.location.href)
+        await navigator.clipboard.writeText(url)
         setCopied(true)
         window.setTimeout(() => setCopied(false), 1800)
       }

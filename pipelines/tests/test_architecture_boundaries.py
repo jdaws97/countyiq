@@ -95,6 +95,14 @@ def test_deploy_requires_quiesced_verified_backup_before_migration() -> None:
     assert "pg_stat_activity" in deploy
     assert "MIGRATION_STARTED=true" in deploy
     assert "persist_image_tag" in deploy
+    assert "install-operation-units.sh" in deploy
+    assert (
+        deploy.index("backup_operation_units")
+        < deploy.index('"$SCRIPT_DIR/install-operation-units.sh"')
+        < deploy.index("RELEASE_RECORDED=true")
+    )
+    assert "restore_operation_units" in deploy
+    assert 'install -d -o 10001 -g 10001 -m 700 "$BACKFILL_STATE_DIR"' in deploy
     assert "legacy Postgres volume" in deploy
     assert "COUNTYIQ_BACKUP_ID" in deploy
     assert "docker compose down" not in deploy

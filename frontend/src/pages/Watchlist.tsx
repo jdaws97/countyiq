@@ -249,7 +249,8 @@ export default function Watchlist() {
           </>
         }
         actions={
-          <>
+          <details className="workspace-settings">
+            <summary>Import / export</summary>
             <Button tone="quiet" onClick={exportWorkspace}>
               Export workspace
             </Button>
@@ -263,7 +264,7 @@ export default function Watchlist() {
               accept="application/json,.json"
               onChange={importWorkspace}
             />
-          </>
+          </details>
         }
       />
 
@@ -405,6 +406,7 @@ export default function Watchlist() {
                 </div>
                 <div>
                   <strong>
+                    Assessed:{' '}
                     {parcel.aprtotal !== null
                       ? formatCurrencyCompact(parcel.aprtotal, { allowBillions: true })
                       : '—'}
@@ -414,10 +416,23 @@ export default function Watchlist() {
                   </span>
                 </div>
                 <div>
+                  {parcelEvents.data?.events.find((event) =>
+                    event.related_pidns.includes(parcel.pidn),
+                  ) && (
+                    <Link to={`/property/${parcel.pidn}#property-activity`}>
+                      {
+                        parcelEvents.data.events.find((event) =>
+                          event.related_pidns.includes(parcel.pidn),
+                        )!.title
+                      }
+                    </Link>
+                  )}
                   {parcel.changed_recently ? (
-                    <Badge color="var(--accent-gold)">Record changed in 30 days</Badge>
+                    <Badge color="var(--accent-gold)">
+                      Parcel record changed in the last 30 days
+                    </Badge>
                   ) : (
-                    <span>No recent recorded change</span>
+                    <span>No parcel-record changes in the last 30 days</span>
                   )}
                 </div>
                 <Button tone="quiet" onClick={() => toggleWatch(parcel.pidn)}>
@@ -444,7 +459,7 @@ export default function Watchlist() {
 
       {watched.length > 0 && (
         <WatchSection
-          title="Recent intelligence for watched parcels"
+          title="Activity on watched properties"
           events={parcelEvents}
           previousVisit={previousVisit}
         />
@@ -478,7 +493,9 @@ function WatchSection({
       {events.loading && <StatusMessage>Loading watched intelligence…</StatusMessage>}
       {events.error && <StatusMessage tone="error">{events.error}</StatusMessage>}
       {!events.loading && !events.error && (events.data?.events.length ?? 0) === 0 && (
-        <div className="watch-empty-inline">No source-backed events are linked yet.</div>
+        <div className="watch-empty-inline">
+          No matching activity in the reviewed records for this scope. Coverage may be incomplete.
+        </div>
       )}
       {(events.data?.events.length ?? 0) > 0 && (
         <div className="feed-list">

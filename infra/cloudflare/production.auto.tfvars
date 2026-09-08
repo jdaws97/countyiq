@@ -10,7 +10,7 @@ access_allowed_emails = [
 ]
 
 # These bounds are deliberately conservative. The VPS guard hard-stops all
-# writers at 8 GB total R2 storage, leaving headroom below the 10 GB allowance.
+# writers at 20 GB total R2 storage, allowing usage above the free allowance.
 raw_retention_days             = 90
 database_backup_retention_days = 7
 backup_lock_days               = 3

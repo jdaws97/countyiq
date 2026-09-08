@@ -1,26 +1,27 @@
 """Version-bound quality approval, independent of runtime format-gate rates."""
 
 from __future__ import annotations
-from datetime import date
+
 import hashlib
 import json
 import os
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 FIXTURES = Path(__file__).resolve().parents[2] / "eval/fixtures"
 
 
 def release_identity(pass_number: int) -> dict:
-    from countyiq.lib.pass_llm_config import (
-        resolve_pass_model,
-        resolve_pass_reasoning_effort,
-    )
     from countyiq.lib import (
         pass0_templates,
         pass1_entity_verification,
         pass2_batched_validation,
         pass3_brief_generation,
         pass3_owner_briefs,
+    )
+    from countyiq.lib.pass_llm_config import (
+        resolve_pass_model,
+        resolve_pass_reasoning_effort,
     )
 
     versions = {
@@ -29,6 +30,21 @@ def release_identity(pass_number: int) -> dict:
         2: [pass2_batched_validation.PROMPT_VERSION],
         3: [pass3_brief_generation.PROMPT_VERSION, pass3_owner_briefs.PROMPT_VERSION],
     }
+    if (
+        pass_number == 0
+        and os.environ.get("COUNTYIQ_PASS0_MODE", "").strip().lower() == "evidence"
+    ):
+        from countyiq.lib.municipal_evidence import REVIEW_VERSION
+
+        versions[0] = [REVIEW_VERSION]
+    records_mode = (
+        pass_number == 3
+        and os.environ.get("COUNTYIQ_PASS3_MODE", "legacy").strip().lower() == "records"
+    )
+    if records_mode:
+        from countyiq.lib.record_explanations import PROMPT_VERSION
+
+        versions[3] = [PROMPT_VERSION]
     names = {
         0: ["p0_expected.json"],
         1: ["p1_frozen.json"],
@@ -56,6 +72,8 @@ def release_identity(pass_number: int) -> dict:
         Path(__file__).with_name("pass_schemas.py"),
         Path(__file__).with_name("prompt_prefix.py"),
         Path(__file__).with_name("intelligence_integrity.py"),
+        Path(__file__).with_name("llm_harness.py"),
+        Path(__file__).with_name("pass_llm_config.py"),
     ]
     if pass_number == 0:
         source_paths.extend(
@@ -67,6 +85,13 @@ def release_identity(pass_number: int) -> dict:
                 "proceeding_coverage.py",
                 "source_passages.py",
                 "proceeding_quality.py",
+                "municipal_evidence.py",
+                "municipal_subjects.py",
+                "municipal_evidence_pipeline.py",
+                "municipal_value.py",
+                "intelligence_resolution.py",
+                "pass0_source.py",
+                "pass0_documents.py",
             )
         )
         source_paths.extend(
@@ -80,14 +105,33 @@ def release_identity(pass_number: int) -> dict:
                 / "alembic/versions/063_intelligence_event_types.py",
                 Path(__file__).parents[2]
                 / "alembic/versions/064_proceeding_updates.py",
+                Path(__file__).parents[2]
+                / "alembic/versions/067_municipal_evidence.py",
+                Path(__file__).parents[2]
+                / "alembic/versions/068_municipal_evidence_connections.py",
+                Path(__file__).parents[2]
+                / "alembic/versions/070_municipal_subject_references.py",
+                Path(__file__).parents[1]
+                / "assets/enrichment/municipal_evidence_linking.py",
             ]
         )
     if pass_number == 3:
         source_paths.append(Path(pass3_owner_briefs.__file__))
+        if records_mode:
+            source_paths.extend(
+                [
+                    Path(__file__).with_name("record_explanations.py"),
+                    Path(__file__).parents[1]
+                    / "assets/enrichment/record_explanations.py",
+                    Path(__file__).parents[2]
+                    / "alembic/versions/069_record_explanations.py",
+                ]
+            )
     if pass_number == 1:
         source_paths.append(
             Path(__file__).parents[1] / "assets/enrichment/entity_verification.py"
         )
+        source_paths.append(Path(__file__).with_name("entity_types.py"))
     if pass_number in (2, 3):
         source_paths.extend(
             Path(__file__).with_name(name)
@@ -103,8 +147,14 @@ def release_identity(pass_number: int) -> dict:
         )
     if pass_number == 2:
         source_paths.append(Path(__file__).with_name("pass2_signal_validation.py"))
+    # Library and asset modules can share a basename. Preserve both identities;
+    # otherwise a validator change can silently retain an earlier approval.
+    repository_root = Path(__file__).resolve().parents[3]
     source_hashes = {
-        p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths
+        path.resolve().relative_to(repository_root).as_posix(): hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
+        for path in source_paths
     }
     settings = {
         key: os.environ.get(key, "").strip()
@@ -115,9 +165,35 @@ def release_identity(pass_number: int) -> dict:
             f"COUNTYIQ_PASS{pass_number}_ESCALATION_REASONING_EFFORT",
             "COUNTYIQ_THINKING",
             "COUNTYIQ_STRICT_SCHEMA",
-            "COUNTYIQ_PASS1_ADAPTIVE_VOTING",
+            "COUNTYIQ_ALLOW_SCHEMA_FALLBACK",
+            "COUNTYIQ_MAX_PRICE_PROMPT",
+            "COUNTYIQ_MAX_PRICE_COMPLETION",
+            "COUNTYIQ_ZDR",
+            "COUNTYIQ_PROVIDER_ONLY",
+            "COUNTYIQ_PROVIDER_ORDER",
+            "COUNTYIQ_PROVIDER_ALLOW_FALLBACKS",
+            f"COUNTYIQ_PASS{pass_number}_PROVIDER_ONLY",
+            f"COUNTYIQ_PASS{pass_number}_PROVIDER_ORDER",
+            f"COUNTYIQ_PASS{pass_number}_PROVIDER_ALLOW_FALLBACKS",
         )
     }
+    if pass_number == 0:
+        settings["COUNTYIQ_PASS0_MODE"] = (
+            os.environ.get("COUNTYIQ_PASS0_MODE", "structured").strip().lower()
+        )
+    if pass_number == 1:
+        for key in ("COUNTYIQ_PASS1_ADAPTIVE_VOTING", "COUNTYIQ_PASS1_SCOPE"):
+            settings[key] = os.environ.get(key, "").strip()
+    if pass_number == 3:
+        settings["COUNTYIQ_PASS3_MODE"] = (
+            os.environ.get("COUNTYIQ_PASS3_MODE", "legacy").strip().lower()
+        )
+        if records_mode:
+            for key, default in (
+                ("COUNTYIQ_PASS3_RANK_LIMIT", "500"),
+                ("COUNTYIQ_PASS3_MUNICIPAL_PROPERTY_LIMIT", "1000"),
+            ):
+                settings[key] = os.environ.get(key, default).strip()
     return {
         "pass_number": pass_number,
         "source_hashes": source_hashes,
@@ -152,7 +228,7 @@ def check_quality_release(pass_number: int, path: Path | None = None) -> dict:
     try:
         receipt = json.loads(path.read_text())
         if not isinstance(receipt, dict):
-            raise ValueError("Receipt must be an object")
+            raise TypeError("Receipt must be an object")
         evaluation = receipt.get("evaluation_record")
         artifact_ok = False
         if isinstance(evaluation, dict) and isinstance(evaluation.get("path"), str):
@@ -166,7 +242,7 @@ def check_quality_release(pass_number: int, path: Path | None = None) -> dict:
             and receipt.get("decision") == "approved"
             and isinstance(receipt.get("reviewer"), str)
             and bool(receipt["reviewer"].strip())
-            and reviewed <= date.today()
+            and reviewed <= datetime.now(UTC).date()
             and artifact_ok
             and type(receipt.get("catastrophic_errors")) is int
             and receipt["catastrophic_errors"] == 0

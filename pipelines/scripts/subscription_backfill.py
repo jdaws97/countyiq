@@ -1,0 +1,307 @@
+"""Author bounded, resumable backfill batches using a ChatGPT Codex login."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from countyiq.assets.enrichment.proceeding_extraction import PENDING_PROCEEDINGS_QUERY
+from countyiq.assets.enrichment.record_explanations import (
+    _source_bundles,
+    persist_explanation,
+)
+from countyiq.lib.county_config import get_county_config
+from countyiq.lib.intelligence_integrity import content_hash
+from countyiq.lib.llm_harness import HarnessConfig
+from countyiq.lib.municipal_evidence import (
+    REVIEW_SCHEMA,
+    REVIEW_SYSTEM_PROMPT,
+    REVIEW_VERSION,
+    review_prompt,
+)
+from countyiq.lib.municipal_evidence_pipeline import (
+    persist_evidence,
+    prepare_source,
+    read_evidence,
+    record_snapshot,
+)
+from countyiq.lib.record_explanations import (
+    EXPLANATION_SCHEMA,
+    PROMPT_VERSION,
+    SYSTEM_PROMPT,
+    explanation_prompt,
+    generate_explanation,
+)
+from countyiq.lib.robots import RobotsPolicy
+from countyiq.lib.source_rights import (
+    authorize_municipality_sources,
+    authorize_source,
+    require_source_use,
+)
+from countyiq.lib.subscription_backfill import (
+    SubscriptionAuthor,
+    SubscriptionUnavailable,
+)
+from countyiq.resources.database import make_database_resource
+from jsonschema import ValidationError
+
+
+def source_batches(sources, size):
+    """Keep complete sources together and bound each combined model context."""
+    batch = []
+    characters = 0
+    for source in sources:
+        length = len(source["prompt"])
+        if batch and (len(batch) >= size or characters + length > 120_000):
+            yield batch
+            batch = []
+            characters = 0
+        batch.append(source)
+        characters += length
+    if batch:
+        yield batch
+
+
+def previous_reads(database, kind):
+    with database.dict_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT DISTINCT ON (subject_key)
+                subject_key, source_hash, prompt_version, payload
+            FROM meta.intelligence_inference_history
+            WHERE output_kind = %s AND disposition = 'accepted'
+            ORDER BY subject_key, inference_id DESC
+            """,
+            ("municipal_evidence" if kind == "read" else "record_explanation",),
+        )
+        return {row["subject_key"]: dict(row) for row in cursor.fetchall()}
+
+
+def proceeding_rows(database):
+    with database.dict_cursor() as cursor:
+        cursor.execute(PENDING_PROCEEDINGS_QUERY)
+        return {row["id"]: dict(row) for row in cursor.fetchall()}
+
+
+def run(database, args):
+    author = SubscriptionAuthor(args.directory, model=args.model)
+    author.check_login()
+    reading = args.kind == "read"
+    config = HarnessConfig(
+        model_path=f"codex/subscription:{args.model}",
+        json_schema=REVIEW_SCHEMA if reading else EXPLANATION_SCHEMA,
+        system_prompt=REVIEW_SYSTEM_PROMPT if reading else SYSTEM_PROMPT,
+        reasoning_effort="medium",
+    )
+    previous = previous_reads(database, args.kind)
+    authorizations = {}
+    if reading:
+        require_source_use(
+            authorize_source(
+                database,
+                source_key="public_proceedings",
+                acquisition_method="official_document_direct",
+                asset_key="subscription_backfill",
+            ),
+            "derived_product",
+        )
+        authorizations = authorize_municipality_sources(
+            database,
+            entries=get_county_config().municipality_websites,
+            acquisition_method="official_document_direct",
+            asset_key="subscription_backfill",
+        )
+        sources = list(proceeding_rows(database).values())
+        if args.ids:
+            requested = set(args.ids)
+            sources = [row for row in sources if row["id"] in requested]
+            if requested - {row["id"] for row in sources}:
+                raise ValueError("Requested proceeding is not currently eligible")
+        total = len(sources)
+    else:
+        total, sources = _source_bundles(
+            database, args.kind, subject_keys=args.subjects, pidns=args.pidns
+        )
+    counts = {
+        "eligible": total,
+        "accepted": 0,
+        "unchanged": 0,
+        "errors": 0,
+        "quarantined": 0,
+        "api_calls": 0,
+    }
+    robots = RobotsPolicy(
+        "CountyIQ/1.0 (+https://countyiq.app)", product_token="CountyIQ"
+    )
+    attempted = 0
+    stop_reason = "scope_exhausted"
+
+    def pending_sources():
+        nonlocal attempted, stop_reason
+        for source in sources:
+            if source is None:
+                counts["errors"] += 1
+                continue
+            subject = f"proceeding:{source['id']}" if reading else source["subject_key"]
+            prior = previous.get(subject)
+            if reading:
+                unchanged = bool(
+                    prior
+                    and prior["prompt_version"] == REVIEW_VERSION
+                    and prior["payload"].get("record_snapshot")
+                    == record_snapshot(source)
+                )
+            else:
+                unchanged = bool(
+                    prior
+                    and prior["prompt_version"] == PROMPT_VERSION
+                    and prior["source_hash"] == content_hash(source)
+                )
+            if unchanged:
+                counts["unchanged"] += 1
+                continue
+            if attempted >= args.limit:
+                stop_reason = "item_limit"
+                return
+            attempted += 1
+            try:
+                prepared = {"source": source, "subject": subject}
+                if reading:
+                    document, pages = prepare_source(source, authorizations, robots)
+                    prepared.update(
+                        document=document,
+                        pages=pages,
+                        prompt=review_prompt([], document),
+                    )
+                else:
+                    prepared["prompt"] = explanation_prompt(source)
+                yield prepared
+            except ValueError as error:
+                counts["errors"] += 1
+                print(json.dumps({"subject": subject, "error": str(error)}), flush=True)
+
+    for batch in source_batches(pending_sources(), args.batch_size):
+        try:
+            author.prefetch(config, [item["prompt"] for item in batch])
+        except SubscriptionUnavailable:
+            stop_reason = "subscription_unavailable"
+            break
+        except (ValueError, ValidationError) as error:
+            counts["errors"] += len(batch)
+            print(json.dumps({"batch_error": str(error)}), flush=True)
+            continue
+        for prepared in batch:
+            author.receipts.clear()
+            source = prepared["source"]
+            subject = prepared["subject"]
+            try:
+                if reading:
+                    document = prepared["document"]
+                    reviewed = read_evidence(document, config, author)
+                    # Recheck eligibility after slow authoring. Changed sources
+                    # and expired rights fail before the persistence call.
+                    current = proceeding_rows(database).get(source["id"])
+                    if current is None or record_snapshot(current) != record_snapshot(
+                        source
+                    ):
+                        raise ValueError(
+                            "Source or eligibility changed during authoring"
+                        )
+                    result = persist_evidence(
+                        database,
+                        source,
+                        document,
+                        prepared["pages"],
+                        reviewed,
+                        config,
+                        provenance=author.provenance(),
+                    )
+                else:
+                    output, attempts = generate_explanation(source, config, author)
+                    selectors = (
+                        {"subject_keys": [subject]}
+                        if args.kind == "municipal"
+                        else {"pidns": [subject.removeprefix("parcel:")]}
+                    )
+                    _, current_sources = _source_bundles(
+                        database, args.kind, **selectors
+                    )
+                    current = next(iter(current_sources), None)
+                    if current != source:
+                        raise ValueError("Explanation source changed during authoring")
+                    result = persist_explanation(
+                        database,
+                        source,
+                        output,
+                        config,
+                        attempts=attempts,
+                        provenance=author.provenance(),
+                    )
+                counts["accepted" if result.accepted else "quarantined"] += 1
+                print(
+                    json.dumps({"subject": subject, "accepted": result.accepted}),
+                    flush=True,
+                )
+            except SubscriptionUnavailable:
+                stop_reason = "subscription_unavailable"
+                break
+            except (ValueError, ValidationError) as error:
+                counts["errors"] += 1
+                print(json.dumps({"subject": subject, "error": str(error)}), flush=True)
+        if stop_reason == "subscription_unavailable":
+            break
+    remaining = total - counts["accepted"] - counts["unchanged"]
+    report = {
+        **counts,
+        "kind": args.kind,
+        "model": args.model,
+        "remaining": remaining,
+        "status": "partial" if remaining else "complete",
+        "stop_reason": stop_reason,
+    }
+    (args.directory / f"{args.kind}-status.json").write_text(
+        json.dumps(report, indent=2) + "\n"
+    )
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("kind", choices=("read", "municipal", "property"))
+    parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--limit", type=int, required=True)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--model", default="gpt-6-astra")
+    parser.add_argument("--ids", type=int, nargs="*")
+    parser.add_argument("--subjects", nargs="*")
+    parser.add_argument("--pidns", nargs="*")
+    args = parser.parse_args()
+    if args.limit < 1:
+        parser.error("--limit must be positive")
+    if not 1 <= args.batch_size <= 16:
+        parser.error("--batch-size must be between 1 and 16")
+    if args.ids and args.kind != "read":
+        parser.error("--ids is only supported for source reads")
+    if args.subjects and args.kind != "municipal":
+        parser.error("--subjects is only supported for municipal explanations")
+    if args.pidns and args.kind != "property":
+        parser.error("--pidns is only supported for property explanations")
+    database = make_database_resource()
+    database.setup_for_execution(None)
+    try:
+        acquired = database.execute(
+            "SELECT pg_try_advisory_lock(hashtext(%s))",
+            (f"countyiq:subscription-backfill:{args.kind}",),
+        )[0][0]
+        if not acquired:
+            parser.error("Another subscription batch for this stage is already running")
+        report = run(database, args)
+    finally:
+        database.teardown_after_execution(None)
+    print(json.dumps(report, indent=2))
+    return 0 if report["status"] == "complete" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

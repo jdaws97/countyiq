@@ -19,19 +19,7 @@ countyiq_validate_secret_file "$ENVIRONMENT_FILE"
 # Refuse to arm a timer that has never successfully read both R2 buckets.
 COUNTYIQ_ENV_FILE="$ENVIRONMENT_FILE" "$SCRIPT_DIR/cost-guard.sh" --check
 
-install -o root -g root -m 644 \
-    "$SCRIPT_DIR/systemd/countyiq-cost-guard.service" \
-    /etc/systemd/system/countyiq-cost-guard.service
-install -o root -g root -m 644 \
-    "$SCRIPT_DIR/systemd/countyiq-cost-guard.timer" \
-    /etc/systemd/system/countyiq-cost-guard.timer
-install -o root -g root -m 644 \
-    "$SCRIPT_DIR/systemd/countyiq-backup.service" \
-    /etc/systemd/system/countyiq-backup.service
-install -o root -g root -m 644 \
-    "$SCRIPT_DIR/systemd/countyiq-backup.timer" \
-    /etc/systemd/system/countyiq-backup.timer
-systemctl daemon-reload
+"$SCRIPT_DIR/install-operation-units.sh" --env-file "$ENVIRONMENT_FILE"
 systemctl enable --now countyiq-cost-guard.timer
 
 echo "CountyIQ R2 cost guard is armed."

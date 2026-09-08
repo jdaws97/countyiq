@@ -2,15 +2,51 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import Badge from './Badge'
-import EvidencePanel from './EvidencePanel'
+import EvidencePanel, { CitedText } from './EvidencePanel'
+import { useSourceViewer } from '../lib/useSourceViewer'
 import { Button, ButtonLink } from './ui'
 import { formatLabel, formatShortDate } from '../lib/format'
-import { openEvidenceReceipt } from '../lib/evidence'
+import { describeRecordDate } from '../lib/recordDates'
 import type { TriageStatus } from '../lib/investigationState'
 import { isProjectWatched, isWatched, toggleProjectWatch, toggleWatch } from '../lib/watchlist'
-import type { IntelligenceEvent } from '../types/api'
+import type { EvidenceItem, IntelligenceEvent, RecordDate } from '../types/api'
+
+function recordDates(details: Record<string, unknown> | undefined): RecordDate[] {
+  const dates = details?.record_dates
+  if (!Array.isArray(dates)) {
+    return []
+  }
+  return dates.filter(
+    (date): date is RecordDate =>
+      Boolean(date) &&
+      typeof date === 'object' &&
+      typeof date.label === 'string' &&
+      typeof date.status === 'string',
+  )
+}
+
+function matchedProperties(details: Record<string, unknown> | undefined) {
+  const properties = details?.matched_properties
+  if (!Array.isArray(properties)) {
+    return []
+  }
+  return properties.flatMap((property) => {
+    if (!property || typeof property !== 'object' || typeof property.pidn !== 'string') {
+      return []
+    }
+    return [
+      {
+        pidn: property.pidn,
+        address: typeof property.address === 'string' ? property.address : null,
+      },
+    ]
+  })
+}
 
 function eventColor(event: IntelligenceEvent): string {
+  if (event.event_type === 'municipal_record') {
+    return 'var(--accent-blue)'
+  }
   if (event.event_type === 'denial' || event.event_type === 'delinquency_change') {
     return 'var(--accent-red)'
   }
@@ -26,11 +62,28 @@ function eventColor(event: IntelligenceEvent): string {
   return 'var(--accent-blue)'
 }
 
+function eventTypeLabel(
+  event: IntelligenceEvent,
+  proceedingDetails: Record<string, unknown> | undefined,
+) {
+  if (event.event_type === 'municipal_record') {
+    return 'Municipal record'
+  }
+  if (
+    event.event_type === 'scoped_decision' &&
+    typeof proceedingDetails?.decision_scope === 'string'
+  ) {
+    return `${formatLabel(proceedingDetails.decision_scope)} decision`
+  }
+  return formatLabel(event.event_type)
+}
+
 export default function IntelligenceEventCard({
   event,
   expandedByDefault = false,
   printEvidence = false,
   currentProjectKey,
+  currentPidn,
   expanded: controlledExpanded,
   onExpandedChange,
   showTriage = false,
@@ -42,6 +95,7 @@ export default function IntelligenceEventCard({
   expandedByDefault?: boolean
   printEvidence?: boolean
   currentProjectKey?: string
+  currentPidn?: string
   expanded?: boolean
   onExpandedChange?: (expanded: boolean) => void
   showTriage?: boolean
@@ -49,6 +103,7 @@ export default function IntelligenceEventCard({
   isNew?: boolean
   onTriage?: (status: TriageStatus | null) => void
 }) {
+  const openSource = useSourceViewer()
   const [localExpanded, setLocalExpanded] = useState(expandedByDefault)
   const expanded = controlledExpanded ?? localExpanded
   const toggleExpanded = () => {
@@ -68,6 +123,20 @@ export default function IntelligenceEventCard({
   const proceedingDetails = event.sources.find((source) =>
     [2, 3].includes(Number(source.details?.contract_version)),
   )?.details
+  const explanationDetails = event.sources.find(
+    (source) => Number(source.details?.explanation_version) === 1,
+  )?.details
+  const sourceDetails = explanationDetails ?? proceedingDetails
+  const nextStep =
+    typeof explanationDetails?.explanation_next_step === 'string'
+      ? explanationDetails.explanation_next_step
+      : null
+  const sourcedDates = recordDates(sourceDetails).slice(0, 3)
+  const relatedProperties = [
+    ...new Map(
+      matchedProperties(sourceDetails).map((property) => [property.pidn, property]),
+    ).values(),
+  ].filter((property) => property.pidn !== currentPidn)
   const conditions = Array.isArray(proceedingDetails?.conditions)
     ? proceedingDetails.conditions.flatMap((value, index) =>
         typeof value === 'string' && value.trim() ? [{ text: value, index }] : [],
@@ -87,8 +156,11 @@ export default function IntelligenceEventCard({
     )
   const projectWatched = event.project ? isProjectWatched(event.project.key) : false
   const showProject = event.project && event.project.key !== currentProjectKey
-  const pidns =
-    showAllParcels || printEvidence ? event.related_pidns : event.related_pidns.slice(0, 8)
+  const sourceMatchedPidns = new Set(relatedProperties.map((property) => property.pidn))
+  const remainingPidns = event.related_pidns.filter(
+    (pidn) => pidn !== currentPidn && !sourceMatchedPidns.has(pidn),
+  )
+  const pidns = showAllParcels || printEvidence ? remainingPidns : remainingPidns.slice(0, 8)
   const entityLinks = event.entity_links ?? []
   const linkedEntityNames = new Set(entityLinks.map((entity) => entity.matched_name.toLowerCase()))
   const unresolvedEntities = event.related_entities.filter(
@@ -103,17 +175,7 @@ export default function IntelligenceEventCard({
       <div className="intelligence-card-topline">
         <div className="intelligence-card-badges">
           {isNew && <Badge color="var(--accent-gold)">New since last visit</Badge>}
-          <Badge color={eventColor(event)}>
-            {event.event_type === 'scoped_decision' &&
-            typeof proceedingDetails?.decision_scope === 'string'
-              ? formatLabel(proceedingDetails.decision_scope) + ' decision'
-              : formatLabel(event.event_type)}
-          </Badge>
-          <Badge
-            color={event.category === 'development' ? 'var(--accent-cyan)' : 'var(--accent-blue)'}
-          >
-            {formatLabel(event.category)}
-          </Badge>
+          <Badge color={eventColor(event)}>{eventTypeLabel(event, sourceDetails)}</Badge>
           {triageStatus && (
             <Badge
               color={triageStatus === 'reviewed' ? 'var(--accent-green)' : 'var(--text-muted)'}
@@ -130,18 +192,64 @@ export default function IntelligenceEventCard({
       </div>
 
       <h2>{event.title}</h2>
-      <p className="intelligence-card-summary">{event.what_happened}</p>
+      <p className="intelligence-card-summary">
+        <CitedText text={event.what_happened} evidence={event.sources} />
+      </p>
+
+      {sourcedDates.length > 0 && (
+        <div
+          aria-label="Dates stated in the source"
+          style={{
+            display: 'grid',
+            gap: 4,
+            marginTop: 10,
+            padding: '8px 10px',
+            color: 'var(--text-secondary)',
+            background: 'var(--bg-panel)',
+            borderLeft: '2px solid var(--event-accent)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}
+        >
+          {sourcedDates.map((recordDate, index) => (
+            <div key={`${recordDate.source_id}-${recordDate.label}-${index}`}>
+              <CitedText
+                text={`${describeRecordDate(recordDate)} [Evidence:source:${recordDate.source_id}]`}
+                evidence={event.sources}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {relatedProperties.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '5px 8px',
+            marginTop: 10,
+            fontFamily: 'var(--font-sans)',
+            fontSize: 13,
+          }}
+        >
+          <span style={{ color: 'var(--text-muted)' }}>Related properties:</span>
+          {relatedProperties.map((property) => (
+            <Link key={property.pidn} to={`/property/${property.pidn}`}>
+              {property.address ?? property.pidn}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="intelligence-card-meta">
         {event.municipality && <span>{event.municipality}</span>}
-        {proceedingDetails?.record_status === 'scheduled' && (
+        {sourceDetails?.record_status === 'scheduled' && (
           <span>Scheduled item · outcome unverified</span>
         )}
-        {proceedingDetails?.record_status === 'recommendation' && (
+        {sourceDetails?.record_status === 'recommendation' && (
           <span>Recommendation · final decision unverified</span>
-        )}
-        {typeof proceedingDetails?.matter_category === 'string' && (
-          <span>{formatLabel(proceedingDetails.matter_category)}</span>
         )}
         {proceedingDetails?.discovery_eligible === false && <span>Property history</span>}
         {typeof proceedingDetails?.decision_authority === 'string' && (
@@ -153,17 +261,6 @@ export default function IntelligenceEventCard({
         {proceedingDetails?.location_status === 'location_not_resolved' &&
           Array.isArray(proceedingDetails.parcel_references) &&
           proceedingDetails.parcel_references.length > 0 && <span>Parcel location unverified</span>}
-        <span>
-          {event.sources.length} evidence receipt{event.sources.length === 1 ? '' : 's'}
-        </span>
-        {event.related_pidns.length > 0 && (
-          <span>
-            {event.related_pidns.length} linked propert
-            {event.related_pidns.length === 1 ? 'y' : 'ies'}
-          </span>
-        )}
-        {event.interpretation.kind === 'deterministic' && <span>Recorded source change</span>}
-        {event.interpretation.kind === 'llm' && <span>Extracted from record</span>}
       </div>
 
       <div className="intelligence-card-actions" data-print-hidden>
@@ -176,8 +273,25 @@ export default function IntelligenceEventCard({
           </ButtonLink>
         )}
         <Button tone="secondary" type="button" aria-expanded={expanded} onClick={toggleExpanded}>
-          {expanded ? 'Hide details' : 'Review details & evidence'}
+          {expanded ? 'Less detail' : 'Read more'}
         </Button>
+        {event.sources.length > 0 && (
+          <Button tone="quiet" type="button" onClick={() => openSource(event.sources)}>
+            View source{event.sources.length > 1 ? 's' : ''}
+          </Button>
+        )}
+        {!event.project &&
+          event.related_pidns.length === 1 &&
+          event.related_pidns[0] !== currentPidn && (
+            <Button tone="quiet" type="button" onClick={() => toggleWatch(event.related_pidns[0])}>
+              {isWatched(event.related_pidns[0]) ? 'Watching property' : 'Watch property'}
+            </Button>
+          )}
+        {event.project && (
+          <Button tone="quiet" type="button" onClick={() => toggleProjectWatch(event.project!)}>
+            {projectWatched ? 'Watching project' : 'Watch project'}
+          </Button>
+        )}
         {showTriage && (
           <>
             <Button
@@ -204,6 +318,12 @@ export default function IntelligenceEventCard({
           hidden={!expanded}
           data-print-evidence={printEvidence || undefined}
         >
+          {nextStep && (
+            <p className="intelligence-next-step">
+              <strong>What to check next: </strong>
+              <CitedText text={nextStep} evidence={event.sources} />
+            </p>
+          )}
           {conditions.length > 0 && (
             <div className="recorded-event-facts">
               <h3>Stated conditions</h3>
@@ -211,8 +331,7 @@ export default function IntelligenceEventCard({
               <ul>
                 {conditions.map((item) => (
                   <li key={item.index}>
-                    {item.text}{' '}
-                    <FactSource evidenceId={sourceFor(`condition:${item.index}`)?.evidence_id} />
+                    {item.text} <FactSource evidence={sourceFor(`condition:${item.index}`)} />
                   </li>
                 ))}
               </ul>
@@ -228,8 +347,7 @@ export default function IntelligenceEventCard({
                     {typeof item.kind === 'string' && item.kind !== 'other' && (
                       <strong>{formatLabel(item.kind)}: </strong>
                     )}
-                    {item.text}{' '}
-                    <FactSource evidenceId={sourceFor(`milestone:${item.index}`)?.evidence_id} />
+                    {item.text} <FactSource evidence={sourceFor(`milestone:${item.index}`)} />
                   </li>
                 ))}
               </ul>
@@ -258,7 +376,7 @@ export default function IntelligenceEventCard({
           )}
 
           {(entityLinks.length > 0 || unresolvedEntities.length > 0) && (
-            <RelatedGroup label="Related entities">
+            <RelatedGroup label="Organizations named in the record">
               {entityLinks.map((entity) => (
                 <Link
                   key={entity.owner_id}
@@ -270,7 +388,7 @@ export default function IntelligenceEventCard({
               ))}
               {unresolvedEntities.map((entity) => (
                 <span className="unresolved-record" key={entity}>
-                  {entity} · unresolved
+                  {entity} · ownership link not established
                 </span>
               ))}
             </RelatedGroup>
@@ -296,7 +414,7 @@ export default function IntelligenceEventCard({
                   </span>
                 )
               })}
-              {event.related_pidns.length > 8 && !printEvidence && (
+              {remainingPidns.length > 8 && !printEvidence && (
                 <Button
                   tone="quiet"
                   type="button"
@@ -305,17 +423,13 @@ export default function IntelligenceEventCard({
                 >
                   {showAllParcels
                     ? 'Show fewer properties'
-                    : `Show all ${event.related_pidns.length} linked properties`}
+                    : `Show all ${remainingPidns.length} additional linked properties`}
                 </Button>
               )}
             </RelatedGroup>
           )}
 
-          <EvidencePanel
-            items={event.sources}
-            title="Verify this event"
-            intro="Inspect source facts, method, timing, caveats, and the original record before relying on this interpretation."
-          />
+          {printEvidence && <EvidencePanel items={event.sources} />}
         </div>
       )}
     </article>
@@ -331,10 +445,11 @@ function RelatedGroup({ label, children }: { label: string; children: React.Reac
   )
 }
 
-function FactSource({ evidenceId }: { evidenceId?: string }) {
-  return evidenceId ? (
-    <a href={'#' + evidenceId} onClick={() => openEvidenceReceipt(evidenceId)}>
-      Source →
-    </a>
+function FactSource({ evidence }: { evidence?: EvidenceItem }) {
+  const openSource = useSourceViewer()
+  return evidence ? (
+    <button type="button" className="source-catalog-button" onClick={() => openSource([evidence])}>
+      View source
+    </button>
   ) : null
 }

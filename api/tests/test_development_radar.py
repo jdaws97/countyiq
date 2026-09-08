@@ -1,3 +1,9 @@
+from collections.abc import Iterator
+
+import psycopg2
+import pytest
+from fastapi import HTTPException
+
 from api.lib.development_radar import (
     SIGNAL_CAVEATS,
     SIGNAL_INTERPRETATIONS,
@@ -6,8 +12,17 @@ from api.lib.development_radar import (
     format_signal_label,
     sanitize_signals_for_public,
 )
+from api.routes.radar import _plan_status_clause, _validate_acre_range
+from api.tests.conftest import (
+    DB_ENV,
+    OTHER_PIDN,
+    SECOND_PIDN,
+    TEST_MUNICIPALITY,
+    TEST_PIDN,
+)
 
 EXPECTED_SIGNAL_KEYS = {
+    "municipal_record",
     "active_subdivision",
     "nearby_subdivision",
     "economic_development_park",
@@ -124,3 +139,144 @@ def test_labels_do_not_overclaim_investor_or_assemblage_intent():
         "entity_assemblage", contiguous
     )
     assert "assembling" not in format_signal_label("entity_assemblage", contiguous)
+
+
+def test_plan_status_defaults_to_no_linked_plan_only_for_opportunity():
+    assert _plan_status_clause(plan_status=None, view="opportunity") == (
+        " AND dm.has_active_plan = FALSE"
+    )
+    assert _plan_status_clause(plan_status=None, view="momentum") == ""
+    assert _plan_status_clause(plan_status="active", view="readiness") == (
+        " AND dm.has_active_plan = TRUE"
+    )
+
+
+def test_acre_range_rejects_an_inverted_screen():
+    try:
+        _validate_acre_range(25, 5)
+    except HTTPException as exc:
+        assert exc.status_code == 422
+    else:
+        raise AssertionError("Expected inverted acre range to be rejected")
+
+
+@pytest.fixture
+def radar_parity_rows() -> Iterator[None]:
+    """Create matching, active-plan, and ineligible rows inside one map viewport."""
+    original_rows: list[tuple] = []
+    try:
+        with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                    SELECT p.pidn, p.municipality, p."class", p.acres,
+                           dm.has_active_plan, dm.eligible
+                    FROM staging.parcels p
+                    JOIN public.development_momentum dm ON dm.pidn = p.pidn
+                    WHERE p.pidn = ANY(%s)
+                    ORDER BY p.pidn
+                    """,
+                ([TEST_PIDN, SECOND_PIDN, OTHER_PIDN],),
+            )
+            original_rows = cur.fetchall()
+            cur.execute(
+                """
+                    UPDATE staging.parcels
+                    SET municipality = %s, "class" = 'C', acres = 1.5
+                    WHERE pidn = ANY(%s)
+                    """,
+                (TEST_MUNICIPALITY, [TEST_PIDN, SECOND_PIDN, OTHER_PIDN]),
+            )
+            cur.execute(
+                """
+                    UPDATE public.development_momentum
+                    SET has_active_plan = CASE
+                            WHEN pidn = %s THEN FALSE
+                            WHEN pidn = %s THEN TRUE
+                            ELSE FALSE
+                        END,
+                        eligible = CASE WHEN pidn = %s THEN FALSE ELSE TRUE END
+                    WHERE pidn = ANY(%s)
+                    """,
+                (
+                    TEST_PIDN,
+                    SECOND_PIDN,
+                    OTHER_PIDN,
+                    [TEST_PIDN, SECOND_PIDN, OTHER_PIDN],
+                ),
+            )
+        yield
+    finally:
+        if original_rows:
+            with (
+                psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn,
+                conn.cursor() as cur,
+            ):
+                for (
+                    pidn,
+                    municipality,
+                    parcel_class,
+                    acres,
+                    has_active_plan,
+                    eligible,
+                ) in original_rows:
+                    cur.execute(
+                        """
+                            UPDATE staging.parcels
+                            SET municipality = %s, "class" = %s, acres = %s
+                            WHERE pidn = %s
+                            """,
+                        (municipality, parcel_class, acres, pidn),
+                    )
+                    cur.execute(
+                        """
+                            UPDATE public.development_momentum
+                            SET has_active_plan = %s, eligible = %s
+                            WHERE pidn = %s
+                            """,
+                        (has_active_plan, eligible, pidn),
+                    )
+
+
+@pytest.mark.parametrize(
+    ("list_path", "view", "plan_status", "expected_pidns"),
+    [
+        ("/api/radar/opportunity", "opportunity", "none", {TEST_PIDN}),
+        ("/api/radar/development", "momentum", "any", {TEST_PIDN, SECOND_PIDN}),
+        ("/api/radar/site-readiness", "readiness", "active", {SECOND_PIDN}),
+    ],
+)
+def test_radar_bbox_matches_regular_list_filters(
+    client,
+    radar_parity_rows,
+    list_path: str,
+    view: str,
+    plan_status: str,
+    expected_pidns: set[str],
+):
+    criteria = {
+        "min_score": 0,
+        "municipality": TEST_MUNICIPALITY,
+        "min_acres": 1,
+        "max_acres": 2,
+        "class": "C",
+        "plan_status": plan_status,
+    }
+    list_response = client.get(list_path, params=criteria)
+    bbox_response = client.get(
+        "/api/radar/development/bbox",
+        params={
+            **criteria,
+            "view": view,
+            "west": -76.81,
+            "south": 39.89,
+            "east": -76.77,
+            "north": 39.93,
+        },
+    )
+
+    assert list_response.status_code == 200
+    assert bbox_response.status_code == 200
+    list_pidns = {row["pidn"] for row in list_response.json()["parcels"]}
+    bbox_pidns = {row["pidn"] for row in bbox_response.json()["parcels"]}
+    assert list_pidns == expected_pidns
+    assert bbox_pidns == expected_pidns

@@ -1,15 +1,15 @@
 """Exercise Pass 1 publication with real parsing, source validation and voting."""
 
+import json
 from contextlib import nullcontext
 from copy import deepcopy
-import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
 from countyiq.assets.enrichment import entity_verification as pass1
 from countyiq.lib.llm_harness import HarnessConfig, HarnessResult
 from countyiq.lib.pass1_entity_verification import ENTITY_CANDIDATE_PAIRS_READY_QUERY
-
 
 NAMES = ["ALPHA LLC", "BETA LLC"]
 RECORDS = {
@@ -56,21 +56,26 @@ def _response(parsed, provider):
 
 
 class _Database:
-    def __init__(self, names):
+    def __init__(self, names, records=None):
         self.names = names
+        self.records = records or {}
 
     def execute(self, sql, params=None):
         if sql == ENTITY_CANDIDATE_PAIRS_READY_QUERY:
             return [(True,)]
         if sql == pass1.CANDIDATE_CLUSTERS_QUERY:
             return [tuple(self.names)]
+        if sql == pass1.ENTITY_REGISTRATION_ROWS_QUERY:
+            return self.records.get("corporate_entities", [])
         raise AssertionError(f"Unexpected database query: {sql}")
 
     def dict_cursor(self):
         return nullcontext(object())
 
 
-def _run(monkeypatch, responses, *, records=None, escalation=False):
+def _run(
+    monkeypatch, responses, *, records=None, escalation=False, paid_available=True
+):
     records = deepcopy(RECORDS if records is None else records)
     calls = {
         "invoke": [],
@@ -97,12 +102,15 @@ def _run(monkeypatch, responses, *, records=None, escalation=False):
         calls["status"].append({"status": status, "error": error})
 
     monkeypatch.setenv("COUNTYIQ_PASS1_TRIALS", "3")
+    monkeypatch.setenv("COUNTYIQ_PASS1_SCOPE", "all")
     monkeypatch.setenv("COUNTYIQ_PASS1_ADAPTIVE_VOTING", "true")
-    monkeypatch.setattr(
-        pass1,
-        "resolve_pass_harness",
-        lambda *args, **kwargs: (HarnessConfig(model_path="test/primary"), invoke),
-    )
+
+    def resolve_harness(*args, **kwargs):
+        if not paid_available:
+            raise pass1.PassHarnessUnavailable("paid inference is disabled")
+        return HarnessConfig(model_path="test/primary"), invoke
+
+    monkeypatch.setattr(pass1, "resolve_pass_harness", resolve_harness)
     monkeypatch.setattr(
         pass1,
         "resolve_escalation_config",
@@ -124,7 +132,7 @@ def _run(monkeypatch, responses, *, records=None, escalation=False):
     monkeypatch.setattr(pass1, "_update_pass_status", record_status)
 
     result = pass1.entity_verification.op.compute_fn.decorated_fn(
-        SimpleNamespace(log=Mock()), _Database(records["candidate_names"])
+        SimpleNamespace(log=Mock()), _Database(records["candidate_names"], records)
     )
     return calls, result
 
@@ -216,17 +224,29 @@ def test_invalid_escalation_cannot_replace_a_valid_primary_abstention(monkeypatc
     assert result.metadata["escalation_validation_rejections"].value == 1
 
 
-def test_anchored_deterministic_resolution_needs_no_paid_trial_quorum(monkeypatch):
+@pytest.mark.parametrize("paid_available", [True, False])
+def test_anchored_deterministic_resolution_needs_no_paid_trial_quorum(
+    monkeypatch, paid_available
+):
     records = deepcopy(RECORDS)
     records["candidate_names"] = ["ALPHA LLC", "ALPHA, L.L.C."]
     records["parcels"] = [records["parcels"][0]]
     records["corporate_entities"] = [
         {"entity_name": "ALPHA LLC", "entity_number": "123"}
     ]
-    calls, result = _run(monkeypatch, [], records=records)
+    calls, result = _run(
+        monkeypatch, [], records=records, paid_available=paid_available
+    )
 
     assert calls["invoke"] == []
     assert calls["graphs"][0][0]["member_names"] == ["ALPHA LLC", "ALPHA, L.L.C."]
     assert calls["inferences"][0]["payload"]["trial_stats"]["target_trials"] == 1
     assert result.metadata["deterministic_clusters"].value == 1
     assert result.metadata["errors"].value == 0
+
+
+def test_disabled_paid_path_does_not_guess_unanchored_identity(monkeypatch):
+    calls, result = _run(monkeypatch, [], paid_available=False)
+    assert calls["invoke"] == []
+    assert calls["graphs"] == []
+    assert result.metadata["clusters_deferred_scope"].value == 1

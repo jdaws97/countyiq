@@ -113,6 +113,7 @@ deterministic_enrichment_refresh = define_asset_job(
     selection=AssetSelection.assets(
         "municipality_join",
         "entity_candidate_pairs_refresh",
+        "municipal_evidence_linking",
         "development_signals",
         "owner_resolution",
         "parcel_events",
@@ -144,8 +145,14 @@ proceedings_refresh = define_asset_job(
 
 proceedings_extraction_refresh = define_asset_job(
     name="proceedings_extraction_refresh",
-    selection=AssetSelection.assets("proceeding_extraction"),
-    description="[Manual] Re-run Pass 0: extract structured records from minute PDFs",
+    selection=AssetSelection.assets(
+        "proceeding_extraction",
+        "municipal_evidence_linking",
+        "development_signals",
+        "intelligence_events",
+        "development_momentum",
+    ),
+    description="[Manual] Read municipal sources, link property references, and refresh watched events",
 )
 
 entity_verification_refresh = define_asset_job(
@@ -153,6 +160,7 @@ entity_verification_refresh = define_asset_job(
     selection=AssetSelection.assets(
         "municipality_join",
         "entity_candidate_pairs_refresh",
+        "municipal_evidence_linking",
         "entity_verification",
         "development_signals",
         "owner_resolution",
@@ -175,6 +183,16 @@ brief_generation_refresh = define_asset_job(
     description="[Manual] Re-run Pass 3: generate intelligence briefs",
 )
 
+record_intelligence_refresh = define_asset_job(
+    name="record_intelligence_refresh",
+    selection=AssetSelection.assets(
+        "municipal_record_explanations",
+        "property_record_explanations",
+        "intelligence_events",
+    ),
+    description="[Manual] Explain current public records and refresh municipal event summaries",
+)
+
 owner_briefs_refresh = define_asset_job(
     name="owner_briefs_refresh",
     selection=AssetSelection.assets("owner_briefs"),
@@ -193,6 +211,10 @@ intelligence_data_refresh = define_asset_job(
         "pa_dos_entities",
         "public_proceedings_scrape",
         "proceeding_extraction",
+        "municipal_evidence_linking",
+        "development_signals",
+        "intelligence_events",
+        "development_momentum",
     ),
     description="[Manual] Re-pull all intelligence source data (PA DOS + proceedings + Pass 0)",
 )
@@ -204,6 +226,8 @@ intelligence_full_pipeline = define_asset_job(
         "signal_validation_batched",
         "development_momentum",
         "brief_generation",
+        "municipal_record_explanations",
+        "property_record_explanations",
         "county_narratives",
         "intelligence_events",
     ),

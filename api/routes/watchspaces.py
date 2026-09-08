@@ -6,15 +6,17 @@ of source data that might later be retracted.
 """
 
 import os
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
-import re
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field, model_validator
-from api.lib.database import get_cursor
-from api.lib.auth import require_identity, require_workspace_write
+
 from api.lib.accounts import account_workspace
+from api.lib.auth import require_identity, require_workspace_write
+from api.lib.database import get_cursor
 from api.lib.rate_limit import PerClientRateLimiter, client_ip
 from api.routes.feed import fetch_feed
 
@@ -235,8 +237,25 @@ def notifications(
         row = account_workspace(cur, request)
         cur.execute(
             """SELECT n.notification_id,n.event_key,n.read_at
-          FROM public.watch_notifications n JOIN public.intelligence_events e USING(event_key)
+          FROM public.watch_notifications n JOIN public.current_intelligence_events e USING(event_key)
           WHERE workspace_id=%s AND n.read_at IS NULL AND (%s::bigint IS NULL OR n.notification_id<%s)
+            AND (e.source_kind <> 'municipal_evidence' OR EXISTS (
+              SELECT 1 FROM public.watch_items w
+              WHERE w.workspace_id=n.workspace_id AND e.detected_at > w.added_at
+                AND (
+                  (w.kind='parcel' AND w.subject_key=ANY(e.related_pidns))
+                  OR (w.kind='project' AND w.subject_key=e.project_key)
+                  OR (w.kind='municipality' AND lower(replace(w.subject_key,'_',' '))=lower(replace(e.municipality,'_',' ')))
+                  OR (w.kind='entity' AND EXISTS (
+                    SELECT 1 FROM public.owners o
+                    WHERE o.owner_id::text=w.subject_key AND EXISTS (
+                      SELECT 1 FROM unnest(e.related_entities) name
+                      WHERE lower(name)=lower(o.canonical_name)
+                        OR lower(name)=ANY(ARRAY(SELECT lower(alias) FROM unnest(o.aliases) alias))
+                    )
+                  ))
+                )
+            ))
           ORDER BY n.notification_id DESC LIMIT 101""",
             (row["workspace_id"], before_id, before_id),
         )

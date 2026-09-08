@@ -353,6 +353,25 @@ def _current_source_hash(
 ) -> str:
     kind = contradiction["output_kind"]
     subject_key = contradiction["subject_key"]
+    if kind == "municipal_evidence":
+        from countyiq.lib.municipal_evidence_pipeline import record_snapshot
+
+        cur.execute(
+            """
+            SELECT id, body_name, meeting_date, proceeding_type, document_url,
+                   raw_text, content_hash
+            FROM staging.public_proceedings
+            WHERE id = %s AND valid_to IS NULL
+            """,
+            (int(subject_key.split(":", 1)[1]),),
+        )
+        row = cur.fetchone()
+        payload = challenger["payload"]
+        if row is None or record_snapshot(row) != payload.get("record_snapshot"):
+            return ""
+        return content_hash(
+            {"record": record_snapshot(row), "text": payload["source_text_sha256"]}
+        )
     if kind == "proceeding_extraction":
         from countyiq.assets.enrichment.proceeding_extraction import (
             _MAX_RAW_TEXT_CHARS,
@@ -482,6 +501,11 @@ def _apply_projection(
         "owner_brief": "public.owner_briefs",
     }
     kind = contradiction["output_kind"]
+    if kind == "municipal_evidence":
+        # This output is served directly from the latest accepted history row.
+        # The new resolution row above selects either version, or retracts both
+        # through its discard payload. There is no mutable projection to update.
+        return
     table = table_by_kind[kind]
     prior_id = contradiction["prior_inference_id"]
 

@@ -10,7 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from countyiq.lib.county_config import get_county_config
 
@@ -383,6 +384,95 @@ def build_delinquency_event(row: dict[str, Any]) -> dict[str, Any]:
         "interpretation_model": None,
         "interpretation_generated_at": None,
     }
+
+
+def build_municipal_evidence_event(row: dict[str, Any]) -> dict[str, Any]:
+    """Publish original wording and reference links, without deriving an outcome."""
+    card = row["card"]
+    document_kind = row["payload"].get("document_kind", "record")
+    label = {"agenda": "Agenda", "minutes": "Minutes"}.get(
+        document_kind, "Municipal record"
+    )
+    excerpt = "\n[…]\n".join(passage["text"] for passage in card["passages"])
+    event = {
+        "event_key": row["event_key"],
+        "source_kind": "municipal_evidence",
+        "source_record_id": f"{row['proceeding_id']}:{card['id']}",
+        "category": "development",
+        "event_type": "municipal_record",
+        "event_tags": ["municipal_record"],
+        "title": f"{label}: {card['title']}",
+        "what_happened": excerpt,
+        "why_it_matters": "",
+        "what_happens_next": "",
+        "event_date": row["meeting_date"],
+        "detected_at": row["observed_at"],
+        "confidence": None,
+        "municipality": row["municipality"],
+        "project_key": None,
+        "project_name": None,
+        "related_entities": list(row["related_entities"]),
+        "related_pidns": list(row["related_pidns"]),
+        "source_evidence": [
+            {
+                "label": f"{row['body_name']} · {label}",
+                "url": row["document_url"],
+                "document_url": row["document_url"],
+                "excerpt": excerpt,
+                "details": {
+                    "document_kind": document_kind,
+                    "meeting_date": str(row["meeting_date"]),
+                    "source_text_sha256": row["payload"]["source_text_sha256"],
+                    "matched_properties": row["matched_properties"],
+                    "method": "Original source selection with literal property-reference matching",
+                    "caveat": "A mention does not establish approval, completion or the extent of a project.",
+                },
+            }
+        ],
+        "interpretation_kind": "deterministic",
+        "interpretation_model": None,
+        "interpretation_generated_at": None,
+    }
+    explanation = row.get("explanation")
+    if explanation:
+        record = explanation["record"]
+        event.update(
+            event_type=record["event_type"],
+            event_tags=[
+                "municipal_record",
+                *record.get("event_tags", [record["event_type"]]),
+            ],
+            title=explanation["headline"],
+            what_happened=explanation["summary"],
+            what_happens_next=explanation["next_step"] or "",
+            interpretation_kind="llm",
+            interpretation_model=row["explanation_model"],
+            interpretation_generated_at=row["explanation_generated_at"],
+        )
+        details = {
+            **event["source_evidence"][0]["details"],
+            "explanation_version": 1,
+            "explanation_inference_id": row["explanation_inference_id"],
+            "explanation_next_step": explanation["next_step"],
+            "record_status": record["record_status"],
+            "matter_category": record["matter_category"],
+            "decision_scope": record["decision_scope"],
+            "record_dates": record["dates"],
+            "discovery_eligible": record["matter_category"]
+            in {"development", "landuse_policy", "public_works"},
+        }
+        event["source_evidence"] = [
+            {
+                "label": source["label"],
+                "url": source.get("url"),
+                "document_url": source.get("url"),
+                "excerpt": source["text"],
+                "explanation_source_id": source["id"],
+                "details": details if index == 0 else {},
+            }
+            for index, source in enumerate(row["explanation_source"]["sources"])
+        ]
+    return event
 
 
 def build_development_event(row: dict[str, Any]) -> dict[str, Any]:

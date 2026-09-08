@@ -11,10 +11,10 @@ from countyiq.lib.intelligence_common import PROCEEDING_USE_ALLOWED_SQL
 from countyiq.lib.intelligence_events import (
     build_delinquency_event,
     build_development_event,
+    build_municipal_evidence_event,
     build_parcel_event,
 )
 from countyiq.resources.database import DatabaseResource
-
 
 _INSERT_COLUMNS = (
     "event_key",
@@ -229,7 +229,13 @@ def _insert_tuple(event: dict) -> tuple:
 
 @asset(
     group_name="enrichment",
-    deps=["parcel_events", "tax_claims", "proceeding_extraction"],
+    deps=[
+        "parcel_events",
+        "tax_claims",
+        "proceeding_extraction",
+        "municipal_evidence_linking",
+        "municipal_record_explanations",
+    ],
     description=(
         "Unified evidence-backed parcel and development intelligence events; "
         "uses cached Pass 0 interpretation and makes no LLM calls"
@@ -243,22 +249,15 @@ def intelligence_events(
     parcel_rows = _fetch_dicts(database, _PARCEL_EVENTS_SQL)
     delinquency_rows = _fetch_dicts(database, _DELINQUENCY_EVENTS_SQL)
     development_rows = _fetch_dicts(database, _DEVELOPMENT_EVENTS_SQL)
+    municipal_rows = _fetch_dicts(
+        database, "SELECT * FROM public.current_municipal_intelligence"
+    )
 
     events = [build_parcel_event(row) for row in parcel_rows]
     events.extend(build_delinquency_event(row) for row in delinquency_rows)
+    events.extend(build_municipal_evidence_event(row) for row in municipal_rows)
     # Development identities are assigned under the same transaction as the
     # serving rebuild below, so persisted watches survive later title changes.
-
-    if not events and not development_rows:
-        context.log.warning(
-            "No source events were available; preserving the current intelligence ledger"
-        )
-        return MaterializeResult(
-            metadata={
-                "status": MetadataValue.text("preserved_empty_source"),
-                "events": MetadataValue.int(0),
-            }
-        )
 
     with database.transaction() as cur:
         from countyiq.lib.proceeding_contract import resolve_project_keys

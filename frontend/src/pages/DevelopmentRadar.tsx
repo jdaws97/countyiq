@@ -4,6 +4,7 @@ import BackButton from '../components/BackButton'
 import PageShell from '../components/PageShell'
 import { Button, ButtonLink } from '../components/ui'
 import { formatCurrencyCompact, formatShortDate } from '../lib/format'
+import { appendRadarCriteria, planStatusFor, type RadarPlanStatus } from '../lib/radarFilters'
 import {
   getComparison,
   radarSearchName,
@@ -23,10 +24,10 @@ import type {
 type RadarTab = RadarViewMode | 'movers'
 
 const TABS: { key: RadarTab; label: string }[] = [
-  { key: 'opportunity', label: 'Opportunity' },
-  { key: 'momentum', label: 'Momentum' },
-  { key: 'movers', label: 'Movers' },
-  { key: 'readiness', label: 'Site Screening' },
+  { key: 'opportunity', label: 'Property shortlist' },
+  { key: 'momentum', label: 'Development indicators' },
+  { key: 'movers', label: 'Score changes' },
+  { key: 'readiness', label: 'Site screening' },
 ]
 
 const PARCEL_CLASSES = [
@@ -38,15 +39,8 @@ const PARCEL_CLASSES = [
   { value: 'E', label: 'Exempt' },
 ]
 
-const ACRE_OPTIONS = [
-  { value: '', label: 'Any size' },
-  { value: '1', label: '1+ acres' },
-  { value: '5', label: '5+ acres' },
-  { value: '10', label: '10+ acres' },
-  { value: '25', label: '25+ acres' },
-]
-
 const PAGE_SIZE = 200
+const MAX_ACRES = 100000
 
 function scoreColor(s: number): string {
   if (s >= 60) {
@@ -64,7 +58,7 @@ function scoreColor(s: number): string {
 function scoreOptionsFor(view: RadarTab) {
   if (view === 'opportunity') {
     return [
-      { value: '30', label: '30+ Recommended' },
+      { value: '30', label: '30+' },
       { value: '40', label: '40+' },
       { value: '50', label: '50+' },
       { value: '60', label: '60+' },
@@ -73,7 +67,7 @@ function scoreOptionsFor(view: RadarTab) {
   }
   if (view === 'momentum') {
     return [
-      { value: '30', label: '30+ Recommended' },
+      { value: '30', label: '30+' },
       { value: '40', label: '40+' },
       { value: '50', label: '50+' },
       { value: '60', label: '60+' },
@@ -121,7 +115,9 @@ export default function DevelopmentRadar() {
   const [error, setError] = useState<string | null>(null)
   const muniFilter = searchParams.get('municipality') ?? ''
   const minAcres = searchParams.get('min_acres') ?? ''
+  const maxAcres = searchParams.get('max_acres') ?? ''
   const parcelClass = searchParams.get('class') ?? ''
+  const planStatus = planStatusFor(view, searchParams.get('plan_status'))
   const direction = searchParams.get('direction')
   const moversDirection: RadarMoversDirection =
     direction === 'down' || direction === 'new' ? direction : 'up'
@@ -147,13 +143,13 @@ export default function DevelopmentRadar() {
     updateFilters({
       view: nextView,
       min_score: null,
-      ...(nextView === 'movers'
-        ? { min_acres: null, class: null }
-        : { direction: null, basis: null }),
+      ...(nextView === 'movers' ? {} : { direction: null, basis: null }),
     })
   const setMuniFilter = (value: string) => updateFilters({ municipality: value })
   const setMinAcres = (value: string) => updateFilters({ min_acres: value })
+  const setMaxAcres = (value: string) => updateFilters({ max_acres: value })
   const setParcelClass = (value: string) => updateFilters({ class: value })
+  const setPlanStatus = (value: RadarPlanStatus) => updateFilters({ plan_status: value })
   const setMoversDirection = (value: RadarMoversDirection) => updateFilters({ direction: value })
   const setMoversBasis = (value: 'opportunity' | 'momentum') => updateFilters({ basis: value })
   const [comparison, setComparison] = useState(() => getComparison())
@@ -165,7 +161,7 @@ export default function DevelopmentRadar() {
   const [municipalities, setMunicipalities] = useState<string[]>([])
   const [screeningCoverage, setScreeningCoverage] = useState<RadarParcelListResponse['coverage']>()
   const minScore = searchParams.get('min_score') || DEFAULT_SCORE[view]
-  const requestKey = `${view}|${minScore}|${muniFilter}|${minAcres}|${parcelClass}|${moversDirection}|${moversBasis}`
+  const requestKey = `${view}|${minScore}|${muniFilter}|${minAcres}|${maxAcres}|${parcelClass}|${planStatus}|${moversDirection}|${moversBasis}`
   const loading = resolvedKey !== requestKey
   const setMinScore = (value: string) => updateFilters({ min_score: value })
   const scoreOptions = scoreOptionsFor(view)
@@ -194,9 +190,13 @@ export default function DevelopmentRadar() {
       if (minAcres) {
         params.set('min_acres', minAcres)
       }
+      if (maxAcres) {
+        params.set('max_acres', maxAcres)
+      }
       if (parcelClass) {
         params.set('class', parcelClass)
       }
+      params.set('plan_status', planStatus)
     }
     return params
   }
@@ -287,6 +287,9 @@ export default function DevelopmentRadar() {
       view: listView,
       min_score: view === 'movers' ? '0' : minScore,
     })
+    if (view !== 'movers') {
+      params.set('plan_status', planStatus)
+    }
     fetch(`/api/radar/municipalities?${params}`, { signal: controller.signal })
       .then((r) => {
         if (!r.ok) {
@@ -308,7 +311,7 @@ export default function DevelopmentRadar() {
         console.error('Failed to load radar municipalities', err)
       })
     return () => controller.abort()
-  }, [view, minScore, moversBasis])
+  }, [view, minScore, moversBasis, planStatus])
 
   useEffect(() => {
     const refresh = () => setComparison(getComparison())
@@ -324,8 +327,14 @@ export default function DevelopmentRadar() {
     if (minAcres) {
       params.set('min_acres', minAcres)
     }
+    if (maxAcres) {
+      params.set('max_acres', maxAcres)
+    }
     if (parcelClass) {
       params.set('class', parcelClass)
+    }
+    if (view !== 'movers') {
+      params.set('plan_status', planStatus)
     }
     if (view === 'movers') {
       params.set('direction', moversDirection)
@@ -341,10 +350,23 @@ export default function DevelopmentRadar() {
     window.setTimeout(() => setSaved(false), 1800)
   }
 
-  const mapLayer = view === 'momentum' ? 'momentum' : 'opportunity'
+  const mapLayer = view === 'movers' ? moversBasis : view
+  const mapParams = new URLSearchParams({ layer: 'radar', radar: mapLayer })
+  if (view !== 'movers') {
+    appendRadarCriteria(mapParams, {
+      minScore,
+      municipality: muniFilter,
+      minAcres,
+      maxAcres,
+      parcelClass,
+      planStatus,
+    })
+  } else if (muniFilter) {
+    mapParams.set('municipality', muniFilter)
+  }
   const countLabel =
     view === 'opportunity'
-      ? 'opportunities'
+      ? 'screening candidates'
       : view === 'momentum'
         ? 'active sites'
         : view === 'movers'
@@ -375,7 +397,7 @@ export default function DevelopmentRadar() {
             : view === 'momentum'
               ? 'Properties with recorded plans, nearby municipal matters, park designations, recent sales or common ownership of neighboring parcels. A score does not establish a development proposal or an owner’s intent.'
               : view === 'movers'
-                ? 'What changed since the previous radar rebuild. Rising scores mean new evidence arrived; new parcels had no signals at all last time.'
+                ? 'Screening-score changes between recorded snapshots. Open a property to understand the underlying evidence; a score change does not establish new development activity.'
                 : 'Parcel screening from public policy, infrastructure, physical constraints, and diligence records. Verify the linked evidence before relying on a score.'}
         </p>
         <ButtonLink to={`/feed?${municipalActivityParams}`} tone="quiet">
@@ -412,7 +434,7 @@ export default function DevelopmentRadar() {
         >
           {previousComputedAt
             ? `Compared with the radar snapshot from ${formatShortDate(previousComputedAt)}.`
-            : 'No previous snapshot yet. Movers appear after the second weekly radar rebuild.'}
+            : 'Score history is not available yet. Compare changes after another screening snapshot is available.'}
         </div>
       )}
 
@@ -492,20 +514,29 @@ export default function DevelopmentRadar() {
             <label className="sr-only" htmlFor="radar-min-acres">
               Minimum acres
             </label>
-            <select
+            <input
               id="radar-min-acres"
+              type="number"
+              min="0"
+              max={MAX_ACRES}
+              step="0.1"
               value={minAcres}
               onChange={(e) => setMinAcres(e.target.value)}
-            >
-              {!ACRE_OPTIONS.some((option) => option.value === minAcres) && (
-                <option value={minAcres}>{minAcres}+ acres</option>
-              )}
-              {ACRE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              placeholder="Min acres"
+            />
+            <label className="sr-only" htmlFor="radar-max-acres">
+              Maximum acres
+            </label>
+            <input
+              id="radar-max-acres"
+              type="number"
+              min="0"
+              max={MAX_ACRES}
+              step="0.1"
+              value={maxAcres}
+              onChange={(e) => setMaxAcres(e.target.value)}
+              placeholder="Max acres"
+            />
             <label className="sr-only" htmlFor="radar-class">
               Property class
             </label>
@@ -523,6 +554,18 @@ export default function DevelopmentRadar() {
                 </option>
               ))}
             </select>
+            <label className="sr-only" htmlFor="radar-plan-status">
+              Recorded linked plan status
+            </label>
+            <select
+              id="radar-plan-status"
+              value={planStatus}
+              onChange={(e) => setPlanStatus(e.target.value as RadarPlanStatus)}
+            >
+              <option value="any">Any recorded linked-plan status</option>
+              <option value="active">Has a recorded linked plan</option>
+              <option value="none">No recorded linked plan</option>
+            </select>
           </>
         )}
         <div className="filter-count">
@@ -531,10 +574,11 @@ export default function DevelopmentRadar() {
         <Button tone="quiet" onClick={saveCurrentSearch}>
           {saved ? 'Search saved' : 'Save search'}
         </Button>
-        {view !== 'readiness' && (
-          <ButtonLink to={`/map?layer=radar&radar=${mapLayer}`} tone="quiet">
-            Map view
-          </ButtonLink>
+        <ButtonLink to={`/map?${mapParams}`} tone="quiet">
+          {view === 'movers' ? 'Map current score screen' : 'Map this screen'}
+        </ButtonLink>
+        {view === 'movers' && (
+          <span className="cell-muted">Map does not apply score-change filters.</span>
         )}
         {comparison.length > 0 && (
           <ButtonLink to="/compare" tone="secondary">
@@ -566,7 +610,7 @@ export default function DevelopmentRadar() {
             <div className="cell-right" style={{ paddingRight: 12 }}>
               Assessed value
             </div>
-            <div style={{ paddingLeft: 12 }}>Why It Ranked</div>
+            <div style={{ paddingLeft: 12 }}>Recorded reason</div>
             <div className="cell-right">Compare</div>
           </div>
 

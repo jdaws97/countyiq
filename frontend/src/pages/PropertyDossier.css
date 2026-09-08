@@ -1,0 +1,197 @@
+.property-dossier-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 40px;
+  align-items: center;
+  padding-bottom: 28px;
+}
+.property-dossier-identity .record-eyebrow {
+  color: var(--accent-ink);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  margin-bottom: 17px;
+}
+.property-dossier-identity .property-address {
+  font: 500 clamp(29px, 3.4vw, 48px)/1.13 var(--font-serif);
+  letter-spacing: -0.035em;
+  text-transform: none;
+  margin: 0 0 18px;
+}
+.property-dossier-identity .property-owner {
+  margin-bottom: 20px;
+  font-size: 15px;
+}
+.property-dossier-identity .property-badges {
+  gap: 8px;
+}
+.property-dossier-heading .parcel-context-map {
+  min-height: 240px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.property-dossier-heading .parcel-context-map > svg {
+  min-height: 240px;
+}
+.property-dossier .property-toolbar {
+  margin-bottom: 28px;
+  padding-top: 0;
+}
+.property-dossier-views {
+  display: flex;
+  gap: 28px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 28px;
+}
+.property-dossier-views button {
+  padding: 0 0 15px;
+  color: var(--text-muted);
+  border: 0;
+  background: none;
+  font: 600 14px var(--font-sans);
+  cursor: pointer;
+}
+.property-dossier-views button[aria-pressed='true'] {
+  color: var(--accent-ink);
+  box-shadow: 0 2px 0 var(--accent-ink);
+}
+.property-dossier-views button > span {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 5px;
+  margin-left: 6px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+}
+.property-activity-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 32px;
+}
+.property-activity-history h2 {
+  margin: 0 0 16px;
+  font: 600 12px var(--font-sans);
+  color: var(--text-muted);
+}
+.property-activity-history button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-left: 2px solid var(--border);
+  padding: 12px 16px 18px;
+  color: var(--text-secondary);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.property-activity-history button[aria-pressed='true'] {
+  border-left-color: var(--accent-ink);
+  background: var(--bg-card);
+}
+.property-activity-history time {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.property-activity-history strong {
+  font: 500 16px/1.5 var(--font-serif);
+}
+.property-activity-account,
+.property-activity-empty {
+  min-width: 0;
+  padding: 28px 32px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+.property-activity-account .investigation-detail > h2 {
+  font-size: clamp(25px, 2.2vw, 32px);
+}
+.property-activity-empty > h2 {
+  font: 500 30px var(--font-serif);
+}
+.property-activity-empty > p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.property-dossier-site,
+.property-dossier-records,
+.property-dossier-sources,
+.property-dossier-additional {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.property-dossier-view > h2 {
+  font: 500 28px var(--font-serif);
+  margin-bottom: 24px;
+}
+@media (max-width: 1050px) {
+  .property-dossier-heading {
+    gap: 24px;
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+  .property-activity-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .property-activity-history {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .property-activity-history h2 {
+    display: none;
+  }
+  .property-activity-history button {
+    min-width: 240px;
+    flex: 1;
+  }
+}
+@media (max-width: 650px) {
+  .property-dossier-heading {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .property-dossier-heading .parcel-context-map,
+  .property-dossier-heading .parcel-context-map > svg {
+    min-height: 190px;
+  }
+  .property-dossier-views {
+    gap: 0;
+    justify-content: space-between;
+  }
+  .property-dossier-views button {
+    font-size: 12px;
+  }
+  .property-dossier-views button > span {
+    display: none;
+  }
+  .property-activity-account {
+    padding: 22px 20px;
+  }
+  .property-dossier .property-toolbar {
+    gap: 12px;
+  }
+}
+@media print {
+  .property-dossier-view[hidden] {
+    display: block !important;
+  }
+  .property-activity-history {
+    display: none;
+  }
+  .property-activity-layout {
+    display: block;
+  }
+  .property-activity-account {
+    padding: 0;
+    border: 0;
+  }
+}
+.property-activity-single {
+  display: block;
+  max-width: 940px;
+  margin: 0 auto;
+}

@@ -53,17 +53,18 @@ class HarnessConfig:
     thinking: bool = False
     model_family: str = "auto"
     archive_label: str | None = None
-    # Explicit OpenRouter reasoning effort ("low" | "medium" | "high").
+    # Explicit OpenRouter reasoning effort; supported values depend on the model.
     # When set, it overrides the family-derived thinking heuristics —
     # exp H showed "low" wins on Pass 2 and higher efforts just burn
     # output tokens. None = keep the per-family default behavior.
     reasoning_effort: str | None = None
     # Strict structured output: when set, response_format becomes
     # json_schema with strict=true (instead of bare json_object) and
-    # provider routing requires endpoints that support it. On a 404
-    # (no matching provider) the call falls back to json_object once.
+    # provider routing requires endpoints that support it. Fail closed unless
+    # schema fallback is explicitly enabled for a separately evaluated workflow.
     json_schema: dict | None = None
     schema_name: str = "response"
+    allow_schema_fallback: bool = False
     # Static instruction block emitted as a system message — providers
     # with implicit prompt caching (OpenAI, DeepSeek, Gemini, ...) can
     # cache it across calls when it stays byte-identical.
@@ -80,6 +81,9 @@ class HarnessConfig:
     # providers serve degraded FP4/NVFP4 weights — documented for GLM-5.2
     # (multi-byte decode failures on FP4 hosts; see docs/decisions.md).
     provider_quantizations: tuple[str, ...] | None = None
+    provider_only: tuple[str, ...] | None = None
+    provider_order: tuple[str, ...] | None = None
+    provider_allow_fallbacks: bool | None = None
     # PDF parsing engine pinned for inline file uploads. Unpinned PDFs can
     # silently route to OpenRouter's OCR parser at ~$2/1,000 pages (the
     # cost trap in docs/cost.md); "native" sends the file to the model's
@@ -319,6 +323,50 @@ def get_preset_for_model(
     if family == "mercury":
         return MODEL_PRESETS["mercury"]
     return MODEL_PRESETS["generic"]
+
+
+def validate_reasoning_effort(model_path: str, effort: str | None) -> None:
+    """Reject GLM efforts that the provider would silently reinterpret as max."""
+    if detect_model_family(model_path) == "glm_flash" and effort not in (
+        None,
+        "low",
+        "high",
+        "max",
+    ):
+        raise ValueError("GLM-5.3-Flash reasoning effort must be low, high, or max")
+
+
+def build_harness_config(
+    *,
+    model_path: str,
+    thinking: bool = False,
+    reasoning_task: bool = True,
+    reasoning_effort: str | None = None,
+    max_tokens: int | None = None,
+    default_max_tokens: int = 2048,
+    **options,
+) -> HarnessConfig:
+    """Shared model defaults for production passes and calibration tools.
+
+    GLM always reasons. Give its answer room after that reasoning, while honoring
+    an explicit output limit. These are starting budgets, not quality approvals.
+    """
+    validate_reasoning_effort(model_path, reasoning_effort)
+    if detect_model_family(model_path) == "deepseek" and reasoning_effort == "none":
+        reasoning_effort = None
+    if max_tokens is None:
+        max_tokens = default_max_tokens
+        if detect_model_family(model_path) == "glm_flash":
+            reasoning_budget = 8192 if reasoning_effort in ("high", "max") else 4096
+            max_tokens = max(max_tokens, reasoning_budget)
+    return HarnessConfig(
+        model_path=model_path,
+        thinking=thinking,
+        reasoning_effort=reasoning_effort,
+        max_tokens=max_tokens,
+        **get_preset_for_model(model_path, thinking, reasoning_task),
+        **options,
+    )
 
 
 def _archive_dir() -> Path:
@@ -674,6 +722,12 @@ def build_openrouter_payload(
         provider_prefs["zdr"] = True
     if config.provider_quantizations:
         provider_prefs["quantizations"] = list(config.provider_quantizations)
+    if config.provider_only:
+        provider_prefs["only"] = list(config.provider_only)
+    if config.provider_order:
+        provider_prefs["order"] = list(config.provider_order)
+    if config.provider_allow_fallbacks is not None:
+        provider_prefs["allow_fallbacks"] = config.provider_allow_fallbacks
     if provider_prefs:
         payload["provider"] = provider_prefs
 
@@ -723,6 +777,7 @@ def build_openrouter_payload(
         payload["reasoning"] = {"effort": "high" if config.thinking else "medium"}
 
     # Explicit per-pass effort beats every family heuristic above.
+    validate_reasoning_effort(config.model_path, config.reasoning_effort)
     if config.reasoning_effort:
         payload.pop("reasoning_effort", None)
         payload["reasoning"] = {"effort": config.reasoning_effort}
@@ -769,7 +824,15 @@ def _invoke_openrouter(
     }
 
     resp = None
-    meta: dict = {}
+    request_metadata = {
+        "effective_request": {
+            key: value for key, value in payload.items() if key != "messages"
+        },
+        "request_sha256": hashlib.sha256(
+            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+        ).hexdigest(),
+    }
+    meta: dict = dict(request_metadata)
     try:
         resp = _post_with_backoff(OPENROUTER_URL, payload, headers, timeout=180)
         data = resp.json()
@@ -777,6 +840,7 @@ def _invoke_openrouter(
         usage = data.get("usage") or {}
         details = usage.get("completion_tokens_details") or {}
         meta = {
+            **request_metadata,
             "provider": data.get("provider"),
             "served_model": data.get("model"),
             "prompt_tokens": usage.get("prompt_tokens"),
@@ -816,17 +880,27 @@ def _invoke_openrouter(
         return raw_output, None, meta
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
-        # 404 from OpenRouter with provider prefs = no endpoint satisfies
-        # the constraints (typically strict-schema support). Downgrade to
-        # json_object once rather than failing the item.
-        if status == 404 and config.json_schema is not None:
+        # A routing failure must not silently weaken the output contract.
+        # Explicit relaxed mode retains the schema in the instructions and
+        # records both request identities; provider/price restrictions survive.
+        if (
+            status == 404
+            and config.json_schema is not None
+            and config.allow_schema_fallback
+        ):
             downgraded = dataclasses.replace(
-                config, json_schema=None, require_parameters=False
+                config,
+                json_schema=None,
+                require_parameters=False,
+                system_prompt=(config.system_prompt or "")
+                + "\nReturn JSON matching this schema:\n"
+                + json.dumps(config.json_schema, sort_keys=True),
             )
             raw_output, error, meta = _invoke_openrouter(
                 downgraded, prompt, pdf_bytes=pdf_bytes
             )
             meta["schema_fallback"] = True
+            meta["strict_request_sha256"] = request_metadata["request_sha256"]
             return raw_output, error, meta
         error_response = exc.response if exc.response is not None else resp
         body = error_response.text[:2000] if error_response is not None else ""
@@ -846,6 +920,10 @@ def invoke(
     pdf_bytes: bytes | None = None,
 ) -> HarnessResult:
     """Invoke OpenRouter and return parsed JSON or an error."""
+    if config.archive_label and not archive_key and llm_archive_strict():
+        raise RuntimeError(
+            f"LLM transcript archive key is missing for {config.archive_label}"
+        )
     started = time.time()
     raw_output, error, meta = _invoke_openrouter(config, prompt, pdf_bytes=pdf_bytes)
     elapsed_ms = int((time.time() - started) * 1000)
@@ -945,6 +1023,7 @@ _TRUNCATION_MARKER = "finish_reason=length"
 # max_price, not by starving the completion budget.
 _ADAPTIVE_MAX_TOKENS = 16384
 _EFFORT_STEP_DOWN = {"high": "medium", "medium": "low", "low": "low"}
+_GLM_EFFORT_STEP_DOWN = {"max": "high", "high": "low", "low": "low"}
 _USAGE_TOTAL_FIELDS = (
     "prompt_tokens",
     "completion_tokens",
@@ -1013,8 +1092,13 @@ def invoke_with_retry(
         if _is_deterministic_failure(result.error):
             return _with_attempt_metadata(result, attempt_metadata)
         if result.error and _TRUNCATION_MARKER in result.error:
+            effort_steps = (
+                _GLM_EFFORT_STEP_DOWN
+                if detect_model_family(attempt_config.model_path) == "glm_flash"
+                else _EFFORT_STEP_DOWN
+            )
             stepped_effort = (
-                _EFFORT_STEP_DOWN.get(attempt_config.reasoning_effort, "low")
+                effort_steps.get(attempt_config.reasoning_effort, "low")
                 if attempt_config.reasoning_effort
                 else "low"
             )

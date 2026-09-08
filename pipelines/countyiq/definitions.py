@@ -24,6 +24,7 @@ from countyiq.jobs import (
     proceedings_extraction_refresh,
     proceedings_refresh,
     radar_refresh,
+    record_intelligence_refresh,
     scraper_refresh,
     signal_validation_refresh,
 )
@@ -64,6 +65,7 @@ defs = Definitions(
         entity_verification_refresh,
         signal_validation_refresh,
         brief_generation_refresh,
+        record_intelligence_refresh,
         owner_briefs_refresh,
         county_narratives_refresh,
         deterministic_enrichment_refresh,

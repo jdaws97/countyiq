@@ -1,4 +1,4 @@
-# Token-Efficient Agent Orchestration
+# Agent Orchestration
 
 This document expands the compact policy in `AGENTS.md`. It is intentionally
 not required reading for ordinary tasks. Read it when delegating, changing the
@@ -6,21 +6,10 @@ policy, or interpreting the agent metrics.
 
 ## Objective
 
-Optimize for **verified useful work per primary-agent token**, not agent count or
-wall-clock speed. A delegation is valuable only when:
-
-```text
-primary tokens avoided > handoff tokens + verification tokens + integration tokens + expected rework
-```
-
-If a direct search, file read, or command can answer the question, use the tool
-directly. If the primary agent must reread every line of a child's work, the
-delegation failed economically even when the code is correct.
-
-This follows current [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model):
-keep prompts lean, use Luna for efficient high-volume work, use Terra for the
-intelligence/cost middle tier, increase reasoning only after measured gains, and
-count resource reduction as an improvement only when quality still passes.
+Apply the delegation rules in `AGENTS.md`. Judge a handoff by completion time,
+total effort across agents, and verification quality. Parallel work may be
+worthwhile even when it consumes more tokens; token savings alone do not decide
+whether to delegate.
 
 ## Routing
 
@@ -31,11 +20,6 @@ count resource reduction as an improvement only when quality still passes.
 | Terra | low | Discovery from a precomputed inventory, data-flow maps, failure triage, scoped implementation | Final architecture or acceptance authority |
 | Terra | medium | Multi-file synthesis that low effort has failed or evals show benefits from | Routine extraction |
 | Primary/root | task-dependent | Scope, architecture, migrations, security, integration, final judgment | Mechanical bulk work with a strong oracle |
-
-The strongest token-saving pattern is **tool reduction before model routing**:
-the primary agent generates a candidate file list or focused evidence bundle,
-then hands only that bundle to Luna or Terra. Do not ask a cheaper model to
-discover an unbounded search space and hope its concise answer is complete.
 
 ### Hard routing boundaries
 
@@ -128,11 +112,9 @@ The report groups by model and task class and measures:
 - median output size
 - median estimated token savings when token fields are available
 
-`trusted` requires at least 10 recent runs, a Wilson lower bound of 0.70, claim
-precision of 0.95, scope compliance of 0.98, rework at most 0.05, and escaped
-defects at most 0.02. The rolling window is 20 runs. These conservative defaults
-are stored in `policy.json` and should change only after an eval demonstrates a
-better quality/cost tradeoff.
+Trust thresholds and the rolling window are defined in
+`.agents/orchestration/policy.json`; use the `gate` command for the verdict.
+Change thresholds only after an eval demonstrates a better quality/cost tradeoff.
 
 Trust is scoped to a **model plus task class**. Luna succeeding at exact-file
 extraction does not qualify it for repository discovery. Any escaped defect or

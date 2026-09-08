@@ -100,6 +100,7 @@ OPPORTUNITY_WEIGHTS: dict[str, float] = {
 _TOP_SIGNAL_PRIORITY = {
     "active_subdivision": 1,
     "municipal_action": 2,
+    "municipal_record": 3,
     "economic_development_park": 3,
     "entity_assemblage": 4,
     "tax_distress": 5,
@@ -334,6 +335,8 @@ def build_rebuild_sql() -> str:
                     THEN 'Municipal ' || REPLACE(COALESCE(t.evidence->>'extraction_type', 'proceeding'), '_', ' ')
                          || ' linked by ' || REPLACE(COALESCE(t.evidence->>'match_method', 'record'), '_', ' ')
                          || COALESCE(' (' || (t.evidence->>'decision') || ')', '')
+                WHEN 'municipal_record'
+                    THEN 'Municipal record: ' || COALESCE(t.evidence->>'title', 'property reference')
                 WHEN 'economic_development_park'
                     THEN 'Mapped in official business/industrial park inventory'
                 WHEN 'entity_assemblage'

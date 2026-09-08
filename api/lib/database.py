@@ -35,6 +35,10 @@ def _connection_kwargs() -> dict[str, str | int]:
         "user": os.environ.get("DATABASE_USER", "dagster_admin"),
         "password": os.environ.get("DATABASE_PASSWORD", "localtest"),
         "connect_timeout": 5,
+        # Interactive serving views can trigger seconds of JIT compilation for
+        # queries that otherwise execute in milliseconds. Scope this to API
+        # connections so pipeline analytics keep their own database settings.
+        "options": "-c jit=off",
     }
 
 

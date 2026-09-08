@@ -1,8 +1,9 @@
 import json
+
 import pytest
 from countyiq.lib.quality_release import check_quality_release, release_identity
-from eval.fixture_io import load_frozen_cases
 from eval.feature_cases import FIXTURE, prompt_for, score
+from eval.fixture_io import load_frozen_cases
 
 
 def test_quality_receipt_cannot_survive_prompt_model_or_fixture_changes(
@@ -57,13 +58,15 @@ def test_quality_receipts_fail_closed_on_bad_shape(tmp_path):
         ((0,), "public_proceedings.py"),
         ((2, 3), "066_parcel_spatial_facts.py"),
         ((1,), "entity_verification.py"),
+        ((0, 1, 2, 3), "llm_harness.py"),
+        ((0, 1, 2, 3), "pass_llm_config.py"),
     ],
 )
 def test_quality_receipt_expires_when_source_or_dispatch_rules_change(
     tmp_path, monkeypatch, pass_numbers, source_name
 ):
-    from datetime import date
     import hashlib
+    from datetime import UTC, datetime
     from pathlib import Path
 
     artifact = tmp_path / "reviewed.json"
@@ -77,7 +80,7 @@ def test_quality_receipt_expires_when_source_or_dispatch_rules_change(
                     "identity": release_identity(pass_number),
                     "decision": "approved",
                     "reviewer": "test reviewer",
-                    "reviewed_at": date.today().isoformat(),
+                    "reviewed_at": datetime.now(UTC).date().isoformat(),
                     "evaluation_record": {
                         "path": artifact.name,
                         "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
@@ -119,3 +122,49 @@ def test_pass3_contract_uses_investigation_actions_without_changing_original_gol
             "insufficient_evidence",
         }
         assert fields["urgency"] == ["none"]
+
+
+@pytest.mark.parametrize("directory", ["lib", "assets/enrichment"])
+def test_records_receipt_expires_when_either_explanation_file_changes(
+    tmp_path, monkeypatch, directory
+):
+    import hashlib
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    monkeypatch.setenv("COUNTYIQ_PASS3_MODE", "records")
+    artifact = tmp_path / "reviewed.json"
+    artifact.write_text("reviewed source outputs")
+    receipt = tmp_path / "quality.json"
+    receipt.write_text(
+        json.dumps(
+            {
+                "identity": release_identity(3),
+                "decision": "approved",
+                "reviewer": "test reviewer",
+                "reviewed_at": datetime.now(UTC).date().isoformat(),
+                "evaluation_record": {
+                    "path": artifact.name,
+                    "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                },
+                "catastrophic_errors": 0,
+            }
+        )
+    )
+    assert check_quality_release(3, receipt)["ok"]
+    target = (
+        Path(__file__).resolve().parents[1]
+        / "countyiq"
+        / directory
+        / "record_explanations.py"
+    )
+    original_read = Path.read_bytes
+
+    def changed_source(path):
+        contents = original_read(path)
+        if path.resolve() == target:
+            return contents + b"\n# changed validation or generation rules"
+        return contents
+
+    monkeypatch.setattr(Path, "read_bytes", changed_source)
+    assert not check_quality_release(3, receipt)["ok"]

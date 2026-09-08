@@ -240,25 +240,27 @@ def test_pass2_release_identity_binds_its_shared_question_module():
     from countyiq.lib.quality_release import release_identity
 
     identity = release_identity(2)
-    assert "pass2_signal_validation.py" in identity["source_hashes"]
+    assert (
+        "pipelines/countyiq/lib/pass2_signal_validation.py" in identity["source_hashes"]
+    )
 
 
 def test_reference_display_wrapper_preserves_identity_and_unknown_refs():
     from countyiq.lib.pass2_signal_validation import parse_signal_validation_output
 
-    value = dict(
-        signal_key="assemblage",
-        validation_status="downgraded",
-        adjusted_significance="low",
-        reasoning="Fragmented ownership [Evidence: signal:assemblage]",
-        key_facts=[],
-        cross_references=[
+    value = {
+        "signal_key": "assemblage",
+        "validation_status": "downgraded",
+        "adjusted_significance": "low",
+        "reasoning": "Fragmented ownership [Evidence: signal:assemblage]",
+        "key_facts": [],
+        "cross_references": [
             "Evidence: signal:assemblage",
             "Evidence: context:vacancy",
             "Evidence: signal:invented",
             "Evidence: signal:assemblage extra",
         ],
-    )
+    }
     parsed = parse_signal_validation_output(value)
     assert parsed["cross_references"] == [
         "signal:assemblage",

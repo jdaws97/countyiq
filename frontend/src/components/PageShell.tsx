@@ -1,20 +1,21 @@
 import type { ReactNode } from 'react'
 
-import Nav from './Nav'
+import WorkspaceShell from './WorkspaceShell'
 
 export default function PageShell({
   children,
   maxWidth = 900,
+  className,
+  wide = false,
 }: {
   children: ReactNode
   maxWidth?: number
+  className?: string
+  wide?: boolean
 }) {
   return (
-    <div className="page-shell">
-      <Nav />
-      <main className="page-shell-main" style={{ maxWidth }}>
-        {children}
-      </main>
-    </div>
+    <WorkspaceShell className={className} maxWidth={maxWidth} wide={wide}>
+      {children}
+    </WorkspaceShell>
   )
 }

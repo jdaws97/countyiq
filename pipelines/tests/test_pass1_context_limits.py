@@ -56,6 +56,7 @@ def _run_asset(monkeypatch, pairs, *, prompt, prior=None):
         pass1, "inference_input_hash", lambda *args, **kwargs: "accepted-input-hash"
     )
     monkeypatch.setenv("COUNTYIQ_PASS1_TRIALS", "1")
+    monkeypatch.setenv("COUNTYIQ_PASS1_SCOPE", "all")
     monkeypatch.setattr(
         pass1,
         "resolve_pass_harness",

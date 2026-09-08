@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import IntelligenceEventCard from '../components/IntelligenceEventCard'
+import InvestigationDesk from '../components/InvestigationDesk'
+import '../components/ActivityWorkspace.css'
 import PageShell from '../components/PageShell'
+import { CoverageSummary } from '../components/MunicipalEvidence'
+import { useFetchJson } from '../lib/useFetchJson'
+import '../components/ActivityPreview.css'
 import { Button, ButtonLink, EmptyState, PageHeader, StatusMessage } from '../components/ui'
 import {
   getEventTriage,
@@ -13,12 +17,13 @@ import {
   type TriageStatus,
 } from '../lib/investigationState'
 import { useCountyMeta } from '../lib/useCountyMeta'
-import { watchBoostParams } from '../lib/watchlist'
+import { useWatchFeedParams } from '../lib/useWatchFeedParams'
 import type {
   IntelligenceCategory,
   IntelligenceEvent,
   IntelligenceFeedResponse,
   MunicipalitySummary,
+  MunicipalEvidenceResponse,
 } from '../types/api'
 
 const PAGE_SIZE = 30
@@ -43,6 +48,7 @@ const EVENT_TYPES = [
   'delinquency_change',
   'value_change',
   'structure_change',
+  'municipal_record',
 ] as const
 const MATTER_CATEGORIES = [
   'all',
@@ -67,6 +73,8 @@ export default function CountyFeed() {
   const county = useCountyMeta()
   const [searchParams, setSearchParams] = useSearchParams()
   const [events, setEvents] = useState<IntelligenceEvent[]>([])
+  const watchParams = useWatchFeedParams()
+  const following = searchParams.get('scope') === 'following'
   const category: CategoryFilter = parseChoice(searchParams.get('category'), CATEGORIES, 'all')
   const eventType: EventTypeFilter = parseChoice(searchParams.get('event'), EVENT_TYPES, 'all')
   const matterCategory: MatterCategory = parseChoice(
@@ -77,8 +85,14 @@ export default function CountyFeed() {
   const sinceDays: TimeWindow = parseNumberChoice(searchParams.get('days'), TIME_WINDOWS, 90)
   const sortMode: SortMode = parseChoice(searchParams.get('sort'), SORT_MODES, 'priority')
   const municipality = searchParams.get('municipality') ?? ''
+  const textQuery = searchParams.get('q') ?? ''
+  const coverage = useFetchJson<MunicipalEvidenceResponse>(
+    municipality
+      ? `/api/municipalities/${encodeURIComponent(municipality)}/evidence?limit=1`
+      : null,
+  )
   const [municipalities, setMunicipalities] = useState<string[]>([])
-  const [inboxMode, setInboxMode] = useState<InboxMode>('inbox')
+  const [inboxMode, setInboxMode] = useState<InboxMode>('all')
   const [triage, setTriage] = useState(() => getEventTriage())
   const [previousVisit] = useState(() => getLastFeedVisit())
   const [loadingMore, setLoadingMore] = useState(false)
@@ -87,7 +101,7 @@ export default function CountyFeed() {
   const [saved, setSaved] = useState(false)
   const requestGeneration = useRef(0)
   const loadMoreController = useRef<AbortController | null>(null)
-  const requestKey = `${category}|${eventType}|${sinceDays}|${sortMode}|${municipality}|${matterCategory}`
+  const requestKey = `${category}|${eventType}|${sinceDays}|${sortMode}|${municipality}|${matterCategory}|${textQuery}|${following}|${watchParams}`
   const [resolvedKey, setResolvedKey] = useState<string | null>(null)
   const loading = resolvedKey !== requestKey
 
@@ -97,6 +111,7 @@ export default function CountyFeed() {
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current)
+        next.delete('record')
         if (value === defaultValue) {
           next.delete(key)
         } else {
@@ -132,6 +147,9 @@ export default function CountyFeed() {
       sortMode,
       municipality,
       matterCategory,
+      textQuery,
+      following,
+      watchParams,
       controller.signal,
     )
       .then((result) => {
@@ -202,6 +220,9 @@ export default function CountyFeed() {
       sortMode,
       municipality,
       matterCategory,
+      textQuery,
+      following,
+      watchParams,
       controller.signal,
     )
       .then((result) => {
@@ -238,11 +259,11 @@ export default function CountyFeed() {
   }
 
   return (
-    <PageShell maxWidth={1040}>
+    <PageShell wide className="activity-workspace-page">
       <PageHeader
         eyebrow={county.county_name}
-        title="Recent activity"
-        description="Changes in property records and municipal proceedings. Open the evidence, then follow the property or project."
+        title="Activity workspace"
+        description="Choose a record. Get the context. Decide what to follow."
         actions={
           <Button tone="quiet" onClick={saveCurrentSearch}>
             {saved ? 'Search saved' : 'Save this search'}
@@ -250,116 +271,211 @@ export default function CountyFeed() {
         }
       />
 
-      {events.length > 0 && (
-        <div className="feed-summary" aria-label="Feed summary">
-          <SummaryStat label="In current result" value={events.length} />
-          <SummaryStat label="New since last visit" value={newCount} accent />
-          <SummaryStat label="Reviewed" value={reviewedCount} />
-        </div>
-      )}
-
-      <div className="feed-toolbar" data-print-hidden>
-        <label>
-          Queue
-          <select
-            value={inboxMode}
-            onChange={(event) => setInboxMode(event.target.value as InboxMode)}
-          >
-            {INBOX_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {mode === 'inbox' ? 'Needs review' : titleCase(mode)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Intelligence
-          <select
-            value={category}
-            onChange={(event) => updateFilter('category', event.target.value)}
-          >
-            {CATEGORIES.map((value) => (
-              <option key={value} value={value}>
-                {titleCase(value)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Municipality
-          <select
-            value={municipality}
-            onChange={(event) => updateFilter('municipality', event.target.value, '')}
-          >
-            <option value="">All municipalities</option>
-            {municipality && !municipalities.includes(municipality) && (
-              <option value={municipality}>{municipality}</option>
-            )}
-            {municipalities.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Window
-          <select
-            value={sinceDays}
-            onChange={(event) => updateFilter('days', event.target.value, '90')}
-          >
-            {TIME_WINDOWS.map((days) => (
-              <option key={days} value={days}>
-                {days === 3650 ? 'All history' : `${days} days`}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Order
-          <select
-            value={sortMode}
-            onChange={(event) => updateFilter('sort', event.target.value, 'priority')}
-          >
-            {SORT_MODES.map((value) => (
-              <option key={value} value={value}>
-                {titleCase(value)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <details className="advanced-filters">
-          <summary>Advanced filters</summary>
-          <div className="advanced-filter-fields">
-            <label>
-              Matter scope
-              <select
-                value={matterCategory}
-                onChange={(event) => updateFilter('matter', event.target.value)}
-              >
-                {MATTER_CATEGORIES.map((value) => (
-                  <option key={value} value={value}>
-                    {value === 'all' ? 'Development discovery' : titleCase(value)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Event type
-              <select
-                value={eventType}
-                onChange={(event) => updateFilter('event', event.target.value)}
-              >
-                {EVENT_TYPES.map((value) => (
-                  <option key={value} value={value}>
-                    {titleCase(value)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </details>
+      <div className="section-actions feed-scope" aria-label="Activity scope">
+        <Button
+          tone={following ? 'primary' : 'quiet'}
+          aria-pressed={following}
+          onClick={() => updateFilter('scope', 'following', 'county')}
+        >
+          Following
+        </Button>
+        <Button
+          tone={following ? 'quiet' : 'primary'}
+          aria-pressed={!following}
+          onClick={() => updateFilter('scope', 'county', 'county')}
+        >
+          Explore county
+        </Button>
       </div>
+      {following && (
+        <p className="activity-scope-note">
+          Records matching any property, project, organization or municipality you follow.
+        </p>
+      )}
+      <form
+        className="feed-record-search"
+        onSubmit={(event) => {
+          event.preventDefault()
+          updateFilter('q', String(new FormData(event.currentTarget).get('q') ?? '').trim(), '')
+        }}
+      >
+        <label className="sr-only" htmlFor="feed-record-query">
+          Search activity and public plan numbers
+        </label>
+        <input
+          key={textQuery}
+          id="feed-record-query"
+          name="q"
+          defaultValue={textQuery}
+          maxLength={160}
+          placeholder="Search a matter, address or public plan number"
+        />
+        <Button type="submit" tone="secondary">
+          Search activity
+        </Button>
+      </form>
+      <details className="activity-filter-drawer">
+        <summary>
+          Filter activity{' '}
+          <span>
+            {municipality || 'All municipalities'} ·{' '}
+            {eventType === 'all' ? 'All activity' : titleCase(eventType)} ·{' '}
+            {sinceDays === 3650 ? 'All history' : `${sinceDays} days`}
+          </span>
+        </summary>
+        <div className="feed-toolbar" data-print-hidden>
+          <label>
+            Municipality
+            <select
+              value={municipality}
+              onChange={(event) => updateFilter('municipality', event.target.value, '')}
+            >
+              <option value="">All municipalities</option>
+              {municipality && !municipalities.includes(municipality) && (
+                <option value={municipality}>{municipality}</option>
+              )}
+              {municipalities.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Activity
+            <select
+              value={eventType}
+              onChange={(event) => updateFilter('event', event.target.value)}
+            >
+              {EVENT_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {value === 'all'
+                    ? 'All activity'
+                    : value === 'municipal_record'
+                      ? 'Other municipal records'
+                      : titleCase(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Record period
+            <select
+              value={sinceDays}
+              onChange={(event) => updateFilter('days', event.target.value, '90')}
+            >
+              {TIME_WINDOWS.map((days) => (
+                <option key={days} value={days}>
+                  {days === 3650 ? 'All history' : `Last ${days} days`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Sort by
+            <select
+              value={sortMode}
+              onChange={(event) => updateFilter('sort', event.target.value, 'priority')}
+            >
+              <option value="priority">Relevance & followed places</option>
+              <option value="latest">Newest record date</option>
+            </select>
+          </label>
+          <details className="advanced-filters">
+            <summary>More filters</summary>
+            <div className="advanced-filter-fields">
+              <label>
+                Reading status
+                <select
+                  value={inboxMode}
+                  onChange={(event) => setInboxMode(event.target.value as InboxMode)}
+                >
+                  {INBOX_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode === 'inbox'
+                        ? 'Unread'
+                        : mode === 'all'
+                          ? 'All visible'
+                          : mode === 'reviewed'
+                            ? 'Read'
+                            : 'Hidden'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Record family
+                <select
+                  value={category}
+                  onChange={(event) => updateFilter('category', event.target.value)}
+                >
+                  {CATEGORIES.map((value) => (
+                    <option key={value} value={value}>
+                      {value === 'all'
+                        ? 'All records'
+                        : value === 'development'
+                          ? 'Municipal activity'
+                          : 'Property record changes'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Topic
+                <select
+                  value={matterCategory}
+                  onChange={(event) => updateFilter('matter', event.target.value)}
+                >
+                  {MATTER_CATEGORIES.map((value) => (
+                    <option key={value} value={value}>
+                      {matterLabel(value)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </details>
+          {(searchParams.size > 0 || inboxMode !== 'all') && (
+            <Button
+              tone="quiet"
+              className="feed-reset"
+              onClick={() => {
+                setSearchParams({})
+                setInboxMode('all')
+              }}
+            >
+              Reset filters
+            </Button>
+          )}
+        </div>
+      </details>
+      <div className="activity-coverage-line">
+        {coverage.data?.coverage ? (
+          <CoverageSummary coverage={coverage.data.coverage} />
+        ) : (
+          <p className="activity-scope-note">
+            Showing published records in this scope. Coverage varies by municipality; missing
+            activity does not mean nothing happened.{' '}
+            <ButtonLink
+              to={
+                municipality
+                  ? `/municipalities/${encodeURIComponent(municipality)}`
+                  : '/municipalities'
+              }
+              tone="quiet"
+            >
+              Explore coverage
+            </ButtonLink>
+          </p>
+        )}
+      </div>
+      {!loading && events.length > 0 && (
+        <p className="feed-result-summary">
+          {visibleEvents.length} visible in loaded results{hasMore ? ' · more available' : ''}
+          {newCount > 0 ? ` · ${newCount} added since your last visit` : ''}
+          {reviewedCount > 0 ? ` · ${reviewedCount} marked read` : ''}
+        </p>
+      )}
 
       {loading && <StatusMessage>Loading intelligence…</StatusMessage>}
       {!loading && error && (
@@ -372,7 +488,7 @@ export default function CountyFeed() {
               ? 'No published activity matches these filters'
               : hasMore
                 ? 'No matching events in the loaded results'
-                : 'Your review queue is clear'
+                : 'No unread activity in these results'
           }
           actions={
             events.length === 0 ? (
@@ -390,7 +506,7 @@ export default function CountyFeed() {
               </>
             ) : (
               <Button tone="secondary" onClick={() => setInboxMode('all')}>
-                Show all active events
+                Show all visible activity
               </Button>
             )
           }
@@ -398,51 +514,44 @@ export default function CountyFeed() {
           {events.length === 0
             ? 'Activity appears when source records change and are ready to review. Coverage varies by municipality. You can still investigate properties and save the places you want to follow.'
             : hasMore
-              ? 'Load more events to continue checking this queue. Reviewed and dismissed items remain available from the Queue filter.'
-              : 'Reviewed and dismissed items remain available from the Queue filter.'}
+              ? 'Load more activity to continue. Read and hidden items remain available under More filters.'
+              : 'Read and hidden items remain available under More filters.'}
         </EmptyState>
       )}
 
       {!loading && visibleEvents.length > 0 && (
-        <div className="feed-list">
-          {visibleEvents.map((event) => (
-            <IntelligenceEventCard
-              key={event.event_key}
-              event={event}
-              showTriage
-              triageStatus={triage[event.event_key]}
-              isNew={Boolean(
-                previousVisit && new Date(event.detected_at) > new Date(previousVisit),
-              )}
-              onTriage={(status) => updateTriage(event.event_key, status)}
-            />
-          ))}
-        </div>
+        <InvestigationDesk
+          events={visibleEvents}
+          triage={triage}
+          onTriage={updateTriage}
+          footer={
+            hasMore ? (
+              <Button onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading…' : 'Load more records'}
+              </Button>
+            ) : undefined
+          }
+        />
       )}
-      {!loading && hasMore && (
-        <Button className="feed-load-more" onClick={loadMore} disabled={loadingMore}>
-          {loadingMore ? 'Loading…' : 'Load more'}
+      {!loading && !visibleEvents.length && hasMore && (
+        <Button onClick={loadMore} disabled={loadingMore}>
+          Load more records
         </Button>
       )}
     </PageShell>
   )
 }
 
-function SummaryStat({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string
-  value: number
-  accent?: boolean
-}) {
-  return (
-    <div className={`feed-summary-stat${accent ? ' feed-summary-stat-accent' : ''}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
+function matterLabel(value: MatterCategory): string {
+  const labels: Record<MatterCategory, string> = {
+    all: 'Development discovery',
+    development: 'Development applications',
+    minor_property: 'Minor property work',
+    landuse_policy: 'Zoning & land-use policy',
+    public_works: 'Infrastructure & public works',
+    context_only: 'Other municipal business',
+  }
+  return labels[value]
 }
 
 function titleCase(value: string): string {
@@ -474,6 +583,9 @@ async function fetchPage(
   sortMode: SortMode,
   municipality: string,
   matterCategory: MatterCategory,
+  textQuery: string,
+  following: boolean,
+  watchParams: string,
   signal?: AbortSignal,
 ): Promise<IntelligenceFeedResponse> {
   const params = new URLSearchParams({
@@ -482,6 +594,9 @@ async function fetchPage(
     since_days: String(sinceDays),
     sort: sortMode,
   })
+  if (textQuery) {
+    params.set('q', textQuery)
+  }
   if (category !== 'all') {
     params.set('category', category)
   }
@@ -494,7 +609,10 @@ async function fetchPage(
   if (matterCategory !== 'all') {
     params.set('matter_category', matterCategory)
   }
-  for (const [key, value] of Object.entries(watchBoostParams())) {
+  if (following) {
+    params.set('watched_only', 'true')
+  }
+  for (const [key, value] of new URLSearchParams(watchParams)) {
     params.set(key, value)
   }
   const response = await fetch(`/api/feed?${params.toString()}`, { signal })

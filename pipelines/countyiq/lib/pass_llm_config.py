@@ -13,7 +13,11 @@ from countyiq.lib.backfill_authorization import (
     BackfillAuthorization,
     BackfillAuthorizationError,
 )
-from countyiq.lib.llm_harness import HarnessConfig, get_preset_for_model
+from countyiq.lib.llm_harness import (
+    HarnessConfig,
+    build_harness_config,
+    get_preset_for_model,
+)
 
 
 class PassHarnessUnavailable(RuntimeError):
@@ -108,9 +112,18 @@ def resolve_pass_model(pass_number: int) -> str | None:
     to shadow them, which silently replaced every evidence-backed model
     choice in any environment built from ``.env.example``.
     """
+    default_model = _PASS_MODEL_DEFAULTS.get(pass_number)
+    if (
+        pass_number == 0
+        and os.environ.get("COUNTYIQ_PASS0_MODE", "structured").strip().lower()
+        == "evidence"
+    ):
+        from countyiq.lib.municipal_evidence import DEFAULT_EVIDENCE_MODEL
+
+        default_model = DEFAULT_EVIDENCE_MODEL
     return (
         os.environ.get(f"COUNTYIQ_PASS{pass_number}_MODEL")
-        or _PASS_MODEL_DEFAULTS.get(pass_number)
+        or default_model
         or os.environ.get("COUNTYIQ_OPENROUTER_MODEL")
     )
 
@@ -421,9 +434,8 @@ def build_pass_harness_config(
     """Return a configured OpenRouter HarnessConfig for a pass.
 
     Global harness knobs resolved from env:
-    - COUNTYIQ_STRICT_SCHEMA (default on): pass a strict json_schema
-      through to OpenRouter; providers lacking support trigger a one-shot
-      json_object fallback inside the harness.
+    - COUNTYIQ_STRICT_SCHEMA (default on): require strict structured output.
+      COUNTYIQ_ALLOW_SCHEMA_FALLBACK explicitly opts into relaxed JSON mode.
     - COUNTYIQ_MAX_PRICE_PROMPT / COUNTYIQ_MAX_PRICE_COMPLETION ($/M):
       provider price ceilings so promotional rates can't expire into a
       silently larger bill.
@@ -437,30 +449,42 @@ def build_pass_harness_config(
         return None
 
     thinking = resolve_pass_thinking(pass_number, default_thinking)
-    max_tokens = _int_env(f"COUNTYIQ_PASS{pass_number}_MAX_TOKENS", default_max_tokens)
-
-    preset = get_preset_for_model(
-        model_path,
-        thinking=thinking,
-        reasoning_task=reasoning_task,
-    )
+    max_tokens = _int_env(f"COUNTYIQ_PASS{pass_number}_MAX_TOKENS", 0) or None
 
     strict_enabled = _bool_env("COUNTYIQ_STRICT_SCHEMA", True)
 
-    return HarnessConfig(
+    def provider_names(suffix: str) -> tuple[str, ...] | None:
+        value = os.environ.get(
+            f"COUNTYIQ_PASS{pass_number}_PROVIDER_{suffix}",
+            os.environ.get(f"COUNTYIQ_PROVIDER_{suffix}", ""),
+        )
+        return tuple(name.strip() for name in value.split(",") if name.strip()) or None
+
+    provider_fallback_key = f"COUNTYIQ_PASS{pass_number}_PROVIDER_ALLOW_FALLBACKS"
+    if provider_fallback_key not in os.environ:
+        provider_fallback_key = "COUNTYIQ_PROVIDER_ALLOW_FALLBACKS"
+
+    return build_harness_config(
         model_path=model_path,
         max_tokens=max_tokens,
+        default_max_tokens=default_max_tokens,
+        reasoning_task=reasoning_task,
         thinking=thinking,
         archive_label=archive_label,
         reasoning_effort=resolve_pass_reasoning_effort(pass_number),
         json_schema=json_schema if strict_enabled else None,
         schema_name=schema_name,
+        allow_schema_fallback=_bool_env("COUNTYIQ_ALLOW_SCHEMA_FALLBACK", False),
         system_prompt=system_prompt,
         pdf_engine=pdf_engine,
         max_price_prompt=_float_env("COUNTYIQ_MAX_PRICE_PROMPT"),
         max_price_completion=_float_env("COUNTYIQ_MAX_PRICE_COMPLETION"),
         zdr=_bool_env("COUNTYIQ_ZDR", False),
-        **preset,
+        provider_only=provider_names("ONLY"),
+        provider_order=provider_names("ORDER"),
+        provider_allow_fallbacks=_bool_env(provider_fallback_key, True)
+        if os.environ.get(provider_fallback_key, "").strip()
+        else None,
     )
 
 

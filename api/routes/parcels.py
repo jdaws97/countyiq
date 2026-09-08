@@ -2,15 +2,10 @@
 
 from fastapi import APIRouter, HTTPException, Query
 
-from api.lib.inference_provenance import (
-    BRIEF_SIGNAL_VERSIONS_CURRENT_SQL,
-    SUPPORTING_PROCEEDINGS_CURRENT_SQL,
-    CROSS_SIGNAL_SUMMARY_CURRENT_SQL,
-)
 from api.lib.database import get_cursor
 from api.lib.development_radar import (
-    build_signal_presentation,
     build_reason_signals,
+    build_signal_presentation,
     compute_headline_signal,
     sanitize_signals_for_public,
 )
@@ -21,13 +16,43 @@ from api.lib.evidence import (
     signal_evidence_items,
     with_arcgis_layer,
 )
+from api.lib.inference_provenance import (
+    BRIEF_SIGNAL_VERSIONS_CURRENT_SQL,
+    CROSS_SIGNAL_SUMMARY_CURRENT_SQL,
+    SUPPORTING_PROCEEDINGS_CURRENT_SQL,
+)
+from api.lib.municipal_evidence import fetch_municipal_evidence
 from api.lib.query_bounds import MAX_BBOX_RESULTS, validate_bbox
-from api.lib.response_types import ParcelBboxResponse, PropertyReportResponse
+from api.lib.record_briefs import build_record_brief
+from api.lib.response_types import (
+    ParcelBboxResponse,
+    ParcelSummaryResponse,
+    PropertyReportResponse,
+)
 from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import county_metadata, open_data_source_key
+from api.lib.source_explanations import fetch_property_explanation
 from api.lib.source_policy import require_source_use, source_use_allowed
 
 router = APIRouter(tags=["parcels"])
+
+
+@router.get("/{pidn}/evidence")
+def municipal_property_evidence(
+    pidn: str, limit: int = Query(12, ge=1, le=100)
+) -> dict:
+    with get_cursor() as cur:
+        require_source_use(cur, "public_proceedings", "derived_product")
+        cur.execute(
+            "SELECT municipality FROM staging.parcels WHERE pidn=%s AND valid_to IS NULL",
+            (pidn,),
+        )
+        parcel = cur.fetchone()
+        if parcel is None:
+            raise HTTPException(status_code=404, detail="Parcel not found")
+        return fetch_municipal_evidence(
+            cur, municipality=parcel["municipality"] or "", pidn=pidn, limit=limit
+        )
 
 
 def _soil_profile(rows: list[dict]) -> dict:
@@ -133,7 +158,7 @@ def parcels_bbox(
         if layer == "delinquent":
             require_source_use(cur, "tax_claims", "derived_product", conceal=False)
             cur.execute(
-                f"""
+                """
                 SELECT
                     ST_AsGeoJSON(p.geom)::json AS geometry,
                     p.pidn,
@@ -198,7 +223,7 @@ def parcels_bbox(
             )
         else:
             cur.execute(
-                f"""
+                """
                 SELECT
                     ST_AsGeoJSON(p.geom)::json AS geometry,
                     p.pidn,
@@ -278,7 +303,7 @@ def parcels_near(
             cur.execute(
                 """
                 SELECT DISTINCT linked.pidn
-                FROM public.intelligence_events ev
+                FROM public.current_intelligence_events ev
                 CROSS JOIN LATERAL unnest(COALESCE(ev.related_pidns, ARRAY[]::text[])) AS linked(pidn)
                 WHERE ev.project_key = %(project_key)s
                 ORDER BY linked.pidn
@@ -331,7 +356,7 @@ def parcels_near(
                 LEFT JOIN public.owner_source_links osl
                     ON osl.source_type = 'parcel' AND osl.source_id = p.pidn
                 LEFT JOIN public.owners owner_entity ON owner_entity.owner_id = osl.owner_id
-                LEFT JOIN public.development_momentum dm ON dm.pidn = p.pidn
+                LEFT JOIN public.current_development_momentum dm ON dm.pidn = p.pidn
                 WHERE p.valid_to IS NULL
                   AND p.geom IS NOT NULL
                   AND a.geom IS NOT NULL
@@ -434,7 +459,7 @@ def parcels_summary(
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
         require_source_use(cur, "tax_claims", "derived_product", conceal=False)
         cur.execute(
-            f"""
+            """
             SELECT
                 p.pidn,
                 p.owner_full,
@@ -454,7 +479,7 @@ def parcels_summary(
                 dm.site_readiness_score,
                 dm.top_signal
             FROM staging.parcels p
-            LEFT JOIN public.development_momentum dm ON dm.pidn = p.pidn
+            LEFT JOIN public.current_development_momentum dm ON dm.pidn = p.pidn
             WHERE p.valid_to IS NULL AND p.pidn = ANY(%(pidns)s)
             ORDER BY p.valid_from DESC
             """,
@@ -476,9 +501,27 @@ def parcels_summary(
     }
 
 
+@router.get("/{pidn}/summary")
+def parcel_summary(pidn: str) -> ParcelSummaryResponse:
+    """Map facts without calculating the full report's soil coverage."""
+    report = _parcel_report(pidn, include_soils=False)
+    return {
+        "parcel": report["parcel"],
+        "tax_delinquency": report["tax_delinquency"],
+        "flood_zone": report["flood_zone"],
+        "structures": report["structures"],
+        "development_momentum": report["development_momentum"],
+        "source_explanation": report["source_explanation"],
+    }
+
+
 @router.get("/{pidn}")
 def parcel_detail(pidn: str) -> PropertyReportResponse:
     """Full property report card for a single parcel."""
+    return _parcel_report(pidn, include_soils=True)
+
+
+def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
     with get_cursor(snapshot=True) as cur:
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
@@ -581,17 +624,19 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         )
         flood = cur.fetchone()
 
-        cur.execute(
-            """
-            SELECT s.*
-            FROM staging.parcels p
-            CROSS JOIN LATERAL public.parcel_soil_units(p.geom) s
-            WHERE p.pidn = %(pidn)s AND p.valid_to IS NULL
-            ORDER BY s.coverage_pct DESC, s.source_record_ids
-        """,
-            {"pidn": pidn},
-        )
-        soil_rows = cur.fetchall()
+        soil_rows = []
+        if include_soils:
+            cur.execute(
+                """
+                SELECT s.*
+                FROM staging.parcels p
+                CROSS JOIN LATERAL public.parcel_soil_units(p.geom) s
+                WHERE p.pidn = %(pidn)s AND p.valid_to IS NULL
+                ORDER BY s.coverage_pct DESC, s.source_record_ids
+                """,
+                {"pidn": pidn},
+            )
+            soil_rows = cur.fetchall()
 
         cur.execute(
             """
@@ -615,7 +660,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                    has_active_plan, eligible,
                    exclusion_reasons, signals, top_signal,
                    signal_count, score_version, computed_at
-            FROM public.development_momentum WHERE pidn = %(pidn)s
+            FROM public.current_development_momentum WHERE pidn = %(pidn)s
         """,
             {"pidn": pidn},
         )
@@ -728,6 +773,10 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
             },
         )
         proceeding_rows = cur.fetchall()
+        municipal_evidence = fetch_municipal_evidence(
+            cur, municipality=parcel["municipality"] or "", pidn=pidn
+        )
+        source_explanation = fetch_property_explanation(cur, pidn)
 
     p = dict(parcel)
     parcel_source_url = p.pop("source_url", None)
@@ -1070,6 +1119,7 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
                 source_kind="official_zoning_layer",
                 source_record_id=str(zoning_row.get("zrecid") or ""),
                 url=zoning_row.get("source_url"),
+                record_query=("ZRECID", [zoning_row.get("zrecid")]),
                 details={
                     key: zoning.get(key)
                     for key in (
@@ -1091,6 +1141,8 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         )
     report_evidence.extend(signal_receipts)
     for item in report_evidence:
+        if not item.get("internal_url"):
+            item["internal_url"] = f"/property/{pidn}"
         serialize_temporal_fields(item, "effective_at", "observed_at")
 
     return {
@@ -1125,8 +1177,14 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         "zoning": zoning,
         "development_momentum": momentum,
         "parcel_brief": brief,
+        "record_brief": build_record_brief(
+            momentum.get("signals") if momentum else None,
+            source_updated_at=momentum.get("computed_at") if momentum else None,
+        ),
         "related_narratives": narratives,
         "intelligence_summary": intelligence_summary,
         "linked_proceedings": linked_proceedings,
+        "municipal_evidence": municipal_evidence,
+        "source_explanation": source_explanation,
         "evidence": report_evidence,
     }

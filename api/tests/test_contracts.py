@@ -25,11 +25,12 @@ def test_api_uses_dedicated_read_only_database_role(client):
     with get_cursor() as cur:
         cur.execute(
             "SELECT current_user AS username, "
-            "current_setting('transaction_read_only') AS read_only"
+            "current_setting('transaction_read_only') AS read_only, "
+            "current_setting('jit') AS jit"
         )
         row = cur.fetchone()
 
-    assert row == {"username": "countyiq_api_test", "read_only": "on"}
+    assert row == {"username": "countyiq_api_test", "read_only": "on", "jit": "off"}
 
 
 def test_ops_health_exposes_source_policy_review_state(client):

@@ -2,7 +2,7 @@
 
 from typing import Literal, cast
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from api.lib.database import get_cursor
 from api.lib.development_radar import (
@@ -47,6 +47,7 @@ VIEW_SCORE_COLUMN = {
 VIEW_DEFAULT_THRESHOLD = {"opportunity": 30, "momentum": 30, "readiness": 40}
 
 PARCEL_CLASS_CODES = {"R", "C", "I", "F", "A", "E", "U"}
+PLAN_STATUS_VALUES = {"any", "active", "none"}
 
 RADAR_ROW_COLUMNS = """
     dm.pidn, dm.score, dm.opportunity_score, dm.site_readiness_score,
@@ -101,6 +102,30 @@ def _parcel_filters(
     return clauses
 
 
+def _plan_status_clause(
+    *,
+    plan_status: str | None,
+    view: str,
+) -> str:
+    """Filter on a recorded linked plan, without implying approval or availability."""
+    resolved_status = plan_status or ("none" if view == "opportunity" else "any")
+    if resolved_status not in PLAN_STATUS_VALUES:
+        raise HTTPException(status_code=422, detail="Invalid plan_status")
+    if resolved_status == "active":
+        return " AND dm.has_active_plan = TRUE"
+    if resolved_status == "none":
+        return " AND dm.has_active_plan = FALSE"
+    return ""
+
+
+def _validate_acre_range(min_acres: float | None, max_acres: float | None) -> None:
+    if min_acres is not None and max_acres is not None and min_acres > max_acres:
+        raise HTTPException(
+            status_code=422,
+            detail="min_acres must be less than or equal to max_acres",
+        )
+
+
 def _serialize_radar_row(
     row: dict,
     reason_scope: set[str] | None = None,
@@ -142,18 +167,19 @@ def radar_municipalities(
         default="opportunity", pattern="^(opportunity|momentum|readiness)$"
     ),
     min_score: int | None = Query(default=None, ge=0, le=100),
+    plan_status: str | None = Query(default=None, pattern="^(any|active|none)$"),
 ) -> RadarMunicipalitiesResponse:
     """Distinct municipalities available for the current radar cohort."""
     threshold = min_score if min_score is not None else VIEW_DEFAULT_THRESHOLD[view]
     score_column = VIEW_SCORE_COLUMN[view]
-    plan_clause = " AND dm.has_active_plan = FALSE" if view == "opportunity" else ""
+    plan_clause = _plan_status_clause(plan_status=plan_status, view=view)
 
     with get_cursor() as cur:
         _require_radar_sources(cur, include_tax_claims=view != "readiness")
         cur.execute(
             f"""
             SELECT DISTINCT p.municipality
-            FROM public.development_momentum dm
+            FROM public.current_development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
             WHERE dm.eligible = TRUE
               {plan_clause}
@@ -176,9 +202,11 @@ def _list_view(
     min_acres: float | None,
     max_acres: float | None,
     parcel_class: str | None,
+    plan_status: str | None,
     limit: int,
     offset: int,
 ) -> RadarParcelListResponse:
+    _validate_acre_range(min_acres, max_acres)
     params: dict = {"min_score": min_score, "limit": limit, "offset": offset}
     extra_where = _parcel_filters(
         params,
@@ -188,7 +216,7 @@ def _list_view(
         parcel_class=parcel_class,
     )
     score_column = VIEW_SCORE_COLUMN[view]
-    plan_clause = " AND dm.has_active_plan = FALSE" if view == "opportunity" else ""
+    plan_clause = _plan_status_clause(plan_status=plan_status, view=view)
     payload_column = {
         "opportunity": "opportunity_score",
         "momentum": "score",
@@ -200,7 +228,7 @@ def _list_view(
         cur.execute(
             f"""
             SELECT {RADAR_ROW_COLUMNS}
-            FROM public.development_momentum dm
+            FROM public.current_development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
             WHERE dm.eligible = TRUE
               {plan_clause}
@@ -259,6 +287,7 @@ def development_scores(
     min_acres: float | None = Query(default=None, ge=0),
     max_acres: float | None = Query(default=None, ge=0),
     parcel_class: str | None = Query(default=None, alias="class", max_length=32),
+    plan_status: str | None = Query(default=None, pattern="^(any|active|none)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> RadarParcelListResponse:
@@ -270,6 +299,7 @@ def development_scores(
         min_acres=min_acres,
         max_acres=max_acres,
         parcel_class=parcel_class,
+        plan_status=plan_status,
         limit=limit,
         offset=offset,
     )
@@ -282,6 +312,7 @@ def opportunity_scores(
     min_acres: float | None = Query(default=None, ge=0),
     max_acres: float | None = Query(default=None, ge=0),
     parcel_class: str | None = Query(default=None, alias="class", max_length=32),
+    plan_status: str | None = Query(default=None, pattern="^(any|active|none)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> RadarParcelListResponse:
@@ -297,6 +328,7 @@ def opportunity_scores(
         min_acres=min_acres,
         max_acres=max_acres,
         parcel_class=parcel_class,
+        plan_status=plan_status,
         limit=limit,
         offset=offset,
     )
@@ -309,6 +341,7 @@ def site_readiness_scores(
     min_acres: float | None = Query(default=None, ge=0),
     max_acres: float | None = Query(default=None, ge=0),
     parcel_class: str | None = Query(default=None, alias="class", max_length=32),
+    plan_status: str | None = Query(default=None, pattern="^(any|active|none)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> RadarParcelListResponse:
@@ -320,6 +353,7 @@ def site_readiness_scores(
         min_acres=min_acres,
         max_acres=max_acres,
         parcel_class=parcel_class,
+        plan_status=plan_status,
         limit=limit,
         offset=offset,
     )
@@ -373,7 +407,7 @@ def radar_movers(
         cur.execute(
             f"""
             SELECT {RADAR_ROW_COLUMNS}
-            FROM public.development_momentum dm
+            FROM public.current_development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
             WHERE dm.eligible = TRUE
               {plan_clause}
@@ -386,7 +420,7 @@ def radar_movers(
         )
         rows = cur.fetchall()
         cur.execute(
-            "SELECT MAX(previous_computed_at) AS previous_computed_at FROM public.development_momentum"
+            "SELECT MAX(previous_computed_at) AS previous_computed_at FROM public.current_development_momentum"
         )
         previous_row = cur.fetchone() or {}
 
@@ -413,37 +447,53 @@ def development_bbox(
     south: float = Query(..., ge=-90, le=90),
     east: float = Query(..., ge=-180, le=180),
     north: float = Query(..., ge=-90, le=90),
-    view: Literal["opportunity", "momentum"] = Query(default="momentum"),
+    view: Literal["opportunity", "momentum", "readiness"] = Query(default="momentum"),
     min_score: int = Query(default=0, ge=0, le=100),
+    municipality: str | None = Query(default=None),
+    min_acres: float | None = Query(default=None, ge=0),
+    max_acres: float | None = Query(default=None, ge=0),
+    parcel_class: str | None = Query(default=None, alias="class", max_length=32),
+    plan_status: str | None = Query(default=None, pattern="^(any|active|none)$"),
     limit: int = Query(default=MAX_BBOX_RESULTS, ge=1, le=MAX_BBOX_RESULTS),
 ) -> RadarBboxResponse:
     """Map layer for parcel coloring by development momentum or opportunity score."""
     validate_bbox(west, south, east, north)
+    _validate_acre_range(min_acres, max_acres)
     score_column = VIEW_SCORE_COLUMN[view]
-    plan_clause = " AND dm.has_active_plan = FALSE" if view == "opportunity" else ""
+    params: dict = {
+        "min_score": min_score,
+        "west": west,
+        "south": south,
+        "east": east,
+        "north": north,
+        "fetch_limit": limit + 1,
+    }
+    parcel_filter_clause = _parcel_filters(
+        params,
+        municipality=municipality,
+        min_acres=min_acres,
+        max_acres=max_acres,
+        parcel_class=parcel_class,
+    )
+    plan_clause = _plan_status_clause(plan_status=plan_status, view=view)
     with get_cursor() as cur:
-        _require_radar_sources(cur)
+        _require_radar_sources(cur, include_tax_claims=view != "readiness")
         cur.execute(
             f"""
             SELECT dm.pidn, {score_column} AS score, dm.eligible, dm.top_signal,
                    ST_X(ST_Centroid(p.geom)) AS lng,
                    ST_Y(ST_Centroid(p.geom)) AS lat
-            FROM public.development_momentum dm
+            FROM public.current_development_momentum dm
             JOIN staging.parcels p ON p.pidn = dm.pidn AND p.valid_to IS NULL
-            WHERE {score_column} >= %(min_score)s
+            WHERE dm.eligible = TRUE
+              AND {score_column} >= %(min_score)s
               {plan_clause}
+              {parcel_filter_clause}
               AND p.geom && ST_MakeEnvelope(%(west)s, %(south)s, %(east)s, %(north)s, 4326)
             ORDER BY {score_column} DESC, dm.pidn
             LIMIT %(fetch_limit)s
         """,
-            {
-                "min_score": min_score,
-                "west": west,
-                "south": south,
-                "east": east,
-                "north": north,
-                "fetch_limit": limit + 1,
-            },
+            params,
         )
         rows = cur.fetchall()
 

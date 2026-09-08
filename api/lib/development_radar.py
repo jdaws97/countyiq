@@ -10,6 +10,7 @@ from api.lib.response_types import ReasonSignalPayload as ReasonSignal
 SIGNAL_PRIORITY: dict[str, int] = {
     "active_subdivision": 1,
     "municipal_action": 2,
+    "municipal_record": 3,
     "economic_development_park": 3,
     "entity_assemblage": 4,
     "tax_distress": 5,
@@ -33,6 +34,7 @@ SIGNAL_PRIORITY: dict[str, int] = {
 DIRECT_SIGNAL_KEYS = {
     "active_subdivision",
     "municipal_action",
+    "municipal_record",
     "economic_development_park",
     "entity_assemblage",
     "tax_distress",
@@ -65,6 +67,7 @@ SIGNAL_TITLES: dict[str, str] = {
     "nearby_subdivision": "Nearby plan activity",
     "economic_development_park": "Business / industrial park inventory",
     "municipal_action": "Municipal proceeding",
+    "municipal_record": "Mentioned in a municipal record",
     "zoning_mismatch": "Plan / zoning divergence",
     "ownership_change": "Recent recorded sale",
     "vacancy": "Building-footprint and value screen",
@@ -88,6 +91,7 @@ SIGNAL_INTERPRETATIONS: dict[str, str] = {
     "nearby_subdivision": "A recent county planning point is nearby and is treated as neighborhood activity, not this parcel's plan.",
     "economic_development_park": "The PIDN appears in the county's official business- or industrial-park parcel inventory.",
     "municipal_action": "A governed municipal record was linked to the parcel by PIDN or normalized address.",
+    "municipal_record": "An original municipal passage mentions this property's exact parcel reference or unique address.",
     "zoning_mismatch": "County zoning and future-land-use labels suggest different uses at the parcel center point.",
     "ownership_change": "The county parcel record shows a non-nominal sale within the scoring window.",
     "vacancy": "No county building footprint intersects the parcel and the parcel also passes low-value filters.",
@@ -111,6 +115,7 @@ SIGNAL_CAVEATS: dict[str, str] = {
     "nearby_subdivision": "The plan belongs to a nearby location; it does not establish activity, access, or entitlement on this parcel.",
     "economic_development_park": "Inventory membership does not by itself establish zoning, utility capacity, incentives, or development entitlement.",
     "municipal_action": "Address matches can be ambiguous, and a proceeding is not necessarily an approval; confirm the cited document and status.",
+    "municipal_record": "A mention is not an approval, a completed action, or proof that the entire property is part of a project. Read the document type and original wording.",
     "zoning_mismatch": "Future land use is policy guidance, not current zoning or an entitlement. Center-point matching can miss split-zoned parcels.",
     "ownership_change": "An organization-looking owner name is a text pattern, not a verified investor classification or evidence of development intent.",
     "vacancy": "Missing footprints can reflect source lag or mapping omissions; this signal does not prove the land is vacant or buildable.",
@@ -142,11 +147,11 @@ def _as_mapping(value: object) -> SignalMapping | None:
 
 def _as_decimal(value: object) -> Decimal:
     if value is None:
-        return Decimal("0")
+        return Decimal(0)
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
-        return Decimal("0")
+        return Decimal(0)
 
 
 def _currency(value: object) -> str:
@@ -207,7 +212,7 @@ def signal_weight(signal: object) -> Decimal:
     signal_dict = _as_mapping(signal)
     if signal_dict is not None:
         return _as_decimal(signal_dict.get("weight"))
-    return Decimal("0")
+    return Decimal(0)
 
 
 def _distance_m(signal: object, evidence: SignalMapping) -> object:
@@ -274,6 +279,8 @@ def soil_constraint_reasons(evidence: SignalMapping) -> list[str]:
 def format_signal_label(key: str, signal: object) -> str:
     ev = _evidence(signal)
 
+    if key == "municipal_record":
+        return f"Municipal record: {ev.get('title') or 'property reference'}"
     if key == "active_subdivision":
         distance = _distance_m(signal, ev)
         if distance is not None and _as_decimal(distance) > Decimal("0.5"):
@@ -408,6 +415,12 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
             _fact("Decision", ev.get("decision")),
             _fact("Meeting", ev.get("meeting_date")),
             _fact("Matched by", str(ev.get("match_method") or "").replace("_", " ")),
+        ]
+    elif key == "municipal_record":
+        raw = [
+            _fact("Matter", ev.get("title")),
+            _fact("Document", ev.get("document_kind")),
+            _fact("Meeting", ev.get("meeting_date")),
         ]
     elif key == "economic_development_park":
         names = ev.get("park_names")

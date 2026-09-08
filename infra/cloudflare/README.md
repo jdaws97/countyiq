@@ -46,8 +46,8 @@ or Workers request meter.
 Lifecycle rules expire raw/intelligence archives after 90 days and daily
 database backups after 7 days. Raw objects receive a three-day bucket lock and
 are not duplicated into the backup bucket. The VPS independently measures
-both buckets every 15 minutes and hard-stops the entire CountyIQ stack at 8 GB,
-leaving 2 GB of safety margin below the 10 GB allowance. A trip never
+both buckets every 15 minutes and hard-stops the entire CountyIQ stack at 20 GB,
+allowing storage above the 10 GB free allowance. A trip never
 automatically resumes services.
 
 The 7-day value is based on a 2026-09-04 measurement, not a generic estimate:
@@ -55,8 +55,8 @@ the current CountyIQ and Dagster custom-format dumps total about 222 MB, while
 the one-time raw archive corpus is about 2.744 GB. Keeping one locked raw copy
 plus seven daily dumps projects to about 4.30 GB; the first day is about 2.97
 GB. A new bulk backfill therefore requires a fresh measurement; the
-8 GB tripwire intentionally prevents it from silently consuming the remaining
-free-tier margin.
+20 GB tripwire bounds total storage while allowing paid usage above the free
+tier.
 
 After the SOPS-managed production environment has been rendered on the VPS,
 arm the enforcement timer:
