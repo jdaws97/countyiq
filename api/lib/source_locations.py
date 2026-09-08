@@ -106,10 +106,13 @@ def locate_feed_sources(cur, rows: list[dict]) -> None:
     ]
     if not event_keys:
         return
+    proceeding_ids = sorted({int(key.split(":")[1]) for key in event_keys})
     cur.execute(
         """SELECT *
-           FROM public.current_municipal_intelligence WHERE event_key = ANY(%s::text[])""",
-        (event_keys,),
+           FROM public.current_municipal_intelligence
+           WHERE proceeding_id = ANY(%s::integer[])
+             AND event_key = ANY(%s::text[])""",
+        (proceeding_ids, event_keys),
     )
     records = {row["event_key"]: dict(row) for row in cur.fetchall()}
     for row in rows:

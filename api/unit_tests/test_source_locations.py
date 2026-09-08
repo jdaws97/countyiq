@@ -103,7 +103,7 @@ def test_locate_feed_sources_batches_current_view_records_and_enriches_only_matc
             self.calls.append((statement, params))
 
         def fetchall(self):
-            return [{"event_key": "event-a", **source_record()}]
+            return [{"event_key": "municipal:1:abc:card1", **source_record()}]
 
     matching_source = {
         "document_url": "https://borough.example.test/agenda.pdf",
@@ -113,12 +113,12 @@ def test_locate_feed_sources_batches_current_view_records_and_enriches_only_matc
     }
     rows = [
         {
-            "event_key": "event-a",
+            "event_key": "municipal:1:abc:card1",
             "source_kind": "municipal_evidence",
             "source_evidence": [matching_source],
         },
         {
-            "event_key": "event-not-in-current-view",
+            "event_key": "municipal:2:abc:card2",
             "source_kind": "municipal_evidence",
             "source_evidence": [matching_source.copy()],
         },
@@ -128,7 +128,10 @@ def test_locate_feed_sources_batches_current_view_records_and_enriches_only_matc
 
     locate_feed_sources(cursor, rows)
 
-    assert cursor.calls[0][1] == (["event-a", "event-not-in-current-view"],)
+    assert cursor.calls[0][1] == (
+        [1, 2],
+        ["municipal:1:abc:card1", "municipal:2:abc:card2"],
+    )
     assert rows[0]["source_evidence"][0]["details"] == {
         "existing": "kept",
         "body_name": "Borough Council",

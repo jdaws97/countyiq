@@ -67,7 +67,7 @@ def test_feed_with_unavailable_current_record_never_serves_old_spanish_copy():
 
     rows = [
         {
-            "event_key": "test",
+            "event_key": "municipal:1:abc:card1",
             "source_kind": "municipal_evidence",
             "title": "Audiencia pública",
             "what_happened": "Fecha propuesta",

@@ -1,8 +1,9 @@
 """Database-independent contract tests for the unified feed route."""
 
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
+from api.lib.feed_cache import FeedPageCache
 from api.routes import feed
 
 
@@ -14,17 +15,27 @@ class _Cursor:
         self.params: dict[str, object] = {}
         self.executions: list[tuple[str, dict[str, object]]] = []
 
-    def execute(self, sql: str, params: dict[str, object]) -> None:
+    def execute(self, sql: str, params: dict[str, object] | None = None) -> None:
         self.sql = sql
-        self.params = params
-        self.executions.append((sql, params))
+        self.params = params or {}
+        self.executions.append((sql, self.params))
+
+    def fetchone(self) -> dict:
+        return {
+            "generation": "unit-test-generation",
+            "revision": 1,
+            "policy_date": date(2026, 8, 27),
+            "checked_at": datetime(2026, 8, 27, tzinfo=UTC),
+        }
 
     def fetchall(self) -> list[dict]:
-        return self.rows if len(self.executions) == 1 else self.owners
+        if self.sql.strip().startswith("SELECT owner_id, canonical_name"):
+            return self.owners
+        return self.rows
 
 
 def test_feed_filters_serializes_and_paginates(monkeypatch):
-    generated_at = datetime(2026, 8, 27, 12, 30, tzinfo=timezone.utc)
+    generated_at = datetime(2026, 8, 27, 12, 30, tzinfo=UTC)
     rows = [
         {
             "event_key": "development:first",
@@ -106,10 +117,12 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
     )
 
     @contextmanager
-    def fake_get_cursor():
+    def fake_get_cursor(*, snapshot=False):
+        assert snapshot
         yield cursor
 
     monkeypatch.setattr(feed, "get_cursor", fake_get_cursor)
+    monkeypatch.setattr(feed, "feed_pages", FeedPageCache())
     monkeypatch.setattr(feed, "require_source_use", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(feed, "restricted_distress_enabled", lambda: False)
 
@@ -133,7 +146,7 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
         offset=2,
     )
 
-    feed_sql, feed_params = cursor.executions[0]
+    feed_sql, feed_params = cursor.executions[1]
     assert "new_affected_total" in feed_sql
     assert "baseline.source_kind = 'delinquency_event'" in feed_sql
     # Recency decay and watched-subject boost are part of the priority order.

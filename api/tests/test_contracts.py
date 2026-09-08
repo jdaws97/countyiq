@@ -70,12 +70,12 @@ def test_ops_health_exposes_source_policy_review_state(client):
 
     municipal = sources["municipal_proceedings"]
     assert (
-        municipal["configured_count"] == 123
-    )  # 122 configured sources plus the synthetic fixture body.
-    assert municipal["active_count"] == 104
+        municipal["configured_count"] == 131
+    )  # 130 configured sources plus the synthetic fixture body.
+    assert municipal["active_count"] == 112
     assert municipal["healthy_count"] == 0
     assert municipal["blocked_count"] == 18
-    assert municipal["unchecked_count"] == 104
+    assert municipal["unchecked_count"] == 112
     assert municipal["stale_count"] == 0
     assert municipal["record_count"] == 0
     assert municipal["status_reason"] == "run_not_observed"
@@ -302,6 +302,7 @@ def test_feed_contract_combines_parcel_and_development_intelligence(client):
     for event in all_payload["events"]:
         for key in (
             "what_happened",
+            "why_it_matters",
             "related_entities",
             "entity_links",
             "related_pidns",
@@ -311,7 +312,6 @@ def test_feed_contract_combines_parcel_and_development_intelligence(client):
             "interpretation",
         ):
             assert key in event
-        assert "why_it_matters" not in event
         assert "what_happens_next" not in event
 
 
@@ -454,25 +454,24 @@ def test_parcels_summary_contract_for_watchlist(client):
 @pytest.mark.parametrize("days_ago,expected", [(1, True), (45, False)])
 def test_watch_changes_require_recent_version_history(client, days_ago, expected):
     import psycopg2
+
     from api.tests.conftest import DB_ENV
 
     pidn = "0000000000987"
-    with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """INSERT INTO staging.parcels(pidn, owner_full, valid_from, valid_to)
-                VALUES (%s, 'Prior owner', NOW() - INTERVAL '90 days', NOW() - %s * INTERVAL '1 day'),
-                       (%s, 'Current owner', NOW() - %s * INTERVAL '1 day', NULL)""",
-                (pidn, days_ago, pidn, days_ago),
-            )
+    with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn, conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO staging.parcels(pidn, owner_full, valid_from, valid_to)
+            VALUES (%s, 'Prior owner', NOW() - INTERVAL '90 days', NOW() - %s * INTERVAL '1 day'),
+                   (%s, 'Current owner', NOW() - %s * INTERVAL '1 day', NULL)""",
+            (pidn, days_ago, pidn, days_ago),
+        )
     try:
         response = client.get(f"/api/parcels/summary?pidns={pidn}")
         assert response.status_code == 200
         assert response.json()["parcels"][0]["changed_recently"] is expected
     finally:
-        with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM staging.parcels WHERE pidn = %s", (pidn,))
+        with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM staging.parcels WHERE pidn = %s", (pidn,))
 
 
 @pytest.mark.parametrize("legacy_reference", [None, "Multiple parcels in application"])
@@ -481,29 +480,32 @@ def test_structured_multiple_parcel_ids_report_id_match_method(
 ):
     import psycopg2
     from psycopg2.extras import Json
+
     from api.tests.conftest import DB_ENV, SECOND_PIDN
 
-    with psycopg2.connect(DB_ENV["DATABASE_URL"]) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT pe.id,pe.parcel_reference,pe.extraction_details
-                FROM staging.proceeding_extractions pe
-                JOIN staging.public_proceedings pp ON pp.id=pe.proceeding_id
-                WHERE pp.body_name='Hanover Borough Council' ORDER BY pe.id LIMIT 1
-            """)
-            extraction_id, reference, details = cursor.fetchone()
-            cursor.execute(
-                """
-                UPDATE staging.proceeding_extractions
-                SET parcel_reference=%s, extraction_details=%s
-                WHERE id=%s
-            """,
-                (
-                    legacy_reference,
-                    Json({"parcel_references": [TEST_PIDN, SECOND_PIDN]}),
-                    extraction_id,
-                ),
-            )
+    with (
+        psycopg2.connect(DB_ENV["DATABASE_URL"]) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute("""
+            SELECT pe.id,pe.parcel_reference,pe.extraction_details
+            FROM staging.proceeding_extractions pe
+            JOIN staging.public_proceedings pp ON pp.id=pe.proceeding_id
+            WHERE pp.body_name='Hanover Borough Council' ORDER BY pe.id LIMIT 1
+        """)
+        extraction_id, reference, details = cursor.fetchone()
+        cursor.execute(
+            """
+            UPDATE staging.proceeding_extractions
+            SET parcel_reference=%s, extraction_details=%s
+            WHERE id=%s
+        """,
+            (
+                legacy_reference,
+                Json({"parcel_references": [TEST_PIDN, SECOND_PIDN]}),
+                extraction_id,
+            ),
+        )
     try:
         response = client.get(f"/api/parcels/{TEST_PIDN}")
         assert response.status_code == 200, response.text
@@ -513,9 +515,11 @@ def test_structured_multiple_parcel_ids_report_id_match_method(
         )
         assert row["match_type"] == "pidn"
     finally:
-        with psycopg2.connect(DB_ENV["DATABASE_URL"]) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "UPDATE staging.proceeding_extractions SET parcel_reference=%s,extraction_details=%s WHERE id=%s",
-                    (reference, Json(details), extraction_id),
-                )
+        with (
+            psycopg2.connect(DB_ENV["DATABASE_URL"]) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                "UPDATE staging.proceeding_extractions SET parcel_reference=%s,extraction_details=%s WHERE id=%s",
+                (reference, Json(details), extraction_id),
+            )

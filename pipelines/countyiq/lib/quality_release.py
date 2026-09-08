@@ -117,6 +117,8 @@ def release_identity(pass_number: int) -> dict:
                 / "alembic/versions/070_municipal_subject_references.py",
                 Path(__file__).parents[2]
                 / "alembic/versions/076_matter_account_member_queries.py",
+                Path(__file__).parents[2]
+                / "alembic/versions/078_feed_revision_cache.py",
                 Path(__file__).parents[1]
                 / "assets/enrichment/municipal_evidence_linking.py",
             ]
@@ -137,7 +139,7 @@ def release_identity(pass_number: int) -> dict:
             source_paths.extend(
                 sorted(
                     (Path(__file__).parents[2] / "alembic/versions").glob(
-                        "07[1-6]_*.py"
+                        "07[1-8]_*.py"
                     )
                 )
             )

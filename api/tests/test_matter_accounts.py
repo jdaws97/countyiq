@@ -134,6 +134,11 @@ def test_matter_accounts_recheck_live_connections_and_global_rights(
 ):
     add_case(add_source)
     keys = publish_test_account()
+    params = {"project_keys": ",".join(keys)}
+    first = client.get("/api/feed", params=params)
+    assert first.status_code == 200, first.text
+    assert first.json()["events"]
+    assert client.get("/api/feed", params=params).json() == first.json()
     with writer() as cur:
         cur.execute(
             "SELECT pidn, propadr, owner_full FROM staging.parcels "
@@ -176,7 +181,7 @@ def test_matter_accounts_recheck_live_connections_and_global_rights(
             assert current == [([TEST_PIDN], ["New Owner LLC"])]
         else:
             assert current == []
-        response = client.get("/api/feed", params={"project_keys": ",".join(keys)})
+        response = client.get("/api/feed", params=params)
         if change == "global_rights":
             assert response.status_code == 503
         else:

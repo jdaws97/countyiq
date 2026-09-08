@@ -1,12 +1,15 @@
 """Unified evidence-backed intelligence feed."""
 
+import json
 import re
+from datetime import timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query
 
 from api.lib.database import get_cursor
 from api.lib.evidence import normalize_source_evidence
+from api.lib.feed_cache import feed_pages
 from api.lib.matter_accounts import locate_matter_sources, matter_payload
 from api.lib.municipality_names import municipality_event_patterns
 from api.lib.response_types import IntelligenceFeedResponse
@@ -404,15 +407,6 @@ def fetch_feed(
         )
         """,
     ]
-    if not event_keys and view == "research":
-        filters.append("""(
-                source_kind = 'municipal_evidence' AND NOT EXISTS (
-                    SELECT 1 FROM public.current_municipal_matter_accounts account
-                    WHERE account.record_keys ? intelligence_events.event_key
-                )
-                OR source_kind = 'municipal_matter' AND
-                    source_evidence->0->'details'->>'discovery_eligible' = 'false'
-            )""")
     if matter_category:
         filters.append(
             "source_evidence->0->'details'->>'matter_category' = %(matter_category)s"
@@ -500,7 +494,10 @@ def fetch_feed(
         params["municipalities"] = municipality_patterns
 
     if since_days is not None:
-        filters.append("detected_at >= NOW() - MAKE_INTERVAL(days => %(since_days)s)")
+        filters.append(
+            "COALESCE(event_date, detected_at::date) >= "
+            "CURRENT_DATE - %(since_days)s::integer"
+        )
         params["since_days"] = since_days
 
     pidn_values = _csv_values(pidns)
@@ -555,7 +552,9 @@ def fetch_feed(
         if view == "activity" and not event_keys
         else "current_intelligence_events"
     )
-    with get_cursor() as cur:
+    if view == "research" and not event_keys:
+        event_view = "current_research_events"
+    with get_cursor(snapshot=True) as cur:
         parcel_source = open_data_source_key()
         required_sources = [parcel_source]
         if category != "development":
@@ -565,42 +564,61 @@ def fetch_feed(
         for source_key in required_sources:
             require_source_use(cur, source_key, "derived_product", conceal=False)
         cur.execute(
-            f"""
-            SELECT
-                event_key,
-                source_kind,
-                source_record_id,
-                category,
-                event_type,
-                event_tags,
-                title,
-                what_happened,
-                why_it_matters,
-                event_date,
-                detected_at,
-                confidence,
-                municipality,
-                project_key,
-                project_name,
-                related_entities,
-                related_pidns,
-                source_evidence,
-                interpretation_kind,
-                interpretation_model,
-                interpretation_generated_at,
-                ({_PRIORITY_SQL})::integer AS priority_score,
-                ({_WATCHED_MATCH_SQL}) AS watched_match
-            FROM public.{event_view} AS intelligence_events
-            WHERE {" AND ".join(filters)}
-            ORDER BY {order_clause}
-            LIMIT %(fetch_limit)s OFFSET %(offset)s
-            """,
-            params,
+            "SELECT generation, revision, CURRENT_DATE AS policy_date, NOW() AS checked_at "
+            "FROM meta.feed_cache_revision"
         )
-        rows = [dict(row) for row in cur.fetchall()]
-        entity_links_by_name = _resolve_entity_links(cur, rows)
-        locate_feed_sources(cur, rows[:limit])
-        locate_matter_sources(cur, rows[:limit])
+        state = cur.fetchone()
+        revision = (str(state["generation"]), state["revision"], state["policy_date"])
+        cache_key = json.dumps(
+            [event_view, filters, params, order_clause, required_sources],
+            sort_keys=True,
+        )
+        cached = feed_pages.get(cache_key, revision, state["checked_at"])
+        if cached is not None:
+            rows, entity_links_by_name = cached
+        else:
+            cur.execute(
+                f"""
+                SELECT
+                    event_key,
+                    source_kind,
+                    source_record_id,
+                    category,
+                    event_type,
+                    event_tags,
+                    title,
+                    what_happened,
+                    why_it_matters,
+                    event_date,
+                    detected_at,
+                    confidence,
+                    municipality,
+                    project_key,
+                    project_name,
+                    related_entities,
+                    related_pidns,
+                    source_evidence,
+                    interpretation_kind,
+                    interpretation_model,
+                    interpretation_generated_at,
+                    ({_PRIORITY_SQL})::integer AS priority_score,
+                    ({_WATCHED_MATCH_SQL}) AS watched_match
+                FROM public.{event_view} AS intelligence_events
+                WHERE {" AND ".join(filters)}
+                ORDER BY {order_clause}
+                LIMIT %(fetch_limit)s OFFSET %(offset)s
+                """,
+                params,
+            )
+            rows = [dict(row) for row in cur.fetchall()]
+            entity_links_by_name = _resolve_entity_links(cur, rows)
+            locate_feed_sources(cur, rows[:limit])
+            locate_matter_sources(cur, rows[:limit])
+
+            expires_at = state["checked_at"] + timedelta(seconds=60)
+            feed_pages.put(
+                cache_key, revision, expires_at, (rows, entity_links_by_name)
+            )
 
     has_more = len(rows) > limit
     rows = rows[:limit]
