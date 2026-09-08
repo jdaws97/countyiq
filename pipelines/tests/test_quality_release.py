@@ -124,9 +124,19 @@ def test_pass3_contract_uses_investigation_actions_without_changing_original_gol
         assert fields["urgency"] == ["none"]
 
 
-@pytest.mark.parametrize("directory", ["lib", "assets/enrichment"])
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "countyiq/lib/record_explanations.py",
+        "countyiq/assets/enrichment/record_explanations.py",
+        "countyiq/lib/municipal_matters.py",
+        "countyiq/lib/pass_subscription.py",
+        "alembic/versions/071_municipal_matter_accounts.py",
+        "alembic/versions/075_activity_presentation_readiness.py",
+    ],
+)
 def test_records_receipt_expires_when_either_explanation_file_changes(
-    tmp_path, monkeypatch, directory
+    tmp_path, monkeypatch, relative_path
 ):
     import hashlib
     from datetime import UTC, datetime
@@ -152,12 +162,7 @@ def test_records_receipt_expires_when_either_explanation_file_changes(
         )
     )
     assert check_quality_release(3, receipt)["ok"]
-    target = (
-        Path(__file__).resolve().parents[1]
-        / "countyiq"
-        / directory
-        / "record_explanations.py"
-    )
+    target = Path(__file__).resolve().parents[1] / relative_path
     original_read = Path.read_bytes
 
     def changed_source(path):

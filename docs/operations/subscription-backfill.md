@@ -1,10 +1,39 @@
 # Subscription-authored record backfill
 
-The operator can use a signed-in Codex CLI to produce actual Pass 0 source
-selections and Pass 3 explanations. This consumes the ChatGPT subscription's
-Codex allowance. It makes no OpenRouter or separately billed OpenAI API calls,
-does not redeem reset credits, and stops if the subscription cannot continue.
-The CLI supports saved authentication and structured output in
+The maintained Dagster assets can use either the normal OpenRouter backend or
+the native `codex_subscription` backend, selected globally with
+`COUNTYIQ_LLM_BACKEND` or per pass with `COUNTYIQ_PASS{N}_BACKEND`. Native mode
+uses the ChatGPT subscription's Codex allowance, defaults to the separate
+`gpt-6-astra` model setting, and stops without a paid fallback if the
+subscription cannot continue. Every run still has finite per-pass item and
+native call caps per asset invocation, including backfills. It requires current
+quality receipts and explicit enable gates, and retains source bindings and
+authorship provenance. Maintenance skips unchanged accepted sources, but its
+usage depends on document arrivals and changes to complete matter bundles.
+
+Native mode is implemented in the maintained `proceeding_extraction`,
+`municipal_matter_explanations`, and `property_record_explanations` assets and
+keeps LLM jobs manual; no new schedule is enabled. The native login is private and
+persistent on the VPS: `CODEX_HOME` must point to the mounted auth directory,
+owned by container UID/GID 10001. `docker/codex-login.sh` runs device
+authentication inside the Dagster webserver as that user; the login helper
+serializes login, status, logout, and model calls with the same file lock. Set
+`COUNTYIQ_CODEX_AUTH_DIR` on the host to choose the mounted directory (the
+container path is `/opt/countyiq/codex-auth`). Keep it private and never place
+credentials in `.env` or Git.
+
+Run `sudo docker/codex-login.sh login` from the deployed checkout and complete
+the displayed OpenAI device flow in your browser. Use
+`sudo docker/codex-login.sh status` to verify the session. This creates a
+separate VPS session; do not copy desktop credentials. The official CLI manages
+refresh, and occasional reauthentication may be required. See OpenAI's
+[private automation authentication guidance](https://learn.chatgpt.com/docs/auth/ci-cd-auth).
+
+The operator can also use a signed-in Codex CLI to produce actual Pass 0 source
+selections and Pass 3 explanations. This local workflow consumes the ChatGPT
+subscription's Codex allowance. It makes no OpenRouter or separately billed
+OpenAI API calls, does not redeem reset credits, and stops if the subscription
+cannot continue. The CLI supports saved authentication and structured output in
 [non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode).
 
 This workflow runs on the operator machine. It does not install account login

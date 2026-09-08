@@ -42,9 +42,10 @@ def release_identity(pass_number: int) -> dict:
         and os.environ.get("COUNTYIQ_PASS3_MODE", "legacy").strip().lower() == "records"
     )
     if records_mode:
+        from countyiq.lib.municipal_matters import PROMPT_VERSION as MATTERS_VERSION
         from countyiq.lib.record_explanations import PROMPT_VERSION
 
-        versions[3] = [PROMPT_VERSION]
+        versions[3] = [PROMPT_VERSION, MATTERS_VERSION]
     names = {
         0: ["p0_expected.json"],
         1: ["p1_frozen.json"],
@@ -124,11 +125,19 @@ def release_identity(pass_number: int) -> dict:
             source_paths.extend(
                 [
                     Path(__file__).with_name("record_explanations.py"),
+                    Path(__file__).with_name("municipal_matters.py"),
                     Path(__file__).parents[1]
                     / "assets/enrichment/record_explanations.py",
                     Path(__file__).parents[2]
                     / "alembic/versions/069_record_explanations.py",
                 ]
+            )
+            source_paths.extend(
+                sorted(
+                    (Path(__file__).parents[2] / "alembic/versions").glob(
+                        "07[1-5]_*.py"
+                    )
+                )
             )
     if pass_number == 1:
         source_paths.append(
