@@ -16,351 +16,1270 @@
       "type": "link",
       "url": "https://app.countyiq.net/ops/health",
       "targetBlank": true
+    },
+    {
+      "title": "Grafana alert rules",
+      "type": "link",
+      "url": "/alerting/list",
+      "targetBlank": false
     }
   ],
   "panels": [
     {
+      "id": 1,
+      "type": "text",
+      "title": "What needs attention",
+      "description": "Start with any red card, then use the linked system for the underlying detail.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Check the highlighted cards, then inspect service and source status below. [Open Dagster](https://dagster.countyiq.net) \u00b7 [Data health](https://app.countyiq.net/ops/health) \u00b7 [Alert rules](/alerting/list)"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Services /6",
+      "description": "Managed containers reporting healthy. A missing series does not count as healthy.",
       "datasource": {
         "type": "prometheus",
         "uid": "${METRICS_UID}"
       },
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(countyiq_container_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"})",
+          "refId": "A",
+          "instant": true
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "green",
+                "value": 6
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
-      "id": 1,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Collectors /8",
+      "description": "Required collectors succeeding at their last attempt. Missing collectors are not assumed healthy.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
         {
-          "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{instance=\"countyiq-production\",job=\"countyiq/host\",mode=\"idle\"}[5m])))",
+          "expr": "sum(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"})",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 7
+              },
+              {
+                "color": "green",
+                "value": 8
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Source issues",
+      "description": "Sources that are unhealthy or stale; collection absence is represented by the collector card.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum((1 - countyiq_source_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"} + countyiq_source_stale{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 0)",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Backup age",
+      "description": "Age of the latest verified backup. Check recovery status and logs if this is stale.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 3,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "time() - countyiq_backup_last_success_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 86400
+              },
+              {
+                "color": "red",
+                "value": 108000
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Root disk free",
+      "description": "Free space on the root filesystem. Alerting escalates below 10 GiB.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"} / 1024 / 1024 / 1024",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "gbytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "green",
+                "value": 20
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Dagster running",
+      "description": "Dagster runs in STARTING or STARTED; run ages appear below. Native CLI backfills are not included.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 7,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(countyiq_dagster_runs{instance=\"countyiq-production\",job=\"countyiq/host\",status=~\"STARTING|STARTED\"})",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "value"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Dagster queued",
+      "description": "Dagster runs waiting in the queue; queue age appears below. Native CLI backfills are not included.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(countyiq_dagster_runs{instance=\"countyiq-production\",job=\"countyiq/host\",status=\"QUEUED\"})",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Dagster failed/24h",
+      "description": "Failures reported by Dagster in the last 24 hours.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 7,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "countyiq_dagster_failures_24h{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 23,
+      "type": "bargauge",
+      "title": "External readiness \u2014 two locations",
+      "description": "Authenticated HTTP 200 and database readiness every five minutes. Missing probe data is alerted separately after 15 minutes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "min by (probe) (last_over_time(probe_success{job=\"countyiq-readiness\",instance=\"https://app.countyiq.net/api/ready\",probe=~\"NorthVirginia|Oregon\"}[10m]))",
+          "legendFormat": "{{probe}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "max": 1,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Needs attention",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Healthy",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "displayMode": "basic"
+      }
+    },
+    {
+      "id": 10,
+      "type": "bargauge",
+      "title": "Service status",
+      "description": "Every managed service must report healthy. Missing data remains missing rather than healthy.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "countyiq_container_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{service}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "max": 1,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Needs attention",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Healthy",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "displayMode": "basic"
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Source status",
+      "description": "Healthy and stale are independent source-state signals. Missing series are not mapped to a healthy state.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 15,
+        "w": 16,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "countyiq_source_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "countyiq_source_stale{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Health"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Unhealthy",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Healthy",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Freshness"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "Fresh",
+                        "color": "green"
+                      },
+                      "1": {
+                        "text": "Stale",
+                        "color": "red"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "source",
+            "mode": "outerTabular"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time #B": true,
+              "instance": true,
+              "job": true,
+              "__name__": true,
+              "Time #A": true,
+              "instance #B": true,
+              "job #B": true,
+              "__name__ #B": true
+            },
+            "indexByName": {
+              "source": 0,
+              "Value #A": 1,
+              "Value #B": 2
+            },
+            "renameByName": {
+              "source": "Source",
+              "Value #A": "Health",
+              "Value #B": "Freshness"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "bargauge",
+      "title": "Collector result",
+      "description": "Last result for each required collection task. Freshness is shown separately.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"}",
+          "legendFormat": "{{collector}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "max": 1,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Failed",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Succeeded",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "displayMode": "basic"
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Collector attempt age",
+      "description": "Seconds since each collector last attempted work. Storage runs hourly; the rest normally run more often.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "time() - countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"}",
+          "legendFormat": "{{collector}}",
           "refId": "A"
         }
       ],
-      "title": "Host CPU utilization",
-      "type": "timeseries"
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Dagster pipeline status counts",
+      "description": "Dagster run counts by status. Ages are intentionally shown in the neighboring panel; native CLI backfills are not included.",
       "datasource": {
         "type": "prometheus",
         "uid": "${METRICS_UID}"
       },
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "countyiq_dagster_runs{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Oldest Dagster pipeline run age",
+      "description": "Dagster run age by status; queued runs above 30 minutes and running runs above six hours need review. Native CLI backfills are not included.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "countyiq_dagster_oldest_run_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",status=~\"QUEUED|STARTING|STARTED\"}",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Root disk free",
+      "description": "Free root filesystem capacity over time.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"} / 1024 / 1024 / 1024",
+          "legendFormat": "free",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "gbytes",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Host CPU utilization",
+      "description": "Host CPU utilization over time.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 39,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{instance=\"countyiq-production\",job=\"countyiq/host\",mode=\"idle\"}[5m])))",
+          "legendFormat": "CPU",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "min": 0,
-          "max": 100
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": []
       },
-      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Host memory utilization",
+      "description": "Host memory utilization over time.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 39,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "100 * (1 - node_memory_MemAvailable_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"} / node_memory_MemTotal_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"})",
+          "legendFormat": "memory",
           "refId": "A"
         }
       ],
-      "title": "Host memory utilization",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "min": 0,
-          "max": 100
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": []
       },
-      "id": 3,
-      "targets": [
-        {
-          "expr": "100 * (1 - node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",fstype!~\"tmpfs|overlay\"})",
-          "legendFormat": "{{mountpoint}}",
-          "refId": "A"
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single"
         }
-      ],
-      "title": "Filesystem utilization",
-      "type": "timeseries"
+      }
     },
     {
+      "id": 19,
+      "type": "timeseries",
+      "title": "PostgreSQL connection capacity",
+      "description": "Connection usage as a percentage of the configured PostgreSQL limit.",
       "datasource": {
         "type": "prometheus",
         "uid": "${METRICS_UID}"
       },
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "100 * countyiq_postgres_total_connections{instance=\"countyiq-production\",job=\"countyiq/host\"} / countyiq_postgres_connection_limit{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "connections used",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes"
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": []
       },
-      "id": 4,
-      "targets": [
-        {
-          "expr": "countyiq_container_memory_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{service}} used",
-          "refId": "A"
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
-        {
-          "expr": "countyiq_container_memory_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{service}} limit",
-          "refId": "B"
+        "tooltip": {
+          "mode": "single"
         }
-      ],
-      "title": "Container memory",
-      "type": "timeseries"
+      }
     },
     {
+      "id": 20,
+      "type": "timeseries",
+      "title": "R2 capacity",
+      "description": "Total R2 usage as a percentage of its configured guard limit.",
       "datasource": {
         "type": "prometheus",
         "uid": "${METRICS_UID}"
       },
+      "gridPos": {
+        "x": 8,
+        "y": 47,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "100 * countyiq_r2_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",bucket=\"total\"} / countyiq_r2_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "used",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes"
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": []
       },
-      "id": 5,
-      "targets": [
-        {
-          "expr": "countyiq_postgres_database_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{database}}",
-          "refId": "A"
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
-        {
-          "expr": "countyiq_postgres_total_connections{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "connections",
-          "refId": "B"
+        "tooltip": {
+          "mode": "single"
         }
-      ],
-      "title": "PostgreSQL size and connections",
-      "type": "timeseries"
+      }
     },
     {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Docker storage",
+      "description": "Docker image, volume, and build-cache storage. Values are capacity only, never mixed with reclaimable estimates.",
       "datasource": {
         "type": "prometheus",
         "uid": "${METRICS_UID}"
       },
+      "gridPos": {
+        "x": 16,
+        "y": 47,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "countyiq_docker_storage_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{kind}}",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": []
       },
-      "id": 6,
-      "targets": [
-        {
-          "expr": "countyiq_dagster_oldest_run_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{status}}",
-          "refId": "A"
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
         },
-        {
-          "expr": "countyiq_dagster_heartbeat_errors{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{daemon}} errors",
-          "refId": "B"
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
-      ],
-      "title": "Dagster run age and heartbeat errors",
-      "type": "timeseries"
+      }
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "id": 7,
-      "targets": [
-        {
-          "expr": "countyiq_r2_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{bucket}}",
-          "refId": "A"
-        },
-        {
-          "expr": "countyiq_r2_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "limit",
-          "refId": "B"
-        }
-      ],
-      "title": "R2 storage",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "id": 8,
-      "targets": [
-        {
-          "expr": "countyiq_openrouter_usage_usd{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{period}}",
-          "refId": "A"
-        },
-        {
-          "expr": "countyiq_openrouter_configured{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "configured",
-          "refId": "B"
-        }
-      ],
-      "title": "OpenRouter usage (informational until a budget is configured)",
-      "type": "timeseries"
-    },
-    {
+      "id": 22,
+      "type": "logs",
+      "title": "Container logs",
+      "description": "Diagnostics only. Filter to the affected service after identifying the relevant card above.",
       "datasource": {
         "type": "loki",
         "uid": "${LOGS_UID}"
       },
-      "id": 9,
+      "gridPos": {
+        "x": 0,
+        "y": 55,
+        "w": 24,
+        "h": 9
+      },
       "targets": [
         {
           "expr": "{job=\"countyiq/containers\"}",
           "refId": "A"
         }
       ],
-      "title": "Container logs",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "id": 10,
-      "targets": [
-        {
-          "expr": "countyiq_source_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{source}} healthy",
-          "refId": "A"
-        },
-        {
-          "expr": "countyiq_source_stale{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{source}} stale",
-          "refId": "B"
-        }
-      ],
-      "title": "Source health",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "id": 11,
-      "targets": [
-        {
-          "expr": "time() - countyiq_dagster_heartbeat_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{daemon}} age",
-          "refId": "A"
-        }
-      ],
-      "title": "Dagster heartbeat age",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "id": 12,
-      "targets": [
-        {
-          "expr": "time() - countyiq_backup_last_success_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "last successful backup age",
-          "refId": "A"
-        },
-        {
-          "expr": "countyiq_backup_timer_active{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "timer active",
-          "refId": "B"
-        }
-      ],
-      "title": "Backup freshness",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "description": "Server-side HTTP traffic only. Browser errors require an account-dependent frontend observability integration and are not represented here.",
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "id": 13,
-      "targets": [
-        {
-          "expr": "sum by (server, handler, method, code) (rate(caddy_http_requests_total{instance=\"countyiq-production\",job=\"countyiq/host\"}[5m]))",
-          "legendFormat": "{{server}} {{handler}} {{method}} {{code}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Caddy HTTP request rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "id": 14,
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum by (le, server, handler, method) (rate(caddy_http_request_duration_seconds_bucket{instance=\"countyiq-production\",job=\"countyiq/host\"}[5m])))",
-          "legendFormat": "{{server}} {{handler}} {{method}} p95",
-          "refId": "A"
-        }
-      ],
-      "title": "Caddy HTTP request duration p95",
-      "type": "timeseries"
+      "options": {
+        "showLabels": false,
+        "showTime": true,
+        "wrapLogMessage": true
+      }
     }
   ],
+  "refresh": "1m",
   "schemaVersion": 41,
   "tags": [
     "countyiq",
@@ -370,7 +1289,7 @@
     "list": []
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-6h",
     "to": "now"
   },
   "title": "CountyIQ Operations Overview",

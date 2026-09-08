@@ -45,11 +45,109 @@ class DashboardAssetTests(unittest.TestCase):
         self.assertEqual('{job="countyiq/containers"}', log_query)
         self.assertIn("https://dagster.countyiq.net", serialized)
         self.assertIn("https://app.countyiq.net/ops/health", serialized)
+        self.assertIn("/alerting/list", serialized)
+        self.assertEqual("now-6h", dashboard["time"]["from"])
+        self.assertEqual("1m", dashboard["refresh"])
+
+    def test_dashboard_panels_have_a_non_overlapping_24_column_layout(self):
+        panels = self.load_json("dashboards/countyiq.json")["panels"]
+        self.assertGreaterEqual(len(panels), 14)
+        self.assertLessEqual(len(panels), 23)
+
+        rectangles = []
+        for panel in panels:
+            with self.subTest(panel=panel["title"]):
+                grid = panel["gridPos"]
+                self.assertGreater(grid["w"], 0)
+                self.assertGreater(grid["h"], 0)
+                self.assertGreaterEqual(grid["x"], 0)
+                self.assertGreaterEqual(grid["y"], 0)
+                self.assertLessEqual(grid["x"] + grid["w"], 24)
+                rectangles.append((panel["id"], grid))
+
+        for index, (left_id, left) in enumerate(rectangles):
+            for right_id, right in rectangles[index + 1 :]:
+                overlaps = (
+                    left["x"] < right["x"] + right["w"]
+                    and right["x"] < left["x"] + left["w"]
+                    and left["y"] < right["y"] + right["h"]
+                    and right["y"] < left["y"] + left["h"]
+                )
+                self.assertFalse(overlaps, f"panels {left_id} and {right_id} overlap")
+
+    def test_dashboard_current_state_panels_use_instant_queries(self):
+        panels = self.load_json("dashboards/countyiq.json")["panels"]
+        for panel in panels:
+            if panel["type"] in {"stat", "bargauge"}:
+                with self.subTest(panel=panel["title"]):
+                    self.assertTrue(panel["targets"])
+                    self.assertTrue(
+                        all(
+                            target.get("instant") is True for target in panel["targets"]
+                        )
+                    )
+
+    def test_dashboard_keeps_incompatible_units_in_separate_panels(self):
+        panels = {
+            panel["title"]: panel
+            for panel in self.load_json("dashboards/countyiq.json")["panels"]
+        }
+
+        expected_units = {
+            "Root disk free": "gbytes",
+            "Host CPU utilization": "percent",
+            "Host memory utilization": "percent",
+            "PostgreSQL connection capacity": "percent",
+            "R2 capacity": "percent",
+            "Docker storage": "bytes",
+            "Dagster pipeline status counts": "short",
+            "Oldest Dagster pipeline run age": "s",
+        }
+        for title, unit in expected_units.items():
+            self.assertEqual(unit, panels[title]["fieldConfig"]["defaults"]["unit"])
+
+        panel_expressions = {
+            title: " ".join(target["expr"] for target in panel.get("targets", []))
+            for title, panel in panels.items()
+        }
+        self.assertNotIn(
+            "countyiq_postgres_database_bytes",
+            panel_expressions["PostgreSQL connection capacity"],
+        )
+        self.assertNotIn(
+            "countyiq_postgres_total_connections", panel_expressions["Docker storage"]
+        )
+        self.assertNotIn(
+            "countyiq_cost_guard_tripped", panel_expressions["R2 capacity"]
+        )
+        self.assertNotIn(
+            "countyiq_dagster_oldest_run_seconds",
+            panel_expressions["Dagster pipeline status counts"],
+        )
+        self.assertNotIn(
+            "countyiq_dagster_runs",
+            panel_expressions["Oldest Dagster pipeline run age"],
+        )
+
+        source_panel = panels["Source status"]
+        self.assertEqual("joinByField", source_panel["transformations"][0]["id"])
+        self.assertEqual(
+            "outerTabular", source_panel["transformations"][0]["options"]["mode"]
+        )
+        self.assertEqual("organize", source_panel["transformations"][1]["id"])
+        self.assertEqual(
+            "Health",
+            source_panel["transformations"][1]["options"]["renameByName"]["Value #A"],
+        )
+        self.assertEqual(
+            "Freshness",
+            source_panel["transformations"][1]["options"]["renameByName"]["Value #B"],
+        )
 
     def test_alert_catalog_has_safe_unique_complete_rules(self):
         alerts = self.load_json("alerts.json")
         uids = [alert["uid"] for alert in alerts]
-        self.assertLessEqual(len(alerts), 20)
+        self.assertLessEqual(len(alerts), 22)
         self.assertEqual(len(uids), len(set(uids)))
 
         for alert in alerts:
@@ -72,14 +170,19 @@ class DashboardAssetTests(unittest.TestCase):
         dashboard_queries = [
             target["expr"]
             for panel in dashboard["panels"]
-            if panel["type"] != "logs"
-            for target in panel["targets"]
+            if panel["type"] not in {"logs", "text"}
+            for target in panel.get("targets", [])
         ]
         alerts = self.load_json("alerts.json")
         all_queries = dashboard_queries + [alert["expr"] for alert in alerts]
 
         for query in all_queries:
-            self.assertIn(HOST_SELECTOR, query)
+            if "probe_success" in query:
+                self.assertIn('job="countyiq-readiness"', query)
+                self.assertIn('instance="https://app.countyiq.net/api/ready"', query)
+                self.assertIn('probe=~"NorthVirginia|Oregon"', query)
+            else:
+                self.assertIn(HOST_SELECTOR, query)
 
     def test_alerts_preserve_true_conditions_when_combined(self):
         alerts = {
@@ -154,8 +257,8 @@ class DashboardAssetTests(unittest.TestCase):
                 "expr": target["expr"],
             }
             for panel in dashboard["panels"]
-            if panel["type"] != "logs"
-            for target in panel["targets"]
+            if panel["type"] not in {"logs", "text"}
+            for target in panel.get("targets", [])
         ]
         alert_rules = [
             {"alert": alert["uid"], "expr": alert["expr"], "for": "0m"}
@@ -467,6 +570,161 @@ class DashboardAssetTests(unittest.TestCase):
             test_path.write_text(json.dumps(test_file), encoding="utf-8")
             self.run_promtool("test", "rules", str(test_path))
 
+    @unittest.skipUnless(
+        os.environ.get("PROMTOOL") or PROMTOOL,
+        "promtool is unavailable; set PROMTOOL to run PromQL behavior tests",
+    )
+    def test_promtool_evaluates_source_attention_dashboard_card(self):
+        dashboard = self.load_json("dashboards/countyiq.json")
+        attention_expression = next(
+            panel["targets"][0]["expr"]
+            for panel in dashboard["panels"]
+            if panel["title"] == "Source issues"
+        )
+        root_labels = 'instance="countyiq-production",job="countyiq/host"'
+
+        test_file = {
+            "rule_files": [],
+            "evaluation_interval": "1m",
+            "tests": [
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f'countyiq_source_healthy{{{root_labels},source="parcels"}}',
+                            "values": "1",
+                        },
+                        {
+                            "series": f'countyiq_source_stale{{{root_labels},source="parcels"}}',
+                            "values": "0",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": attention_expression,
+                            "eval_time": "0m",
+                            "exp_samples": [self.promtool_sample("", 0)],
+                        }
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f'countyiq_source_healthy{{{root_labels},source="parcels"}}',
+                            "values": "0",
+                        },
+                        {
+                            "series": f'countyiq_source_stale{{{root_labels},source="parcels"}}',
+                            "values": "0",
+                        },
+                        {
+                            "series": f'countyiq_source_healthy{{{root_labels},source="permits"}}',
+                            "values": "1",
+                        },
+                        {
+                            "series": f'countyiq_source_stale{{{root_labels},source="permits"}}',
+                            "values": "1",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": attention_expression,
+                            "eval_time": "0m",
+                            "exp_samples": [self.promtool_sample("", 2)],
+                        }
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [],
+                    "promql_expr_test": [
+                        {
+                            "expr": attention_expression,
+                            "eval_time": "0m",
+                            "exp_samples": [],
+                        }
+                    ],
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            test_path = Path(temporary_directory) / "dashboard-test.json"
+            test_path.write_text(json.dumps(test_file), encoding="utf-8")
+            self.run_promtool("test", "rules", str(test_path))
+
+    @unittest.skipUnless(
+        os.environ.get("PROMTOOL") or PROMTOOL,
+        "promtool is unavailable; set PROMTOOL to run PromQL behavior tests",
+    )
+    def test_external_readiness_failure_recovery_and_missing_locations(self):
+        alerts = {
+            alert["uid"]: alert["expr"] for alert in self.load_json("alerts.json")
+        }
+        labels = (
+            'job="countyiq-readiness",instance="https://app.countyiq.net/api/ready"'
+        )
+        tests = []
+        for probes, missing in (
+            (("NorthVirginia", "Oregon"), 0),
+            (("NorthVirginia",), 1),
+            ((), 1),
+        ):
+            inputs = [
+                {
+                    "series": f'probe_success{{{labels},probe="{probe}"}}',
+                    "values": "1 0 1",
+                }
+                for probe in probes
+            ]
+            # Configuration versions must not count as additional locations.
+            if probes == ("NorthVirginia",):
+                inputs.append(
+                    {
+                        "series": f'probe_success{{{labels},probe="NorthVirginia",config_version="old"}}',
+                        "values": "1 0 1",
+                    }
+                )
+            expressions = [
+                {
+                    "expr": alerts["external-readiness-failed"],
+                    "eval_time": time,
+                    "exp_samples": [
+                        self.promtool_sample(f'probe="{probe}"', expected)
+                        for probe in probes
+                    ],
+                }
+                for time, expected in (("0m", 0), ("1m", 1), ("2m", 0))
+            ]
+            expressions.extend(
+                [
+                    {
+                        "expr": alerts["external-readiness-missing"],
+                        "eval_time": "2m",
+                        "exp_samples": [self.promtool_sample("", missing)],
+                    },
+                    {
+                        "expr": alerts["external-readiness-missing"],
+                        "eval_time": "18m",
+                        "exp_samples": [self.promtool_sample("", 1)],
+                    },
+                ]
+            )
+            tests.append(
+                {
+                    "interval": "1m",
+                    "input_series": inputs,
+                    "promql_expr_test": expressions,
+                }
+            )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            test_path = Path(temporary_directory) / "external-test.json"
+            test_path.write_text(
+                json.dumps({"rule_files": [], "tests": tests}), encoding="utf-8"
+            )
+            self.run_promtool("test", "rules", str(test_path))
+
     def run_promtool(self, *arguments: str):
         promtool = os.environ.get("PROMTOOL") or PROMTOOL
         completed = subprocess.run(
@@ -474,6 +732,11 @@ class DashboardAssetTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
+        )
+        self.assertEqual(
+            completed.returncode,
+            0,
+            f"promtool {' '.join(arguments)} failed:\n{completed.stdout}\n{completed.stderr}",
         )
 
     @staticmethod
@@ -497,11 +760,6 @@ class DashboardAssetTests(unittest.TestCase):
             }
             for collector in collectors
         ]
-        self.assertEqual(
-            completed.returncode,
-            0,
-            f"promtool {' '.join(arguments)} failed:\n{completed.stdout}\n{completed.stderr}",
-        )
 
     @staticmethod
     def promtool_sample(labels: str, value: int):

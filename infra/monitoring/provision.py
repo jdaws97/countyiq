@@ -59,12 +59,12 @@ class Grafana:
                 ) from None
             if error.code == 403:
                 raise ConfigurationError(
-                    "The service-account token lacks permission (HTTP 403). "
-                    "The provisioning service account needs the Admin role."
+                    "Grafana denied this operation (HTTP 403). Check the token's "
+                    "permissions and the target stack or namespace."
                 ) from None
             # API error bodies may contain secrets or saved contact settings.
-            raise RuntimeError(
-                f"Grafana {method} failed with HTTP {error.code}"
+            raise ConfigurationError(
+                f"Grafana {method} {path} failed with HTTP {error.code}."
             ) from None
 
 
@@ -148,7 +148,7 @@ def alert_group(catalog: list[dict], metrics_uid: str) -> dict:
                     "summary": alert["summary"],
                     "description": alert["description"],
                     "runbook_url": "https://github.com/jdaws97/countyiq/blob/main/docs/operations/monitoring.md",
-                    "__dashboardUid__": "countyiq-overview",
+                    "dashboard_url": "https://eloquentbread1118.grafana.net/d/countyiq-overview",
                 },
                 "labels": {
                     "countyiq_monitoring": "true",
@@ -236,7 +236,7 @@ def run(*, apply: bool) -> None:
     )
     if not apply:
         print(
-            f"Preflight passed: sole human operator verified; {len(catalog)} alert rules ready."
+            f"Preflight passed: approved human membership verified; {len(catalog)} alert rules ready."
         )
         return
     if api.request("GET", f"/api/folders/{FOLDER_UID}", allow_missing=True) is None:
@@ -290,6 +290,9 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     try:
         run(apply=arguments.apply)
+    except ConfigurationError as error:
+        print(f"Grafana provisioning stopped: {error}")
+        raise SystemExit(1)
     except Exception as error:
         # Never print API bodies, credentials, or protected contact settings.
         print(f"Grafana provisioning stopped ({type(error).__name__}).")

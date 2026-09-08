@@ -138,9 +138,11 @@ def resolve() -> None:
     api = Grafana(values["GRAFANA_STACK_URL"], values["GRAFANA_PROVISION_TOKEN"])
     verify_owner(api.request("GET", "/api/org/users"), ALLOWED_EMAILS)
     sources = api.request("GET", "/api/datasources")
-    by_uid = {source["uid"]: source for source in sources}
-    metrics = by_uid[select_datasource(sources, "prometheus")]
-    logs = by_uid[select_datasource(sources, "loki")]
+    # The list endpoint omits tenant usernames; the individual records include them.
+    metrics_uid = select_datasource(sources, "prometheus")
+    logs_uid = select_datasource(sources, "loki")
+    metrics = api.request("GET", f"/api/datasources/uid/{metrics_uid}")
+    logs = api.request("GET", f"/api/datasources/uid/{logs_uid}")
     values.update(
         {
             "GRAFANA_METRICS_URL": validate_url(

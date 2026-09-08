@@ -15,6 +15,45 @@ from provision import notification_policy, select_datasource, verify_owner
 
 
 class ProvisioningTests(unittest.TestCase):
+    def test_discovery_reads_tenant_ids_from_detailed_datasources(self):
+        settings = {
+            "GRAFANA_STACK_URL": "https://stack.grafana.net",
+            "GRAFANA_PROVISION_TOKEN": "glsa_fixture",
+            "GRAFANA_INGEST_TOKEN": "glc_fixture",
+        }
+        responses = {
+            "/api/org/users": [{"email": "jarod.daws@gmail.com"}],
+            "/api/datasources": [
+                {
+                    "uid": "metrics",
+                    "name": "grafanacloud-stack-prom",
+                    "type": "prometheus",
+                },
+                {"uid": "logs", "name": "grafanacloud-stack-logs", "type": "loki"},
+            ],
+            "/api/datasources/uid/metrics": {
+                "url": "https://metrics.grafana.net/api/prom",
+                "basicAuthUser": "123",
+            },
+            "/api/datasources/uid/logs": {
+                "url": "https://logs.grafana.net",
+                "basicAuthUser": "456",
+            },
+        }
+        api = MagicMock()
+        api.request.side_effect = lambda method, path: responses[path]
+        with (
+            patch("configure.read_secrets", return_value=settings),
+            patch("provision.Grafana", return_value=api),
+            patch("configure.save_secrets") as save,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            configure.resolve()
+        saved = save.call_args.args[0]
+        self.assertEqual(saved["GRAFANA_METRICS_USER"], "123")
+        self.assertEqual(saved["GRAFANA_LOGS_USER"], "456")
+        self.assertEqual(saved["GRAFANA_INGEST_TOKEN"], "glc_fixture")
+
     def test_capture_keeps_encrypted_credentials_when_discovery_fails(self):
         api = MagicMock()
         api.request.return_value = [{"email": "jarod.daws@gmail.com"}]

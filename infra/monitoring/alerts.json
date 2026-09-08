@@ -178,5 +178,23 @@
     "severity": "critical",
     "summary": "The intelligence integrity check is failing.",
     "description": "Investigate pipeline outputs and the associated collector state."
+  },
+  {
+    "uid": "external-readiness-failed",
+    "title": "External readiness failed",
+    "expr": "min by (probe) (last_over_time(probe_success{job=\"countyiq-readiness\",instance=\"https://app.countyiq.net/api/ready\",probe=~\"NorthVirginia|Oregon\"}[10m])) == bool 0",
+    "for": "5m",
+    "severity": "critical",
+    "summary": "An external location cannot confirm HTTP 200 and database readiness.",
+    "description": "Check application readiness, Cloudflare Access health credentials, and the synthetic execution log. Redirects and login pages are failures."
+  },
+  {
+    "uid": "external-readiness-missing",
+    "title": "External readiness probe data missing",
+    "expr": "(count(count by (probe) (present_over_time(probe_success{job=\"countyiq-readiness\",instance=\"https://app.countyiq.net/api/ready\",probe=~\"NorthVirginia|Oregon\"}[15m]))) or vector(0)) < bool 2",
+    "for": "5m",
+    "severity": "critical",
+    "summary": "One or both external locations have not reported for at least 15 minutes.",
+    "description": "Check that the readiness check is enabled, both selected probes are online, and synthetic metrics are arriving. This alert does not depend on the VPS exporter."
   }
 ]
