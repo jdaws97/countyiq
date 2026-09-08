@@ -22,7 +22,9 @@ serializes login, status, logout, and model calls with the same file lock. Set
 container path is `/opt/countyiq/codex-auth`). Keep it private and never place
 credentials in `.env` or Git.
 
-Run `sudo docker/codex-login.sh login` from the deployed checkout and complete
+First enable Codex device code authorization in ChatGPT's Settings → Security
+(managed workspaces use the workspace permissions). Then run
+`sudo docker/codex-login.sh login` from the deployed checkout and complete
 the displayed OpenAI device flow in your browser. Use
 `sudo docker/codex-login.sh status` to verify the session. This creates a
 separate VPS session; do not copy desktop credentials. The official CLI manages

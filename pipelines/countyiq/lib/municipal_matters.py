@@ -89,6 +89,8 @@ The input is a CANDIDATE RETRIEVAL BUNDLE, not an established case. Sources were
 
 Each matter has record_keys and one account using ONLY those records' sources. For linked records, connection must briefly explain the source-backed match with citations from every member. Keep competing facts and unresolved identity separate; abstain from linking when uncertain. A shared retrieval scope is not evidence to cite. Each account's source_presentations covers exactly its assigned text sources, including faithful English translations where necessary.
 
+Record keys such as R1 and R2 are local references within this input bundle. Copy them exactly into record_keys and history.record_key; do not construct an identifier from an address, source hash or citation ID.
+
 Write a headline centered on the actual proposed change or recorded outcome and recognizable property/project. Use 'Appliance store seeks use and parking variances at 750 E. Philadelphia St.', not 'Agenda: 30-2026-Z-V' or 'Agenda proposes consideration'. This example illustrates wording, not facts to copy. Prefer 'X requests ...', 'Y recommends ...', or 'Board approves ...' as supported. The label and source history carry document type. Keep proposal versus outcome explicit without making 'Agenda' the subject of every headline.
 
 summary explains the latest documented action in the context of the request. It must use later minutes or written decisions in this bundle when they address the SAME request, instead of telling the customer to find information already supplied. A later agenda does not erase an earlier recorded decision, and a later date alone is not evidence that anything passed. Planning-commission support/recommendation is not zoning-board relief or governing-body final approval. A decision on one waiver is not approval of the entire development. Distinguish a source's historical report from a new decision at that meeting. Treat meeting dates as document dates; do not manufacture a hearing appointment from metadata.
@@ -107,12 +109,56 @@ Return ONLY the matters object matching the supplied schema, not a single explan
 """
 )
 
-PROMPT_VERSION = content_hash({"prompt": SYSTEM_PROMPT, "schema": MATTERS_SCHEMA})[:16]
+PROMPT_VERSION = content_hash(
+    {
+        "prompt": SYSTEM_PROMPT,
+        "schema": MATTERS_SCHEMA,
+        "record_reference_contract": "bundle-local-aliases-v1",
+    }
+)[:16]
 MAX_BUNDLE_CHARS = 120_000
 
 
+def _record_aliases(source: dict) -> dict[str, str]:
+    keys = [record["key"] for record in source["records"]]
+    if len(set(keys)) != len(keys):
+        raise ValueError("Matter source contains duplicate record keys")
+    return {f"R{position}": key for position, key in enumerate(keys, start=1)}
+
+
+def _wire_source(source: dict) -> dict:
+    """Keep all evidence intact while avoiding model transcription of hashes."""
+    aliases = {key: alias for alias, key in _record_aliases(source).items()}
+    result = deepcopy(source)
+    for record in result["records"]:
+        record["key"] = aliases[record["key"]]
+    for item in result["sources"]:
+        if item["record_key"] not in aliases:
+            raise ValueError("Matter source refers to an unknown record")
+        item["record_key"] = aliases[item["record_key"]]
+    return result
+
+
+def restore_record_keys(value: object, source: dict) -> dict:
+    """Expand exact bundle-local references before the ordinary identity checks."""
+    validate(value, MATTERS_SCHEMA)
+    aliases = _record_aliases(source)
+    result = deepcopy(value)
+
+    def canonical_key(alias: str) -> str:
+        if alias not in aliases:
+            raise ValueError(f"Unknown record reference: {alias}")
+        return aliases[alias]
+
+    for matter in result["matters"]:
+        matter["record_keys"] = [canonical_key(key) for key in matter["record_keys"]]
+        for entry in matter["account"]["history"]:
+            entry["record_key"] = canonical_key(entry["record_key"])
+    return result
+
+
 def matter_prompt(source: dict) -> str:
-    text = json.dumps(source, ensure_ascii=False)
+    text = json.dumps(_wire_source(source), ensure_ascii=False)
     if len(text) > MAX_BUNDLE_CHARS:
         raise ValueError(
             "Matter source bundle exceeds the complete-context limit; review its scope"
@@ -235,7 +281,8 @@ def generate_matters(source: dict, config, invoke) -> tuple[dict, int]:
         if not result.success or result.parsed is None:
             raise ValueError("Matter authoring returned no structured account")
         try:
-            return validate_matters(result.parsed, source), attempt
+            restored = restore_record_keys(result.parsed, source)
+            return validate_matters(restored, source), attempt
         except (ValueError, ValidationError) as error:
             last_error = error
             prompt = (

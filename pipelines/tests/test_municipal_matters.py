@@ -1,9 +1,17 @@
 """Contract tests for partitioned municipal matter accounts."""
 
+import json
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
-from countyiq.lib.municipal_matters import resolve_matter_keys, validate_matters
+from countyiq.lib.municipal_matters import (
+    generate_matters,
+    matter_prompt,
+    resolve_matter_keys,
+    restore_record_keys,
+    validate_matters,
+)
 
 
 def _source(*records):
@@ -78,6 +86,57 @@ def _account(keys, *, outcome="not_established", record_status="proposed"):
 
 def _matter(keys, **account_options):
     return {"record_keys": keys, "account": _account(keys, **account_options)}
+
+
+def test_model_references_round_trip_to_exact_stored_identities():
+    first = "municipal:4692:" + "a5255e2281e6d383770fe742b67929e42" * 2
+    second = "municipal:10689:" + "3774cca10305b4de4c23c65cded8a7fbb" * 2
+    source = _source(
+        (first, "2026-03-01", "P1", "Agenda: rezoning request.\nOriginal • text."),
+        (second, "2026-03-15", "P2", "Minutes: discussion of the same rezoning."),
+    )
+    original = deepcopy(source)
+
+    def invoke(_config, prompt):
+        supplied = json.loads(prompt.split("\n", 1)[1])
+        assert [record["key"] for record in supplied["records"]] == ["R1", "R2"]
+        assert [item["text"] for item in supplied["sources"]] == [
+            item["text"] for item in source["sources"]
+        ]
+        return SimpleNamespace(
+            success=True, parsed={"matters": [_matter(["R1", "R2"])]}
+        )
+
+    value, attempts = generate_matters(source, None, invoke)
+    assert attempts == 1
+    assert value["matters"][0]["record_keys"] == [first, second]
+    assert [
+        entry["record_key"] for entry in value["matters"][0]["account"]["history"]
+    ] == [first, second]
+    assert source == original
+    assert validate_matters(value, source) == value
+
+
+@pytest.mark.parametrize("unknown", ["R0", "R3", "R01", "municipal:other-bundle"])
+def test_record_reference_expansion_never_guesses_an_unknown_identity(unknown):
+    source = _source(("persisted-key", "2026-03-01", "P1", "Agenda: a request."))
+    value = {"matters": [_matter(["R1"])]}
+    value["matters"][0]["account"]["history"][0]["record_key"] = unknown
+    with pytest.raises(ValueError, match="Unknown record reference"):
+        restore_record_keys(value, source)
+
+
+def test_reference_expansion_preserves_the_complete_partition_gate():
+    source = _source(
+        ("first-key", "2026-03-01", "P1", "First request."),
+        ("second-key", "2026-03-01", "P2", "Second request."),
+    )
+    value = restore_record_keys({"matters": [_matter(["R1"])]}, source)
+    with pytest.raises(ValueError, match="Every source record"):
+        validate_matters(value, source)
+    source["records"][1]["key"] = "first-key"
+    with pytest.raises(ValueError, match="duplicate record keys"):
+        matter_prompt(source)
 
 
 def test_later_competent_body_minutes_establishes_outcome_for_agenda_request():
