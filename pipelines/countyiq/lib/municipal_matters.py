@@ -324,12 +324,93 @@ class _CurrentTransaction:
         yield self.cursor
 
 
-def persist_matters(database, source, value, config, *, attempts=1, provenance=None):
+def reviewed_matter_keys(matters, source, known, review):
+    """Validate an explicit, complete identity review without guessing a mapping."""
+    if review.get("source_hash") != content_hash(source):
+        raise ValueError("Identity review does not match the current source")
+    if review.get("expected_aliases") != known:
+        raise ValueError("Matter aliases changed since identity review")
+    if review.get("decision_origin") not in {"human_resolution", "auto_resolution"}:
+        raise ValueError("Identity review must identify its decision origin")
+    if (
+        not str(review.get("reviewer", "")).strip()
+        or len(str(review.get("rationale", "")).strip()) < 12
+    ):
+        raise ValueError("Identity review requires a reviewer and source rationale")
+    proposed = review.get("proposed_aliases")
+    members = {record["key"] for record in source["records"]}
+    if not isinstance(proposed, dict) or set(proposed) != members:
+        raise ValueError("Identity review must map the complete source bundle")
+    resolved = []
+    used = set()
+    for matter in matters:
+        keys = {proposed[member] for member in matter["record_keys"]}
+        if len(keys) != 1:
+            raise ValueError("Reviewed aliases disagree with the proposed partition")
+        key = next(iter(keys))
+        allowed = {known[member] for member in matter["record_keys"] if member in known}
+        allowed.add("matter:" + content_hash(min(matter["record_keys"]))[:24])
+        if key not in allowed or key in used:
+            raise ValueError("Reviewed matter identity is unrelated or duplicated")
+        used.add(key)
+        resolved.append({"key": key, **matter})
+    return resolved
+
+
+def check_identity_review_state(cur, source, review):
+    """Check aliases and watches under locks held through proposal or resolution."""
+    record_keys = [record["key"] for record in source["records"]]
+    cur.execute(
+        "SELECT record_key, matter_key FROM meta.municipal_matter_aliases "
+        "WHERE record_key = ANY(%s::text[])",
+        (record_keys,),
+    )
+    known = {
+        row["record_key"] if isinstance(row, dict) else row[0]: row["matter_key"]
+        if isinstance(row, dict)
+        else row[1]
+        for row in cur.fetchall()
+    }
+    if known != review["expected_aliases"]:
+        raise ValueError("Matter aliases changed since identity review")
+    affected = sorted(set(known.values()) | set(review["proposed_aliases"].values()))
+    cur.execute(
+        "SELECT 1 FROM meta.municipal_matter_aliases "
+        "WHERE matter_key = ANY(%s::text[]) "
+        "AND NOT (record_key = ANY(%s::text[])) LIMIT 1",
+        (affected, record_keys),
+    )
+    if cur.fetchone() is not None:
+        raise ValueError("Identity review would affect records outside this bundle")
+    cur.execute(
+        "SELECT 1 FROM public.watch_items "
+        "WHERE kind = 'project' AND subject_key = ANY(%s::text[]) LIMIT 1",
+        (affected,),
+    )
+    if cur.fetchone() is not None:
+        raise ValueError(
+            "Followed matter identities require an explicit watch migration"
+        )
+    return known
+
+
+def persist_matters(
+    database,
+    source,
+    value,
+    config,
+    *,
+    attempts=1,
+    provenance=None,
+    identity_review=None,
+):
     validated = validate_matters(value, source)
     with database.transaction() as cur:
         cur.execute(
             "LOCK TABLE meta.municipal_matter_aliases IN SHARE ROW EXCLUSIVE MODE"
         )
+        if identity_review is not None:
+            cur.execute("LOCK TABLE public.watch_items IN SHARE MODE")
         cur.execute(
             "SELECT source FROM public.current_municipal_matter_sources WHERE bundle_key = %s",
             (source["subject_key"],),
@@ -342,7 +423,29 @@ def persist_matters(database, source, value, config, *, attempts=1, provenance=N
             "SELECT record_key, matter_key FROM meta.municipal_matter_aliases WHERE record_key = ANY(%s::text[])",
             (record_keys,),
         )
-        resolved = resolve_matter_keys(validated["matters"], dict(cur.fetchall()))
+        known = dict(cur.fetchall())
+        if identity_review is None:
+            resolved = resolve_matter_keys(validated["matters"], known)
+        else:
+            resolved = reviewed_matter_keys(
+                validated["matters"], source, known, identity_review
+            )
+            check_identity_review_state(cur, source, identity_review)
+            cur.execute(
+                "SELECT inference_id, source_hash FROM meta.intelligence_inference_history "
+                "WHERE subject_key = %s AND pass_number = 3 "
+                "AND output_kind = 'record_explanation' AND decision_key = 'municipal_matters' "
+                "AND disposition = 'accepted' ORDER BY inference_id DESC LIMIT 1",
+                (source["subject_key"],),
+            )
+            prior = cur.fetchone()
+            if prior != (
+                identity_review.get("expected_prior_inference_id"),
+                content_hash(source),
+            ):
+                raise ValueError(
+                    "Identity review requires the current accepted source version"
+                )
         result = record_inference_decision(
             _CurrentTransaction(cur),
             subject_key=source["subject_key"],
@@ -365,6 +468,11 @@ def persist_matters(database, source, value, config, *, attempts=1, provenance=N
                 "matters": resolved,
                 "validation_attempts": attempts,
                 "provenance": provenance,
+                **(
+                    {"identity_review": identity_review}
+                    if identity_review is not None
+                    else {}
+                ),
             },
             semantic_decision=[
                 {
@@ -386,6 +494,10 @@ def persist_matters(database, source, value, config, *, attempts=1, provenance=N
             ],
             provider=(provenance or {}).get("provider"),
         )
+        if identity_review is not None and result.accepted:
+            raise ValueError(
+                "An identity repair must enter the contradiction review queue"
+            )
         if result.accepted:
             for matter in resolved:
                 for record_key in matter["record_keys"]:

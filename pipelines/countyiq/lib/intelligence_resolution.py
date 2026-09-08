@@ -1,9 +1,9 @@
-"""Human review workflow for quarantined intelligence contradictions.
+"""Audited operator and AI review for quarantined intelligence contradictions.
 
 The product API remains read-only. Operators use this module through the
-pipeline CLI with a writer credential. A resolution appends a human-origin
-inference, updates or retracts the serving projection, records the resolution,
-and repairs pass status in one transaction.
+pipeline CLI with a writer credential. A resolution appends an inference with
+its actual decision origin, updates the serving projection, records the
+resolution, and repairs pass status in one transaction.
 """
 
 from __future__ import annotations
@@ -148,6 +148,13 @@ def resolve_contradiction(
 
     with database.transaction(dict_rows=True) as cur:
         cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        # Acquire identity/watch locks before the first snapshot read. A watch
+        # added while a repair waits must be visible to the migration guard.
+        # This order matches persist_matters and lasts through the ledger append.
+        cur.execute(
+            "LOCK TABLE meta.municipal_matter_aliases IN SHARE ROW EXCLUSIVE MODE"
+        )
+        cur.execute("LOCK TABLE public.watch_items IN SHARE MODE")
         cur.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
             (f"intelligence-contradiction:{contradiction_id}",),
@@ -180,6 +187,13 @@ def resolve_contradiction(
         contradiction = detail["contradiction"]
         prior = detail["prior"]
         challenger = detail["challenger"]
+        if (
+            contradiction["output_kind"] == "record_explanation"
+            and resolution == "discard_both"
+        ):
+            raise ContradictionResolutionError(
+                "Record account retraction requires a serving tombstone; choose a reviewed account"
+            )
         if detail["existing_resolution"] is not None:
             raise ContradictionResolutionError(
                 f"contradiction {contradiction_id} is already resolved"
@@ -353,6 +367,16 @@ def _current_source_hash(
 ) -> str:
     kind = contradiction["output_kind"]
     subject_key = contradiction["subject_key"]
+    if (
+        kind == "record_explanation"
+        and contradiction["decision_key"] == "municipal_matters"
+    ):
+        cur.execute(
+            "SELECT source FROM public.current_municipal_matter_sources WHERE bundle_key = %s",
+            (subject_key,),
+        )
+        row = cur.fetchone()
+        return content_hash(row["source"]) if row else ""
     if kind == "municipal_evidence":
         from countyiq.lib.municipal_evidence_pipeline import record_snapshot
 
@@ -501,14 +525,57 @@ def _apply_projection(
         "owner_brief": "public.owner_briefs",
     }
     kind = contradiction["output_kind"]
+    prior_id = contradiction["prior_inference_id"]
+    if (
+        kind == "record_explanation"
+        and contradiction["decision_key"] == "municipal_matters"
+    ):
+        from countyiq.lib.municipal_matters import (
+            check_identity_review_state,
+            reviewed_matter_keys,
+            validate_matters,
+        )
+
+        selected = challenger if resolution == "accept_challenger" else prior
+        payload = selected["payload"]
+        source = payload["source"]
+        value = {
+            "matters": [
+                {key: matter[key] for key in ("record_keys", "account")}
+                for matter in payload["matters"]
+            ]
+        }
+        validate_matters(value, source)
+        review = payload.get("identity_review")
+        if resolution == "accept_challenger" and review is not None:
+            if review.get("expected_prior_inference_id") != prior_id:
+                raise ContradictionResolutionError(
+                    "Identity review references a different prior account"
+                )
+            known = check_identity_review_state(cur, source, review)
+            if (
+                reviewed_matter_keys(value["matters"], source, known, review)
+                != payload["matters"]
+            ):
+                raise ContradictionResolutionError(
+                    "Reviewed identity mapping differs from the account"
+                )
+            for record_key, matter_key in review["proposed_aliases"].items():
+                cur.execute(
+                    "INSERT INTO meta.municipal_matter_aliases(record_key, matter_key) "
+                    "VALUES (%s, %s) ON CONFLICT (record_key) DO UPDATE "
+                    "SET matter_key = EXCLUDED.matter_key",
+                    (record_key, matter_key),
+                )
+        # Accounts are served from accepted history. The event refresh picks up
+        # the new inference; existing events fail closed until refreshed.
+        return
     if kind == "municipal_evidence":
         # This output is served directly from the latest accepted history row.
         # The new resolution row above selects either version, or retracts both
         # through its discard payload. There is no mutable projection to update.
         return
     table = table_by_kind[kind]
-    prior_id = contradiction["prior_inference_id"]
-
     if resolution == "accept_prior":
         cur.execute(
             f"UPDATE {table} SET active_inference_id = %s WHERE active_inference_id = %s",

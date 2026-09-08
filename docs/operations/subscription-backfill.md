@@ -203,3 +203,28 @@ For production, add `--rebind` before the remote wrapper's `--` separator and
 pass the same receipt-replay arguments after it. The wrapper still requires a
 clean checkout matching the deployed image and keeps database credentials in
 process memory.
+
+## Review an existing matter partition
+
+Ordinary authorship still rejects splits and merges of established matter
+identities. After reviewing the complete original sources and both accounts,
+an operator can pass an `identity_review` packet to `persist_matters`. It must
+contain `source_hash`, `expected_prior_inference_id`, `expected_aliases`,
+`proposed_aliases`, `reviewer`, `rationale`, and `decision_origin`.
+
+The packet maps every record in the current bundle. Each proposed matter retains
+an identity already associated with one of its members, or uses the ordinary
+key derived from its smallest record key. The packet must match the current
+accepted inference and unchanged source. Records outside the bundle and project
+watches block this workflow; migrating followed identities requires separate
+work. The ordinary integrity gate records the proposal as quarantined and leaves
+aliases unchanged.
+
+Resolve the resulting contradiction through `resolve_contradiction`. Accepting
+the challenger rechecks aliases and watches under transaction locks, then appends
+the resolution and applies the reviewed aliases atomically. Accepting the prior
+account preserves its aliases. Use `decision_origin="auto_resolution"` and an
+explicit AI reviewer when AI performs the source review. Record-account
+`discard_both` is unsupported until a serving tombstone can prevent older
+accounts from reappearing. Refresh intelligence events after resolution so they
+reference the newly accepted account.
