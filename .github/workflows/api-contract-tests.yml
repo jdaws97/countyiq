@@ -33,4 +33,4 @@ jobs:
         run: uv sync --project pipelines --locked
 
       - name: Run API contract tests
-        run: uv run --project api pytest api/tests -v
+        run: uv run --project api python -m pytest api/tests -v
