@@ -31,6 +31,7 @@ from countyiq.lib.robots import (
     RobotsDeniedError,
     RobotsPolicy,
     SourceOriginDeniedError,
+    assert_source_path,
     get_with_robots,
 )
 
@@ -339,6 +340,44 @@ class TestRobotsPolicy:
         assert "https://vendor.example/minutes" not in requested
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/proudcity/other/file.pdf",
+        "/proudcity/hellam-extra/file.pdf",
+        "/proudcity/hellam/%2e%2e/other/file.pdf",
+    ],
+)
+def test_shared_storage_directory_rejects_other_publishers(path):
+    with pytest.raises(SourceOriginDeniedError):
+        assert_source_path(
+            "https://storage.example" + path,
+            ("https://storage.example/proudcity/hellam/",),
+        )
+
+
+def test_shared_storage_directory_is_checked_after_redirect(monkeypatch):
+    requested = []
+
+    def fake_get(url, **kwargs):
+        requested.append(url)
+        if url.endswith("robots.txt"):
+            return _Response(404, url=url)
+        return _Response(
+            302, headers={"Location": "/proudcity/other/file.pdf"}, url=url
+        )
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    with pytest.raises(SourceOriginDeniedError):
+        get_with_robots(
+            "https://storage.example/proudcity/hellam/file.pdf",
+            robots=RobotsPolicy("CountyIQ/1.0"),
+            allowed_origins={"https://storage.example"},
+            allowed_url_prefixes=("https://storage.example/proudcity/hellam/",),
+        )
+    assert "https://storage.example/proudcity/other/file.pdf" not in requested
+
+
 class TestSharedListingAttribution:
     def test_classified_document_routes_to_matching_body(self):
         supervisor = {"proceeding_type": "board_of_supervisors"}
@@ -355,6 +394,22 @@ class TestSharedListingAttribution:
 
         assert _link_belongs_to_entry(first, siblings, "unknown")
         assert not _link_belongs_to_entry(second, siblings, "unknown")
+
+    def test_other_body_is_rejected_even_when_only_one_body_is_configured(self):
+        supervisor = {"proceeding_type": "board_of_supervisors"}
+        assert not _link_belongs_to_entry(
+            supervisor, [supervisor], "planning_commission"
+        )
+        assert _link_belongs_to_entry(supervisor, [supervisor], "supervisors")
+
+
+def test_month_only_html_links_sort_by_recency_without_inventing_meeting_dates():
+    older = {
+        "filename": "meeting-minutes-september-2024.html",
+        "link_text": "September 2024",
+    }
+    newer = {"filename": "meeting-minutes-june-2026.html", "link_text": "June 2026"}
+    assert _document_priority(newer) > _document_priority(older)
 
 
 class TestDocumentValidation:
@@ -379,6 +434,7 @@ class TestDocumentValidation:
                 "meeting.docx",
             ),
             ("application/octet-stream", b"%PDF-1.7", "meeting.pdf"),
+            ("application/msword", b"PK\x03\x04zip", "meeting.docx"),
         ],
     )
     def test_extensionless_route_uses_response_document_type(

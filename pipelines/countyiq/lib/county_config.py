@@ -136,6 +136,16 @@ class CountyConfig:
 
     # Public Proceedings - tuple of (body_name, minutes_url, proceeding_type) tuples
     municipality_websites: tuple[tuple[str, str, str], ...] = ()
+    # Explicitly reviewed browser-first sources; never inferred from an access denial.
+    proceeding_browser_sources: tuple[str, ...] = ()
+    # (body, same-origin path prefix, CSS selector containing the actual minutes).
+    proceeding_html_sources: tuple[tuple[str, str, str], ...] = ()
+    # (body, same-origin meeting-detail prefix); one bounded hop to document links.
+    proceeding_detail_sources: tuple[tuple[str, str], ...] = ()
+    # (body, CSS selector, exact heading); use a selector or heading-bounded siblings.
+    proceeding_listing_regions: tuple[tuple[str, str, str], ...] = ()
+    # (origin, minimum seconds between source requests), including published crawl delays.
+    proceeding_crawl_delays: tuple[tuple[str, float], ...] = ()
 
     # Development signal thresholds (see assets/enrichment/development_signals.py)
     signal_subdivision_radius_m: int = 250  # corridor radius for nearby_subdivision
@@ -169,48 +179,6 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             "paradisetownship.org",
             "windsortownship.com",
             "jackson-township.org",
-        ),
-        proceeding_source_replacements=(
-            (
-                "Penn Township Board of Commissioners",
-                "https://penntwp.com/directory/committees/board-of-commissioners-meeting-minutes/",
-                "board_of_commissioners",
-            ),
-            (
-                "Penn Township Planning Commission",
-                "https://penntwp.com/commissions/planning-commission/",
-                "planning_commission",
-            ),
-            (
-                "Penn Township Zoning Hearing Board",
-                "https://penntwp.com/directory/boards/zoning-hearing-board/",
-                "zoning_hearing",
-            ),
-            (
-                "Paradise Township Board of Supervisors",
-                "https://paradisetwpyorkco.com/board-of-supervisors-meeting-agendas-and-minutes/",
-                "board_of_supervisors",
-            ),
-            (
-                "Paradise Township Planning Commission",
-                "https://paradisetwpyorkco.com/planning-commission-meeting-agendas-and-minutes/",
-                "planning_commission",
-            ),
-            (
-                "Jackson Township Board of Supervisors",
-                "https://jacksontwpyork.org/township-calendar-meetings/township-meetings-minutes/board-of-supervisors-meetings-minutes",
-                "board_of_supervisors",
-            ),
-            (
-                "Windsor Township Board of Supervisors",
-                "https://windsortwp.com/board-of-supervisors-meeting-minutes-agenda/",
-                "board_of_supervisors",
-            ),
-            (
-                "Windsor Township Planning Commission",
-                "https://windsortwp.com/planning-commission-meeting-minutes-agenda/",
-                "planning_commission",
-            ),
         ),
         open_data_source_key="york_open_data",
         plcb_filter="York County",
@@ -280,6 +248,47 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         arcgis_local_traffic_counts_min_records=2500,
         pa_dos_min_records=100,
         municipality_websites=(
+            # Reviewed York replacements use new source identities (migration 077).
+            (
+                "Penn Township Board of Commissioners",
+                "https://penntwp.com/directory/committees/board-of-commissioners-meeting-minutes/",
+                "board_of_commissioners",
+            ),
+            (
+                "Penn Township Planning Commission",
+                "https://penntwp.com/commissions/planning-commission/",
+                "planning_commission",
+            ),
+            (
+                "Penn Township Zoning Hearing Board",
+                "https://penntwp.com/directory/boards/zoning-hearing-board/",
+                "zoning_hearing",
+            ),
+            (
+                "Paradise Township Board of Supervisors",
+                "https://paradisetwpyorkco.com/board-of-supervisors-meeting-agendas-and-minutes/",
+                "board_of_supervisors",
+            ),
+            (
+                "Paradise Township Planning Commission",
+                "https://paradisetwpyorkco.com/planning-commission-meeting-agendas-and-minutes/",
+                "planning_commission",
+            ),
+            (
+                "Jackson Township Board of Supervisors",
+                "https://jacksontwpyork.org/township-calendar-meetings/township-meetings-minutes/board-of-supervisors-meetings-minutes",
+                "board_of_supervisors",
+            ),
+            (
+                "Windsor Township Board of Supervisors",
+                "https://windsortwp.com/board-of-supervisors-meeting-minutes-agenda/",
+                "board_of_supervisors",
+            ),
+            (
+                "Windsor Township Planning Commission",
+                "https://windsortwp.com/planning-commission-meeting-minutes-agenda/",
+                "planning_commission",
+            ),
             # Format: (body_name, minutes_page_url, proceeding_type)
             # Surveyed 2026-04-08 via Playwright. 90 entries across 40+ municipalities.
             # ZHB: 22 dedicated pages. PC: 24 dedicated pages.
@@ -399,12 +408,12 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),
             (
                 "Goldsboro Borough Council",
-                "https://goldsboropa.com/document-library-2/",
+                "https://goldsboropa.com/council-minutes/",
                 "borough_council",
             ),
             (
                 "Hellam Twp Board of Supervisors",
-                "https://www.hellamtownship.gov/board-of-supervisors-meetings/",
+                "https://www.hellamtownship.gov/public-meetings-archive/",
                 "board_of_supervisors",
             ),
             (
@@ -414,7 +423,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),
             (
                 "Manchester Twp Board of Supervisors",
-                "https://www.mantwp.com/meetings-agendas/",
+                "https://www.mantwp.com/meeting-agenda-archive/",
                 "board_of_supervisors",
             ),
             (
@@ -502,11 +511,10 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
                 "https://yoeborough.org/information/minutes/",
                 "borough_council",
             ),
-            # Yorkana site is dead as of 2026-08-02 (TLS cert expired; HTTP serves
-            # the cPanel default page). Kept for retry if hosting is restored.
+            # Official replacement publishes minutes as HTML posts.
             (
                 "Yorkana Borough Council",
-                "https://yorkanaborough.com/meeting-minutes/",
+                "https://yorkana-borough.com/meeting-minutes/",
                 "borough_council",
             ),
             (
@@ -527,7 +535,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),
             (
                 "Delta Borough Council",
-                "https://www.deltaborough.us/current-meeting-minutes",
+                "https://www.deltaborough.us/minutes-archive",
                 "borough_council",
             ),
             (
@@ -689,7 +697,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),
             (
                 "Hellam Twp Zoning Hearing Board",
-                "https://www.hellamtownship.gov/zoning-hearing-board-meetings/",
+                "https://www.hellamtownship.gov/public-meetings-archive/",
                 "zoning_hearing",
             ),
             (
@@ -775,7 +783,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),
             (
                 "Dover Twp Planning Commission",
-                "https://www.dovertownship.org/home/government/boards-commissions/planning-commission/",
+                "https://www.dovertownship.org/document-category/agendas-minutes/",
                 "planning_commission",
             ),
             (
@@ -815,7 +823,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),
             (
                 "Hellam Twp Planning Commission",
-                "https://www.hellamtownship.gov/planning-commission-meetings/",
+                "https://www.hellamtownship.gov/public-meetings-archive/",
                 "planning_commission",
             ),
             (
@@ -877,6 +885,54 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
                 "planning_commission",
             ),
         ),
+        proceeding_browser_sources=(
+            "Goldsboro Borough Council",
+            "Goldsboro Boro Planning Commission",
+            "Goldsboro Boro Zoning Hearing Board",
+            "Manheim Twp Board of Supervisors",
+            "North York Borough Council",
+            "Peach Bottom Twp Board of Supervisors",
+            "Springettsbury Twp Board of Supervisors",
+            "Paradise Township Board of Supervisors",
+            "Paradise Township Planning Commission",
+        ),
+        proceeding_html_sources=(
+            ("Yorkana Borough Council", "/meeting-minutes-", "#primary .post"),
+            (
+                "Springettsbury Twp Board of Supervisors",
+                "/government_documents/",
+                "#brx-content",
+            ),
+        ),
+        proceeding_detail_sources=(
+            ("Dover Twp Planning Commission", "/document/"),
+            ("Hellam Twp Board of Supervisors", "/meetings/"),
+            ("Hellam Twp Planning Commission", "/meetings/"),
+            ("Hellam Twp Zoning Hearing Board", "/meetings/"),
+        ),
+        proceeding_crawl_delays=(("https://springettsbury.com", 10.0),),
+        proceeding_listing_regions=(
+            (
+                "Manchester Twp Board of Supervisors",
+                "main article:has(h2 a[href*='/board-of-supervisors-'])",
+                "",
+            ),
+            (
+                "Peach Bottom Twp Board of Supervisors",
+                ".et_pb_column:has(h2:-soup-contains('Supervisors Minutes'))",
+                "",
+            ),
+            (
+                "Dover Twp Planning Commission",
+                "main table tbody tr:has(td:first-child:-soup-contains('PC Minutes'))",
+                "",
+            ),
+            (
+                "Springettsbury Twp Board of Supervisors",
+                "#brx-content a[href*='board-of-supervisors']",
+                "",
+            ),
+        ),
         s3_prefix="york",
     ),
 }
@@ -887,6 +943,11 @@ _TUPLE_FIELDS = {
     "soda_datasets",
     "penndot_projects_layers",
     "municipality_websites",
+    "proceeding_browser_sources",
+    "proceeding_html_sources",
+    "proceeding_detail_sources",
+    "proceeding_crawl_delays",
+    "proceeding_listing_regions",
     "pa_dep_query_bbox",
 }
 _REQUIRED_MANIFEST_FIELDS = {
@@ -903,7 +964,14 @@ def _tuple_value(field_name: str, value: object) -> object:
         return value
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a TOML array")
-    if field_name in {"soda_datasets", "municipality_websites"}:
+    if field_name in {
+        "soda_datasets",
+        "municipality_websites",
+        "proceeding_html_sources",
+        "proceeding_detail_sources",
+        "proceeding_crawl_delays",
+        "proceeding_listing_regions",
+    }:
         return tuple(tuple(item) if isinstance(item, list) else item for item in value)
     return tuple(value)
 

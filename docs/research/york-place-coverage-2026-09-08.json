@@ -1,0 +1,5048 @@
+{
+  "scope": "York County, Pennsylvania incorporated municipalities and USGS GNIS Populated Place records only. Named places are geographic labels, not presumed governments; they inherit the governing municipality selected by a point-in-polygon join to the York County Planning Commission municipal boundary layer. Configured coverage means at least one reviewed body source, not that every board or every historical file is retrievable. The GNIS point identifies a municipality, not the full extent of a named community; informal names outside GNIS are not claimed complete.",
+  "references": [
+    {
+      "name": "York County Planning Commission Municipal Contacts",
+      "url": "https://www.ycpc.org/325/Municipal-Contacts",
+      "evidence": "States 72 municipalities: 35 townships, 36 boroughs, and 1 city."
+    },
+    {
+      "name": "York County Planning Commission 2025 Directory of Public Officials",
+      "url": "https://www.ycpc.org/279/Directory-of-Public-Officials-PDF",
+      "evidence": "Official municipal roster and officials; updated January 2025."
+    },
+    {
+      "name": "York County Planning Commission municipal boundaries",
+      "url": "https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Municipal_Boundary/FeatureServer/0",
+      "evidence": "Public ArcGIS layer returned 72 municipal polygons used for the place-to-government join."
+    },
+    {
+      "name": "USGS GNIS Populated Places",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/Topical/PopulatedPlaces_National_Text.zip",
+      "evidence": "Downloaded 2026-09-08; filtered on Pennsylvania / York County (FIPS 133)."
+    }
+  ],
+  "summary": {
+    "authoritative_municipal_inventory_count": 72,
+    "county_planning_commission_stated_count": 72,
+    "configured_body_entries": 112,
+    "configured_municipalities": 68,
+    "paused_candidate_municipalities": 0,
+    "municipal_source_gaps": 4,
+    "gnis_york_county_populated_place_rows": 383,
+    "gnis_points_unmapped_to_ycpc_municipal_boundary": 0
+  },
+  "municipalities": [
+    {
+      "municipality": "CARROLL TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Carroll Twp Board of Supervisors",
+          "source_key": "carroll_twp_board_of_supervisors",
+          "url": "https://www.carrolltownship.com/bos-agenda-2024/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Carroll Twp Zoning Hearing Board",
+          "source_key": "carroll_twp_zoning_hearing_board",
+          "url": "https://www.carrolltownship.com/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Carroll Twp Planning Commission",
+          "source_key": "carroll_twp_planning_commission",
+          "url": "https://www.carrolltownship.com/planning-commission/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "CHANCEFORD TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Chanceford Twp Board of Supervisors",
+          "source_key": "chanceford_twp_board_of_supervisors",
+          "url": "https://www.chancefordtwp.com/Minutes.html",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "CODORUS TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Codorus Twp Board of Supervisors",
+          "source_key": "codorus_twp_board_of_supervisors",
+          "url": "https://codorustownship.org/meeting-minutes/",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "CONEWAGO TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Conewago Twp Board of Supervisors",
+          "source_key": "conewago_twp_board_of_supervisors",
+          "url": "https://www.conewagotwp.com/board-of-supervisors/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Conewago Twp Zoning Hearing Board",
+          "source_key": "conewago_twp_zoning_hearing_board",
+          "url": "https://www.conewagotwp.com/2026-zoning-agendas-minutes/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Conewago Twp Planning Commission",
+          "source_key": "conewago_twp_planning_commission",
+          "url": "https://www.conewagotwp.com/2026-planning-agendas-minutes/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "CROSS ROADS BORO",
+      "municipality_type": "borough",
+      "coverage_status": "source_gap",
+      "configured_bodies": [],
+      "government_evidence_url": "https://www.ycpc.org/279/Directory-of-Public-Officials-PDF",
+      "note": "YCPC 2025 directory lists Cross Roads Borough as an incorporated municipality; no official meeting URL was confirmed in this review."
+    },
+    {
+      "municipality": "DALLASTOWN BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Dallastown Borough Council",
+          "source_key": "dallastown_borough_council",
+          "url": "https://dallastownboro.com/meetings-agendas-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "DELTA BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Delta Borough Council",
+          "source_key": "delta_borough_council",
+          "url": "https://www.deltaborough.us/minutes-archive",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "DILLSBURG BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Dillsburg Borough Council",
+          "source_key": "dillsburg_borough_council",
+          "url": "https://dillsburg.com/minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "DOVER BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Dover Borough Council",
+          "source_key": "dover_borough_council",
+          "url": "https://www.doverboroughpa.com/minutes.html",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "DOVER TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Dover Twp Planning Commission",
+          "source_key": "dover_twp_planning_commission",
+          "url": "https://www.dovertownship.org/document-category/agendas-minutes/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "EAST HOPEWELL TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "East Hopewell Twp Board of Supervisors",
+          "source_key": "east_hopewell_twp_board_of_supervisors",
+          "url": "https://www.easthopewelltownshippa.gov/board-of-supervisors",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "East Hopewell Twp Planning Commission",
+          "source_key": "east_hopewell_twp_planning_commission",
+          "url": "https://www.easthopewelltownshippa.gov/planning-commission",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "EAST MANCHESTER TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "East Manchester Twp Board of Supervisors",
+          "source_key": "east_manchester_twp_board_of_supervisors",
+          "url": "https://emanchestertwp.com/boards-and-committees/meetings-archive/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "East Manchester Twp Zoning Hearing Board",
+          "source_key": "east_manchester_twp_zoning_hearing_board",
+          "url": "https://emanchestertwp.com/boards-and-committees/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "East Manchester Twp Planning Commission",
+          "source_key": "east_manchester_twp_planning_commission",
+          "url": "https://emanchestertwp.com/boards-and-committees/planning-commission/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "EAST PROSPECT BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "East Prospect Borough Council",
+          "source_key": "east_prospect_borough_council",
+          "url": "https://www.eastprospectborough.com/minutes",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "FAIRVIEW TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Fairview Twp Board of Supervisors",
+          "source_key": "fairview_twp_board_of_supervisors",
+          "url": "https://twp.fairview.pa.us/board-of-supervisors/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Fairview Twp Zoning Hearing Board",
+          "source_key": "fairview_twp_zoning_hearing_board",
+          "url": "https://twp.fairview.pa.us/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Fairview Twp Planning Commission",
+          "source_key": "fairview_twp_planning_commission",
+          "url": "https://twp.fairview.pa.us/planning-commission/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "FAWN GROVE BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Fawn Grove Borough Council",
+          "source_key": "fawn_grove_borough_council",
+          "url": "https://fawngroveborough.org/documents/council-meeting-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "FAWN TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Fawn Twp Board of Supervisors",
+          "source_key": "fawn_twp_board_of_supervisors",
+          "url": "https://fawntwp.org/monthly-meeting-minutes/",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "FELTON BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Felton Borough Council",
+          "source_key": "felton_borough_council",
+          "url": "https://feltonboroughpa.com/documents/minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "FRANKLIN TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Franklin Twp Board of Supervisors",
+          "source_key": "franklin_twp_board_of_supervisors",
+          "url": "https://franklintownship.org/meeting-minutes-agendas/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Franklin Twp Planning Commission",
+          "source_key": "franklin_twp_planning_commission",
+          "url": "https://franklintownship.org/planning-commission-meeting-minutesagendas/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "FRANKLINTOWN BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Franklintown Borough Council",
+          "source_key": "franklintown_borough_council",
+          "url": "https://franklintownborough.net/notices%2Fagendas%2Fminutes",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "GLEN ROCK BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Glen Rock Borough Council",
+          "source_key": "glen_rock_borough_council",
+          "url": "https://www.glenrockpa.org/borough-government/council-meeting-minutes-agendas/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "GOLDSBORO BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Goldsboro Borough Council",
+          "source_key": "goldsboro_borough_council",
+          "url": "https://goldsboropa.com/council-minutes/",
+          "type": "borough_council"
+        },
+        {
+          "body_name": "Goldsboro Boro Zoning Hearing Board",
+          "source_key": "goldsboro_boro_zoning_hearing_board",
+          "url": "https://goldsboropa.com/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Goldsboro Boro Planning Commission",
+          "source_key": "goldsboro_boro_planning_commission",
+          "url": "https://goldsboropa.com/planning-commission/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "HALLAM BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Hallam Borough Council",
+          "source_key": "hallam_borough_council",
+          "url": "https://hallamborough.com/library/agendas-minutes",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "HANOVER BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Hanover Borough Council",
+          "source_key": "hanover_borough_council",
+          "url": "https://hanoverboroughpa.gov/AgendaCenter",
+          "type": "borough_council"
+        },
+        {
+          "body_name": "Hanover Boro Zoning Hearing Board",
+          "source_key": "hanover_boro_zoning_hearing_board",
+          "url": "https://hanoverboroughpa.gov/AgendaCenter/Zoning-Hearing-Board-11",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Hanover Boro Planning Commission",
+          "source_key": "hanover_boro_planning_commission",
+          "url": "https://hanoverboroughpa.gov/AgendaCenter/Planning-Commission-8",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "HEIDELBERG TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Heidelberg Twp Board of Supervisors",
+          "source_key": "heidelberg_twp_board_of_supervisors",
+          "url": "https://www.heidelbergtwpmunicipal.com/meeting-agendas-monthly-minutes/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Heidelberg Twp Zoning Hearing Board",
+          "source_key": "heidelberg_twp_zoning_hearing_board",
+          "url": "https://www.heidelbergtwpmunicipal.com/meeting-agendas-monthly-minutes/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Heidelberg Twp Planning Commission",
+          "source_key": "heidelberg_twp_planning_commission",
+          "url": "https://www.heidelbergtwpmunicipal.com/meeting-agendas-monthly-minutes/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "HELLAM TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Hellam Twp Board of Supervisors",
+          "source_key": "hellam_twp_board_of_supervisors",
+          "url": "https://www.hellamtownship.gov/public-meetings-archive/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Hellam Twp Zoning Hearing Board",
+          "source_key": "hellam_twp_zoning_hearing_board",
+          "url": "https://www.hellamtownship.gov/public-meetings-archive/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Hellam Twp Planning Commission",
+          "source_key": "hellam_twp_planning_commission",
+          "url": "https://www.hellamtownship.gov/public-meetings-archive/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "HOPEWELL TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Hopewell Twp Board of Supervisors",
+          "source_key": "hopewell_twp_board_of_supervisors",
+          "url": "https://www.hopewelltownship.com/public-meetings/board-of-supervisors/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Hopewell Twp Zoning Hearing Board",
+          "source_key": "hopewell_twp_zoning_hearing_board",
+          "url": "https://www.hopewelltownship.com/public-meetings/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Hopewell Twp Planning Commission",
+          "source_key": "hopewell_twp_planning_commission",
+          "url": "https://www.hopewelltownship.com/public-meetings/planning-commission-board/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "JACKSON TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Jackson Township Board of Supervisors",
+          "source_key": "jackson_township_board_of_supervisors",
+          "url": "https://jacksontwpyork.org/township-calendar-meetings/township-meetings-minutes/board-of-supervisors-meetings-minutes",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "JACOBUS BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Jacobus Borough Council",
+          "source_key": "jacobus_borough_council",
+          "url": "https://jacobuspa.com/council-meeting/council-meeting-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "JEFFERSON BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Jefferson Borough Council",
+          "source_key": "jefferson_borough_council",
+          "url": "https://jeffersonboro.net/council-minutes-agendas",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "LEWISBERRY BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Lewisberry Borough Council",
+          "source_key": "lewisberry_borough_council",
+          "url": "https://lewisberryborough.org/residents/meeting-agendas-and-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "LOGANVILLE BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Loganville Borough Council",
+          "source_key": "loganville_borough_council",
+          "url": "https://loganvilleborough.com/loganville_borough_council",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "LOWER CHANCEFORD TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Lower Chanceford Twp Board of Supervisors",
+          "source_key": "lower_chanceford_twp_board_of_supervisors",
+          "url": "https://lowerchancefordtwppa.gov/meetings.php",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "LOWER WINDSOR TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Lower Windsor Twp Board of Supervisors",
+          "source_key": "lower_windsor_twp_board_of_supervisors",
+          "url": "https://www.lowerwindsor.com/board-of-supervisors/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Lower Windsor Twp Zoning Hearing Board",
+          "source_key": "lower_windsor_twp_zoning_hearing_board",
+          "url": "https://www.lowerwindsor.com/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Lower Windsor Twp Planning Commission",
+          "source_key": "lower_windsor_twp_planning_commission",
+          "url": "https://www.lowerwindsor.com/planning-commission/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "MANCHESTER BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Manchester Borough Council",
+          "source_key": "manchester_borough_council",
+          "url": "https://manchesterborough.gov/documents/meeting-minutes-agendas/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "MANCHESTER TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Manchester Twp Board of Supervisors",
+          "source_key": "manchester_twp_board_of_supervisors",
+          "url": "https://www.mantwp.com/meeting-agenda-archive/",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "MANHEIM TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Manheim Twp Board of Supervisors",
+          "source_key": "manheim_twp_board_of_supervisors",
+          "url": "https://www.manheimtwpyorkpa.org/index.php/government/minutes-agendas",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "MONAGHAN TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Monaghan Twp Board of Supervisors",
+          "source_key": "monaghan_twp_board_of_supervisors",
+          "url": "https://monaghantownship.com/AgendaCenter",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "MOUNT WOLF BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Mount Wolf Borough Council",
+          "source_key": "mount_wolf_borough_council",
+          "url": "https://mtwolfpa.gov/agenda-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "NEW FREEDOM BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "New Freedom Borough Council",
+          "source_key": "new_freedom_borough_council",
+          "url": "https://newfreedomboro.org/meeting-information/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "NEW SALEM BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "New Salem Borough Council",
+          "source_key": "new_salem_borough_council",
+          "url": "https://newsalemborough.org/government/agendas-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "NEWBERRY TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Newberry Twp Board of Supervisors",
+          "source_key": "newberry_twp_board_of_supervisors",
+          "url": "https://newberrytwp.com/board-of-supervisors-info",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "NORTH CODORUS TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "North Codorus Twp Board of Supervisors",
+          "source_key": "north_codorus_twp_board_of_supervisors",
+          "url": "https://northcodorustwp.org/board-of-supervisors-3/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "North Codorus Twp Zoning Hearing Board",
+          "source_key": "north_codorus_twp_zoning_hearing_board",
+          "url": "https://northcodorustwp.org/zoning-hearing-board-2/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "North Codorus Twp Planning Commission",
+          "source_key": "north_codorus_twp_planning_commission",
+          "url": "https://northcodorustwp.org/planning-commission-2/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "NORTH HOPEWELL TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "North Hopewell Twp Board of Supervisors",
+          "source_key": "north_hopewell_twp_board_of_supervisors",
+          "url": "https://www.northhopewelltwp.com/",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "NORTH YORK BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "North York Borough Council",
+          "source_key": "north_york_borough_council",
+          "url": "https://northyorkborough.com/borough-council-meeting-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "PARADISE TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Paradise Township Board of Supervisors",
+          "source_key": "paradise_township_board_of_supervisors",
+          "url": "https://paradisetwpyorkco.com/board-of-supervisors-meeting-agendas-and-minutes/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Paradise Township Planning Commission",
+          "source_key": "paradise_township_planning_commission",
+          "url": "https://paradisetwpyorkco.com/planning-commission-meeting-agendas-and-minutes/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "PEACH BOTTOM TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Peach Bottom Twp Board of Supervisors",
+          "source_key": "peach_bottom_twp_board_of_supervisors",
+          "url": "https://www.peachbottomtownship.org/meeting-minutes",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Peach Bottom Twp Zoning Hearing Board",
+          "source_key": "peach_bottom_twp_zoning_hearing_board",
+          "url": "https://www.peachbottomtownship.org/zoning-hearing-board",
+          "type": "zoning_hearing"
+        }
+      ]
+    },
+    {
+      "municipality": "PENN TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Penn Township Board of Commissioners",
+          "source_key": "penn_township_board_of_commissioners",
+          "url": "https://penntwp.com/directory/committees/board-of-commissioners-meeting-minutes/",
+          "type": "board_of_commissioners"
+        },
+        {
+          "body_name": "Penn Township Planning Commission",
+          "source_key": "penn_township_planning_commission",
+          "url": "https://penntwp.com/commissions/planning-commission/",
+          "type": "planning_commission"
+        },
+        {
+          "body_name": "Penn Township Zoning Hearing Board",
+          "source_key": "penn_township_zoning_hearing_board",
+          "url": "https://penntwp.com/directory/boards/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        }
+      ]
+    },
+    {
+      "municipality": "RAILROAD BORO",
+      "municipality_type": "borough",
+      "coverage_status": "source_gap",
+      "configured_bodies": [],
+      "government_evidence_url": "https://www.ycpc.org/279/Directory-of-Public-Officials-PDF",
+      "note": "YCPC 2025 directory lists Railroad Borough Council and its municipal office; no official meeting URL was confirmed in this review."
+    },
+    {
+      "municipality": "RED LION BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Red Lion Borough Council",
+          "source_key": "red_lion_borough_council",
+          "url": "https://redlionpa.org/government/agendas-minutes/borough-council-agendas-minutes/",
+          "type": "borough_council"
+        },
+        {
+          "body_name": "Red Lion Boro Zoning Hearing Board",
+          "source_key": "red_lion_boro_zoning_hearing_board",
+          "url": "https://redlionpa.org/government/agendas-minutes/zoning-hearing-board-agendas/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Red Lion Boro Planning Commission",
+          "source_key": "red_lion_boro_planning_commission",
+          "url": "https://redlionpa.org/government/agendas-minutes/2023-planning-commission-agendas-minutes/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "SEVEN VALLEYS BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Seven Valleys Borough Council",
+          "source_key": "seven_valleys_borough_council",
+          "url": "https://sevenvalleysborough.com/minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "SHREWSBURY BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Shrewsbury Borough Council",
+          "source_key": "shrewsbury_borough_council",
+          "url": "https://shrewsburyborough.org/minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "SHREWSBURY TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Shrewsbury Twp Zoning Hearing Board",
+          "source_key": "shrewsbury_twp_zoning_hearing_board",
+          "url": "https://www.shrewsburytownship.org/government/zoning_hearing_board/hearing_notices.php",
+          "type": "zoning_hearing"
+        }
+      ]
+    },
+    {
+      "municipality": "SPRING GARDEN TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Spring Garden Twp Board of Supervisors",
+          "source_key": "spring_garden_twp_board_of_supervisors",
+          "url": "https://www.springgardentwp.org/meeting-minutes/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Spring Garden Twp Zoning Hearing Board",
+          "source_key": "spring_garden_twp_zoning_hearing_board",
+          "url": "https://www.springgardentwp.org/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Spring Garden Twp Planning Commission",
+          "source_key": "spring_garden_twp_planning_commission",
+          "url": "https://www.springgardentwp.org/planning-commission/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "SPRING GROVE BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Spring Grove Borough Council",
+          "source_key": "spring_grove_borough_council",
+          "url": "https://www.springgrovepa.gov/meeting-minutes",
+          "type": "borough_council"
+        },
+        {
+          "body_name": "Spring Grove Boro Zoning Hearing Board",
+          "source_key": "spring_grove_boro_zoning_hearing_board",
+          "url": "https://www.springgrovepa.gov/zoning-hearing",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Spring Grove Boro Planning Commission",
+          "source_key": "spring_grove_boro_planning_commission",
+          "url": "https://www.springgrovepa.gov/planning-commissions",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "SPRINGETTSBURY TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Springettsbury Twp Board of Supervisors",
+          "source_key": "springettsbury_twp_board_of_supervisors",
+          "url": "https://springettsbury.com/township-document-archives/",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "SPRINGFIELD TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Springfield Twp Board of Supervisors",
+          "source_key": "springfield_twp_board_of_supervisors",
+          "url": "https://springfieldyork.org/meeting-minutes/",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "STEWARTSTOWN BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Stewartstown Borough Council",
+          "source_key": "stewartstown_borough_council",
+          "url": "https://www.stewartstown.org/borough-government/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "WARRINGTON TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Warrington Twp Board of Supervisors",
+          "source_key": "warrington_twp_board_of_supervisors",
+          "url": "https://warringtontwp.org/index.php/board-of-supervisors-minutes-2026/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Warrington Twp Zoning Hearing Board",
+          "source_key": "warrington_twp_zoning_hearing_board",
+          "url": "https://warringtontwp.org/index.php/past-zoning-minutes/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "Warrington Twp Planning Commission",
+          "source_key": "warrington_twp_planning_commission",
+          "url": "https://warringtontwp.org/index.php/planning-commission-minutes-2026/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "WASHINGTON TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Washington Twp Board of Supervisors",
+          "source_key": "washington_twp_board_of_supervisors",
+          "url": "https://washingtontownshipyc.net/meeting-minutes",
+          "type": "board_of_supervisors"
+        }
+      ]
+    },
+    {
+      "municipality": "WELLSVILLE BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Wellsville Borough Council",
+          "source_key": "wellsville_borough_council",
+          "url": "https://wellsvilleborough.com/boards-commissions/borough-council-agenda-budget/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "WEST MANCHESTER TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "West Manchester Twp Board of Supervisors",
+          "source_key": "west_manchester_twp_board_of_supervisors",
+          "url": "https://www.westmanchestertownship.com/boards-committees/board-of-supervisors/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "West Manchester Twp Zoning Hearing Board",
+          "source_key": "west_manchester_twp_zoning_hearing_board",
+          "url": "https://www.westmanchestertownship.com/boards-committees/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "West Manchester Twp Planning Commission",
+          "source_key": "west_manchester_twp_planning_commission",
+          "url": "https://www.westmanchestertownship.com/boards-committees/planning-commission/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "WEST MANHEIM TWP",
+      "municipality_type": "township",
+      "coverage_status": "robots_blocked",
+      "configured_bodies": [],
+      "government_evidence_url": "https://westmanheimtwp.com/",
+      "meeting_evidence_url": "https://westmanheimtwp.com/boards-comissions/board-of-supervisors/minutes/",
+      "note": "Public BOS, PC, and ZHB records found; current robots.txt explicitly disallows all automated paths."
+    },
+    {
+      "municipality": "WEST YORK BORO",
+      "municipality_type": "borough",
+      "coverage_status": "document_delivery_blocked",
+      "configured_bodies": [],
+      "government_evidence_url": "https://www.westyorkpa.gov/",
+      "meeting_evidence_url": "https://www.westyorkpa.gov/borough-meeting-minutes/",
+      "note": "Public minutes folders found. Google Drive download/embedded paths and drive.usercontent delivery are robots-blocked; no first-party document alternative confirmed."
+    },
+    {
+      "municipality": "WINDSOR BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Windsor Borough Council",
+          "source_key": "windsor_borough_council",
+          "url": "https://www.windsorboropa.com/agenda-minutes.html",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "WINDSOR TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Windsor Township Board of Supervisors",
+          "source_key": "windsor_township_board_of_supervisors",
+          "url": "https://windsortwp.com/board-of-supervisors-meeting-minutes-agenda/",
+          "type": "board_of_supervisors"
+        },
+        {
+          "body_name": "Windsor Township Planning Commission",
+          "source_key": "windsor_township_planning_commission",
+          "url": "https://windsortwp.com/planning-commission-meeting-minutes-agenda/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "WINTERSTOWN BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Winterstown Borough Council",
+          "source_key": "winterstown_borough_council",
+          "url": "https://www.winterstownborough.com/documents",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "WRIGHTSVILLE BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Wrightsville Borough Council",
+          "source_key": "wrightsville_borough_council",
+          "url": "https://wrightsvilleborough.com/meeting-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "YOE BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Yoe Borough Council",
+          "source_key": "yoe_borough_council",
+          "url": "https://yoeborough.org/information/minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "YORK CITY",
+      "municipality_type": "city",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "York City Council",
+          "source_key": "york_city_council",
+          "url": "https://www.yorkcity.org/government/city-council/meetings/",
+          "type": "city_council"
+        },
+        {
+          "body_name": "York City Zoning Hearing Board",
+          "source_key": "york_city_zoning_hearing_board",
+          "url": "https://www.yorkcity.org/government/authorities-boards-and-commissions/zoning-hearing-board/",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "York City Planning Commission",
+          "source_key": "york_city_planning_commission",
+          "url": "https://www.yorkcity.org/government/authorities-boards-and-commissions/planning-commission-board/",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "YORK HAVEN BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "York Haven Borough Council",
+          "source_key": "york_haven_borough_council",
+          "url": "https://yorkhavenborough.org/administration/borough-council-meeting-agendas-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    },
+    {
+      "municipality": "YORK TWP",
+      "municipality_type": "township",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "York Twp Board of Commissioners",
+          "source_key": "york_twp_board_of_commissioners",
+          "url": "https://yorktownshippa.gov/boards-4/boc/",
+          "type": "board_of_commissioners"
+        },
+        {
+          "body_name": "York Twp Zoning Hearing Board",
+          "source_key": "york_twp_zoning_hearing_board",
+          "url": "https://yorktownshippa.gov/ZHB",
+          "type": "zoning_hearing"
+        },
+        {
+          "body_name": "York Twp Planning Commission",
+          "source_key": "york_twp_planning_commission",
+          "url": "https://yorktownshippa.gov/PC",
+          "type": "planning_commission"
+        }
+      ]
+    },
+    {
+      "municipality": "YORKANA BORO",
+      "municipality_type": "borough",
+      "coverage_status": "configured",
+      "configured_bodies": [
+        {
+          "body_name": "Yorkana Borough Council",
+          "source_key": "yorkana_borough_council",
+          "url": "https://yorkana-borough.com/meeting-minutes/",
+          "type": "borough_council"
+        }
+      ]
+    }
+  ],
+  "named_populated_places": [
+    {
+      "gnis_feature_id": "1168076",
+      "name": "Adamsville",
+      "latitude": 39.8828783,
+      "longitude": -76.6210784,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1168082",
+      "name": "Admire",
+      "latitude": 39.9620418,
+      "longitude": -76.8705283,
+      "governing_municipality": "DOVER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1168096",
+      "name": "Airville",
+      "latitude": 39.8323244,
+      "longitude": -76.4063509,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1168294",
+      "name": "Andersontown",
+      "latitude": 40.0792613,
+      "longitude": -76.828304,
+      "governing_municipality": "CONEWAGO TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1168295",
+      "name": "Andersontown",
+      "latitude": 40.1523141,
+      "longitude": -76.9316412,
+      "governing_municipality": "MONAGHAN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1168586",
+      "name": "Bair",
+      "latitude": 39.9053767,
+      "longitude": -76.8277501,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169069",
+      "name": "Beavertown",
+      "latitude": 40.1078699,
+      "longitude": -77.0527562,
+      "governing_municipality": "CARROLL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169260",
+      "name": "Benroy",
+      "latitude": 39.9453767,
+      "longitude": -76.672467,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169305",
+      "name": "Bermudian",
+      "latitude": 40.019539,
+      "longitude": -77.0355342,
+      "governing_municipality": "WASHINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169537",
+      "name": "Big Mount",
+      "latitude": 39.9575969,
+      "longitude": -76.934698,
+      "governing_municipality": "PARADISE TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169677",
+      "name": "Bittersville",
+      "latitude": 39.9248219,
+      "longitude": -76.5474657,
+      "governing_municipality": "LOWER WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169764",
+      "name": "Blackrock",
+      "latitude": 39.7217689,
+      "longitude": -76.8610884,
+      "governing_municipality": "MANHEIM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169846",
+      "name": "Blooming Grove",
+      "latitude": 39.7948225,
+      "longitude": -76.9441457,
+      "governing_municipality": "PENN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169930",
+      "name": "Boeckel Landing",
+      "latitude": 39.8017698,
+      "longitude": -76.3113475,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1169976",
+      "name": "Bonnair",
+      "latitude": 39.7526029,
+      "longitude": -76.7555291,
+      "governing_municipality": "SHREWSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1170313",
+      "name": "Brogue",
+      "latitude": 39.8717678,
+      "longitude": -76.48302,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1170482",
+      "name": "Bryansville",
+      "latitude": 39.7481598,
+      "longitude": -76.3530153,
+      "governing_municipality": "PEACH BOTTOM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1171467",
+      "name": "Centerville",
+      "latitude": 39.8009352,
+      "longitude": -76.7377495,
+      "governing_municipality": "SHREWSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1171972",
+      "name": "Clear Spring",
+      "latitude": 40.0587043,
+      "longitude": -77.0627568,
+      "governing_municipality": "FRANKLIN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1172040",
+      "name": "Cly",
+      "latitude": 40.1239828,
+      "longitude": -76.7363572,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1172225",
+      "name": "Collinsville",
+      "latitude": 39.8567682,
+      "longitude": -76.4507968,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1172320",
+      "name": "Conewago Heights",
+      "latitude": 40.0856508,
+      "longitude": -76.7166341,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1172610",
+      "name": "Craley",
+      "latitude": 39.9475993,
+      "longitude": -76.5105207,
+      "governing_municipality": "LOWER WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1172746",
+      "name": "Cross Roads",
+      "latitude": 39.8195464,
+      "longitude": -76.5766337,
+      "governing_municipality": "CROSS ROADS BORO",
+      "governing_coverage_status": "source_gap",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "CROSS ROADS BORO"
+    },
+    {
+      "gnis_feature_id": "1172898",
+      "name": "Dallastown",
+      "latitude": 39.8995444,
+      "longitude": -76.6402452,
+      "governing_municipality": "DALLASTOWN BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "DALLASTOWN BORO"
+    },
+    {
+      "gnis_feature_id": "1172975",
+      "name": "Davidsburg",
+      "latitude": 39.9837078,
+      "longitude": -76.8944178,
+      "governing_municipality": "DOVER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1173143",
+      "name": "Delroy",
+      "latitude": 39.9714875,
+      "longitude": -76.5735767,
+      "governing_municipality": "LOWER WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1173144",
+      "name": "Delta",
+      "latitude": 39.727049,
+      "longitude": -76.3266255,
+      "governing_municipality": "DELTA BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "DELTA BORO"
+    },
+    {
+      "gnis_feature_id": "1173182",
+      "name": "Detters Mill",
+      "latitude": 40.0142624,
+      "longitude": -76.9271968,
+      "governing_municipality": "WARRINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1173273",
+      "name": "Dillsburg",
+      "latitude": 40.1109255,
+      "longitude": -77.034978,
+      "governing_municipality": "DILLSBURG BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "DILLSBURG BORO"
+    },
+    {
+      "gnis_feature_id": "1173858",
+      "name": "East Prospect",
+      "latitude": 39.9720431,
+      "longitude": -76.5199652,
+      "governing_municipality": "EAST PROSPECT BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "EAST PROSPECT BORO"
+    },
+    {
+      "gnis_feature_id": "1173905",
+      "name": "East Yoe",
+      "latitude": 39.9162108,
+      "longitude": -76.6294114,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1173906",
+      "name": "East York",
+      "latitude": 39.9737093,
+      "longitude": -76.6863554,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1173923",
+      "name": "Eastmont",
+      "latitude": 40.0287072,
+      "longitude": -76.827748,
+      "governing_municipality": "CONEWAGO TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1174179",
+      "name": "Elmwood",
+      "latitude": 39.9695427,
+      "longitude": -76.6983,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1174222",
+      "name": "Emigsville",
+      "latitude": 40.0217636,
+      "longitude": -76.728022,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1174310",
+      "name": "Erney",
+      "latitude": 40.1028717,
+      "longitude": -76.8327489,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1174539",
+      "name": "Fairview Park",
+      "latitude": 40.1864804,
+      "longitude": -76.8480277,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1174620",
+      "name": "Farmers",
+      "latitude": 39.917598,
+      "longitude": -76.9110866,
+      "governing_municipality": "PARADISE TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1174643",
+      "name": "Fawn Grove",
+      "latitude": 39.727882,
+      "longitude": -76.4519078,
+      "governing_municipality": "FAWN GROVE BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "FAWN GROVE BORO"
+    },
+    {
+      "gnis_feature_id": "1174653",
+      "name": "Fayfield",
+      "latitude": 39.9673206,
+      "longitude": -76.6827444,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1174674",
+      "name": "Felton",
+      "latitude": 39.8548235,
+      "longitude": -76.5644109,
+      "governing_municipality": "FELTON BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "FELTON BORO"
+    },
+    {
+      "gnis_feature_id": "1174959",
+      "name": "Fordville",
+      "latitude": 39.9514862,
+      "longitude": -76.9124749,
+      "governing_municipality": "PARADISE TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1175024",
+      "name": "Fortney",
+      "latitude": 40.0989825,
+      "longitude": -76.9069182,
+      "governing_municipality": "WARRINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1175077",
+      "name": "Foustown",
+      "latitude": 39.9950974,
+      "longitude": -76.7716341,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1175179",
+      "name": "Franklintown",
+      "latitude": 40.0767599,
+      "longitude": -77.0283114,
+      "governing_municipality": "FRANKLINTOWN BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "FRANKLINTOWN BORO"
+    },
+    {
+      "gnis_feature_id": "1175237",
+      "name": "Freysville",
+      "latitude": 39.9281551,
+      "longitude": -76.6060776,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1175286",
+      "name": "Frogtown",
+      "latitude": 40.1814805,
+      "longitude": -76.858028,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1175666",
+      "name": "Glades",
+      "latitude": 40.0100974,
+      "longitude": -76.6802439,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1175704",
+      "name": "Glen Rock",
+      "latitude": 39.7931577,
+      "longitude": -76.7302495,
+      "governing_municipality": "GLEN ROCK BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "GLEN ROCK BORO"
+    },
+    {
+      "gnis_feature_id": "1175734",
+      "name": "Glenville",
+      "latitude": 39.7570466,
+      "longitude": -76.8152533,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1175788",
+      "name": "Goldsboro",
+      "latitude": 40.152593,
+      "longitude": -76.7502467,
+      "governing_municipality": "GOLDSBORO BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "GOLDSBORO BORO"
+    },
+    {
+      "gnis_feature_id": "1176241",
+      "name": "Grimms Crossroads",
+      "latitude": 39.9101001,
+      "longitude": -76.5491324,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1176399",
+      "name": "Hallam",
+      "latitude": 40.00482,
+      "longitude": -76.6041322,
+      "governing_municipality": "HALLAM BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "HALLAM BORO"
+    },
+    {
+      "gnis_feature_id": "1176470",
+      "name": "Hanover",
+      "latitude": 39.8006554,
+      "longitude": -76.9830358,
+      "governing_municipality": "HANOVER BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "HANOVER BORO"
+    },
+    {
+      "gnis_feature_id": "1176479",
+      "name": "Hanover Junction",
+      "latitude": 39.8423229,
+      "longitude": -76.7755273,
+      "governing_municipality": "NORTH CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1176553",
+      "name": "Harmony Grove",
+      "latitude": 40.0103738,
+      "longitude": -76.9077516,
+      "governing_municipality": "DOVER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1177053",
+      "name": "Highmount",
+      "latitude": 40.0312083,
+      "longitude": -76.5757991,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1177087",
+      "name": "Hillcrest",
+      "latitude": 39.9378768,
+      "longitude": -76.7038564,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1177096",
+      "name": "Hillcroft",
+      "latitude": 39.9462099,
+      "longitude": -76.7041339,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1177228",
+      "name": "Hollywood Heights",
+      "latitude": 39.9492655,
+      "longitude": -76.6885782,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1177331",
+      "name": "Homewood",
+      "latitude": 40.1098143,
+      "longitude": -77.0441448,
+      "governing_municipality": "CARROLL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1177593",
+      "name": "Hungerford",
+      "latitude": 39.756492,
+      "longitude": -76.6777488,
+      "governing_municipality": "SHREWSBURY BORO",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1177965",
+      "name": "Jacobs Mills",
+      "latitude": 39.8325996,
+      "longitude": -76.9280333,
+      "governing_municipality": "HEIDELBERG TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1178010",
+      "name": "Jefferson",
+      "latitude": 39.8173229,
+      "longitude": -76.8416415,
+      "governing_municipality": "JEFFERSON BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "JEFFERSON BORO"
+    },
+    {
+      "gnis_feature_id": "1178430",
+      "name": "Keys",
+      "latitude": 39.8814896,
+      "longitude": -76.5360768,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1178660",
+      "name": "Kralltown",
+      "latitude": 40.0198174,
+      "longitude": -76.9827549,
+      "governing_municipality": "WASHINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1178726",
+      "name": "Kyleville",
+      "latitude": 39.8187137,
+      "longitude": -76.3871835,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1178729",
+      "name": "La Bott",
+      "latitude": 39.9209313,
+      "longitude": -76.8960859,
+      "governing_municipality": "JACKSON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1178902",
+      "name": "Larue",
+      "latitude": 39.8203792,
+      "longitude": -76.7602497,
+      "governing_municipality": "SPRINGFIELD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1179080",
+      "name": "Leaders Heights",
+      "latitude": 39.9064885,
+      "longitude": -76.7188574,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1179163",
+      "name": "Lehman",
+      "latitude": 39.8645439,
+      "longitude": -76.8583078,
+      "governing_municipality": "NORTH CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1179245",
+      "name": "Lewisberry",
+      "latitude": 40.1350929,
+      "longitude": -76.8596945,
+      "governing_municipality": "LEWISBERRY BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "LEWISBERRY BORO"
+    },
+    {
+      "gnis_feature_id": "1179773",
+      "name": "Locust Grove",
+      "latitude": 39.9617654,
+      "longitude": -76.6305218,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1179796",
+      "name": "Locust Spring",
+      "latitude": 39.9334328,
+      "longitude": -76.5746882,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1179829",
+      "name": "Loganville",
+      "latitude": 39.8556564,
+      "longitude": -76.7074696,
+      "governing_municipality": "LOGANVILLE BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "LOGANVILLE BORO"
+    },
+    {
+      "gnis_feature_id": "1179924",
+      "name": "Longstown",
+      "latitude": 39.9603764,
+      "longitude": -76.6588555,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1180264",
+      "name": "Manchester",
+      "latitude": 40.0631514,
+      "longitude": -76.7183005,
+      "governing_municipality": "MANCHESTER BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "MANCHESTER TWP"
+    },
+    {
+      "gnis_feature_id": "1180401",
+      "name": "Margaretta Furnace",
+      "latitude": 39.9653766,
+      "longitude": -76.536632,
+      "governing_municipality": "LOWER WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1180452",
+      "name": "Marsh Run",
+      "latitude": 40.2000913,
+      "longitude": -76.8135825,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1180507",
+      "name": "Martinsville",
+      "latitude": 39.9403772,
+      "longitude": -76.5246875,
+      "governing_municipality": "LOWER WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1180925",
+      "name": "Menges Mills",
+      "latitude": 39.8609326,
+      "longitude": -76.894976,
+      "governing_municipality": "HEIDELBERG TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1181796",
+      "name": "Mount Pleasant",
+      "latitude": 40.1370366,
+      "longitude": -76.9630312,
+      "governing_municipality": "MONAGHAN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1181842",
+      "name": "Mount Royal",
+      "latitude": 40.039262,
+      "longitude": -76.8877507,
+      "governing_municipality": "DOVER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1181888",
+      "name": "Mount Wolf",
+      "latitude": 40.0631515,
+      "longitude": -76.703856,
+      "governing_municipality": "MOUNT WOLF BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "MOUNT WOLF BORO"
+    },
+    {
+      "gnis_feature_id": "1182173",
+      "name": "Nashville",
+      "latitude": 39.8992656,
+      "longitude": -76.8524734,
+      "governing_municipality": "JACKSON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1182233",
+      "name": "Neiman",
+      "latitude": 39.81899,
+      "longitude": -76.793862,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1182291",
+      "name": "New Bridgeville",
+      "latitude": 39.9126002,
+      "longitude": -76.4885758,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1182356",
+      "name": "New Park",
+      "latitude": 39.7348262,
+      "longitude": -76.5055208,
+      "governing_municipality": "FAWN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1182367",
+      "name": "New Salem",
+      "latitude": 39.9014882,
+      "longitude": -76.7894152,
+      "governing_municipality": "NEW SALEM BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "NEW SALEM BORO"
+    },
+    {
+      "gnis_feature_id": "1182382",
+      "name": "Newberrytown",
+      "latitude": 40.130649,
+      "longitude": -76.7921922,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1182657",
+      "name": "North York",
+      "latitude": 39.9781536,
+      "longitude": -76.7330223,
+      "governing_municipality": "NORTH YORK BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "NORTH YORK BORO"
+    },
+    {
+      "gnis_feature_id": "1183031",
+      "name": "Ore Valley",
+      "latitude": 39.9314882,
+      "longitude": -76.6571893,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1183340",
+      "name": "Parkville",
+      "latitude": 39.7812115,
+      "longitude": -76.9633133,
+      "governing_municipality": "PENN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1183550",
+      "name": "Pennville",
+      "latitude": 39.7895443,
+      "longitude": -76.9980365,
+      "governing_municipality": "PENN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1183634",
+      "name": "Petersburg",
+      "latitude": 39.9009335,
+      "longitude": -76.5780218,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1184010",
+      "name": "Pleasant Grove",
+      "latitude": 40.1198162,
+      "longitude": -76.7438572,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1184081",
+      "name": "Pleasant View",
+      "latitude": 39.9028779,
+      "longitude": -76.5902443,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1184105",
+      "name": "Pleasureville",
+      "latitude": 39.9970421,
+      "longitude": -76.7066327,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1184266",
+      "name": "Poplars",
+      "latitude": 39.9887084,
+      "longitude": -76.805247,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1184306",
+      "name": "Porters Sideling",
+      "latitude": 39.8253779,
+      "longitude": -76.8946989,
+      "governing_municipality": "HEIDELBERG TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1184600",
+      "name": "Railroad",
+      "latitude": 39.7606585,
+      "longitude": -76.6983049,
+      "governing_municipality": "RAILROAD BORO",
+      "governing_coverage_status": "source_gap",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "RAILROAD BORO"
+    },
+    {
+      "gnis_feature_id": "1184765",
+      "name": "Red Lion",
+      "latitude": 39.9009334,
+      "longitude": -76.6058001,
+      "governing_municipality": "RED LION BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "RED LION BORO"
+    },
+    {
+      "gnis_feature_id": "1184849",
+      "name": "Reesers Summit",
+      "latitude": 40.2012021,
+      "longitude": -76.8655283,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1185480",
+      "name": "Roseville",
+      "latitude": 40.0639833,
+      "longitude": -76.917752,
+      "governing_municipality": "WARRINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1185568",
+      "name": "Roundtown",
+      "latitude": 40.0178747,
+      "longitude": -76.7555224,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1185722",
+      "name": "Saginaw",
+      "latitude": 40.0650959,
+      "longitude": -76.6727447,
+      "governing_municipality": "EAST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1187238",
+      "name": "Seitzland",
+      "latitude": 39.7853801,
+      "longitude": -76.7230272,
+      "governing_municipality": "SHREWSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1187268",
+      "name": "Seven Valleys",
+      "latitude": 39.8556561,
+      "longitude": -76.7685823,
+      "governing_municipality": "SEVEN VALLEYS BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "SEVEN VALLEYS BORO"
+    },
+    {
+      "gnis_feature_id": "1187467",
+      "name": "Shenks Ferry",
+      "latitude": 39.8995451,
+      "longitude": -76.3860726,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1187516",
+      "name": "Shiloh",
+      "latitude": 39.9781532,
+      "longitude": -76.7971913,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1187619",
+      "name": "Shrewsbury",
+      "latitude": 39.7687139,
+      "longitude": -76.679693,
+      "governing_municipality": "SHREWSBURY BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "SHREWSBURY TWP"
+    },
+    {
+      "gnis_feature_id": "1187647",
+      "name": "Siddonsburg",
+      "latitude": 40.1459252,
+      "longitude": -76.9660869,
+      "governing_municipality": "MONAGHAN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1187907",
+      "name": "Smiths Station",
+      "latitude": 39.8151,
+      "longitude": -76.9252558,
+      "governing_municipality": "HEIDELBERG TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188229",
+      "name": "Spring Grove",
+      "latitude": 39.8745437,
+      "longitude": -76.8658078,
+      "governing_municipality": "SPRING GROVE BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "SPRING GROVE BORO"
+    },
+    {
+      "gnis_feature_id": "1188251",
+      "name": "Spring Plains",
+      "latitude": 39.9825982,
+      "longitude": -76.6466327,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188284",
+      "name": "Springdale",
+      "latitude": 39.9506543,
+      "longitude": -76.7146895,
+      "governing_municipality": "YORK CITY",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188309",
+      "name": "Springvale",
+      "latitude": 39.8948225,
+      "longitude": -76.5832998,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188362",
+      "name": "Spry",
+      "latitude": 39.9184328,
+      "longitude": -76.6849677,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188424",
+      "name": "Starview",
+      "latitude": 40.0484296,
+      "longitude": -76.6883,
+      "governing_municipality": "EAST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188641",
+      "name": "Stevenstown",
+      "latitude": 40.1014819,
+      "longitude": -76.9874768,
+      "governing_municipality": "CARROLL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188654",
+      "name": "Stewartstown",
+      "latitude": 39.7537146,
+      "longitude": -76.5913571,
+      "governing_municipality": "STEWARTSTOWN BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "STEWARTSTOWN BORO"
+    },
+    {
+      "gnis_feature_id": "1188661",
+      "name": "Sticks",
+      "latitude": 39.7470469,
+      "longitude": -76.8041419,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188813",
+      "name": "Stonybrook",
+      "latitude": 39.9870425,
+      "longitude": -76.6441326,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188830",
+      "name": "Stoverstown",
+      "latitude": 39.8842662,
+      "longitude": -76.8171946,
+      "governing_municipality": "NORTH CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1188881",
+      "name": "Strinestown",
+      "latitude": 40.0912058,
+      "longitude": -76.7613572,
+      "governing_municipality": "CONEWAGO TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1189493",
+      "name": "Thomasville",
+      "latitude": 39.9287093,
+      "longitude": -76.8505282,
+      "governing_municipality": "JACKSON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1189627",
+      "name": "Tolna",
+      "latitude": 39.7620475,
+      "longitude": -76.6516366,
+      "governing_municipality": "SHREWSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1190297",
+      "name": "Valley Forge",
+      "latitude": 39.9845423,
+      "longitude": -76.7074665,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1190412",
+      "name": "Villa Green",
+      "latitude": 39.9537098,
+      "longitude": -76.6994115,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1190438",
+      "name": "Violet Hill",
+      "latitude": 39.9417656,
+      "longitude": -76.7110786,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1190773",
+      "name": "Weigelstown",
+      "latitude": 39.9837084,
+      "longitude": -76.8224701,
+      "governing_municipality": "DOVER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1190817",
+      "name": "Wellsville",
+      "latitude": 40.0514836,
+      "longitude": -76.9366416,
+      "governing_municipality": "WELLSVILLE BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "WELLSVILLE BORO"
+    },
+    {
+      "gnis_feature_id": "1191527",
+      "name": "Wilshire Hills",
+      "latitude": 39.976765,
+      "longitude": -76.6360772,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1191581",
+      "name": "Windsor",
+      "latitude": 39.9162109,
+      "longitude": -76.5844107,
+      "governing_municipality": "WINDSOR BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "WINDSOR TWP"
+    },
+    {
+      "gnis_feature_id": "1191770",
+      "name": "Woodside",
+      "latitude": 40.1220381,
+      "longitude": -76.7816361,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1191812",
+      "name": "Wrightsville",
+      "latitude": 40.0256531,
+      "longitude": -76.5299655,
+      "governing_municipality": "WRIGHTSVILLE BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "WRIGHTSVILLE BORO"
+    },
+    {
+      "gnis_feature_id": "1191833",
+      "name": "Wyndham Hills",
+      "latitude": 39.9398211,
+      "longitude": -76.7335789,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1191893",
+      "name": "Yocumtown",
+      "latitude": 40.1584258,
+      "longitude": -76.8038596,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1191895",
+      "name": "Yoe",
+      "latitude": 39.9089887,
+      "longitude": -76.6369116,
+      "governing_municipality": "YOE BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "YOE BORO"
+    },
+    {
+      "gnis_feature_id": "1191897",
+      "name": "York Haven",
+      "latitude": 40.1109277,
+      "longitude": -76.7158012,
+      "governing_municipality": "YORK HAVEN BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "YORK HAVEN BORO"
+    },
+    {
+      "gnis_feature_id": "1191908",
+      "name": "Yorkana",
+      "latitude": 39.9764874,
+      "longitude": -76.5841323,
+      "governing_municipality": "YORKANA BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "YORKANA BORO"
+    },
+    {
+      "gnis_feature_id": "1191909",
+      "name": "Yorkshire",
+      "latitude": 39.9662096,
+      "longitude": -76.6607998,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1192018",
+      "name": "Zions View",
+      "latitude": 40.0528736,
+      "longitude": -76.7683013,
+      "governing_municipality": "CONEWAGO TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1192068",
+      "name": "Alpine",
+      "latitude": 40.0787054,
+      "longitude": -76.8727502,
+      "governing_municipality": "WARRINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1192368",
+      "name": "Dover",
+      "latitude": 40.0017634,
+      "longitude": -76.8502488,
+      "governing_municipality": "DOVER BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "DOVER TWP"
+    },
+    {
+      "gnis_feature_id": "1192520",
+      "name": "Glatfelters",
+      "latitude": 39.8745447,
+      "longitude": -76.7505255,
+      "governing_municipality": "NORTH CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1192683",
+      "name": "Jacobus",
+      "latitude": 39.8831558,
+      "longitude": -76.7105245,
+      "governing_municipality": "JACOBUS BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "JACOBUS BORO"
+    },
+    {
+      "gnis_feature_id": "1192971",
+      "name": "Mount Zion",
+      "latitude": 40.0023198,
+      "longitude": -76.6830215,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1193679",
+      "name": "Winterstown",
+      "latitude": 39.8353793,
+      "longitude": -76.6180234,
+      "governing_municipality": "WINTERSTOWN BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "WINTERSTOWN BORO"
+    },
+    {
+      "gnis_feature_id": "1193695",
+      "name": "Woodland View",
+      "latitude": 39.9981532,
+      "longitude": -76.7344107,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1193701",
+      "name": "York",
+      "latitude": 39.9625984,
+      "longitude": -76.727745,
+      "governing_municipality": "YORK CITY",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "YORK TWP"
+    },
+    {
+      "gnis_feature_id": "1196228",
+      "name": "Canterbury",
+      "latitude": 39.9839869,
+      "longitude": -76.7096887,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196229",
+      "name": "Gwendale",
+      "latitude": 39.9875978,
+      "longitude": -76.7446888,
+      "governing_municipality": "YORK CITY",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196230",
+      "name": "Lightners Tract",
+      "latitude": 39.9878756,
+      "longitude": -76.7377444,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196232",
+      "name": "Fireside Terrace",
+      "latitude": 39.9823201,
+      "longitude": -76.7408,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196238",
+      "name": "Greenbriar",
+      "latitude": 39.9892643,
+      "longitude": -76.7649673,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196239",
+      "name": "Fairway",
+      "latitude": 39.976209,
+      "longitude": -76.7655232,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196240",
+      "name": "Holly Heights",
+      "latitude": 39.9614871,
+      "longitude": -76.7680237,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196241",
+      "name": "Campbell Estates",
+      "latitude": 39.92871,
+      "longitude": -76.7733027,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196242",
+      "name": "Crestlyn Court",
+      "latitude": 39.9150996,
+      "longitude": -76.680801,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196243",
+      "name": "Crestview Terrace",
+      "latitude": 39.9112108,
+      "longitude": -76.6769122,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196244",
+      "name": "Clearview Heights",
+      "latitude": 39.9053776,
+      "longitude": -76.6713567,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196245",
+      "name": "Dalvue",
+      "latitude": 39.9000999,
+      "longitude": -76.6699679,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196246",
+      "name": "South View Acres",
+      "latitude": 39.9117663,
+      "longitude": -76.6919124,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196249",
+      "name": "Fair Acres",
+      "latitude": 39.9125995,
+      "longitude": -76.7180238,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196250",
+      "name": "Homeland Gardens",
+      "latitude": 39.920655,
+      "longitude": -76.7105235,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196251",
+      "name": "Ridgefield",
+      "latitude": 39.9239881,
+      "longitude": -76.7260793,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196252",
+      "name": "Marborough West",
+      "latitude": 39.9259325,
+      "longitude": -76.711079,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196257",
+      "name": "McClellan Heights",
+      "latitude": 39.9470431,
+      "longitude": -76.7327454,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196258",
+      "name": "Grantly Hills",
+      "latitude": 39.9425988,
+      "longitude": -76.7296899,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196259",
+      "name": "Farquhar Estates",
+      "latitude": 39.9439877,
+      "longitude": -76.721912,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196260",
+      "name": "South Wood Hills",
+      "latitude": 39.9459321,
+      "longitude": -76.7152453,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196268",
+      "name": "Park Village",
+      "latitude": 39.9659316,
+      "longitude": -76.7366338,
+      "governing_municipality": "YORK CITY",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196269",
+      "name": "Skyline Heights",
+      "latitude": 39.995931,
+      "longitude": -76.7116328,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196271",
+      "name": "Green Acres",
+      "latitude": 39.9623207,
+      "longitude": -76.6824668,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196272",
+      "name": "Haines Acres",
+      "latitude": 39.9645429,
+      "longitude": -76.6724666,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196274",
+      "name": "Penn Oaks",
+      "latitude": 39.9712095,
+      "longitude": -76.6541329,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196275",
+      "name": "Barwood",
+      "latitude": 39.9978755,
+      "longitude": -76.6730214,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196277",
+      "name": "Woodstream",
+      "latitude": 39.9912089,
+      "longitude": -76.6905217,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196278",
+      "name": "Idywyld",
+      "latitude": 39.9906535,
+      "longitude": -76.6863551,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196280",
+      "name": "Kalreda Woods",
+      "latitude": 39.9950977,
+      "longitude": -76.7041328,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196282",
+      "name": "Herman Heights",
+      "latitude": 39.9859312,
+      "longitude": -76.7038553,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196283",
+      "name": "North Hills",
+      "latitude": 39.9842647,
+      "longitude": -76.6927442,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196290",
+      "name": "Green Hill",
+      "latitude": 39.9606541,
+      "longitude": -76.6988558,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196291",
+      "name": "Beverly Hills",
+      "latitude": 39.9512098,
+      "longitude": -76.6991338,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196292",
+      "name": "Grandview Heights",
+      "latitude": 39.9492654,
+      "longitude": -76.7071895,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196293",
+      "name": "Rosemount",
+      "latitude": 39.9475988,
+      "longitude": -76.6971894,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196294",
+      "name": "Leafydale Terrace",
+      "latitude": 39.9456545,
+      "longitude": -76.6866338,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196295",
+      "name": "Seven Acres",
+      "latitude": 39.9425989,
+      "longitude": -76.6971895,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196296",
+      "name": "Tri-Hill",
+      "latitude": 39.9423211,
+      "longitude": -76.7085786,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196297",
+      "name": "Oakridge",
+      "latitude": 39.9364879,
+      "longitude": -76.7088565,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196298",
+      "name": "Brook Hill",
+      "latitude": 39.9334324,
+      "longitude": -76.7046898,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196299",
+      "name": "Hill-n-Dale",
+      "latitude": 39.9348213,
+      "longitude": -76.6977453,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196300",
+      "name": "Brook Hill South",
+      "latitude": 39.9300992,
+      "longitude": -76.7019121,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196301",
+      "name": "Avondale",
+      "latitude": 39.9359324,
+      "longitude": -76.689134,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196302",
+      "name": "McDonald Heights",
+      "latitude": 39.9281548,
+      "longitude": -76.7021899,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196303",
+      "name": "Fox Run",
+      "latitude": 39.9253771,
+      "longitude": -76.6991344,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196304",
+      "name": "Oak Manor",
+      "latitude": 39.9173217,
+      "longitude": -76.6774676,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196305",
+      "name": "Panorama Hills",
+      "latitude": 39.9606543,
+      "longitude": -76.6169106,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196308",
+      "name": "Kendale East",
+      "latitude": 39.9189886,
+      "longitude": -76.6071888,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196312",
+      "name": "Forest Hills",
+      "latitude": 39.8870448,
+      "longitude": -76.5996891,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196314",
+      "name": "Stonewood Farms",
+      "latitude": 39.9795427,
+      "longitude": -76.6271882,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196315",
+      "name": "Stonybrook Heights",
+      "latitude": 39.9812093,
+      "longitude": -76.6371882,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196318",
+      "name": "Manifold Manor",
+      "latitude": 39.9428769,
+      "longitude": -76.6269109,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196319",
+      "name": "Carol Heights",
+      "latitude": 39.9359325,
+      "longitude": -76.6413557,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196320",
+      "name": "Bellview Acres",
+      "latitude": 39.9384324,
+      "longitude": -76.6460779,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196321",
+      "name": "Chapel View",
+      "latitude": 39.9231551,
+      "longitude": -76.6321891,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196322",
+      "name": "Appleton",
+      "latitude": 39.9131554,
+      "longitude": -76.6313559,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196323",
+      "name": "Denton Terrace",
+      "latitude": 39.9087109,
+      "longitude": -76.6446895,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196326",
+      "name": "Southwood Hills",
+      "latitude": 39.8912113,
+      "longitude": -76.6371897,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196327",
+      "name": "Amleyn Gardens",
+      "latitude": 39.8912113,
+      "longitude": -76.648301,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196328",
+      "name": "South Ridge Estates",
+      "latitude": 39.8984333,
+      "longitude": -76.6508009,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196329",
+      "name": "Dallas Acres",
+      "latitude": 39.9017666,
+      "longitude": -76.6619121,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196330",
+      "name": "Sunset Terrace",
+      "latitude": 39.9067665,
+      "longitude": -76.6596898,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196331",
+      "name": "Grandview Heights",
+      "latitude": 39.907322,
+      "longitude": -76.6652455,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196333",
+      "name": "Chestnut Hill",
+      "latitude": 39.9220439,
+      "longitude": -76.6627451,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196334",
+      "name": "Sylvania Heights",
+      "latitude": 39.929266,
+      "longitude": -76.6663561,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196335",
+      "name": "Waterford",
+      "latitude": 39.9500989,
+      "longitude": -76.6544111,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196336",
+      "name": "Starview Heights",
+      "latitude": 39.9528766,
+      "longitude": -76.6574667,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196338",
+      "name": "Country Club West",
+      "latitude": 40.0150968,
+      "longitude": -76.7813569,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196339",
+      "name": "Country Club Estates",
+      "latitude": 40.0067638,
+      "longitude": -76.781079,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196340",
+      "name": "Brandywine",
+      "latitude": 40.0112081,
+      "longitude": -76.7702452,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196341",
+      "name": "Clear Springs",
+      "latitude": 40.0042641,
+      "longitude": -76.7357996,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196342",
+      "name": "Hayshire",
+      "latitude": 40.0078751,
+      "longitude": -76.7302441,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196344",
+      "name": "Rishelieu",
+      "latitude": 40.0039863,
+      "longitude": -76.7246884,
+      "governing_municipality": "MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196345",
+      "name": "Greenridge",
+      "latitude": 40.0106529,
+      "longitude": -76.6996884,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196346",
+      "name": "Clear View",
+      "latitude": 40.0064864,
+      "longitude": -76.6932994,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196347",
+      "name": "North View Hills",
+      "latitude": 40.0006532,
+      "longitude": -76.7010772,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196353",
+      "name": "Brigadoon",
+      "latitude": 39.9995423,
+      "longitude": -76.6138545,
+      "governing_municipality": "HALLAM BORO",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196355",
+      "name": "Crestwood East",
+      "latitude": 39.9862092,
+      "longitude": -76.6213547,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196356",
+      "name": "Greystone Farms",
+      "latitude": 39.9820426,
+      "longitude": -76.6207992,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196357",
+      "name": "Orchard Hill",
+      "latitude": 39.9745428,
+      "longitude": -76.6182993,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196358",
+      "name": "Sylvan Hills",
+      "latitude": 39.9725985,
+      "longitude": -76.6121882,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196422",
+      "name": "Arlington Park",
+      "latitude": 39.9050998,
+      "longitude": -76.6855235,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196423",
+      "name": "Fireside Park",
+      "latitude": 39.9781536,
+      "longitude": -76.7516336,
+      "governing_municipality": "YORK CITY",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196427",
+      "name": "Arbor",
+      "latitude": 39.8803783,
+      "longitude": -76.6224674,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196428",
+      "name": "Randolph Park",
+      "latitude": 39.9403767,
+      "longitude": -76.7046897,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196430",
+      "name": "Willis Park",
+      "latitude": 39.9720425,
+      "longitude": -76.7444115,
+      "governing_municipality": "YORK CITY",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196433",
+      "name": "Robin Heights",
+      "latitude": 39.8975999,
+      "longitude": -76.6927461,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196434",
+      "name": "Susquehanna Heights",
+      "latitude": 39.9048219,
+      "longitude": -76.7255242,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196435",
+      "name": "Strathcona Hills",
+      "latitude": 39.9439877,
+      "longitude": -76.7127453,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196439",
+      "name": "Yorklyn",
+      "latitude": 39.9923201,
+      "longitude": -76.6463548,
+      "governing_municipality": "SPRINGETTSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1196661",
+      "name": "Yorktown Homes",
+      "latitude": 39.9762091,
+      "longitude": -76.7483003,
+      "governing_municipality": "YORK CITY",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1197597",
+      "name": "Longview Heights",
+      "latitude": 39.9609319,
+      "longitude": -76.655522,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1198269",
+      "name": "Bunches",
+      "latitude": 40.1814803,
+      "longitude": -76.8785842,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1201738",
+      "name": "Carroll Manor",
+      "latitude": 40.1342586,
+      "longitude": -77.0121994,
+      "governing_municipality": "CARROLL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1201739",
+      "name": "Berkshire Hills",
+      "latitude": 40.1398137,
+      "longitude": -77.0296998,
+      "governing_municipality": "CARROLL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1201985",
+      "name": "Coldsborough Manor",
+      "latitude": 40.1339825,
+      "longitude": -76.7485797,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1201997",
+      "name": "Redland Village",
+      "latitude": 40.1717588,
+      "longitude": -76.8063598,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1201998",
+      "name": "Valley Green Estates",
+      "latitude": 40.1492596,
+      "longitude": -76.7885812,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1201999",
+      "name": "Bass Lake",
+      "latitude": 40.1459263,
+      "longitude": -76.7816364,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202000",
+      "name": "Harvest Hills",
+      "latitude": 40.1425931,
+      "longitude": -76.7788586,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202002",
+      "name": "Colonial Woods South",
+      "latitude": 40.1817584,
+      "longitude": -76.8288606,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202003",
+      "name": "Colonial Woods",
+      "latitude": 40.184536,
+      "longitude": -76.8280272,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202007",
+      "name": "Ramblewood",
+      "latitude": 40.1475927,
+      "longitude": -76.8277491,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202009",
+      "name": "Quaker Village",
+      "latitude": 40.1373152,
+      "longitude": -76.8196932,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202017",
+      "name": "Memphord Estates",
+      "latitude": 40.1373142,
+      "longitude": -76.9974768,
+      "governing_municipality": "MONAGHAN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202018",
+      "name": "Cedar Point",
+      "latitude": 40.1700917,
+      "longitude": -76.8863622,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202019",
+      "name": "Nauvoo Estates",
+      "latitude": 40.1578699,
+      "longitude": -76.8780285,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202021",
+      "name": "Timber Ridge",
+      "latitude": 40.2056463,
+      "longitude": -76.8855289,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202944",
+      "name": "Accomac",
+      "latitude": 40.0450969,
+      "longitude": -76.563577,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202951",
+      "name": "Ailston",
+      "latitude": 39.7442711,
+      "longitude": -76.315514,
+      "governing_municipality": "PEACH BOTTOM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1202971",
+      "name": "Ambau",
+      "latitude": 39.8514884,
+      "longitude": -76.8930316,
+      "governing_municipality": "NORTH CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203007",
+      "name": "Bacon Mill",
+      "latitude": 39.8176022,
+      "longitude": -76.5360771,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203011",
+      "name": "Bald Eagle",
+      "latitude": 39.7703814,
+      "longitude": -76.4280181,
+      "governing_municipality": "FAWN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203057",
+      "name": "Bellevue",
+      "latitude": 39.7606594,
+      "longitude": -76.3985726,
+      "governing_municipality": "PEACH BOTTOM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203062",
+      "name": "Benedicts",
+      "latitude": 40.0267621,
+      "longitude": -76.9280302,
+      "governing_municipality": "WARRINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203151",
+      "name": "Bridgeton",
+      "latitude": 39.7909364,
+      "longitude": -76.4205178,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203155",
+      "name": "Brillhart",
+      "latitude": 39.9092662,
+      "longitude": -76.7546913,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203157",
+      "name": "Brodbecks",
+      "latitude": 39.7706574,
+      "longitude": -76.8277534,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203158",
+      "name": "Brogueville",
+      "latitude": 39.8431572,
+      "longitude": -76.5316324,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203172",
+      "name": "Brownton",
+      "latitude": 39.8698231,
+      "longitude": -76.5619107,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203174",
+      "name": "Bruce",
+      "latitude": 39.795103,
+      "longitude": -76.4449632,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203231",
+      "name": "Castle Fin",
+      "latitude": 39.7684371,
+      "longitude": -76.3282923,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203268",
+      "name": "Chestnut Hill",
+      "latitude": 40.0637039,
+      "longitude": -77.0855349,
+      "governing_municipality": "FRANKLIN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203299",
+      "name": "Codorus Furnace",
+      "latitude": 40.0509297,
+      "longitude": -76.6577444,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203305",
+      "name": "Cold Spring",
+      "latitude": 39.8298227,
+      "longitude": -76.8324743,
+      "governing_municipality": "NORTH CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203357",
+      "name": "Coyne Lock",
+      "latitude": 39.7673262,
+      "longitude": -76.273846,
+      "governing_municipality": "PEACH BOTTOM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203368",
+      "name": "Cross Mill",
+      "latitude": 39.7989915,
+      "longitude": -76.5407996,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203430",
+      "name": "Dolf",
+      "latitude": 39.7831585,
+      "longitude": -76.545522,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203442",
+      "name": "Draco",
+      "latitude": 39.7512148,
+      "longitude": -76.5355218,
+      "governing_municipality": "HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203560",
+      "name": "Fenmore",
+      "latitude": 39.8376018,
+      "longitude": -76.5266323,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203571",
+      "name": "Fiscal",
+      "latitude": 39.7276028,
+      "longitude": -76.7935862,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203641",
+      "name": "Fuhrmans Mill",
+      "latitude": 39.7581568,
+      "longitude": -76.9238679,
+      "governing_municipality": "WEST MANHEIM TWP",
+      "governing_coverage_status": "robots_blocked",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203655",
+      "name": "Gatchellville",
+      "latitude": 39.7689924,
+      "longitude": -76.4669084,
+      "governing_municipality": "FAWN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203692",
+      "name": "Gnatstown",
+      "latitude": 39.8675989,
+      "longitude": -76.9288661,
+      "governing_municipality": "JACKSON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203698",
+      "name": "Goram",
+      "latitude": 39.8739902,
+      "longitude": -76.4077399,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203712",
+      "name": "Graybill",
+      "latitude": 39.9237099,
+      "longitude": -76.800804,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203713",
+      "name": "Graydon",
+      "latitude": 39.8542677,
+      "longitude": -76.6549685,
+      "governing_municipality": "NORTH HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203727",
+      "name": "Grove Mill",
+      "latitude": 39.7645478,
+      "longitude": -76.5188546,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203744",
+      "name": "Hametown",
+      "latitude": 39.7984355,
+      "longitude": -76.6791367,
+      "governing_municipality": "SHREWSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203805",
+      "name": "Highrock",
+      "latitude": 39.8153802,
+      "longitude": -76.4788533,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203808",
+      "name": "Hildebrand",
+      "latitude": 39.7439919,
+      "longitude": -76.7527515,
+      "governing_municipality": "SHREWSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203820",
+      "name": "Hobart",
+      "latitude": 39.7428794,
+      "longitude": -76.904423,
+      "governing_municipality": "WEST MANHEIM TWP",
+      "governing_coverage_status": "robots_blocked",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203823",
+      "name": "Hokes",
+      "latitude": 39.7381579,
+      "longitude": -76.8399765,
+      "governing_municipality": "MANHEIM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203831",
+      "name": "Holtz",
+      "latitude": 39.9423214,
+      "longitude": -76.6032996,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203837",
+      "name": "Hopewell Center",
+      "latitude": 39.7976027,
+      "longitude": -76.5074653,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203866",
+      "name": "Hyson Hill",
+      "latitude": 39.7953804,
+      "longitude": -76.5685782,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203875",
+      "name": "Iron Ridge",
+      "latitude": 39.8406552,
+      "longitude": -76.9116436,
+      "governing_municipality": "HEIDELBERG TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203919",
+      "name": "Keeney",
+      "latitude": 39.7595475,
+      "longitude": -76.661637,
+      "governing_municipality": "SHREWSBURY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203960",
+      "name": "Kraft Mill",
+      "latitude": 39.8203781,
+      "longitude": -76.8769206,
+      "governing_municipality": "HEIDELBERG TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203965",
+      "name": "Kreutz Creek",
+      "latitude": 40.0039866,
+      "longitude": -76.618299,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1203989",
+      "name": "Laurel",
+      "latitude": 39.8253799,
+      "longitude": -76.5096875,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204003",
+      "name": "Leibharts Corner",
+      "latitude": 39.9912095,
+      "longitude": -76.4980205,
+      "governing_municipality": "LOWER WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204009",
+      "name": "Leiphart Mill",
+      "latitude": 39.9870426,
+      "longitude": -76.6027435,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204075",
+      "name": "Lucky",
+      "latitude": 39.9037116,
+      "longitude": -76.4455189,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204099",
+      "name": "Marburg",
+      "latitude": 39.7848232,
+      "longitude": -76.8858105,
+      "governing_municipality": "MANHEIM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204111",
+      "name": "Martin",
+      "latitude": 39.8881548,
+      "longitude": -76.8405287,
+      "governing_municipality": "JACKSON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204121",
+      "name": "Maytown",
+      "latitude": 40.099816,
+      "longitude": -76.8724725,
+      "governing_municipality": "WARRINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204131",
+      "name": "McDermott",
+      "latitude": 39.748993,
+      "longitude": -76.4180177,
+      "governing_municipality": "FAWN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204142",
+      "name": "Meadetown",
+      "latitude": 39.8164912,
+      "longitude": -76.5199656,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204217",
+      "name": "Moulstown",
+      "latitude": 39.8520436,
+      "longitude": -76.9327554,
+      "governing_municipality": "HEIDELBERG TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204232",
+      "name": "Mount Top",
+      "latitude": 40.0587052,
+      "longitude": -76.9891437,
+      "governing_municipality": "WARRINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204241",
+      "name": "Muddy Creek Forks",
+      "latitude": 39.8081582,
+      "longitude": -76.4752421,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204260",
+      "name": "Nauvoo",
+      "latitude": 40.1573143,
+      "longitude": -76.8846954,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204337",
+      "name": "Orwig",
+      "latitude": 39.7609365,
+      "longitude": -76.6280248,
+      "governing_municipality": "HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204381",
+      "name": "Pentland",
+      "latitude": 39.7909345,
+      "longitude": -76.8538649,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204389",
+      "name": "Pierceville",
+      "latitude": 39.7542693,
+      "longitude": -76.7796966,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204405",
+      "name": "Pinetown",
+      "latitude": 40.120093,
+      "longitude": -76.9008069,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204415",
+      "name": "Plainfield",
+      "latitude": 40.1698146,
+      "longitude": -76.764414,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204441",
+      "name": "Potosi",
+      "latitude": 39.8206573,
+      "longitude": -76.673025,
+      "governing_municipality": "SPRINGFIELD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204464",
+      "name": "Raubenstine",
+      "latitude": 39.7342675,
+      "longitude": -76.9960926,
+      "governing_municipality": "WEST MANHEIM TWP",
+      "governing_coverage_status": "robots_blocked",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204483",
+      "name": "Reimold",
+      "latitude": 39.7581589,
+      "longitude": -76.6188579,
+      "governing_municipality": "HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204487",
+      "name": "Relay",
+      "latitude": 39.9248216,
+      "longitude": -76.6485782,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204493",
+      "name": "Reynolds Mill",
+      "latitude": 39.8950998,
+      "longitude": -76.7424692,
+      "governing_municipality": "SPRINGFIELD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204512",
+      "name": "Rinely",
+      "latitude": 39.8017691,
+      "longitude": -76.59719,
+      "governing_municipality": "EAST HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204528",
+      "name": "Rockey",
+      "latitude": 39.8989893,
+      "longitude": -76.5177432,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204531",
+      "name": "Rockville",
+      "latitude": 39.7787132,
+      "longitude": -76.7749736,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204545",
+      "name": "Rosegarden",
+      "latitude": 40.1478693,
+      "longitude": -77.0110882,
+      "governing_municipality": "CARROLL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204568",
+      "name": "Rye",
+      "latitude": 39.878156,
+      "longitude": -76.6630237,
+      "governing_municipality": "YORK TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204600",
+      "name": "Sechrist Mill",
+      "latitude": 39.8628788,
+      "longitude": -76.5905225,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204608",
+      "name": "Seitzville",
+      "latitude": 39.8301011,
+      "longitude": -76.7619161,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204657",
+      "name": "Sinsheim",
+      "latitude": 39.804823,
+      "longitude": -76.8660872,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204659",
+      "name": "Slab",
+      "latitude": 39.7962143,
+      "longitude": -76.3363483,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204661",
+      "name": "Slate Hill",
+      "latitude": 39.7392712,
+      "longitude": -76.2894019,
+      "governing_municipality": "PEACH BOTTOM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204682",
+      "name": "Snyder Corner",
+      "latitude": 39.9198221,
+      "longitude": -76.528021,
+      "governing_municipality": "LOWER WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204694",
+      "name": "Southside",
+      "latitude": 39.7812145,
+      "longitude": -76.3946836,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204738",
+      "name": "Stiltz",
+      "latitude": 39.7212142,
+      "longitude": -76.7649742,
+      "governing_municipality": "CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204745",
+      "name": "Stoner",
+      "latitude": 40.0039868,
+      "longitude": -76.5766321,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204759",
+      "name": "Strickhousers",
+      "latitude": 39.8387116,
+      "longitude": -76.8085843,
+      "governing_municipality": "NORTH CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204760",
+      "name": "Strickler",
+      "latitude": 40.0112089,
+      "longitude": -76.5510765,
+      "governing_municipality": "HELLAM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204774",
+      "name": "Sunnyburn",
+      "latitude": 39.8056585,
+      "longitude": -76.370794,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204802",
+      "name": "Taxville",
+      "latitude": 39.9584312,
+      "longitude": -76.8146926,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204854",
+      "name": "Uno",
+      "latitude": 40.1034262,
+      "longitude": -76.9833099,
+      "governing_municipality": "CARROLL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204863",
+      "name": "Valley Junction",
+      "latitude": 39.8114895,
+      "longitude": -76.872754,
+      "governing_municipality": "NORTH CODORUS TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204886",
+      "name": "Wago Junction",
+      "latitude": 40.0873174,
+      "longitude": -76.6949674,
+      "governing_municipality": "EAST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204922",
+      "name": "West Bangor",
+      "latitude": 39.7301046,
+      "longitude": -76.3130139,
+      "governing_municipality": "PEACH BOTTOM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204930",
+      "name": "West Manheim",
+      "latitude": 39.7226016,
+      "longitude": -76.9177569,
+      "governing_municipality": "WEST MANHEIM TWP",
+      "governing_coverage_status": "robots_blocked",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "WEST MANHEIM TWP"
+    },
+    {
+      "gnis_feature_id": "1204933",
+      "name": "West York",
+      "latitude": 39.9525985,
+      "longitude": -76.7513566,
+      "governing_municipality": "WEST YORK BORO",
+      "governing_coverage_status": "document_delivery_blocked",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "WEST YORK BORO"
+    },
+    {
+      "gnis_feature_id": "1204951",
+      "name": "Wiley",
+      "latitude": 39.7223262,
+      "longitude": -76.5432999,
+      "governing_municipality": "HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1204982",
+      "name": "Woodbine",
+      "latitude": 39.7848255,
+      "longitude": -76.4057951,
+      "governing_municipality": "PEACH BOTTOM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1205005",
+      "name": "York Furnace",
+      "latitude": 39.8723236,
+      "longitude": -76.3813501,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1205010",
+      "name": "Zeigler",
+      "latitude": 39.755659,
+      "longitude": -76.6077465,
+      "governing_municipality": "HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1209049",
+      "name": "Pigeon Hills (historical)",
+      "latitude": 39.8681545,
+      "longitude": -76.930255,
+      "governing_municipality": "JACKSON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211009",
+      "name": "Uniontown",
+      "latitude": 40.0653709,
+      "longitude": -77.0555343,
+      "governing_municipality": "FRANKLIN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211059",
+      "name": "Markey Ford",
+      "latitude": 39.980602,
+      "longitude": -76.929616,
+      "governing_municipality": "DOVER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211089",
+      "name": "Penn Grove",
+      "latitude": 39.8142668,
+      "longitude": -76.9124776,
+      "governing_municipality": "HEIDELBERG TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211095",
+      "name": "New Baltimore",
+      "latitude": 39.8250994,
+      "longitude": -76.9733129,
+      "governing_municipality": "HANOVER BORO",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211144",
+      "name": "Mount Airy",
+      "latitude": 40.0989825,
+      "longitude": -76.9066404,
+      "governing_municipality": "WARRINGTON TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211147",
+      "name": "Roler",
+      "latitude": 40.0128736,
+      "longitude": -76.9221966,
+      "governing_municipality": "DOVER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211161",
+      "name": "Springville",
+      "latitude": 40.1834248,
+      "longitude": -76.8663616,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211171",
+      "name": "Anstine",
+      "latitude": 39.75427,
+      "longitude": -76.6349696,
+      "governing_municipality": "HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211172",
+      "name": "Sheffer",
+      "latitude": 39.7617698,
+      "longitude": -76.6496922,
+      "governing_municipality": "HOPEWELL TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211189",
+      "name": "Lockport",
+      "latitude": 39.9156559,
+      "longitude": -76.4060732,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211192",
+      "name": "Bridgeville",
+      "latitude": 39.9375997,
+      "longitude": -76.4538525,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211205",
+      "name": "Golden (historical)",
+      "latitude": 39.9623209,
+      "longitude": -76.6274662,
+      "governing_municipality": "WINDSOR TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211209",
+      "name": "Botts",
+      "latitude": 39.9359316,
+      "longitude": -76.8205267,
+      "governing_municipality": "WEST MANCHESTER TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211220",
+      "name": "Pleasant Grove (historical)",
+      "latitude": 39.8153802,
+      "longitude": -76.4696863,
+      "governing_municipality": "LOWER CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1211236",
+      "name": "Shrewsbury Station",
+      "latitude": 39.7573252,
+      "longitude": -76.7002495,
+      "governing_municipality": "RAILROAD BORO",
+      "governing_coverage_status": "source_gap",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1212375",
+      "name": "Maple Grove",
+      "latitude": 39.880654,
+      "longitude": -76.9530334,
+      "governing_municipality": "PARADISE TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1212377",
+      "name": "Holtzswam",
+      "latitude": 39.9306532,
+      "longitude": -76.9263648,
+      "governing_municipality": "PARADISE TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1212379",
+      "name": "Cherry Hill",
+      "latitude": 40.2067575,
+      "longitude": -76.8627506,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1212380",
+      "name": "Westfield Terrace",
+      "latitude": 40.2106463,
+      "longitude": -76.8655284,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1212381",
+      "name": "Fair Acres",
+      "latitude": 40.187869,
+      "longitude": -76.8921957,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1212589",
+      "name": "Richmond",
+      "latitude": 39.9348218,
+      "longitude": -76.5041317,
+      "governing_municipality": "CHANCEFORD TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1213102",
+      "name": "New Market",
+      "latitude": 40.223146,
+      "longitude": -76.8521948,
+      "governing_municipality": "FAIRVIEW TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1213132",
+      "name": "Bandanna",
+      "latitude": 39.7387124,
+      "longitude": -76.9372018,
+      "governing_municipality": "WEST MANHEIM TWP",
+      "governing_coverage_status": "robots_blocked",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1214031",
+      "name": "New Freedom",
+      "latitude": 39.7378811,
+      "longitude": -76.7013609,
+      "governing_municipality": "NEW FREEDOM BORO",
+      "governing_coverage_status": "configured",
+      "scope": "incorporated_municipality",
+      "incorporated_municipality_match": "NEW FREEDOM BORO"
+    },
+    {
+      "gnis_feature_id": "1867492",
+      "name": "Grantley",
+      "latitude": 39.9403767,
+      "longitude": -76.7291344,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1867509",
+      "name": "Susquehanna Trails",
+      "latitude": 39.7587151,
+      "longitude": -76.3680159,
+      "governing_municipality": "PEACH BOTTOM TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1867512",
+      "name": "Valley Green",
+      "latitude": 40.1573148,
+      "longitude": -76.7927481,
+      "governing_municipality": "NEWBERRY TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    },
+    {
+      "gnis_feature_id": "1867513",
+      "name": "Valley View",
+      "latitude": 39.9500987,
+      "longitude": -76.7010783,
+      "governing_municipality": "SPRING GARDEN TWP",
+      "governing_coverage_status": "configured",
+      "scope": "named_populated_place_inherits_governing_municipality",
+      "incorporated_municipality_match": null
+    }
+  ],
+  "unmapped_gnis_place_names": [],
+  "verified_on": "2026-09-08",
+  "verification": "Primary independently matched all 72 municipal names to YCPC polygons and all 383 GNIS IDs/names/coordinates to the downloaded source, then recomputed every point-in-polygon assignment."
+}

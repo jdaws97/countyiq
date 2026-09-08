@@ -7,16 +7,15 @@ reviewed policy and writes an immutable decision receipt for the Dagster run.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
 import hashlib
 import json
+from dataclasses import dataclass
+from datetime import date
 from typing import Literal
-
-from countyiq.resources.database import DatabaseResource
 
 from countyiq.lib.county_config import municipality_source_key
 from countyiq.lib.robots import source_origin
+from countyiq.resources.database import DatabaseResource
 
 
 @dataclass(frozen=True)
@@ -40,6 +39,8 @@ class MunicipalitySourceAuthorization:
     raw_export_allowed: bool
     allowed_origins: frozenset[str]
     robots_unavailable_risk_accepted: bool
+    browser_transport_reviewed: bool = False
+    document_url_prefixes: tuple[str, ...] = ()
 
 
 SourceUse = Literal[
@@ -489,6 +490,12 @@ def authorize_municipality_sources(
             robots_unavailable_risk_accepted=bool(
                 (evidence or {}).get("robots_unavailable_risk_accepted", False)
             ),
+            browser_transport_reviewed=bool(
+                (evidence or {}).get("browser_transport_reviewed", False)
+            ),
+            document_url_prefixes=(str(evidence["document_path_prefix"]),)
+            if (evidence or {}).get("document_path_prefix")
+            else (),
         )
         require_source_use(authorization, "derived_product")
         authorizations[source_key] = authorization

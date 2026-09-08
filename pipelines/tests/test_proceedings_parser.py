@@ -40,6 +40,13 @@ class TestExtractDriveFolderIds:
         )
         assert extract_drive_folder_ids(html) == ["12wXw_s6QTg7yumxB5dK60R8dnaol1Woz"]
 
+    def test_extracts_embedded_folderview_links(self):
+        html = (
+            '<iframe src="https://drive.google.com/embeddedfolderview?id='
+            '1abcDEF_2ghiJKL34mnoPQR56stuVWX78#grid"></iframe>'
+        )
+        assert extract_drive_folder_ids(html) == ["1abcDEF_2ghiJKL34mnoPQR56stuVWX78"]
+
     def test_ignores_non_drive_links(self):
         html = '<a href="https://example.com/minutes.pdf">m</a>'
         assert extract_drive_folder_ids(html) == []
@@ -357,6 +364,13 @@ class TestParseMeetingDateFromFilename:
 
 # ---------------------------------------------------------------------------
 # classify_proceeding_type
+def test_planning_month_filename_is_not_a_supervisor_document():
+    assert (
+        classify_proceeding_type("Planning-12-2024.pdf", "December")
+        == "planning_commission"
+    )
+
+
 # ---------------------------------------------------------------------------
 
 

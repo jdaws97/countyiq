@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import ipaddress
+import posixpath
 import re
 import socket
 import threading
 from dataclasses import dataclass
-from urllib.parse import urljoin, urlparse, urlsplit
+from urllib.parse import unquote, urljoin, urlparse, urlsplit
 
 import requests
 
@@ -43,6 +44,23 @@ class UnsafeSourceAddressError(requests.RequestException):
     def __init__(self, reason: str):
         self.reason = reason
         super().__init__(f"source URL is not a public HTTP endpoint: {reason}")
+
+
+def assert_source_path(url: str, allowed_url_prefixes: tuple[str, ...] = ()) -> None:
+    """Restrict a shared delivery origin to its reviewed publisher directory."""
+    prefixes = [
+        prefix
+        for prefix in allowed_url_prefixes
+        if source_origin(prefix) == source_origin(url)
+    ]
+    if not prefixes:
+        return
+    path = posixpath.normpath(unquote(urlsplit(url).path))
+    for prefix in prefixes:
+        approved_path = posixpath.normpath(unquote(urlsplit(prefix).path)).rstrip("/")
+        if path == approved_path or path.startswith(approved_path + "/"):
+            return
+    raise SourceOriginDeniedError(url)
 
 
 @dataclass(frozen=True)
@@ -275,6 +293,7 @@ def get_with_robots(
     stream: bool = False,
     max_redirects: int = 5,
     allowed_origins: set[str] | frozenset[str] | None = None,
+    allowed_url_prefixes: tuple[str, ...] = (),
 ) -> requests.Response:
     """GET a URL while authorizing every redirect target before access.
 
@@ -300,6 +319,7 @@ def get_with_robots(
 
     for redirect_count in range(max_redirects + 1):
         assert_public_http_url(current_url)
+        assert_source_path(current_url, allowed_url_prefixes)
         if (
             normalized_allowed_origins is not None
             and source_origin(current_url) not in normalized_allowed_origins

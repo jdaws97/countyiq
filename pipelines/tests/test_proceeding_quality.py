@@ -365,13 +365,18 @@ def test_pending_query_requires_metadata_release_and_past_date():
 def test_replacement_sources_are_separate_from_retired_identities():
     county = get_county_config("york")
     assert len(county.rejected_proceeding_domains) == 4
-    assert len(county.proceeding_source_replacements) == 8
-    assert not {x[0] for x in county.proceeding_source_replacements}.intersection(
-        x[0] for x in county.municipality_websites
-    )
+    assert not county.proceeding_source_replacements
+    active_names = {name for name, _, _ in county.municipality_websites}
+    assert "Penn Twp Board of Supervisors" not in active_names
+    assert "Jackson Twp Board of Supervisors" not in active_names
     assert any(
         name == "Penn Township Board of Commissioners"
-        for name, _, _ in county.proceeding_source_replacements
+        for name, _, _ in county.municipality_websites
+    )
+    assert not any(
+        domain in url
+        for domain in county.rejected_proceeding_domains
+        for _, url, _ in county.municipality_websites
     )
 
 

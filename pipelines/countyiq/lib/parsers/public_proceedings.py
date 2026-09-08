@@ -115,7 +115,7 @@ def _compact_eight_digits(m: re.Match) -> str | None:
 # ---------------------------------------------------------------------------
 
 _DRIVE_FOLDER_RE = re.compile(
-    r"drive\.google\.com/(?:drive/folders/|folderview\?id=)([A-Za-z0-9_-]+)"
+    r"drive\.google\.com/(?:drive/folders/|folderview\?id=|embeddedfolderview\?id=)([A-Za-z0-9_-]+)"
 )
 
 # One embeddedfolderview entry: the id carries the item ID, the first href
@@ -342,8 +342,10 @@ def classify_proceeding_type(filename: str, link_text: str) -> str:
         return "zoning_hearing"
 
     # PC (standalone) or "Planning Commission"
-    if _token("PC").search(combined) or re.search(
-        r"Planning[\s_-]+Commission", combined, re.IGNORECASE
+    if (
+        _token("PC").search(combined)
+        or re.search(r"Planning[\s_-]+Commission", combined, re.IGNORECASE)
+        or re.search(r"^Planning[\s_-]+(?:\d|Minutes|Agenda)", stem, re.IGNORECASE)
     ):
         return "planning_commission"
 

@@ -1,4 +1,4 @@
-"""Public proceedings scraper — downloads meeting minute PDFs from municipality websites.
+"""Collect reviewed municipal meeting documents and HTML records.
 
 Reworked 2026-08-02 for politeness-preserving parallelism:
 
@@ -12,7 +12,8 @@ Reworked 2026-08-02 for politeness-preserving parallelism:
   Phase 1.5 (main thread): transparent Playwright transport for a robots.txt
       network failure, followed by listing rendering only when the browser-read
       policy allows it; also renders successful static listings whose document
-      list is genuinely JS-rendered.
+      list is JS-rendered. Explicitly reviewed browser sources use Chromium
+      for both listings and documents, with the same robots and source limits.
   Phase 2 (parallel across DOMAINS): download only NEW documents, body-scoped
       content-hash dedup, and enforce global/per-body request caps before
       extracting text and archiving to R2. Workers never touch the database.
@@ -27,14 +28,19 @@ Reworked 2026-08-02 for politeness-preserving parallelism:
   conditional requests wherever the server provides validators.
 """
 
+import base64
+import calendar
 import concurrent.futures
 import hashlib
 import os
 import random
 import re
+import tempfile
 import threading
 import time
 from datetime import date, timedelta
+from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
 from dagster import (
@@ -46,8 +52,6 @@ from dagster import (
 from psycopg2.errors import UndefinedTable
 from psycopg2.extras import Json
 
-from countyiq.lib.proceeding_quality import review_metadata
-
 from countyiq.lib.county_config import (
     get_county_config,
     municipality_name_from_body,
@@ -58,6 +62,11 @@ from countyiq.lib.doc_text import (
     extract_text_from_pdf_bytes,
 )
 from countyiq.lib.error_budget import check_error_budget
+from countyiq.lib.parsers.municipal_web import (
+    extract_html_record_text,
+    extract_meeting_page_links,
+    select_listing_region,
+)
 from countyiq.lib.parsers.public_proceedings import (
     classify_proceeding_type,
     extract_drive_folder_ids,
@@ -65,11 +74,13 @@ from countyiq.lib.parsers.public_proceedings import (
     parse_drive_folder_listing,
     parse_meeting_date_from_filename,
 )
+from countyiq.lib.proceeding_quality import review_metadata
 from countyiq.lib.robots import (
     RobotsDeniedError,
     RobotsPolicy,
     SourceOriginDeniedError,
     assert_public_http_url,
+    assert_source_path,
     get_with_robots,
     source_origin,
 )
@@ -154,6 +165,20 @@ def _document_priority(link: dict) -> tuple[str, str]:
     parsed = parse_meeting_date_from_filename(link.get("filename") or "")
     if parsed is None:
         parsed = parse_meeting_date_from_filename(link.get("link_text") or "")
+    if parsed is None:
+        label = (link.get("filename", "") + " " + link.get("link_text", "")).lower()
+        year = re.search(r"\b(20\d{2})\b", label)
+        if year:
+            month = next(
+                (
+                    index
+                    for index, name in enumerate(calendar.month_name)
+                    if name and name.lower() in label
+                ),
+                0,
+            )
+            # A sort key only; month/year labels never invent a meeting day.
+            parsed = f"{year.group(1)}-{month:02d}-00"
     return parsed or "", link.get("filename") or ""
 
 
@@ -192,6 +217,8 @@ class _PlaywrightFetcher:
         self._playwright = None
         self._browser = None
         self._unavailable = False
+        self._user_agent = _BROWSER_UA
+        self._document_pages = {}
 
     def _ensure_browser(self) -> bool:
         if self._unavailable:
@@ -220,6 +247,14 @@ class _PlaywrightFetcher:
                     channel="chrome", headless=True, args=launch_args
                 )
                 self._log.info("Playwright launched system Chrome for JS fallback")
+            identity_page = self._browser.new_page()
+            try:
+                chromium_identity = identity_page.evaluate("navigator.userAgent")
+            finally:
+                identity_page.close()
+            self._user_agent = (
+                chromium_identity + " CountyIQ/1.0 (+https://countyiq.app)"
+            )
             return True
         except Exception as exc:
             self._log.warning("Failed to launch Playwright browser: %s", exc)
@@ -237,7 +272,7 @@ class _PlaywrightFetcher:
         if not self._ensure_browser():
             return None
         try:
-            page = self._browser.new_page(user_agent=_BROWSER_UA)
+            page = self._browser.new_page(user_agent=self._user_agent)
             try:
 
                 def authorize_request(route, request):
@@ -286,8 +321,25 @@ class _PlaywrightFetcher:
                 # that DOMContentLoaded never arrives under routed automation.
                 # The document anchors are server-rendered, so commit plus the
                 # bounded settle below is the correct acquisition boundary.
-                page.goto(url, timeout=_PLAYWRIGHT_NAV_TIMEOUT_MS, wait_until="commit")
+                response = page.goto(
+                    url, timeout=_PLAYWRIGHT_NAV_TIMEOUT_MS, wait_until="commit"
+                )
+                if response is None or response.status >= 400:
+                    return None
                 page.wait_for_timeout(settle_ms)
+                # Use the published table control to expose more public rows.
+                # The document budget still bounds collection independently.
+                for control in page.locator("select[name$='_length']").all():
+                    values = control.locator("option").evaluate_all(
+                        "options => options.map(option => option.value)"
+                    )
+                    sizes = [
+                        int(value)
+                        for value in values
+                        if value.isdigit() and int(value) <= 100
+                    ]
+                    if sizes:
+                        control.select_option(str(max(sizes)))
                 return page.content()
             finally:
                 page.close()
@@ -316,7 +368,7 @@ class _PlaywrightFetcher:
         if not self._ensure_browser():
             return False
 
-        page = self._browser.new_page(user_agent=_BROWSER_UA)
+        page = self._browser.new_page(user_agent=self._user_agent)
         try:
 
             def authorize_request(route, request):
@@ -354,6 +406,97 @@ class _PlaywrightFetcher:
         finally:
             page.close()
 
+    def fetch_document(
+        self,
+        url,
+        listing_url,
+        allowed_origins,
+        *,
+        minimum_delay=0.5,
+        allowed_url_prefixes=(),
+    ):
+        """Read public bytes in Chromium with every data request policy-checked."""
+        if not self._ensure_browser():
+            raise RuntimeError("browser document transport is unavailable")
+        if source_origin(url) not in allowed_origins or not self._robots.allowed(url):
+            raise RuntimeError(f"document policy does not permit {url}")
+        assert_source_path(url, allowed_url_prefixes)
+        page = self._document_pages.get(listing_url)
+        if page is None:
+            page = self._browser.new_page(user_agent=self._user_agent)
+
+            def authorize_request(route, request):
+                if request.resource_type not in {"document", "xhr", "fetch"}:
+                    route.continue_()
+                    return
+                if source_origin(
+                    request.url
+                ) not in allowed_origins or not self._robots.allowed(request.url):
+                    route.abort()
+                    return
+                assert_public_http_url(request.url)
+                assert_source_path(request.url, allowed_url_prefixes)
+                route.continue_()
+
+            page.route("**/*", authorize_request)
+            response = page.goto(
+                listing_url,
+                timeout=_PLAYWRIGHT_NAV_TIMEOUT_MS,
+                wait_until="domcontentloaded",
+            )
+            if response is None or response.status >= 400:
+                page.close()
+                raise RuntimeError(f"browser document context failed: {listing_url}")
+            self._document_pages[listing_url] = page
+            time.sleep(minimum_delay)
+        payload = page.evaluate(
+            """async (url) => {
+                const response = await fetch(url, {
+                    signal: AbortSignal.timeout(30000), credentials: 'omit'
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${url}`);
+                }
+                const reader = response.body.getReader();
+                const chunks = [];
+                let length = 0;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) { break; }
+                    length += value.length;
+                    if (length > 25 * 1024 * 1024) {
+                        await reader.cancel();
+                        throw new Error(`Document exceeds 25 MiB: ${url}`);
+                    }
+                    chunks.push(value);
+                }
+                const bytes = new Uint8Array(length);
+                let position = 0;
+                for (const chunk of chunks) {
+                    bytes.set(chunk, position);
+                    position += chunk.length;
+                }
+                let binary = '';
+                for (let offset = 0; offset < bytes.length; offset += 8192) {
+                    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+                }
+                return {
+                    content: btoa(binary), url: response.url,
+                    contentType: response.headers.get('content-type'),
+                    disposition: response.headers.get('content-disposition')
+                };
+            }""",
+            url,
+        )
+        return SimpleNamespace(
+            content=base64.b64decode(payload["content"]),
+            url=payload["url"],
+            headers={
+                "Content-Type": payload["contentType"] or "",
+                "Content-Disposition": payload["disposition"] or "",
+            },
+        )
+
     def close(self) -> None:
         if self._browser is not None:
             self._browser.close()
@@ -361,6 +504,7 @@ class _PlaywrightFetcher:
             self._playwright.stop()
         self._browser = None
         self._playwright = None
+        self._document_pages.clear()
 
 
 def _domain_of(url: str) -> str:
@@ -385,6 +529,7 @@ def _upgrade_reviewed_document_url(
 def _filter_allowed_document_links(
     links: list[dict],
     allowed_origins: frozenset[str],
+    allowed_url_prefixes: tuple[str, ...] = (),
 ) -> tuple[list[dict], set[str]]:
     """Keep reviewed document origins without sacrificing same-page signal.
 
@@ -403,6 +548,11 @@ def _filter_allowed_document_links(
             allowed_origins,
         )
         if source_origin(document_url) not in allowed_origins:
+            blocked_urls.add(document_url)
+            continue
+        try:
+            assert_source_path(document_url, allowed_url_prefixes)
+        except SourceOriginDeniedError:
             blocked_urls.add(document_url)
             continue
         allowed.append({**link, "url": document_url})
@@ -457,6 +607,24 @@ def public_proceedings_scrape(
     require_source_use(source_authorization, "raw_retention")
 
     municipality_websites = county.municipality_websites
+    selected_keys = {
+        key.strip()
+        for key in os.environ.get("COUNTYIQ_PROCEEDINGS_SOURCE_KEYS", "").split(",")
+        if key.strip()
+    }
+    if selected_keys:
+        configured_keys = {
+            municipality_source_key(body) for body, _, _ in municipality_websites
+        }
+        if selected_keys - configured_keys:
+            raise ValueError(
+                f"Unknown configured source keys: {sorted(selected_keys - configured_keys)}"
+            )
+        municipality_websites = tuple(
+            entry
+            for entry in municipality_websites
+            if municipality_source_key(entry[0]) in selected_keys
+        )
 
     if not municipality_websites:
         log.info(
@@ -481,6 +649,94 @@ def public_proceedings_scrape(
         asset_key="public_proceedings_scrape",
         dagster_run_id=context.run_id,
     )
+    browser_sources = set(county.proceeding_browser_sources)
+    html_sources = {
+        body: (prefix, selector)
+        for body, prefix, selector in county.proceeding_html_sources
+    }
+    detail_sources = dict(county.proceeding_detail_sources)
+    listing_regions = {
+        body: (selector, heading)
+        for body, selector, heading in county.proceeding_listing_regions
+    }
+    crawl_delays = dict(county.proceeding_crawl_delays)
+    for body in browser_sources:
+        authorization = municipality_authorizations.get(municipality_source_key(body))
+        if authorization and not authorization.browser_transport_reviewed:
+            raise RuntimeError(f"Browser transport is not reviewed for {body}")
+
+    def source_delay(url):
+        time.sleep(max(crawl_delays.get(source_origin(url), 0), _THROTTLE_MIN))
+
+    def discover_links(
+        html, url, body, proceeding_type, fetch_detail, discovery_errors
+    ):
+        if body in listing_regions:
+            selector, heading = listing_regions[body]
+            html = select_listing_region(html, selector=selector, heading=heading)
+        links = extract_pdf_links(html, url)
+        if body in html_sources:
+            prefix, selector = html_sources[body]
+            for link in extract_meeting_page_links(html, url, path_prefixes=(prefix,)):
+                if not re.search(
+                    r"minutes|agenda", link["url"] + link["link_text"], re.IGNORECASE
+                ):
+                    continue
+                links.append({**link, "content_selector": selector})
+        if body in detail_sources:
+            # Document landing routes can look like file downloads to the
+            # generic parser. Resolve their actual attachment on the detail page.
+            links = [
+                link
+                for link in links
+                if not (
+                    source_origin(link["url"]) == source_origin(url)
+                    and urlsplit(link["url"]).path.startswith(detail_sources[body])
+                )
+            ]
+            pages = extract_meeting_page_links(
+                html, url, path_prefixes=(detail_sources[body],)
+            )
+            relevant_pages = [
+                page
+                for page in pages
+                if classify_proceeding_type(page["filename"], page["link_text"])
+                == _CLASSIFIED_TYPE_BY_CONFIG.get(proceeding_type)
+            ]
+            for page in sorted(relevant_pages, key=_document_priority, reverse=True)[
+                :25
+            ]:
+                try:
+                    detail_html = fetch_detail(page["url"])
+                except Exception as exc:
+                    discovery_errors.append(f"{page['url']}: {exc}"[:500])
+                    continue
+                if detail_html:
+                    for link in extract_pdf_links(detail_html, page["url"]):
+                        record_label = link["filename"] + " " + link["link_text"]
+                        if not re.search(
+                            r"minutes|agenda|packet|decision",
+                            record_label,
+                            re.IGNORECASE,
+                        ):
+                            continue
+                        links.append(
+                            {
+                                **link,
+                                "link_text": page["link_text"]
+                                + " "
+                                + link["link_text"],
+                            }
+                        )
+        distinct_links = {}
+        for link in links:
+            label = re.sub(r"[-_]", " ", link["filename"] + " " + link["link_text"])
+            if re.search(
+                r"zoning map|meeting dates|no \w+ 20\d{2} meeting", label, re.IGNORECASE
+            ):
+                continue
+            distinct_links.setdefault(link["url"], link)
+        return list(distinct_links.values())
 
     # ------------------------------------------------------------------
     # Phase 0 — preload dedup sets + HTTP validators (main thread)
@@ -584,7 +840,12 @@ def public_proceedings_scrape(
                 "last_error": None,
                 "policy_blocked_document_urls": set(),
                 "budget_deferred": 0,
+                "discovery_errors": [],
             }
+            if body_name in browser_sources:
+                entry_result["status"] = "needs_reviewed_browser"
+                results.append(entry_result)
+                continue
             robots_decision = robots.decision(minutes_url)
             entry_result["robots_allowed"] = robots_decision.allowed
             entry_result["robots_reason"] = robots_decision.reason
@@ -659,11 +920,39 @@ def public_proceedings_scrape(
                 if response is not None:
                     entry_result["http_status"] = response.status_code
 
-            links = extract_pdf_links(html or "", entry_result["resolved_url"])
+            def fetch_detail(url, authorization=authorization):
+                try:
+                    response = get_with_robots(
+                        url,
+                        robots=robots,
+                        allowed_origins=authorization.allowed_origins,
+                        headers=_HEADERS,
+                        timeout=_REQUEST_TIMEOUT,
+                    )
+                    response.raise_for_status()
+                    return response.text
+                finally:
+                    source_delay(url)
+
+            links = discover_links(
+                html or "",
+                entry_result["resolved_url"],
+                body_name,
+                proceeding_type,
+                fetch_detail,
+                entry_result["discovery_errors"],
+            )
+            if body_name in detail_sources or body_name in html_sources:
+                entry_result["validators"] = None
             if html:
+                if "https://drive.google.com" not in authorization.allowed_origins:
+                    entry_result["policy_blocked_document_urls"].update(
+                        f"https://drive.google.com/drive/folders/{folder_id}"
+                        for folder_id in extract_drive_folder_ids(html)
+                    )
                 drive_records = _resolve_drive_folders(
                     html,
-                    lambda url: _fetch_drive_listing(
+                    lambda url, authorization=authorization: _fetch_drive_listing(
                         url,
                         robots,
                         authorization.allowed_origins,
@@ -678,6 +967,7 @@ def public_proceedings_scrape(
             links, blocked_urls = _filter_allowed_document_links(
                 links,
                 authorization.allowed_origins,
+                getattr(authorization, "document_url_prefixes", ()),
             )
             entry_result["policy_blocked_document_urls"].update(blocked_urls)
             if html and not links:
@@ -706,21 +996,26 @@ def public_proceedings_scrape(
     # Phase 1.5 — Playwright fallback, main thread only
     # ------------------------------------------------------------------
     pdfs_via_playwright = 0
+    browser_downloads = tempfile.TemporaryDirectory(prefix="countyiq-proceedings-")
     playwright_fetcher = _PlaywrightFetcher(log, robots)
     try:
         for entry_result in listing_results:
             if entry_result["status"] not in {
                 "needs_browser_robots",
                 "needs_playwright",
+                "needs_reviewed_browser",
             }:
                 continue
             resolved_url = entry_result["resolved_url"]
             authorization = municipality_authorizations[entry_result["source_key"]]
             allowed_origins = authorization.allowed_origins
-            if entry_result["status"] == "needs_browser_robots":
-                robots_decision = robots.decision(resolved_url)
+            if entry_result["status"] in {
+                "needs_browser_robots",
+                "needs_reviewed_browser",
+            }:
+                robots_url = source_origin(resolved_url) + "/robots.txt"
                 if not playwright_fetcher.fetch_robots(
-                    robots_decision.robots_url,
+                    robots_url,
                     allowed_origins,
                 ):
                     entry_result["status"] = "robots_skipped"
@@ -735,6 +1030,7 @@ def public_proceedings_scrape(
                     entry_result["status"] = "robots_skipped"
                     entry_result["last_error"] = robots_decision.reason
                     continue
+            source_delay(resolved_url)
             rendered = playwright_fetcher.fetch_html(
                 resolved_url,
                 allowed_origins,
@@ -742,15 +1038,26 @@ def public_proceedings_scrape(
                     authorization.robots_unavailable_risk_accepted
                 ),
             )
-            links = extract_pdf_links(rendered or "", resolved_url) if rendered else []
+            links = discover_links(
+                rendered or "",
+                resolved_url,
+                entry_result["body_name"],
+                entry_result["proceeding_type"],
+                lambda url, allowed_origins=allowed_origins: (
+                    playwright_fetcher.fetch_html(url, allowed_origins)
+                ),
+                entry_result["discovery_errors"],
+            )
             links, blocked_urls = _filter_allowed_document_links(
                 links,
                 allowed_origins,
+                getattr(authorization, "document_url_prefixes", ()),
             )
             entry_result["policy_blocked_document_urls"].update(blocked_urls)
             if rendered and not links:
                 # Some sites (eCode360) populate the document list via XHR
                 # well after DOM settle — one slower retry before giving up.
+                source_delay(resolved_url)
                 rendered = playwright_fetcher.fetch_html(
                     resolved_url,
                     allowed_origins,
@@ -759,12 +1066,20 @@ def public_proceedings_scrape(
                         authorization.robots_unavailable_risk_accepted
                     ),
                 )
-                links = (
-                    extract_pdf_links(rendered or "", resolved_url) if rendered else []
+                links = discover_links(
+                    rendered or "",
+                    resolved_url,
+                    entry_result["body_name"],
+                    entry_result["proceeding_type"],
+                    lambda url, allowed_origins=allowed_origins: (
+                        playwright_fetcher.fetch_html(url, allowed_origins)
+                    ),
+                    entry_result["discovery_errors"],
                 )
                 links, blocked_urls = _filter_allowed_document_links(
                     links,
                     allowed_origins,
+                    getattr(authorization, "document_url_prefixes", ()),
                 )
                 entry_result["policy_blocked_document_urls"].update(blocked_urls)
             if links:
@@ -795,6 +1110,75 @@ def public_proceedings_scrape(
             else:
                 entry_result["status"] = "no_documents"
                 entry_result["last_error"] = "no supported documents discovered"
+        # Chromium is confined to this main-thread phase. Download reservations
+        # use the same run/body limits and existing-document checkpoint as HTTP.
+        for entry_result in listing_results:
+            siblings = [
+                result
+                for result in listing_results
+                if result["minutes_url"] == entry_result["minutes_url"]
+            ]
+            entry_result["links"] = [
+                link
+                for link in entry_result["links"]
+                if _link_belongs_to_entry(
+                    entry_result,
+                    siblings,
+                    classify_proceeding_type(link["filename"], link["link_text"]),
+                )
+            ]
+            if not entry_result["links"] and entry_result["status"] == "ok":
+                entry_result["status"] = "no_documents"
+                entry_result["last_error"] = "no documents matched this municipal body"
+            body_name = entry_result["body_name"]
+            if body_name not in browser_sources:
+                continue
+            authorization = municipality_authorizations[entry_result["source_key"]]
+            siblings = [
+                result
+                for result in listing_results
+                if result["minutes_url"] == entry_result["minutes_url"]
+            ]
+            for link in sorted(
+                entry_result["links"], key=_document_priority, reverse=True
+            ):
+                classified = classify_proceeding_type(
+                    link["filename"], link["link_text"]
+                )
+                if not _link_belongs_to_entry(entry_result, siblings, classified):
+                    continue
+                if (body_name, link["url"]) in known_pairs:
+                    continue
+                if not request_budget.reserve(body_name):
+                    link["browser_deferred"] = True
+                    continue
+                link["budget_reserved"] = True
+                try:
+                    source_delay(link["url"])
+                    response = playwright_fetcher.fetch_document(
+                        link["url"],
+                        entry_result["minutes_url"],
+                        authorization.allowed_origins,
+                        minimum_delay=max(
+                            crawl_delays.get(source_origin(link["url"]), 0),
+                            _THROTTLE_MIN,
+                        ),
+                        allowed_url_prefixes=getattr(
+                            authorization, "document_url_prefixes", ()
+                        ),
+                    )
+                    document_key = hashlib.sha256(
+                        (body_name + link["url"]).encode()
+                    ).hexdigest()
+                    local_path = Path(browser_downloads.name) / document_key
+                    local_path.write_bytes(response.content)
+                    link["browser_response"] = SimpleNamespace(
+                        local_path=local_path,
+                        headers=response.headers,
+                        url=response.url,
+                    )
+                except Exception as exc:
+                    link["browser_error"] = f"{link['url']}: {exc}"[:500]
     finally:
         playwright_fetcher.close()
 
@@ -807,7 +1191,9 @@ def public_proceedings_scrape(
         "policy_no_documents",
     }
     listing_errors = sum(
-        1 for result in listing_results if result["status"] in listing_error_statuses
+        1
+        for result in listing_results
+        if result["status"] in listing_error_statuses or result["discovery_errors"]
     )
 
     # ------------------------------------------------------------------
@@ -874,7 +1260,10 @@ def public_proceedings_scrape(
                     entry_result["last_error"] = "document blocked by robots policy"
                     continue
 
-                if not request_budget.reserve(body_name):
+                if link.get("browser_deferred") or (
+                    not link.get("budget_reserved")
+                    and not request_budget.reserve(body_name)
+                ):
                     stats["deferred"] += 1
                     entry_result["budget_deferred"] += 1
                     continue
@@ -898,17 +1287,55 @@ def public_proceedings_scrape(
                 )
 
                 try:
-                    pdf_resp = get_with_robots(
-                        document_url,
-                        robots=robots,
-                        allowed_origins=allowed_origins,
-                        headers=_HEADERS,
-                        timeout=_REQUEST_TIMEOUT,
+                    if link.get("browser_error"):
+                        raise RuntimeError(link["browser_error"])
+                    pdf_resp = link.get("browser_response")
+                    if pdf_resp is None:
+                        pdf_resp = get_with_robots(
+                            document_url,
+                            robots=robots,
+                            allowed_origins=allowed_origins,
+                            allowed_url_prefixes=getattr(
+                                municipality_authorizations[source_key],
+                                "document_url_prefixes",
+                                (),
+                            ),
+                            headers=_HEADERS,
+                            timeout=_REQUEST_TIMEOUT,
+                        )
+                        pdf_resp.raise_for_status()
+                    pdf_bytes = (
+                        pdf_resp.local_path.read_bytes()
+                        if hasattr(pdf_resp, "local_path")
+                        else pdf_resp.content
                     )
-                    pdf_resp.raise_for_status()
-                    pdf_bytes = pdf_resp.content
-                    filename = _resolved_document_filename(filename, pdf_resp)
-                    if not _valid_document_content(filename, pdf_bytes):
+                    if hasattr(pdf_resp, "local_path"):
+                        # Only the current document's bytes are resident in memory.
+                        pdf_resp = SimpleNamespace(
+                            content=pdf_bytes,
+                            headers=pdf_resp.headers,
+                            url=pdf_resp.url,
+                        )
+                    html_text = None
+                    if link.get("format") == "html":
+                        html_text = extract_html_record_text(
+                            pdf_bytes.decode("utf-8", errors="replace"),
+                            content_selector=link["content_selector"],
+                        )
+                        if not html_text or len(html_text) < 100:
+                            raise ValueError(
+                                "reviewed HTML minutes region is missing or empty"
+                            )
+                        if meeting_date is None:
+                            meeting_date, _ = _sanitize_meeting_date(
+                                parse_meeting_date_from_filename(html_text[:600]),
+                                max_future_days=max_future_days,
+                            )
+                    else:
+                        filename = _resolved_document_filename(filename, pdf_resp)
+                    if not html_text and not _valid_document_content(
+                        filename, pdf_bytes
+                    ):
                         raise ValueError(
                             "response content does not match document type"
                         )
@@ -921,7 +1348,7 @@ def public_proceedings_scrape(
                     )
                     stats["errors"] += 1
                     entry_result["download_errors"] += 1
-                    entry_result["last_error"] = str(exc)[:500]
+                    entry_result["last_error"] = f"{document_url}: {exc}"[:500]
                     _throttle()
                     continue
 
@@ -953,7 +1380,7 @@ def public_proceedings_scrape(
                         "'%s': R2 archive failed for '%s': %s", body_name, filename, exc
                     )
 
-                raw_text = _extract_raw_text(filename, pdf_bytes)
+                raw_text = html_text or _extract_raw_text(filename, pdf_bytes)
                 if raw_text is None:
                     # Expected for legacy .doc and scanned PDFs; Pass 0 falls
                     # back to downloading the document itself (PDFs only).
@@ -1030,6 +1457,7 @@ def public_proceedings_scrape(
                         and entry_result.get("validators")
                         and entry_result.get("download_errors", 0) == 0
                         and entry_result.get("budget_deferred", 0) == 0
+                        and not entry_result["discovery_errors"]
                         and insert_failures_by_entry.get(key, 0) == 0
                     )
                     if clean:
@@ -1039,10 +1467,15 @@ def public_proceedings_scrape(
                             entry_result["validators"],
                         )
 
+    browser_downloads.cleanup()
     for entry_result in listing_results:
         key = (entry_result["body_name"], entry_result["minutes_url"])
         insert_errors = insert_failures_by_entry.get(key, 0)
-        item_errors = entry_result.get("download_errors", 0) + insert_errors
+        item_errors = (
+            entry_result.get("download_errors", 0)
+            + insert_errors
+            + len(entry_result["discovery_errors"])
+        )
         health_status = entry_result["status"]
         if item_errors and health_status in {"ok", "not_modified"}:
             health_status = "partial_error"
@@ -1050,6 +1483,8 @@ def public_proceedings_scrape(
             health_status = "budget_limited"
         if insert_errors:
             entry_result["last_error"] = f"{insert_errors} database insert(s) failed"
+        elif entry_result["discovery_errors"]:
+            entry_result["last_error"] = entry_result["discovery_errors"][-1]
         record_municipality_source_health(
             database,
             source_key=entry_result["source_key"],
@@ -1253,11 +1688,11 @@ def _link_belongs_to_entry(
     once without manufacturing several body attributions.
     """
 
-    if len(siblings) <= 1:
-        return True
     if classified_type != "unknown":
         expected = _CLASSIFIED_TYPE_BY_CONFIG.get(entry_result["proceeding_type"])
         return expected == classified_type
+    if len(siblings) <= 1:
+        return True
     return entry_result is siblings[0]
 
 
@@ -1275,6 +1710,17 @@ def _valid_document_content(filename: str, data: bytes) -> bool:
 def _resolved_document_filename(filename: str, response) -> str:
     """Align an extensionless route's filename with the bytes it returned."""
 
+    data = response.content
+    # Some official Word handlers label DOCX bytes as application/msword.
+    # A recognized file signature takes precedence over that incorrect header.
+    for signature, extension in (
+        (b"%PDF-", ".pdf"),
+        (b"PK\x03\x04", ".docx"),
+        (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", ".doc"),
+    ):
+        if data.startswith(signature):
+            stem = re.sub(r"\.(?:pdf|docx?)$", "", filename, flags=re.IGNORECASE)
+            return f"{stem}{extension}"
     content_type = str(response.headers.get("Content-Type") or "")
     content_type = content_type.partition(";")[0].strip().casefold()
     extension = {

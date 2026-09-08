@@ -36,17 +36,17 @@ def test_hellam_sources_use_document_listing_pages():
 
     assert (
         "Hellam Twp Board of Supervisors",
-        "https://www.hellamtownship.gov/board-of-supervisors-meetings/",
+        "https://www.hellamtownship.gov/public-meetings-archive/",
         "board_of_supervisors",
     ) in entries
     assert (
         "Hellam Twp Planning Commission",
-        "https://www.hellamtownship.gov/planning-commission-meetings/",
+        "https://www.hellamtownship.gov/public-meetings-archive/",
         "planning_commission",
     ) in entries
     assert (
         "Hellam Twp Zoning Hearing Board",
-        "https://www.hellamtownship.gov/zoning-hearing-board-meetings/",
+        "https://www.hellamtownship.gov/public-meetings-archive/",
         "zoning_hearing",
     ) in entries
 
@@ -105,10 +105,10 @@ def test_york_proceeding_coverage_counts_sources_not_municipalities():
         }
     }
 
-    assert len(entries) == 104
-    assert len({url for _, url, _ in entries}) == 102
-    assert len(municipalities_with_any_source) == 64
-    assert len(governing_body_municipalities) == 62
+    assert len(entries) == 112
+    assert len({url for _, url, _ in entries}) == 108
+    assert len(municipalities_with_any_source) == 68
+    assert len(governing_body_municipalities) == 66
 
 
 def test_all_configs_have_required_fields():
