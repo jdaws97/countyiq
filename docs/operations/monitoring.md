@@ -29,12 +29,11 @@ application, DNS record, and tunnel route are applied. Anonymous UI and GraphQL
 requests redirect to Access; a Firefox check confirmed the login form. Owner
 sign-in and cloud ingestion still require account setup and verification.
 
-The internal operator network was attached to the existing two containers
-without restarting them. Caddy metrics were enabled through a graceful reload.
-The normal application release was deferred because production intelligence
-processing was enabled. The next application release must include the committed
-Compose and Caddy changes; until then a Caddy restart loses its runtime metrics
-setting. The monitoring probes will report that loss as a collector failure.
+Production release `124ad880a0e5b4ec2b2458a1a713d37d8fc95d88` includes the
+operator network and Caddy metrics setting. The release completed at
+`2026-09-08T15:37:54Z` with schema `075` unchanged; all eight monitoring probes
+reported success after deployment. These settings now persist across container
+recreation through the deployed Compose configuration and Caddy image.
 
 ## Components and retention
 
