@@ -9,6 +9,7 @@ import PageShell from '../components/PageShell'
 import Section from '../components/Section'
 import { Button, ButtonLink, EmptyState, PageHeader, StatusMessage } from '../components/ui'
 import { formatCurrencyCompact } from '../lib/format'
+import { getIntelligenceProfile, getIntelligenceWork } from '../lib/intelligenceState'
 import {
   downloadText,
   getComparison,
@@ -133,6 +134,8 @@ export default function Watchlist() {
       savedSearches: getSavedSearches(),
       comparison: getComparison(),
       triage: getEventTriage(),
+      intelligenceProfile: getIntelligenceProfile(),
+      intelligenceWork: getIntelligenceWork(),
     }
     downloadText(
       `countyiq-workspace-${new Date().toISOString().slice(0, 10)}.json`,

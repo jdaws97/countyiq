@@ -6,7 +6,7 @@ export function setWorkspaceAccount(userId: string | null) {
 }
 export function workspaceStorageKey(key: string): string {
   return activeAccount &&
-    /^countyiq_(watchlist|project_watchlist|entity_watchlist|municipality_watchlist|saved_searches|compare|event_triage|last_feed_visit|last_watch_visit|recent_investigations)_v1$/.test(
+    /^countyiq_(watchlist|project_watchlist|entity_watchlist|municipality_watchlist|saved_searches|compare|event_triage|last_feed_visit|last_watch_visit|recent_investigations|intelligence_profile|intelligence_work)_v1$/.test(
       key,
     )
     ? 'countyiq_account:' + activeAccount + ':' + key

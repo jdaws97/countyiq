@@ -3,6 +3,13 @@
 Updated September 5, 2026. This is the launch hypothesis, not evidence of
 customer demand or willingness to pay.
 
+September 8 extension: the owner expanded the product into evidence-backed
+emerging-project hypotheses and commercial opportunities for both investors and
+service businesses. The bounded implementation, customer journey, initial cases
+and data limits are documented in [Emerging intelligence](emerging-intelligence.md).
+This adds explicit, revisable interpretations alongside factual Activity; it
+does not turn an early hypothesis into a confirmed project or an open bid.
+
 ## The first customer and job
 
 Start with small land developers and acquisition teams working in York County,
@@ -59,6 +66,11 @@ Generated interpretation is optional to the customer workflow. Reading the
 product makes no model calls. Pass 4 county narratives, unrestricted AI search,
 judges and escalation stay disabled until there is a demonstrated need and a
 separate evaluation.
+
+The emerging-intelligence extension has its own manual, explicit-scope draft job
+and a separate publication review. It does not enable legacy county narratives
+or scheduled paid inference. Its initial service-business actions concern
+research and qualification, with missing procurement and delivery facts visible.
 
 ## Pilot and sale
 

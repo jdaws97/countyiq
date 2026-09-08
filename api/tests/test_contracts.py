@@ -46,9 +46,9 @@ def test_ops_health_exposes_source_policy_review_state(client):
     assert response.status_code == 200
     sources = response.json()["sources"]
     governance = sources["source_governance"]
-    assert governance["configured_count"] == 11
-    assert governance["active_count"] == 9
-    assert governance["conditional_count"] == 4
+    assert governance["configured_count"] == 12
+    assert governance["active_count"] == 10
+    assert governance["conditional_count"] == 5
     assert governance["paused_count"] == 2
     assert governance["overdue_count"] == 0
     assert governance["next_review_on"] == "2026-11-27"

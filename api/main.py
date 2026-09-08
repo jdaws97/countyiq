@@ -140,3 +140,6 @@ app.include_router(watchspaces_router, prefix="/api/watchspaces")
 app.include_router(session_router, prefix="/api/session")
 
 app.include_router(directory_router, prefix="/api/directory")
+from api.routes.intelligence import router as intelligence_router
+
+app.include_router(intelligence_router, prefix="/api/intelligence")

@@ -1,6 +1,14 @@
 import type { RadarViewMode } from '../types/api'
 import { commitBrowserStorage, workspaceStorageKey } from './browserStorage'
 import { watchlistStorageEntries } from './watchlist'
+import type { IntelligenceProfile, IntelligenceWorkItem } from '../types/emerging'
+import {
+  getIntelligenceProfile,
+  getIntelligenceWork,
+  intelligenceStorageEntries,
+  isIntelligenceProfile,
+  isIntelligenceWork,
+} from './intelligenceState'
 
 const TRIAGE_KEY = 'countyiq_event_triage_v1'
 const LAST_FEED_KEY = 'countyiq_last_feed_visit_v1'
@@ -208,6 +216,8 @@ export interface PortableWorkspace {
   savedSearches: SavedSearch[]
   comparison: string[]
   triage: Record<string, TriageStatus>
+  intelligenceProfile?: IntelligenceProfile
+  intelligenceWork?: IntelligenceWorkItem[]
 }
 
 /** Validate the entire portable format before any browser state changes. */
@@ -221,6 +231,8 @@ export function parseWorkspace(text: string): PortableWorkspace {
     Array.isArray(items) && items.every((item) => typeof item === 'string' && item.length > 0)
   if (
     w.version !== 1 ||
+    (w.intelligenceProfile !== undefined && !isIntelligenceProfile(w.intelligenceProfile)) ||
+    (w.intelligenceWork !== undefined && !isIntelligenceWork(w.intelligenceWork)) ||
     !strings(w.parcels) ||
     !Array.isArray(w.projects) ||
     !w.projects.every(
@@ -255,6 +267,10 @@ export function replaceWorkspace(workspace: PortableWorkspace): void {
   const valid = parseWorkspace(JSON.stringify(workspace))
   commitBrowserStorage({
     ...watchlistStorageEntries(valid),
+    ...intelligenceStorageEntries(
+      valid.intelligenceProfile ?? getIntelligenceProfile(),
+      valid.intelligenceWork ?? getIntelligenceWork(),
+    ),
     [SAVED_SEARCH_KEY]: JSON.stringify(valid.savedSearches),
     [COMPARE_KEY]: JSON.stringify([...new Set(valid.comparison)]),
     [TRIAGE_KEY]: JSON.stringify(valid.triage),
