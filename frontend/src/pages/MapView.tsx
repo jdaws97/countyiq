@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { Map, NavigationControl } from 'react-map-gl/maplibre'
+import { Map } from 'react-map-gl/maplibre'
 import { setWorkerUrl } from 'maplibre-gl'
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { DeckGL } from '@deck.gl/react'
@@ -1231,10 +1231,29 @@ export default function MapView() {
           <Map
             mapStyle={darkMap ? BASEMAPS.dark : BASEMAPS.light}
             style={{ width: '100%', height: '100%' }}
-          >
-            <NavigationControl position="bottom-right" showCompass={false} />
-          </Map>
+          />
         </DeckGL>
+
+        <div className="map-zoom-controls" role="group" aria-label="Map zoom">
+          {[1, -1].map((step) => (
+            <button
+              key={step}
+              type="button"
+              aria-label={step > 0 ? 'Zoom in' : 'Zoom out'}
+              onClick={() =>
+                onViewStateChange({
+                  viewState: {
+                    ...viewState,
+                    zoom: Math.max(0, Math.min(22, viewState.zoom + step)),
+                  },
+                  interactionState: { isZooming: true },
+                })
+              }
+            >
+              {step > 0 ? '+' : '−'}
+            </button>
+          ))}
+        </div>
 
         {hoverInfo?.object && hoverInfo.x != null && hoverInfo.y != null && (
           <div
