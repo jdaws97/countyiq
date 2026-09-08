@@ -24,6 +24,11 @@ def main():
     parser.add_argument("--ssh-target", required=True)
     parser.add_argument("--identity-file", type=Path, required=True)
     parser.add_argument("--local-port", type=int, default=5544)
+    parser.add_argument(
+        "--rebind",
+        action="store_true",
+        help="Replay accepted receipts with rebind_subscription_reads.py",
+    )
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if not 1024 <= args.local_port <= 65535:
@@ -145,13 +150,19 @@ def main():
                         "SSH database tunnel did not become ready"
                     ) from None
                 time.sleep(0.1)
+        operation = "receipt replay" if args.rebind else "authoring"
+        script = (
+            "rebind_subscription_reads.py"
+            if args.rebind
+            else "subscription_backfill.py"
+        )
         print(
-            f"Subscription authoring against deployed release {local_ref}", flush=True
+            f"Subscription {operation} against deployed release {local_ref}", flush=True
         )
         return subprocess.run(
             [
                 sys.executable,
-                str(Path(__file__).with_name("subscription_backfill.py")),
+                str(Path(__file__).with_name(script)),
                 *arguments,
             ],
             env=environment,

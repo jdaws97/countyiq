@@ -177,3 +177,29 @@ apply. Keep the specification alongside the immutable request/response receipts.
 Review both case-specific passages and their shared outcome before accepting
 the repair. Status reports retain failed subject keys and validation errors for
 explicit retries.
+
+## Replay accepted receipts after a binding repair
+
+`scripts/rebind_subscription_reads.py` replays the final raw response referenced
+by each accepted read's provenance. It makes no model calls or source downloads.
+It requires current governed eligibility, unchanged retained source text, an
+unmodified receipt and the current prompt contract. A missing receipt or source
+fails instead of generating a replacement. Refined selection units are currently
+unsupported; their different prompt is rejected for separate review.
+
+```bash
+DATABASE_PORT=5433 .venv/bin/python scripts/rebind_subscription_reads.py \
+  --ids 161 713 --directory ../output/subscription-backfill \
+  --report ../output/source-binding-review.json
+```
+
+The default is read-only. Inspect the complete before/after report, then use
+`--apply` to propose the changed bindings through the ordinary integrity gate.
+Unchanged cards are skipped. Changed cards remain quarantined for contradiction
+review; this command never resolves them or labels its mechanical work as human
+adjudication. Exit status 2 reports errors or unresolved proposals.
+
+For production, add `--rebind` before the remote wrapper's `--` separator and
+pass the same receipt-replay arguments after it. The wrapper still requires a
+clean checkout matching the deployed image and keeps database credentials in
+process memory.
