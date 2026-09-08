@@ -1,4 +1,7 @@
 {
+	# Scraped through the container's loopback admin endpoint by the host probe.
+	# No public metrics route, URL labels, or customer identifiers are exposed.
+	metrics
 	servers {
 		timeouts {
 			read_header 10s
@@ -30,7 +33,6 @@
 			respond 404
 		}
 	}
-
 }
 
 :8080 {
@@ -45,62 +47,62 @@
 		X-Frame-Options "DENY"
 	}
 
-    @health path /healthz
-    handle @health {
-        header Cache-Control "no-store"
-        respond "ok" 200
-    }
+	@health path /healthz
+	handle @health {
+		header Cache-Control "no-store"
+		respond "ok" 200
+	}
 
-    @marketing host {$DOMAIN:countyiq.net}
-    handle @marketing {
-        @api path /api /api/*
-        handle @api {
-            header Cache-Control "no-store"
-            respond 404
-        }
-        import static_assets
-        @public_page path / /index.html /favicon-ciq.svg /robots.txt
-        handle @public_page {
-            root * /srv
-            header Cache-Control "no-cache"
-            file_server
-        }
-        @entry path /app /app.html
-        handle @entry {
-            redir https://app.{$DOMAIN:countyiq.net}/ 302
-        }
-        handle {
-            # Preserve old product deep links; never proxy them on the public host.
-            redir https://app.{$DOMAIN:countyiq.net}{uri} 302
-        }
-    }
+	@marketing host {$DOMAIN:countyiq.net}
+	handle @marketing {
+		@api path /api /api/*
+		handle @api {
+			header Cache-Control "no-store"
+			respond 404
+		}
+		import static_assets
+		@public_page path / /index.html /favicon-ciq.svg /robots.txt
+		handle @public_page {
+			root * /srv
+			header Cache-Control "no-cache"
+			file_server
+		}
+		@entry path /app /app.html
+		handle @entry {
+			redir https://app.{$DOMAIN:countyiq.net}/ 302
+		}
+		handle {
+			# Preserve old product deep links; never proxy them on the public host.
+			redir https://app.{$DOMAIN:countyiq.net}{uri} 302
+		}
+	}
 
-    @product host app.{$DOMAIN:countyiq.net}
-    handle @product {
-        header X-Robots-Tag "noindex, nofollow"
-        @api path /api /api/*
-        handle @api {
-            header Cache-Control "no-store"
-            reverse_proxy api:8000 {
-                header_up X-Forwarded-For {client_ip}
-                header_up -CF-Connecting-IP
-            }
-        }
-        import static_assets
-        @favicon path /favicon-ciq.svg
-        handle @favicon {
-            root * /srv
-            file_server
-        }
-        handle {
-            header Cache-Control "no-cache"
-            root * /srv
-            rewrite * /app.html
-            file_server
-        }
-    }
+	@product host app.{$DOMAIN:countyiq.net}
+	handle @product {
+		header X-Robots-Tag "noindex, nofollow"
+		@api path /api /api/*
+		handle @api {
+			header Cache-Control "no-store"
+			reverse_proxy api:8000 {
+				header_up X-Forwarded-For {client_ip}
+				header_up -CF-Connecting-IP
+			}
+		}
+		import static_assets
+		@favicon path /favicon-ciq.svg
+		handle @favicon {
+			root * /srv
+			file_server
+		}
+		handle {
+			header Cache-Control "no-cache"
+			root * /srv
+			rewrite * /app.html
+			file_server
+		}
+	}
 
-    handle {
-        respond 404
-    }
+	handle {
+		respond 404
+	}
 }

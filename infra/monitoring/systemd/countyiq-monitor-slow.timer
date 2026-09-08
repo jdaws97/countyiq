@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect CountyIQ database, data, recovery, and usage health
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=5min
+AccuracySec=10s
+Unit=countyiq-monitor@slow.service
+
+[Install]
+WantedBy=timers.target

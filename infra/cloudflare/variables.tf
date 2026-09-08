@@ -43,6 +43,16 @@ variable "raw_bucket_name" {
   default = "countyiq-raw"
 }
 
+variable "operator_email" {
+  description = "Single owner allowed to access Dagster; independent of tester access."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.operator_email))
+    error_message = "operator_email must be one exact email address."
+  }
+}
+
 variable "backup_bucket_name" {
   type    = string
   default = "countyiq-backups"

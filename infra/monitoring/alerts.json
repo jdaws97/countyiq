@@ -1,0 +1,182 @@
+[
+  {
+    "uid": "host-telemetry-missing",
+    "title": "Host telemetry missing",
+    "expr": "(max without (instance, job) (up{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 0)) or absent_over_time(up{instance=\"countyiq-production\",job=\"countyiq/host\"}[10m])",
+    "for": "10m",
+    "severity": "critical",
+    "summary": "Host telemetry is down or absent for ten minutes.",
+    "description": "Check the host exporter and metrics ingestion before interpreting dependent alerts."
+  },
+  {
+    "uid": "filesystem-warning",
+    "title": "Root filesystem above 75%",
+    "expr": "(100 * (1 - node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"})) > bool 75",
+    "for": "30m",
+    "severity": "warning",
+    "summary": "The root filesystem is above 75% used.",
+    "description": "This does not estimate recoverable Docker storage."
+  },
+  {
+    "uid": "filesystem-critical",
+    "title": "Root filesystem above 85%",
+    "expr": "(100 * (1 - node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"})) > bool 85",
+    "for": "15m",
+    "severity": "critical",
+    "summary": "The root filesystem is above 85% used.",
+    "description": "Free space is at risk; inspect data growth and cleanup options."
+  },
+  {
+    "uid": "filesystem-low-free-space",
+    "title": "Root filesystem below 10 GiB free",
+    "expr": "node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"} < bool 10737418240",
+    "for": "15m",
+    "severity": "critical",
+    "summary": "The root filesystem has less than 10 GiB free.",
+    "description": "Act before writes fail."
+  },
+  {
+    "uid": "filesystem-predicted-full",
+    "title": "Root filesystem predicted to fill in 72 hours",
+    "expr": "(predict_linear(node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"}[6h], 259200) < bool 0) * (count_over_time(node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"}[6h]) >= bool 300) * (min_over_time(timestamp(node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",mountpoint=\"/\"})[6h:]) <= bool (time() - 18000))",
+    "for": "30m",
+    "severity": "warning",
+    "summary": "Observed root-filesystem trend predicts exhaustion within 72 hours.",
+    "description": "Requires 300 one-minute observations and a trend window spanning at least five hours."
+  },
+  {
+    "uid": "host-memory-high",
+    "title": "Host memory above 85%",
+    "expr": "(100 * (1 - node_memory_MemAvailable_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"} / node_memory_MemTotal_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"})) > bool 85",
+    "for": "15m",
+    "severity": "warning",
+    "summary": "Host memory use is sustained above 85%.",
+    "description": "Inspect container and database memory consumers."
+  },
+  {
+    "uid": "collector-failed-or-stale",
+    "title": "Monitoring collector failed or stale",
+    "expr": "(((max(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"} == bool 0) or vector(0)) + (max((time() - countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter\"}) > bool 900) or vector(0)) + ((((count(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"}) or vector(0)) < bool 8) + ((count(countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"}) or vector(0)) < bool 8)) * scalar(up{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 1))) > bool 0)",
+    "for": "15m",
+    "severity": "critical",
+    "summary": "A required monitoring collector is failing, stale, or missing.",
+    "description": "The eight required collectors are containers, dagster, caddy, postgres, sources, recovery, openrouter, and storage. Missing custom metrics are suppressed while the host is down."
+  },
+  {
+    "uid": "docker-storage-stale",
+    "title": "Docker storage collection stale",
+    "expr": "(time() - countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=\"storage\"}) > bool 7200",
+    "for": "15m",
+    "severity": "warning",
+    "summary": "Docker storage inventory is older than two hours.",
+    "description": "Storage collection is hourly, so this has a longer freshness window."
+  },
+  {
+    "uid": "container-unhealthy",
+    "title": "Container not running or unhealthy",
+    "expr": "((countyiq_container_running{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 0) + (countyiq_container_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 0)) > bool 0",
+    "for": "10m",
+    "severity": "critical",
+    "summary": "A managed service is not running or unhealthy.",
+    "description": "Grouped by bounded service label; do not add process or request identifiers."
+  },
+  {
+    "uid": "container-restart-or-oom",
+    "title": "Container restart or OOM",
+    "expr": "((increase(countyiq_container_restarts_total{instance=\"countyiq-production\",job=\"countyiq/host\"}[1h]) > bool 3) + (max_over_time(countyiq_container_oom_killed{instance=\"countyiq-production\",job=\"countyiq/host\"}[1h]) > bool 0)) > bool 0",
+    "for": "5m",
+    "severity": "warning",
+    "summary": "A managed service has restarted repeatedly or was OOM-killed.",
+    "description": "OOMKilled is a gauge, so this checks its maximum rather than its increase."
+  },
+  {
+    "uid": "dagster-heartbeat-missing",
+    "title": "Dagster heartbeat missing",
+    "expr": "(time() - countyiq_dagster_heartbeat_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 300",
+    "for": "5m",
+    "severity": "critical",
+    "summary": "A Dagster daemon heartbeat is older than five minutes.",
+    "description": "Check daemon health and service logs."
+  },
+  {
+    "uid": "dagster-queue-delayed",
+    "title": "Dagster queued run delayed",
+    "expr": "(countyiq_dagster_runs{instance=\"countyiq-production\",job=\"countyiq/host\",status=\"QUEUED\"} > bool 0) * (countyiq_dagster_oldest_run_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",status=\"QUEUED\"} > bool 1800)",
+    "for": "10m",
+    "severity": "warning",
+    "summary": "A queued Dagster run has waited over 30 minutes.",
+    "description": "Inspect queue capacity and daemon health."
+  },
+  {
+    "uid": "dagster-run-too-old",
+    "title": "Dagster run exceeds six hours",
+    "expr": "(countyiq_dagster_oldest_run_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",status=~\"STARTED|STARTING\"} > bool 21600)",
+    "for": "15m",
+    "severity": "warning",
+    "summary": "A running or starting Dagster run is older than six hours.",
+    "description": "Inspect run state without creating an alert per run identifier."
+  },
+  {
+    "uid": "backup-missing-or-failed",
+    "title": "Backup missing or failed",
+    "expr": "(((time() - countyiq_backup_last_success_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 108000) + (countyiq_backup_last_exit_success{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 0) + (countyiq_backup_timer_active{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 0)) > bool 0",
+    "for": "15m",
+    "severity": "critical",
+    "summary": "The last backup is older than 30 hours, failed, or its timer is inactive.",
+    "description": "Check the backup timer, service logs, and destination."
+  },
+  {
+    "uid": "restore-drill-overdue",
+    "title": "Restore drill overdue",
+    "expr": "(time() - countyiq_restore_drill_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 2592000",
+    "for": "1h",
+    "severity": "warning",
+    "summary": "No restore drill has completed in 30 days.",
+    "description": "Run and record a restore verification."
+  },
+  {
+    "uid": "r2-capacity-or-guard",
+    "title": "R2 capacity high or guard tripped",
+    "expr": "(((countyiq_r2_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",bucket=\"total\"} / ignoring(bucket) countyiq_r2_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 0.85) + ignoring(bucket) (countyiq_cost_guard_tripped{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 1)) > bool 0",
+    "for": "15m",
+    "severity": "critical",
+    "summary": "R2 use exceeds 85% of the configured limit or the cost guard tripped.",
+    "description": "Reduce stored data or correct the limit and guard configuration."
+  },
+  {
+    "uid": "r2-cost-guard-stale",
+    "title": "R2 cost guard stale",
+    "expr": "(time() - countyiq_cost_guard_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 3600",
+    "for": "15m",
+    "severity": "warning",
+    "summary": "The R2 cost guard has not run within one hour.",
+    "description": "Investigate guard collection before relying on capacity alerts."
+  },
+  {
+    "uid": "source-unhealthy-or-stale",
+    "title": "Source unhealthy or stale",
+    "expr": "(((countyiq_source_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 0) + (countyiq_source_stale{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 1)) > bool 0) * on(instance, job) group_left() (countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=\"sources\"} == bool 1)",
+    "for": "30m",
+    "severity": "warning",
+    "summary": "A source is unhealthy or stale while its collector is succeeding.",
+    "description": "The collector alert handles collection failures; this rule avoids duplicating that root cause."
+  },
+  {
+    "uid": "postgres-capacity-or-blocking",
+    "title": "PostgreSQL capacity or blocking",
+    "expr": "(((countyiq_postgres_total_connections{instance=\"countyiq-production\",job=\"countyiq/host\"} / countyiq_postgres_connection_limit{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 0.85) + (countyiq_postgres_blocked_sessions{instance=\"countyiq-production\",job=\"countyiq/host\"} > bool 0)) > bool 0",
+    "for": "15m",
+    "severity": "warning",
+    "summary": "PostgreSQL connections exceed 85% of capacity or sessions are blocked.",
+    "description": "Investigate connection use and blocked work; this is one aggregate alert, not one per session."
+  },
+  {
+    "uid": "intelligence-integrity-failed",
+    "title": "Intelligence integrity check failed",
+    "expr": "countyiq_intelligence_integrity_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 0",
+    "for": "15m",
+    "severity": "critical",
+    "summary": "The intelligence integrity check is failing.",
+    "description": "Investigate pipeline outputs and the associated collector state."
+  }
+]

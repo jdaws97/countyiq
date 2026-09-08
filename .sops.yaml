@@ -1,4 +1,4 @@
 creation_rules:
-  - path_regex: ^infra/secrets/(production|cloudflare-iac)\.sops\.env$
+  - path_regex: ^infra/secrets/(production|cloudflare-iac|monitoring)\.sops\.env$
     age: >-
       ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKa8ONVH1BEH9xGWcCdass9dF7v9GyMbaf5tJpblmphi

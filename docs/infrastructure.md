@@ -94,6 +94,11 @@ deployments require a recent receipt from `docker/restore-drill.sh`.
 
 ## Delivery
 
+Operator monitoring and private Dagster browser access are configured in
+`infra/monitoring/` and `infra/cloudflare/`. See
+[Monitoring](operations/monitoring.md) for installation, account connection,
+zero-cost limits, and the live acceptance checks.
+
 GitHub Actions verifies the locked pipeline and API environments, architecture
 contracts, pipeline definition import, unit and contract tests, frontend type,
 lint and production build, Compose configuration, and the deployment preflight.

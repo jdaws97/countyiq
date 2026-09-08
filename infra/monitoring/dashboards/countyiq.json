@@ -1,0 +1,379 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "title": "Dagster",
+      "type": "link",
+      "url": "https://dagster.countyiq.net",
+      "targetBlank": true
+    },
+    {
+      "title": "Operations health",
+      "type": "link",
+      "url": "https://app.countyiq.net/ops/health",
+      "targetBlank": true
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{instance=\"countyiq-production\",job=\"countyiq/host\",mode=\"idle\"}[5m])))",
+          "refId": "A"
+        }
+      ],
+      "title": "Host CPU utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"} / node_memory_MemTotal_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Host memory utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "100 * (1 - node_filesystem_avail_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",fstype!~\"tmpfs|overlay\"})",
+          "legendFormat": "{{mountpoint}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Filesystem utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "countyiq_container_memory_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{service}} used",
+          "refId": "A"
+        },
+        {
+          "expr": "countyiq_container_memory_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{service}} limit",
+          "refId": "B"
+        }
+      ],
+      "title": "Container memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "countyiq_postgres_database_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{database}}",
+          "refId": "A"
+        },
+        {
+          "expr": "countyiq_postgres_total_connections{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "connections",
+          "refId": "B"
+        }
+      ],
+      "title": "PostgreSQL size and connections",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "countyiq_dagster_oldest_run_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        },
+        {
+          "expr": "countyiq_dagster_heartbeat_errors{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{daemon}} errors",
+          "refId": "B"
+        }
+      ],
+      "title": "Dagster run age and heartbeat errors",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "countyiq_r2_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{bucket}}",
+          "refId": "A"
+        },
+        {
+          "expr": "countyiq_r2_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "limit",
+          "refId": "B"
+        }
+      ],
+      "title": "R2 storage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "countyiq_openrouter_usage_usd{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{period}}",
+          "refId": "A"
+        },
+        {
+          "expr": "countyiq_openrouter_configured{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "configured",
+          "refId": "B"
+        }
+      ],
+      "title": "OpenRouter usage (informational until a budget is configured)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${LOGS_UID}"
+      },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "{job=\"countyiq/containers\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "Container logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "countyiq_source_healthy{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{source}} healthy",
+          "refId": "A"
+        },
+        {
+          "expr": "countyiq_source_stale{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{source}} stale",
+          "refId": "B"
+        }
+      ],
+      "title": "Source health",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "time() - countyiq_dagster_heartbeat_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "{{daemon}} age",
+          "refId": "A"
+        }
+      ],
+      "title": "Dagster heartbeat age",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "time() - countyiq_backup_last_success_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "last successful backup age",
+          "refId": "A"
+        },
+        {
+          "expr": "countyiq_backup_timer_active{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "legendFormat": "timer active",
+          "refId": "B"
+        }
+      ],
+      "title": "Backup freshness",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "description": "Server-side HTTP traffic only. Browser errors require an account-dependent frontend observability integration and are not represented here.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "sum by (server, handler, method, code) (rate(caddy_http_requests_total{instance=\"countyiq-production\",job=\"countyiq/host\"}[5m]))",
+          "legendFormat": "{{server}} {{handler}} {{method}} {{code}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Caddy HTTP request rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${METRICS_UID}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "id": 14,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, server, handler, method) (rate(caddy_http_request_duration_seconds_bucket{instance=\"countyiq-production\",job=\"countyiq/host\"}[5m])))",
+          "legendFormat": "{{server}} {{handler}} {{method}} p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Caddy HTTP request duration p95",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 41,
+  "tags": [
+    "countyiq",
+    "operations"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "title": "CountyIQ Operations Overview",
+  "uid": "countyiq-overview",
+  "version": 1
+}

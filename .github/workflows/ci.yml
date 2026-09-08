@@ -40,7 +40,10 @@ jobs:
         run: uv sync --project pipelines --locked --extra dev
 
       - name: Check Python formatting
-        run: uv run --project pipelines ruff format --check --output-format concise api pipelines
+        run: uv run --project pipelines ruff format --check --output-format concise api pipelines infra/monitoring
+
+      - name: Validate monitoring collector and alert behavior
+        run: bash infra/monitoring/check.sh
 
       - name: Import smoke test
         run: uv run --project pipelines python -c "from countyiq.definitions import defs; print('definitions OK')"
