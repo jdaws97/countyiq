@@ -383,7 +383,7 @@ def fetch_feed(
             AND COALESCE(source_evidence->0->'details'->>'change_kind', '') = 'new'
             AND detected_at = (
                 SELECT MIN(baseline.detected_at)
-                FROM public.current_intelligence_events AS baseline
+                FROM public.intelligence_events AS baseline
                 WHERE baseline.source_kind = 'delinquency_event'
             )
         )

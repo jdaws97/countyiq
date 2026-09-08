@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from api.tests.conftest import DB_ENV, PIPELINES_DIR, TEST_PIDN
+from api.tests.conftest import DB_ENV, PIPELINES_DIR, SECOND_PIDN, TEST_PIDN
 from api.tests.test_municipal_evidence import append_read, writer
 from api.tests.test_municipal_evidence_workflow import (  # noqa: F401
     add_source,
@@ -124,6 +124,77 @@ def test_changed_source_withdraws_case_without_waiting_for_a_projection_rebuild(
     assert not any(
         item["event_key"] in keys for item in client.get("/api/feed").json()["events"]
     )
+
+
+@pytest.mark.parametrize(
+    "change", ["address", "ambiguous_address", "owner", "global_rights"]
+)
+def test_matter_accounts_recheck_live_connections_and_global_rights(
+    client, add_source, change
+):
+    add_case(add_source)
+    keys = publish_test_account()
+    with writer() as cur:
+        cur.execute(
+            "SELECT pidn, propadr, owner_full FROM staging.parcels "
+            "WHERE pidn = ANY(%s) AND valid_to IS NULL",
+            ([TEST_PIDN, SECOND_PIDN],),
+        )
+        original_parcels = cur.fetchall()
+        if change == "address":
+            cur.execute(
+                "UPDATE staging.parcels SET propadr = '99 Different Road' "
+                "WHERE pidn = %s AND valid_to IS NULL",
+                (TEST_PIDN,),
+            )
+        elif change == "ambiguous_address":
+            cur.execute(
+                "UPDATE staging.parcels SET propadr = '1 Main Street' "
+                "WHERE pidn = %s AND valid_to IS NULL",
+                (SECOND_PIDN,),
+            )
+        elif change == "owner":
+            cur.execute(
+                "UPDATE staging.parcels SET owner_full = 'New Owner LLC' "
+                "WHERE pidn = %s AND valid_to IS NULL",
+                (TEST_PIDN,),
+            )
+        else:
+            cur.execute(
+                "UPDATE meta.source_rights SET derived_product_allowed = FALSE "
+                "WHERE source_key = 'public_proceedings'"
+            )
+    try:
+        with writer() as cur:
+            cur.execute(
+                "SELECT related_pidns, related_entities "
+                "FROM public.current_municipal_matter_accounts WHERE event_key = ANY(%s)",
+                (keys,),
+            )
+            current = cur.fetchall()
+        if change == "owner":
+            assert current == [([TEST_PIDN], ["New Owner LLC"])]
+        else:
+            assert current == []
+        response = client.get("/api/feed", params={"project_keys": ",".join(keys)})
+        if change == "global_rights":
+            assert response.status_code == 503
+        else:
+            assert response.status_code == 200, response.text
+            assert response.json()["events"] == []
+    finally:
+        with writer() as cur:
+            for pidn, address, owner in original_parcels:
+                cur.execute(
+                    "UPDATE staging.parcels SET propadr = %s, owner_full = %s "
+                    "WHERE pidn = %s AND valid_to IS NULL",
+                    (address, owner, pidn),
+                )
+            if change == "global_rights":
+                cur.execute(
+                    "UPDATE meta.source_rights SET derived_product_allowed = TRUE "
+                    "WHERE source_key = 'public_proceedings'"
+                )
 
 
 def test_raw_agenda_is_a_research_lead_until_its_substance_is_explained(

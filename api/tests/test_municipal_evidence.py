@@ -2,6 +2,8 @@
 
 import hashlib
 from contextlib import closing, contextmanager
+from copy import deepcopy
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import psycopg2
@@ -21,18 +23,20 @@ def writer():
         yield cur
 
 
-def append_read(cur, proceeding_id, payload, disposition="accepted"):
+def append_read(
+    cur, proceeding_id, payload, disposition="accepted", *, created_at=None
+):
     cur.execute(
         """
         INSERT INTO meta.intelligence_inference_history (
             subject_key, pass_number, output_kind, decision_key, source_hash,
             input_hash, requested_model, prompt_version, output_hash,
-            decision_fingerprint, payload, disposition
+            decision_fingerprint, payload, disposition, created_at
         ) VALUES (%s, 0, 'municipal_evidence', 'source_selection', 'test',
-                  'test', 'test', 'test', 'test', 'test', %s, %s)
+                  'test', 'test', 'test', 'test', 'test', %s, %s, COALESCE(%s, NOW()))
         RETURNING inference_id
         """,
-        (f"proceeding:{proceeding_id}", Json(payload), disposition),
+        (f"proceeding:{proceeding_id}", Json(payload), disposition, created_at),
     )
     return cur.fetchone()[0]
 
@@ -96,6 +100,29 @@ def cards(client):
     response = client.get(f"/api/municipalities/{TEST_MUNICIPALITY}/evidence")
     assert response.status_code == 200, response.text
     return response.json()["cards"]
+
+
+def test_each_card_retains_its_first_accepted_observation(source_read):
+    proceeding_id, _, payload = source_read
+    first_seen = datetime(2026, 4, 12, 9, 15, 1, 123456, tzinfo=UTC)
+    second_seen = datetime(2026, 4, 14, 10, 30, 2, 654321, tzinfo=UTC)
+    expanded = deepcopy(payload)
+    new_card = deepcopy(expanded["cards"][0])
+    new_card["id"] = "later-selection"
+    expanded["cards"].append(new_card)
+    with writer() as cur:
+        append_read(cur, proceeding_id, payload, created_at=first_seen)
+        append_read(cur, proceeding_id, expanded, created_at=second_seen)
+        append_read(cur, proceeding_id, expanded)
+        cur.execute(
+            "SELECT card->>'id', observed_at FROM public.current_municipal_evidence "
+            "WHERE proceeding_id = %s",
+            (proceeding_id,),
+        )
+        assert dict(cur.fetchall()) == {
+            "example": first_seen,
+            "later-selection": second_seen,
+        }
 
 
 def test_pending_english_presentation_withholds_raw_agenda_wording(client, source_read):
