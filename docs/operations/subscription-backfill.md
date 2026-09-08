@@ -102,6 +102,13 @@ does not leave other workers idle. A batch containing one uncached source also
 runs in its worker. Source preparation and all database operations remain on the
 operator thread.
 
+`--author-timeout` bounds each native request in seconds (default 600, maximum
+3600). For long complete-source batches, operators can allow more time, for
+example `--author-timeout 1800`. A timeout preserves the partial CLI diagnostic
+in the artifact directory and leaves the source unaccepted. The final status
+includes `stop_detail` so a timeout can be distinguished from a login or usage
+failure. Completed cached responses remain reusable on the next run.
+
 Matter persistence verifies an isolated, single-record selection directly against
 the current governed evidence. It checks that the record still has no case
 reference, address title, or unique parcel that would place it in a broader
@@ -180,6 +187,33 @@ introduced; no existing transcripts needed migration. The standard image include
 maintained scripts and evaluation fixtures. Scan OCR uses the separately locked
 operator runtime described in `pipelines/ocr/README.md`; missing preparation
 remains pending rather than becoming an empty read.
+
+## Compare subscription models for Passes 1 and 2
+
+Run `eval.subscription_challenger` from `pipelines/` to evaluate native models
+without database writes or an API fallback. It uses the production prompts,
+schemas, parsers, attribution checks and frozen scorers. For example:
+
+```bash
+.venv/bin/python -m eval.subscription_challenger --pass-number 1 \
+  --model gpt-5.6-terra --effort medium --output ../output/native-pass1-terra
+
+.venv/bin/python -m eval.subscription_challenger --pass-number 2 --expanded \
+  --model gpt-5.6-sol --effort medium --output ../output/native-pass2-sol
+```
+
+Pass 1 includes eight frozen cases. Pass 2 includes ten original cases;
+`--expanded` adds twenty stability cases and four municipal feature cases.
+Keep the same effort and `--trial` value across models. Increment `--trial` for
+an independent request rather than reusing its immutable cached response.
+Reports preserve raw outputs, scores, context hashes and subscription provenance.
+A malformed batch falls back to individual requests for the complete sources.
+
+These scores are diagnostic, not automatic quality approval. Some original
+labels predate current identity-abstention and missing-footprint rules. Review
+the full sources, current prompt and each failed expectation before attributing
+a failure to the model; preserve the original score when recording that review.
+No model or prompt change should be approved from structural acceptance alone.
 
 ## Retry a joint source line
 

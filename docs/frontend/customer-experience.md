@@ -108,6 +108,13 @@ those facts from the underlying proceeding and their original citation indexes.
 A future date or stated milestone does not establish that an action occurred.
 Where a next check is unavailable, omit it rather than manufacture advice.
 
+Direct municipal matter case links work from both Activity and Research. A
+single accepted matter uses the same complete investigation detail and source
+viewer as Activity, including its outcome, conditions and individual history.
+Research readiness remains visible. Legacy project chronology is reserved for
+projects assembled from separate events; it must not replace a matter account
+with an empty or contradictory summary.
+
 ### Property investigation
 
 The header establishes identity and location. The four views replace the former

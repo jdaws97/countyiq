@@ -1,6 +1,7 @@
 """Subscription authoring must never become an unapproved paid fallback."""
 
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -91,6 +92,32 @@ def test_failed_subscription_stops_without_retry_or_paid_fallback(
         SubscriptionAuthor(tmp_path, model="test")(config(), "SOURCE")
     assert sum(command[1] == "exec" for command in calls) == 1
     assert len(list(tmp_path.glob("*.error.txt"))) == 1
+    assert not list(tmp_path.glob("*.json"))
+
+
+def test_timeout_preserves_diagnostics_without_accepting_an_incomplete_response(
+    tmp_path, monkeypatch
+):
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[1] == "login":
+            return SimpleNamespace(
+                returncode=0, stdout="Logged in using ChatGPT", stderr=""
+            )
+        assert kwargs["timeout"] == 1800
+        raise subprocess.TimeoutExpired(
+            command, 1800, output=b'{"type":"thread.started"}\n', stderr=b"diagnostic\n"
+        )
+
+    monkeypatch.setattr("subprocess.run", run)
+    with pytest.raises(SubscriptionUnavailable, match="timed out after 1800 seconds"):
+        SubscriptionAuthor(tmp_path, model="test", timeout=1800)(config(), "SOURCE")
+    assert sum(command[1] == "exec" for command in calls) == 1
+    diagnostic = next(tmp_path.glob("*.error.txt")).read_text()
+    assert "thread.started" in diagnostic
+    assert "diagnostic" in diagnostic
     assert not list(tmp_path.glob("*.json"))
 
 

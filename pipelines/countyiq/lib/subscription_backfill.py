@@ -263,8 +263,18 @@ class SubscriptionAuthor:
                         check=False,
                     )
                 except subprocess.TimeoutExpired as error:
+                    diagnostic = (
+                        f"Codex authoring timed out after {self.timeout} seconds\n"
+                    )
+                    for captured in (error.stdout, error.stderr):
+                        if isinstance(captured, bytes):
+                            captured = captured.decode("utf-8", errors="replace")
+                        if captured:
+                            diagnostic += captured
+                    (self.directory / f"{fingerprint}.error.txt").write_text(diagnostic)
                     raise SubscriptionUnavailable(
-                        "Codex authoring timed out"
+                        f"Codex authoring timed out after {self.timeout} seconds; "
+                        f"inspect {fingerprint}.error.txt"
                     ) from error
                 (self.directory / f"{fingerprint}.cli.jsonl").write_text(result.stdout)
                 if result.returncode or not response.exists():
