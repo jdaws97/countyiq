@@ -158,6 +158,32 @@ def test_numeric_two_digit_year_cannot_be_reinterpreted_as_meeting_year(
         validate_explanation(explanation, source)
 
 
+@pytest.mark.parametrize("written_date", ["9/8.", "9/8/26.", "9.8.2026.Next item."])
+def test_numeric_date_at_sentence_end_keeps_its_exact_source_quote(
+    source, explanation, written_date
+):
+    quote = f"Proposed hearing {written_date}"
+    source["sources"][0]["text"] = quote
+    explanation["record"]["dates"][0].update(quote=quote, time=None)
+
+    result = validate_explanation(explanation, source)
+
+    assert result["record"]["dates"][0]["date"] == "2026-09-08"
+    assert result["record"]["dates"][0]["quote"] == quote
+
+
+@pytest.mark.parametrize("written_date", ["9/8/25.", "9/8.25.", "9/80.", "19/8."])
+def test_sentence_punctuation_does_not_allow_partial_or_changed_numeric_dates(
+    source, explanation, written_date
+):
+    quote = f"Proposed hearing {written_date}"
+    source["sources"][0]["text"] = quote
+    explanation["record"]["dates"][0].update(quote=quote, time=None)
+
+    with pytest.raises(ValueError, match="Exact date is not stated"):
+        validate_explanation(explanation, source)
+
+
 def test_partial_period_stays_literal_without_inventing_an_exact_day(
     source, explanation
 ):

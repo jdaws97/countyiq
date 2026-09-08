@@ -108,3 +108,10 @@ backfill. Fresh Activity took 2.47 seconds, Research 3.61 seconds, and the Conew
 profile 2.26 seconds. Research's immediate repeat took 0.009 seconds; Activity's
 repeat was invalidated by new accepted backfill output and took 2.48 seconds.
 These remain handler measurements, excluding browser, network and authentication.
+
+Historical processing found a valid `5/15.` date rejected because its sentence
+period was treated as an unfinished numeric date component. The date validator
+now permits sentence punctuation while still rejecting partial dates and changed
+years. The source-supported account was separately reviewed and accepted with an
+exact quote ending before the period. All 57 record/account validation tests pass,
+including seven new punctuation and invalid-date regressions.

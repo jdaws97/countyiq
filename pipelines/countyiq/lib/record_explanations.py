@@ -339,8 +339,11 @@ def _validate_date(
         spanish_named = re.search(
             rf"\b0?{parsed.day}\s+de\s+{spanish_month}\b", normalized
         )
+        # A trailing period ends a sentence unless it begins another numeric component.
         numeric = re.search(
-            rf"(?<![\d/.-])0?{parsed.month}[/.-]0?{parsed.day}(?:[/.-](?:{parsed.year}|{parsed.year % 100:02d}))?(?![\d/.-])",
+            rf"(?<![\d/.-])0?{parsed.month}[/.-]0?{parsed.day}"
+            rf"(?:[/.-](?:{parsed.year}|{parsed.year % 100:02d}))?"
+            r"(?![\d/-]|\.\d)",
             normalized,
         )
         if language != "en":
