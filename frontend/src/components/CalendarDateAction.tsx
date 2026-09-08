@@ -33,7 +33,7 @@ export default function CalendarDateAction({
     <button
       className="source-catalog-button"
       type="button"
-      title="Download calendar reminder for this stated date"
+      title="Download an all-day reminder; any stated time is included in the notes"
       aria-label={`Download calendar reminder for ${date.label}`}
       onClick={download}
     >

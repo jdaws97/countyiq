@@ -463,9 +463,8 @@
   margin: 0.7rem 0 0;
 }
 
-.overview-scope button[aria-pressed='true'] {
-  background: var(--text-primary);
-  color: var(--bg-card);
+.overview-scope .section-actions {
+  justify-content: flex-start;
 }
 
 .overview-date-item > button {
