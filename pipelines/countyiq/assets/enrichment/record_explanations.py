@@ -1,6 +1,7 @@
 """Explain current records once, with the ordinary Pass 3 spend and release gates."""
 
 import os
+from dataclasses import replace
 
 from dagster import AssetExecutionContext, Field, MaterializeResult, Noneable, asset
 from jsonschema import ValidationError
@@ -115,6 +116,24 @@ def _source_bundles(
     """Return the scope size and lazily prepared bundles, including unavailable ones."""
     county = get_county_config()
     with database.dict_cursor() as cur:
+        if kind == "matter":
+            cur.execute(
+                """
+                SELECT source FROM public.current_municipal_matter_sources
+                WHERE (%(subject_keys)s::text[] IS NULL OR bundle_key = ANY(%(subject_keys)s::text[]))
+                ORDER BY latest_meeting_date DESC, bundle_key
+                """,
+                {"subject_keys": subject_keys or None},
+            )
+            sources = [row["source"] for row in cur.fetchall()]
+            missing = set(subject_keys or []) - {
+                source["subject_key"] for source in sources
+            }
+            if missing:
+                raise ValueError(
+                    f"Requested matter bundles are not current: {sorted(missing)}"
+                )
+            return len(sources), sources
         if kind == "municipal":
             cur.execute(
                 """
@@ -177,19 +196,37 @@ def run_explanations(context, database, kind: str) -> MaterializeResult:
                 "reason": "Record explanation mode is disabled",
             }
         )
+    schema, system_prompt, prompt_version = (
+        EXPLANATION_SCHEMA,
+        SYSTEM_PROMPT,
+        PROMPT_VERSION,
+    )
+    generate, persist = generate_explanation, persist_explanation
+    if kind == "matter":
+        from countyiq.lib import municipal_matters
+
+        schema = municipal_matters.MATTERS_SCHEMA
+        system_prompt = municipal_matters.SYSTEM_PROMPT
+        prompt_version = municipal_matters.PROMPT_VERSION
+        generate, persist = (
+            municipal_matters.generate_matters,
+            municipal_matters.persist_matters,
+        )
     try:
         config, invoke = resolve_pass_harness(
             context.log,
             pass_number=3,
             archive_label=f"{kind}_record_explanations",
-            default_max_tokens=2048,
-            json_schema=EXPLANATION_SCHEMA,
+            default_max_tokens=12000 if kind == "matter" else 2048,
+            json_schema=schema,
             schema_name="record_explanation",
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system_prompt,
         )
     except PassHarnessUnavailable as error:
         return MaterializeResult(metadata={"status": "skipped", "reason": error.reason})
     config = configure_explanation_harness(config, kind)
+    if kind == "matter":
+        config = replace(config, json_schema=schema)
     budget = PassItemBudget(3)
     counts = {
         "accepted": 0,
@@ -209,7 +246,9 @@ def run_explanations(context, database, kind: str) -> MaterializeResult:
         """)
         previous = {row["subject_key"]: row for row in cur.fetchall()}
     subject_keys = (
-        context.op_config.get("subject_keys", []) if kind == "municipal" else None
+        context.op_config.get("subject_keys", [])
+        if kind in {"municipal", "matter"}
+        else None
     )
     pidns = context.op_config.get("pidns") if kind == "property" else None
     eligible_in_scope, sources = _source_bundles(
@@ -223,11 +262,18 @@ def run_explanations(context, database, kind: str) -> MaterializeResult:
         prior = previous.get(source["subject_key"], {})
         subscription_current = (
             prior.get("provider") == "codex_subscription"
-            and prior.get("prompt_version") == PROMPT_VERSION
+            and prior.get("prompt_version") == prompt_version
             and prior.get("source_hash") == content_hash(source)
         )
         if (
-            prior.get("input_hash") == explanation_identity(source, config)
+            prior.get("input_hash")
+            == content_hash(
+                {
+                    "source": source,
+                    "prompt_version": prompt_version,
+                    "config": config.__dict__,
+                }
+            )
             or subscription_current
         ):
             counts["unchanged"] += 1
@@ -237,9 +283,9 @@ def run_explanations(context, database, kind: str) -> MaterializeResult:
             break
         try:
             start_subscription_item(invoke)
-            explanation, attempts = generate_explanation(source, config, invoke)
+            explanation, attempts = generate(source, config, invoke)
             counts["corrected"] += int(attempts == 2)
-            result = persist_explanation(
+            result = persist(
                 database,
                 source,
                 explanation,
@@ -291,6 +337,24 @@ def municipal_record_explanations(
     context: AssetExecutionContext, database: DatabaseResource
 ) -> MaterializeResult:
     return run_explanations(context, database, "municipal")
+
+
+@asset(
+    group_name="enrichment",
+    deps=["municipal_evidence_linking"],
+    kinds={"postgres", "llm"},
+    config_schema={
+        "subject_keys": Field(
+            [str],
+            default_value=[],
+            description="Optional fixed candidate-bundle scope.",
+        ),
+    },
+)
+def municipal_matter_explanations(
+    context: AssetExecutionContext, database: DatabaseResource
+) -> MaterializeResult:
+    return run_explanations(context, database, "matter")
 
 
 @asset(

@@ -13,6 +13,7 @@ from countyiq.assets.enrichment.record_explanations import (
     _source_bundles,
     persist_explanation,
 )
+from countyiq.lib import municipal_matters
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.error_budget import check_error_budget
 from countyiq.lib.intelligence_integrity import content_hash
@@ -105,10 +106,27 @@ def run(database, args):
         else {}
     )
     reading = args.kind == "read"
+    matter_accounts = args.kind == "matter"
+    schema = municipal_matters.MATTERS_SCHEMA if matter_accounts else EXPLANATION_SCHEMA
+    system_prompt = (
+        municipal_matters.SYSTEM_PROMPT if matter_accounts else SYSTEM_PROMPT
+    )
+    prompt_version = (
+        municipal_matters.PROMPT_VERSION if matter_accounts else PROMPT_VERSION
+    )
+    generate = (
+        municipal_matters.generate_matters if matter_accounts else generate_explanation
+    )
+    persist = (
+        municipal_matters.persist_matters if matter_accounts else persist_explanation
+    )
+    build_prompt = (
+        municipal_matters.matter_prompt if matter_accounts else explanation_prompt
+    )
     config = HarnessConfig(
         model_path=f"codex/subscription:{args.model}",
-        json_schema=REVIEW_SCHEMA if reading else EXPLANATION_SCHEMA,
-        system_prompt=REVIEW_SYSTEM_PROMPT if reading else SYSTEM_PROMPT,
+        json_schema=REVIEW_SCHEMA if reading else schema,
+        system_prompt=REVIEW_SYSTEM_PROMPT if reading else system_prompt,
         reasoning_effort="medium",
     )
     previous = previous_reads(database, args.kind)
@@ -203,7 +221,7 @@ def run(database, args):
             else:
                 unchanged = bool(
                     prior
-                    and prior["prompt_version"] == PROMPT_VERSION
+                    and prior["prompt_version"] == prompt_version
                     and prior["source_hash"] == content_hash(source)
                 )
             if unchanged:
@@ -227,7 +245,7 @@ def run(database, args):
                         prompt=review_prompt([], document),
                     )
                 else:
-                    prepared["prompt"] = explanation_prompt(source)
+                    prepared["prompt"] = build_prompt(source)
                 yield prepared
             except ValueError as error:
                 counts["errors"] += 1
@@ -279,10 +297,10 @@ def run(database, args):
                             provenance=author.provenance(),
                         )
                     else:
-                        output, attempts = generate_explanation(source, config, author)
+                        output, attempts = generate(source, config, author)
                         selectors = (
                             {"subject_keys": [subject]}
-                            if args.kind == "municipal"
+                            if args.kind in {"municipal", "matter"}
                             else {"pidns": [subject.removeprefix("parcel:")]}
                         )
                         _, current_sources = _source_bundles(
@@ -293,7 +311,7 @@ def run(database, args):
                             raise ValueError(
                                 "Explanation source changed during authoring"
                             )
-                        result = persist_explanation(
+                        result = persist(
                             database,
                             source,
                             output,
@@ -334,7 +352,7 @@ def run(database, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("read", "municipal", "property"))
+    parser.add_argument("kind", choices=("read", "municipal", "matter", "property"))
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--limit", type=int, required=True)
     parser.add_argument("--batch-size", type=int, default=8)
@@ -359,8 +377,10 @@ def main():
         parser.error("--ids is only supported for source reads")
     if args.unit_breaks and (args.kind != "read" or not args.ids):
         parser.error("--unit-breaks requires a source read with explicit --ids")
-    if args.subjects and args.kind != "municipal":
-        parser.error("--subjects is only supported for municipal explanations")
+    if args.subjects and args.kind not in {"municipal", "matter"}:
+        parser.error(
+            "--subjects is only supported for municipal or matter explanations"
+        )
     if args.pidns and args.kind != "property":
         parser.error("--pidns is only supported for property explanations")
     database = make_database_resource()

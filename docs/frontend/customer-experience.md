@@ -175,6 +175,30 @@ excerpt without promising a page jump. GIS evidence leads to the related propert
 on the map, enabling the relevant available layer, and retains the official data
 record as a separate source action.
 
+## Explained activity and research leads
+
+The Activity workspace centers on the specific request or recorded outcome. A
+municipal matter account states what is proposed, why that particular change
+matters, its documented disposition and conditions, and a dated source history.
+Its headline identifies the actual change and recognizable place. Document type
+belongs in the history and source labels. A later agenda does not undo an earlier
+recorded decision; a planning recommendation does not establish final approval.
+
+The default Explained activity view requires a current, usable explanation.
+Research leads retains sparse listings, mixed subjects awaiting review, and
+records awaiting English presentation. These leads do not generate notifications.
+The toggle is preserved in the URL. Related agendas/minutes appear as one account
+only when the source text establishes the same request. Different applications
+at one property stay separate. Follow matter preserves the account identity as
+its source history develops. Accounts withdraw immediately when their source
+scope, rights or verified property/entity connections cease to be current.
+
+Candidate retrieval uses a verified property connection, a literal case number,
+or a literal address. Repeated project names without these anchors are still
+separate candidates; this release does not promise complete histories for them.
+A short unexplained section-number listing may remain a separate research lead
+even when a substantive account exists at the same address.
+
 ## Change discipline
 
 Treat the composition above as the default for later work. Do not restore the old

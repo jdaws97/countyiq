@@ -466,7 +466,10 @@ def validate_explanation(value: object, source: dict) -> dict:
                 ),
                 "en",
             )
-            _validate_date(item, sources, source.get("meeting_date"), language)
+            meeting_date = sources.get(item["source_id"], {}).get(
+                "meeting_date", source.get("meeting_date")
+            )
+            _validate_date(item, sources, meeting_date, language)
     return result
 
 

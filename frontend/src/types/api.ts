@@ -462,6 +462,23 @@ export interface IntelligenceEntityLink {
   verification_status: string | null
 }
 
+export interface MatterAccount {
+  request: string | null
+  outcome:
+    'not_established' | 'continued' | 'approved' | 'conditional' | 'denied' | 'withdrawn' | 'mixed'
+  outcome_summary: string | null
+  readiness: 'ready' | 'needs_detail' | 'needs_source_review'
+  conditions: string[]
+  history: {
+    record_key: string
+    meeting_date: string
+    body_name: string
+    document_kind: string
+    record_status: string
+    summary: string
+  }[]
+}
+
 export interface IntelligenceEvent {
   event_key: string
   category: IntelligenceCategory
@@ -469,6 +486,8 @@ export interface IntelligenceEvent {
   event_tags: string[]
   title: string
   what_happened: string
+  why_it_matters?: string | null
+  matter?: MatterAccount | null
   event_date: string | null
   detected_at: string
   confidence: number | null

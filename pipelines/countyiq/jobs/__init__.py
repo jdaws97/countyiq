@@ -187,10 +187,11 @@ record_intelligence_refresh = define_asset_job(
     name="record_intelligence_refresh",
     selection=AssetSelection.assets(
         "municipal_record_explanations",
+        "municipal_matter_explanations",
         "property_record_explanations",
         "intelligence_events",
     ),
-    description="[Manual] Explain current public records and refresh municipal event summaries",
+    description="[Manual] Explain current records and case histories, then refresh municipal activity",
 )
 
 owner_briefs_refresh = define_asset_job(
@@ -227,6 +228,7 @@ intelligence_full_pipeline = define_asset_job(
         "development_momentum",
         "brief_generation",
         "municipal_record_explanations",
+        "municipal_matter_explanations",
         "property_record_explanations",
         "county_narratives",
         "intelligence_events",

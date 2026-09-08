@@ -84,7 +84,7 @@ export default function InvestigationDesk({
       <section className="investigation-queue" aria-label="Activity queue">
         <div className="investigation-queue-heading">
           <span>In this view</span>
-          <span>{events.length} records</span>
+          <span>{events.length} items</span>
         </div>
         {events.map((event) => (
           <button
@@ -98,6 +98,11 @@ export default function InvestigationDesk({
               <time>{formatShortDate(event.event_date) ?? 'Date unverified'}</time>
             </span>
             <strong>{event.title}</strong>
+            {event.why_it_matters && (
+              <span className="queue-item-meaning">
+                {event.why_it_matters.replace(/\[Evidence:[^\]]+\]/gi, '').trim()}
+              </span>
+            )}
             <span className="queue-item-place">
               <span>
                 {event.municipality || 'County records'}
@@ -149,7 +154,13 @@ export function FollowActivity({ event }: { event: IntelligenceEvent }) {
     : property
       ? isWatched(property)
       : getMunicipalityWatchlist().some((item) => item.name === event.municipality)
-  const subject = event.project ? 'project' : property ? 'property' : 'municipality'
+  const subject = event.matter
+    ? 'matter'
+    : event.project
+      ? 'project'
+      : property
+        ? 'property'
+        : 'municipality'
   if (!event.project && !property && !event.municipality) {
     return null
   }
@@ -196,6 +207,9 @@ export function InvestigationDetail({
     showContext && singlePidn ? `/api/parcels/${encodeURIComponent(singlePidn)}` : null,
   )
   const source = event.sources[sourceIndex]
+  const documentCount = new Set(
+    event.sources.map((item) => item.document_url || item.url || item.label),
+  ).size
   return (
     <article
       className={`investigation-detail${showContext ? '' : ' investigation-detail-standalone'}`}
@@ -209,24 +223,66 @@ export function InvestigationDetail({
         {event.title}
       </h2>
       <p className="investigation-byline">
-        Record dated {formatShortDate(event.event_date) ?? 'date unverified'}
+        {event.matter ? 'Latest source dated' : 'Record dated'}{' '}
+        {formatShortDate(event.event_date) ?? 'date unverified'}
         <span>·</span>
-        {event.sources.length} supporting {event.sources.length === 1 ? 'source' : 'sources'}
+        {documentCount} supporting {documentCount === 1 ? 'document' : 'documents'}
       </p>
       <div className="investigation-tabs" aria-label="Investigation view">
         <button aria-pressed={tab === 'overview'} onClick={() => setTab('overview')}>
           Overview
         </button>
         <button aria-pressed={tab === 'sources'} onClick={() => setTab('sources')}>
-          Source documents <span>{event.sources.length}</span>
+          Source documents <span>{documentCount}</span>
         </button>
       </div>
       <div className="investigation-overview" hidden={tab !== 'overview'}>
         <section className="investigation-account">
-          <h3>What the record says</h3>
+          <h3>{event.matter ? 'Latest account' : 'What the record says'}</h3>
           <p className="investigation-summary">
             <CitedText text={event.what_happened} evidence={event.sources} />
           </p>
+          {event.matter?.outcome === 'not_established' && (
+            <p className="matter-outcome-note">
+              The supplied records do not establish the final outcome.
+            </p>
+          )}
+          {event.matter?.request && (
+            <section className="matter-explanation">
+              <h3>What is proposed</h3>
+              <p>
+                <CitedText text={event.matter.request} evidence={event.sources} />
+              </p>
+            </section>
+          )}
+          {event.why_it_matters && (
+            <section className="matter-explanation matter-significance">
+              <h3>Why it matters</h3>
+              <p>
+                <CitedText text={event.why_it_matters} evidence={event.sources} />
+              </p>
+            </section>
+          )}
+          {event.matter?.outcome_summary && (
+            <section className="matter-explanation">
+              <h3>Recorded outcome</h3>
+              <p>
+                <CitedText text={event.matter.outcome_summary} evidence={event.sources} />
+              </p>
+            </section>
+          )}
+          {Boolean(event.matter?.conditions.length) && (
+            <section className="investigation-nuance">
+              <h3>Conditions in the decision</h3>
+              <ul>
+                {event.matter!.conditions.map((condition, index) => (
+                  <li key={index}>
+                    <CitedText text={condition} evidence={event.sources} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {detail.dates.length > 0 && (
             <div className="investigation-dates">
               {detail.dates.map((date, index) => (
@@ -306,6 +362,28 @@ export function InvestigationDetail({
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+          {event.matter && event.matter.history.length > 1 && (
+            <section className="matter-history" aria-label="History of this matter">
+              <h3>How this matter developed</h3>
+              <ol>
+                {event.matter.history.map((entry) => (
+                  <li key={entry.record_key}>
+                    <div className="matter-history-meta">
+                      <time dateTime={entry.meeting_date}>
+                        {formatShortDate(entry.meeting_date)}
+                      </time>
+                      <span>
+                        {formatLabel(entry.document_kind)} · {entry.body_name}
+                      </span>
+                    </div>
+                    <p>
+                      <CitedText text={entry.summary} evidence={event.sources} />
+                    </p>
+                  </li>
+                ))}
+              </ol>
             </section>
           )}
           <div className="investigation-verification">

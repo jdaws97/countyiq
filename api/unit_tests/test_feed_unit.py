@@ -179,7 +179,9 @@ def test_feed_filters_serializes_and_paginates(monkeypatch):
     assert response["limit"] == 1
     assert len(response["events"]) == 1
     event = response["events"][0]
-    assert "why_it_matters" not in event and "what_happens_next" not in event
+    assert event["why_it_matters"] == "The approval advances the public review process."
+    assert event["matter"] is None
+    assert "what_happens_next" not in event
     assert event["sources"][0]["details"]["conditions"] == ["Submit a traffic study"]
     assert event["sources"][0]["details"]["milestones"][0]["date"] == "2026-09-20"
     assert event["sources"][0]["details"]["supports"] == ["condition:0", "milestone:0"]

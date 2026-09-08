@@ -32,6 +32,28 @@ DATABASE_PORT=5433 .venv/bin/python scripts/subscription_backfill.py property \
   --limit 16 --batch-size 8
 ```
 
+For customer activity, author complete municipal matter accounts after the
+source selections and verified evidence links are current (schema 075):
+
+```bash
+DATABASE_PORT=5433 .venv/bin/python scripts/subscription_backfill.py matter \
+  --directory ../output/subscription-matters \
+  --limit 16 --batch-size 2 --workers 1
+```
+
+Use `--subjects municipal-bundle:...` to pin complete candidate bundles from
+`public.current_municipal_matter_sources`. A bundle is retrieval scope, not an
+assertion that its records are one case. Pass 3 must partition every record exactly
+once, cite each linked record, preserve local source history and abstain on sparse
+or mixed subjects. Inputs above the complete-context limit fail for review.
+
+`municipal_matter_explanations` is included in `record_intelligence_refresh` and
+the full pipeline. Materialize `intelligence_events` after authoring to publish
+accepted accounts. The source-hash guard withdraws stale accounts before a
+rebuild. Stable record aliases prevent silently splitting or merging previously
+followed matters; those changes need identity review. The older `municipal`
+mode still authors individual source cards for property evidence.
+
 `--ids` pins proceeding IDs, `--subjects` pins municipal explanation keys, and
 `--pidns` pins properties. Without selectors, the read stage covers every
 currently eligible proceeding; municipal explanations cover all current cards;
