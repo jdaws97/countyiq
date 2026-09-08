@@ -1,15 +1,48 @@
 """Credential boundaries and preservation of existing Grafana routes."""
 
+import contextlib
+import io
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import configure
 from configure import validate_url
 from provision import notification_policy, select_datasource, verify_owner
 
 
 class ProvisioningTests(unittest.TestCase):
+    def test_capture_keeps_encrypted_credentials_when_discovery_fails(self):
+        api = MagicMock()
+        api.request.return_value = [{"email": "jarod.daws@gmail.com"}]
+        encrypted = "GRAFANA_PROVISION_TOKEN=ENC[encrypted-fixture]\n"
+        tokens = ["glsa_provision_fixture", "glc_ingestion_fixture"]
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            secret = root / "monitoring.sops.env"
+            with (
+                patch.object(configure, "ROOT", root),
+                patch.object(configure, "SECRET_PATH", secret),
+                patch("provision.Grafana", return_value=api),
+                patch("configure.getpass.getpass", side_effect=tokens),
+                patch(
+                    "configure.subprocess.run", return_value=MagicMock(stdout=encrypted)
+                ),
+                patch("configure.resolve", side_effect=KeyError("basicAuthUser")),
+                contextlib.redirect_stdout(output),
+            ):
+                with self.assertRaises(KeyError):
+                    configure.capture()
+            self.assertEqual(secret.read_text(), encrypted)
+            self.assertEqual(secret.stat().st_mode & 0o777, 0o600)
+            for token in tokens:
+                self.assertNotIn(token, secret.read_text())
+                self.assertNotIn(token, output.getvalue())
+
     def test_notification_routing_preserves_unrelated_routes(self):
         existing = {
             "receiver": "original",
@@ -55,6 +88,30 @@ class ProvisioningTests(unittest.TestCase):
             {"uid": "metrics", "type": "prometheus", "name": "grafanacloud-stack-prom"},
         ]
         self.assertEqual(select_datasource(sources, "prometheus"), "metrics")
+
+    def test_cloud_logs_are_selected_over_alert_state_history(self):
+        sources = [
+            {
+                "uid": "alert-history",
+                "type": "loki",
+                "name": "grafanacloud-countyiq-alert-state-history",
+            },
+            {
+                "uid": "application-logs",
+                "type": "loki",
+                "name": "grafanacloud-countyiq-logs",
+            },
+        ]
+        self.assertEqual(select_datasource(sources, "loki"), "application-logs")
+        sources.append(
+            {
+                "uid": "another-stack",
+                "type": "loki",
+                "name": "grafanacloud-another-logs",
+            }
+        )
+        with self.assertRaises(ValueError):
+            select_datasource(sources, "loki")
 
 
 if __name__ == "__main__":

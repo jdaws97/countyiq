@@ -52,6 +52,16 @@ class Grafana:
         except urllib.error.HTTPError as error:
             if allow_missing and error.code == 404:
                 return None
+            if error.code == 401:
+                raise ConfigurationError(
+                    "Grafana rejected the service-account token (HTTP 401). "
+                    "Use a current glsa_ token from this Grafana stack."
+                ) from None
+            if error.code == 403:
+                raise ConfigurationError(
+                    "The service-account token lacks permission (HTTP 403). "
+                    "The provisioning service account needs the Admin role."
+                ) from None
             # API error bodies may contain secrets or saved contact settings.
             raise RuntimeError(
                 f"Grafana {method} failed with HTTP {error.code}"
@@ -67,9 +77,20 @@ def select_datasource(datasources: list[dict], kind: str) -> str:
     defaults = [item for item in matches if item.get("isDefault")]
     if len(defaults) == 1:
         return defaults[0]["uid"]
+    suffix = {"prometheus": "-prom", "loki": "-logs"}.get(kind)
+    cloud_sources = [
+        item
+        for item in matches
+        if suffix
+        and item["name"].startswith("grafanacloud-")
+        and item["name"].endswith(suffix)
+    ]
+    if len(cloud_sources) == 1:
+        return cloud_sources[0]["uid"]
     if len(matches) != 1:
         raise ConfigurationError(
-            f"Expected one unambiguous {kind} datasource; found {len(matches)}."
+            f"Expected one unambiguous {kind} datasource; found {len(matches)}. "
+            "Check the datasource names in Grafana Connections > Data sources."
         )
     return matches[0]["uid"]
 

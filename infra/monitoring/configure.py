@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
@@ -85,47 +86,85 @@ def read_secrets() -> dict[str, str]:
 
 
 def capture() -> None:
-    if SECRET_PATH.exists():
-        raise ValueError(
-            "Monitoring secrets already exist; use SOPS to edit or rotate them."
-        )
     print("Use Grafana Cloud Free. Secret input is hidden and streamed into SOPS.")
-    from provision import Grafana, select_datasource, verify_owner
+    from provision import Grafana, verify_owner
 
     stack_url = validate_url(STACK["url"], path="")
     print(
         f"Connecting {stack_url}; allowed accounts: {', '.join(sorted(ALLOWED_EMAILS))}."
     )
-    provision_token = getpass.getpass(
-        "Grafana service-account provisioning token (hidden): "
-    ).strip()
+    values = read_secrets() if SECRET_PATH.exists() else {}
+    provision_token = (
+        values.get("GRAFANA_PROVISION_TOKEN")
+        or getpass.getpass("1. Grafana SERVICE ACCOUNT token, glsa_ (hidden): ").strip()
+    )
+    if provision_token.startswith("glc_"):
+        raise ConfigurationError(
+            "The first prompt needs your service-account token (glsa_), "
+            "not the Cloud Access Policy token (glc_)."
+        )
     api = Grafana(stack_url, provision_token)
+    verify_owner(api.request("GET", "/api/org/users"), ALLOWED_EMAILS)
+    values.update(
+        {
+            "GRAFANA_STACK_URL": stack_url,
+            "GRAFANA_PROVISION_TOKEN": provision_token,
+            "COUNTYIQ_OPERATOR_EMAIL": OPERATOR_EMAIL,
+        }
+    )
+    save_secrets(values)
+    print("Service-account token verified and encrypted locally.")
+    if not values.get("GRAFANA_INGEST_TOKEN"):
+        ingest_token = getpass.getpass(
+            "2. CLOUD ACCESS POLICY token, glc_, metrics:write + logs:write (hidden): "
+        ).strip()
+        if ingest_token.startswith("glsa_"):
+            raise ConfigurationError(
+                "The second prompt needs a Cloud Access Policy token (glc_). "
+                "Your service-account token is already saved; rerun to continue."
+            )
+        values["GRAFANA_INGEST_TOKEN"] = ingest_token
+        save_secrets(values)
+    print(
+        "Tokens encrypted locally. Connection discovery can now continue automatically."
+    )
+    resolve()
+
+
+def resolve() -> None:
+    from provision import Grafana, select_datasource, verify_owner
+
+    values = read_secrets()
+    api = Grafana(values["GRAFANA_STACK_URL"], values["GRAFANA_PROVISION_TOKEN"])
     verify_owner(api.request("GET", "/api/org/users"), ALLOWED_EMAILS)
     sources = api.request("GET", "/api/datasources")
     by_uid = {source["uid"]: source for source in sources}
     metrics = by_uid[select_datasource(sources, "prometheus")]
     logs = by_uid[select_datasource(sources, "loki")]
-    values = {
-        "GRAFANA_STACK_URL": stack_url,
-        "GRAFANA_METRICS_URL": validate_url(
-            metrics["url"].rstrip("/") + "/push", path="/api/prom/push"
-        ),
-        "GRAFANA_METRICS_USER": metrics["basicAuthUser"],
-        "GRAFANA_LOGS_URL": validate_url(
-            logs["url"].rstrip("/") + "/loki/api/v1/push", path="/loki/api/v1/push"
-        ),
-        "GRAFANA_LOGS_USER": logs["basicAuthUser"],
-        "GRAFANA_INGEST_TOKEN": getpass.getpass(
-            "Cloud metrics:write + logs:write token (hidden): "
-        ).strip(),
-        "GRAFANA_PROVISION_TOKEN": provision_token,
-        "COUNTYIQ_OPERATOR_EMAIL": OPERATOR_EMAIL,
-    }
+    values.update(
+        {
+            "GRAFANA_METRICS_URL": validate_url(
+                metrics["url"].rstrip("/") + "/push", path="/api/prom/push"
+            ),
+            "GRAFANA_METRICS_USER": str(metrics["basicAuthUser"]),
+            "GRAFANA_LOGS_URL": validate_url(
+                logs["url"].rstrip("/") + "/loki/api/v1/push", path="/loki/api/v1/push"
+            ),
+            "GRAFANA_LOGS_USER": str(logs["basicAuthUser"]),
+        }
+    )
     for name in ("GRAFANA_METRICS_USER", "GRAFANA_LOGS_USER"):
         if not values[name].isdigit():
             raise ConfigurationError(
                 "Grafana metrics/logs instance IDs must be numeric."
             )
+    save_secrets(values)
+    print(
+        "Saved encrypted monitoring connection settings. No credentials were printed."
+    )
+
+
+def save_secrets(values: dict[str, str]) -> None:
     if any(not value or re.search(r"[\s\"'`$]", value) for value in values.values()):
         raise ConfigurationError(
             "Connection values must be nonempty, single-line values."
@@ -150,9 +189,17 @@ def capture() -> None:
         cwd=ROOT,
         env=sops_environment(),
     )
-    with SECRET_PATH.open("x") as output:
-        output.write(result.stdout)
-    print("Saved encrypted monitoring credentials. No credentials were printed.")
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=".monitoring-", dir=SECRET_PATH.parent
+    )
+    try:
+        with os.fdopen(descriptor, "w") as output:
+            output.write(result.stdout)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, SECRET_PATH)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def publish() -> None:
@@ -195,10 +242,10 @@ def publish() -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("capture", "publish"))
+    parser.add_argument("action", choices=("capture", "resolve", "publish"))
     args = parser.parse_args()
     try:
-        {"capture": capture, "publish": publish}[args.action]()
+        {"capture": capture, "resolve": resolve, "publish": publish}[args.action]()
     except ConfigurationError as error:
         print(f"Monitoring configuration failed: {error}")
         raise SystemExit(1)

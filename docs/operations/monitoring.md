@@ -120,6 +120,7 @@ Enter credentials through hidden local prompts, never chat or repository text:
 
 ```bash
 pipelines/.venv/bin/python infra/monitoring/configure.py capture
+pipelines/.venv/bin/python infra/monitoring/configure.py resolve
 pipelines/.venv/bin/python infra/monitoring/provision.py --check
 pipelines/.venv/bin/python infra/monitoring/provision.py --apply
 pipelines/.venv/bin/python infra/monitoring/configure.py publish
@@ -128,6 +129,11 @@ bash infra/monitoring/deploy.sh
 
 Only encrypted `infra/secrets/monitoring.sops.env` is stored in Git. Publishing
 streams ingestion-only credentials over verified SSH to a root-owned 0600 file.
+Capture saves the verified service-account token before asking for the Cloud
+Access Policy token, and saves both before datasource discovery. If setup is
+interrupted or discovery fails, rerun `capture` to resume or `resolve` to retry
+discovery without entering tokens again. The first token belongs to the Grafana
+service account (`glsa_`); the second belongs to the Cloud Access Policy (`glc_`).
 Dashboards and alert rules reconcile by fixed UIDs. Notification routing adds
 only the CountyIQ route and preserves unrelated routes. Initial routing is
 email to the operator's ProtonMail address; a Slack contact point remains optional and requires
