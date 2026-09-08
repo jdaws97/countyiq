@@ -399,8 +399,8 @@ def _budget_context_ranges(
         if (
             re.fullmatch(r"[A-Z]{2,5}", text)
             and text not in {"NONE", "YES", "NO", "VOTE", "PASS", "FAIL", "DENY"}
-            and re.search(
-                r"\b(they|their|it|its)\b",
+            and re.match(
+                r"\s*(they|their|it|its)\b",
                 document.units[first - 1].text,
                 re.IGNORECASE,
             )

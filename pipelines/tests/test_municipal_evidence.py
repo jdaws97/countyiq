@@ -551,6 +551,46 @@ def test_adjacent_acronym_heading_identifies_a_facility_opening():
     )
 
 
+def test_wrapped_acronym_does_not_attach_to_a_new_named_subject():
+    document, _ = source_document(
+        [
+            {
+                "page": 1,
+                "text": (
+                    "Loius Diaz: A complaint was filed with the\n"
+                    "DJ\n"
+                    "Rock Realty asked what they can do with 286 N. Main.\n"
+                ),
+            }
+        ]
+    )
+    result = bind_review(
+        {
+            "items": [
+                {
+                    "index": None,
+                    "title": "Loius Diaz",
+                    "passages": [[1, 2]],
+                    "context": [],
+                    "references": [],
+                },
+                {
+                    "index": None,
+                    "title": "286 N. Main",
+                    "passages": [[3, 3]],
+                    "context": [],
+                    "references": [],
+                },
+            ]
+        },
+        [],
+        document,
+    )
+    assert result["status"] == "complete"
+    assert result["cards"][0]["subject_passages"][0]["text"].endswith("DJ\n")
+    assert result["cards"][1]["context_passages"] == []
+
+
 def test_uppercase_previous_vote_is_not_a_heading_for_another_property():
     document, _ = source_document(
         [
