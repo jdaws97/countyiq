@@ -406,9 +406,20 @@ def current_matter_source(cur, source):
     records = source.get("records", [])
     record_key = records[0].get("key", "") if len(records) == 1 else ""
     match = re.fullmatch(r"municipal:([0-9]+):[a-f0-9]{20}:[a-f0-9]{64}", record_key)
-    if not match or source.get("candidate_scope") != "selection:" + record_key:
+    reviewed_selection = False
+    if match and source.get("candidate_scope") == "selection:" + record_key:
         cur.execute(
-            "SELECT source FROM public.current_municipal_matter_sources WHERE bundle_key = %s",
+            "SELECT 1 FROM meta.municipal_candidate_reviews WHERE members ? %s LIMIT 1",
+            (record_key,),
+        )
+        reviewed_selection = cur.fetchone() is not None
+    if (
+        not match
+        or source.get("candidate_scope") != "selection:" + record_key
+        or reviewed_selection
+    ):
+        cur.execute(
+            "SELECT source FROM public.municipal_matter_source(%s)",
             (source["subject_key"],),
         )
         current = cur.fetchone()

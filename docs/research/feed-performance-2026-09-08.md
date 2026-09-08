@@ -74,3 +74,23 @@ Verification of this follow-up: 24 focused API/cache/account tests and three rea
 database identity-review tests passed; the pipeline suite passed 1,886 tests with
 137 integration tests deselected. Complete candidate rows outside the two
 intentionally regrouped records matched the previous production view exactly.
+
+## Historical source loading and reviewed related updates
+
+The historical backfill exposed a separate poor join plan when constructing all
+candidate source bundles. Migration 080 builds source records and their passages
+in a single grouped query over the compact, current scope inputs. A bounded
+source function supports persistence and contradiction review. A rollback-only
+production comparison found zero differences across all 21,762 complete source
+bundles; constructing their roughly 64 MB of source JSON took about four seconds,
+and a single-bundle check took about 1.5 seconds.
+
+Cross-document updates without literal case references can now receive an
+explicit candidate review through `review_municipal_candidates.py`. Reviews bind
+every selected record to its current source fingerprint, require one municipality
+and complete existing bundles, and cannot override property or formal case
+scopes. Reviews are append-only; a later release restores default retrieval.
+Every member must remain current for the group to apply. A candidate review does
+not update matter aliases or establish a merged account: the existing complete
+source, identity, watch, and contradiction checks still govern that separate step.
+The same source-change revision invalidates cached Activity immediately.

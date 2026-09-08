@@ -372,7 +372,7 @@ def _current_source_hash(
         and contradiction["decision_key"] == "municipal_matters"
     ):
         cur.execute(
-            "SELECT source FROM public.current_municipal_matter_sources WHERE bundle_key = %s",
+            "SELECT source FROM public.municipal_matter_source(%s)",
             (subject_key,),
         )
         row = cur.fetchone()

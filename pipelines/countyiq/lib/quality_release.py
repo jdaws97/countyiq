@@ -132,10 +132,13 @@ def release_identity(pass_number: int) -> dict:
                 [
                     Path(__file__).with_name("record_explanations.py"),
                     Path(__file__).with_name("municipal_matters.py"),
+                    Path(__file__).with_name("municipal_candidate_review.py"),
                     Path(__file__).parents[1]
                     / "assets/enrichment/record_explanations.py",
                     Path(__file__).parents[2]
                     / "alembic/versions/069_record_explanations.py",
+                    Path(__file__).parents[2]
+                    / "alembic/versions/080_reviewed_municipal_candidates.py",
                 ]
             )
             source_paths.extend(

@@ -96,12 +96,12 @@ def seeded_selection_source():
                 INSERT INTO meta.municipality_source_rights (
                     source_key, municipality_name, body_name, proceeding_type,
                     rights_status, acquisition_allowed, raw_retention_allowed,
-                    derived_product_allowed, person_level_display_allowed,
+                    derived_product_allowed,
                     raw_export_allowed, allowed_methods, terms_review_status,
                     reviewed_on, review_due_on, evidence
                 )
                 VALUES (%s, %s, %s, 'planning', 'conditional', true, true,
-                        true, false, false, ARRAY['official_document_direct'],
+                        true, false, ARRAY['official_document_direct'],
                         'reviewed', CURRENT_DATE, CURRENT_DATE + 1, '{}'::jsonb)
                 """,
                 (source_key, f"Matter Freshness {suffix}", body_name),

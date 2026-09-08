@@ -103,7 +103,7 @@ class SourceCursor:
 
     def execute(self, sql, params=None):
         self.source_query = sql.startswith(
-            "SELECT source FROM public.current_municipal_matter_sources "
+            "SELECT source FROM public.municipal_matter_source("
         )
         if self.source_query:
             assert params == (self.source["subject_key"],)
