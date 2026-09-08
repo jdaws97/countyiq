@@ -1,5 +1,10 @@
 """Present current accepted record explanations with their original receipts."""
 
+from api.lib.english_presentation import (
+    english_explanation,
+    present_receipt,
+    present_record,
+)
 from api.lib.evidence import NFHL_FLOOD_HAZARD_LAYER, evidence_item, with_arcgis_layer
 from api.lib.settings import open_data_source_key
 from api.lib.source_locations import municipal_source_details
@@ -36,7 +41,7 @@ def explanation_payload(
 ) -> dict | None:
     explanation = row.get("explanation")
     source = row.get("explanation_source")
-    if not explanation or not source:
+    if not english_explanation(explanation) or not source:
         return None
     generated_at = row.get("explanation_generated_at")
     if hasattr(generated_at, "isoformat"):
@@ -78,6 +83,7 @@ def explanation_payload(
         ]
         if len(matches) == 1:
             receipt["details"].update(matches[0])
+        present_receipt(receipt, item, explanation)
         if context_pidn:
             related_pidn = (item.get("facts") or {}).get("pidn") or context_pidn
             receipt["internal_url"] = f"/property/{related_pidn}"
@@ -85,7 +91,7 @@ def explanation_payload(
         "headline": explanation["headline"],
         "summary": explanation["summary"],
         "next_step": explanation["next_step"],
-        "record": explanation["record"],
+        "record": present_record(explanation["record"], source["sources"], explanation),
         "citation_evidence": receipts,
         "generated_at": generated_at,
         "model": row.get("explanation_model"),

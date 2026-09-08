@@ -99,23 +99,6 @@ def build_record_brief(
         if key in CONSTRAINT_KEYS:
             category = "constraint"
         text = format_signal_label(key, supported[key])
-        if key == "municipal_record":
-            evidence = supported[key].get("evidence", supported[key])
-            excerpts = evidence.get("passages", [])
-            source_text = " […] ".join(
-                " ".join(passage["text"].split())
-                for passage in excerpts
-                if isinstance(passage, Mapping) and isinstance(passage.get("text"), str)
-            )
-            kind = str(evidence.get("document_kind") or "record").capitalize()
-            meeting_date = evidence.get("meeting_date") or "date unavailable"
-            if source_text:
-                preview = (
-                    source_text
-                    if len(source_text) <= 600
-                    else source_text[:600].rstrip() + "…"
-                )
-                text = f"{kind}, {meeting_date}: {preview}"
         findings.append(
             {
                 "signal_key": key,

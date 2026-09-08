@@ -116,6 +116,7 @@ export function SourceContent({
 }) {
   const facts = sourceFacts(item)
   const passages = sourcePassages(item)
+  const translated = item.details?.translated === true
   const original = sourceOriginalUrl(item)
   const propertyPath = sourcePropertyPath(item)
   const caveat = sourceCaveat(item)
@@ -164,10 +165,19 @@ export function SourceContent({
         </p>
       )}
       {passages.length > 0 && (
-        <section className="source-passages" aria-label="Original wording">
-          <h3>Excerpts from the original document</h3>
+        <section
+          className="source-passages"
+          aria-label={translated ? 'English translation' : 'Original wording'}
+        >
+          <h3>
+            {translated
+              ? 'English translation of the source excerpt'
+              : 'Excerpts from the original document'}
+          </h3>
           <p className="source-reading-guide">
-            Original wording is preserved below. Page links use PDF page numbers where available.
+            {translated
+              ? 'Translated from the original document. Page links open the beginning of the supporting passage.'
+              : 'Original wording is preserved below. Page links use PDF page numbers where available.'}
           </p>
           {passages.map((passage, index) => (
             <SourcePassageContent

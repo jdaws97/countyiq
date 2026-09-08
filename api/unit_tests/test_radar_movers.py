@@ -174,6 +174,7 @@ def test_list_views_accept_acreage_and_class_filters(monkeypatch):
         min_acres=5,
         max_acres=None,
         parcel_class="r, i, bogus",
+        plan_status=None,
         limit=10,
         offset=0,
     )

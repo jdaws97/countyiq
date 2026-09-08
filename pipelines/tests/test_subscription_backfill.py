@@ -121,3 +121,41 @@ def test_batch_keeps_source_identity_and_rejects_incomplete_results(
         assert author(config(), "first source").parsed == {"items": []}
         assert author(config(), "second source").parsed == {"items": []}
         assert len(list(tmp_path.glob("*.json"))) == 3
+
+
+def test_prefetch_concurrency_is_bounded_and_early_stop_does_not_consume_more_sources(
+    monkeypatch, tmp_path
+):
+    from threading import Barrier
+    from types import SimpleNamespace
+
+    from countyiq.lib import subscription_backfill
+
+    barrier = Barrier(2)
+    cached = []
+    consumed = []
+
+    class Author:
+        def __init__(self, *_args, **_kwargs):
+            self.receipts = []
+
+        def prefetch(self, _config, prompts):
+            barrier.wait(timeout=3)
+            cached.extend(prompts)
+
+    def sources():
+        for index in range(5):
+            consumed.append(index)
+            yield [{"prompt": str(index)}]
+
+    monkeypatch.setattr(subscription_backfill, "SubscriptionAuthor", Author)
+    parent = SimpleNamespace(directory=tmp_path, model="test", timeout=10)
+    with subscription_backfill.prefetched_batches(
+        parent, None, sources(), workers=2
+    ) as batches:
+        batch, worker, future = next(batches)
+        future.result()
+        assert batch == [{"prompt": "0"}]
+        assert worker.receipts == []
+    assert consumed == [0, 1]
+    assert sorted(cached) == ["0", "1"]

@@ -20,6 +20,12 @@ def append_explanation(
     municipal = source["kind"] == "municipal"
     source_id = source["sources"][0]["id"]
     explanation = {
+        "presentation_language": "en",
+        "source_presentations": [
+            {"source_id": item["id"], "language": "en", "english_text": None}
+            for item in source["sources"]
+            if "text" in item
+        ],
         "headline": headline,
         "summary": f"The source proposes consideration of the final plan. [Evidence:source:{source_id}]",
         "next_step": None,

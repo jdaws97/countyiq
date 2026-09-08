@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 from countyiq.assets.enrichment.proceeding_extraction import PENDING_PROCEEDINGS_QUERY
@@ -44,6 +45,7 @@ from countyiq.lib.source_rights import (
 from countyiq.lib.subscription_backfill import (
     SubscriptionAuthor,
     SubscriptionUnavailable,
+    prefetched_batches,
 )
 from countyiq.resources.database import make_database_resource
 from jsonschema import ValidationError
@@ -138,6 +140,35 @@ def run(database, args):
     )
     attempted = 0
     stop_reason = "scope_exhausted"
+    started_at = datetime.now(UTC).isoformat()
+
+    def write_status(*, finished=False):
+        remaining = total - counts["accepted"] - counts["unchanged"]
+        report = {
+            **counts,
+            "kind": args.kind,
+            "model": args.model,
+            "workers": args.workers,
+            "remaining": remaining,
+            "status": ("partial" if remaining else "complete")
+            if finished
+            else "running",
+            "stop_reason": stop_reason if finished else None,
+            "started_at": started_at,
+            "updated_at": datetime.now(UTC).isoformat(),
+            "selectors": {
+                "ids": args.ids,
+                "subjects": args.subjects,
+                "pidns": args.pidns,
+            },
+        }
+        path = args.directory / f"{args.kind}-status.json"
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(report, indent=2) + "\n")
+        temporary.replace(path)
+        return report
+
+    write_status()
 
     def pending_sources():
         nonlocal attempted, stop_reason
@@ -183,99 +214,99 @@ def run(database, args):
                 counts["errors"] += 1
                 print(json.dumps({"subject": subject, "error": str(error)}), flush=True)
 
-    for batch in source_batches(pending_sources(), args.batch_size):
-        try:
-            author.prefetch(config, [item["prompt"] for item in batch])
-        except SubscriptionUnavailable:
-            stop_reason = "subscription_unavailable"
-            break
-        except (ValueError, ValidationError) as error:
-            # Preserve the rejected batch artifact, then author each original
-            # source separately. Never treat a missing batch item as an empty read.
-            print(json.dumps({"batch_split_reason": str(error)}), flush=True)
-        for prepared in batch:
-            author.receipts.clear()
-            source = prepared["source"]
-            subject = prepared["subject"]
+    with prefetched_batches(
+        author,
+        config,
+        source_batches(pending_sources(), args.batch_size),
+        workers=args.workers,
+    ) as batches:
+        for batch, author, prefetch in batches:
             try:
-                if reading:
-                    document = prepared["document"]
-                    reviewed = read_evidence(document, config, author)
-                    # Recheck eligibility after slow authoring. Changed sources
-                    # and expired rights fail before the persistence call.
-                    current = proceeding_rows(database).get(source["id"])
-                    if current is None or record_snapshot(current) != record_snapshot(
-                        source
-                    ):
-                        raise ValueError(
-                            "Source or eligibility changed during authoring"
-                        )
-                    result = persist_evidence(
-                        database,
-                        source,
-                        document,
-                        prepared["pages"],
-                        reviewed,
-                        config,
-                        provenance=author.provenance(),
-                    )
-                else:
-                    output, attempts = generate_explanation(source, config, author)
-                    selectors = (
-                        {"subject_keys": [subject]}
-                        if args.kind == "municipal"
-                        else {"pidns": [subject.removeprefix("parcel:")]}
-                    )
-                    _, current_sources = _source_bundles(
-                        database, args.kind, **selectors
-                    )
-                    current = next(iter(current_sources), None)
-                    if current != source:
-                        raise ValueError("Explanation source changed during authoring")
-                    result = persist_explanation(
-                        database,
-                        source,
-                        output,
-                        config,
-                        attempts=attempts,
-                        provenance=author.provenance(),
-                    )
-                counts["accepted" if result.accepted else "quarantined"] += 1
-                print(
-                    json.dumps({"subject": subject, "accepted": result.accepted}),
-                    flush=True,
-                )
+                prefetch.result()
             except SubscriptionUnavailable:
                 stop_reason = "subscription_unavailable"
                 break
             except (ValueError, ValidationError) as error:
-                counts["errors"] += 1
-                print(json.dumps({"subject": subject, "error": str(error)}), flush=True)
-        if stop_reason == "subscription_unavailable":
-            break
-        try:
-            check_error_budget(
-                logging.getLogger(__name__),
-                label="Subscription backfill",
-                errors=counts["errors"],
-                total=counts["accepted"] + counts["quarantined"] + counts["errors"],
-            )
-        except RuntimeError:
-            stop_reason = "error_budget"
-            break
-    remaining = total - counts["accepted"] - counts["unchanged"]
-    report = {
-        **counts,
-        "kind": args.kind,
-        "model": args.model,
-        "remaining": remaining,
-        "status": "partial" if remaining else "complete",
-        "stop_reason": stop_reason,
-    }
-    (args.directory / f"{args.kind}-status.json").write_text(
-        json.dumps(report, indent=2) + "\n"
-    )
-    return report
+                # Preserve the rejected batch artifact, then author each original
+                # source separately. Never treat a missing batch item as an empty read.
+                print(json.dumps({"batch_split_reason": str(error)}), flush=True)
+            for prepared in batch:
+                author.receipts.clear()
+                source = prepared["source"]
+                subject = prepared["subject"]
+                try:
+                    if reading:
+                        document = prepared["document"]
+                        reviewed = read_evidence(document, config, author)
+                        # Recheck eligibility after slow authoring. Changed sources
+                        # and expired rights fail before the persistence call.
+                        current = proceeding_rows(database).get(source["id"])
+                        if current is None or record_snapshot(
+                            current
+                        ) != record_snapshot(source):
+                            raise ValueError(
+                                "Source or eligibility changed during authoring"
+                            )
+                        result = persist_evidence(
+                            database,
+                            source,
+                            document,
+                            prepared["pages"],
+                            reviewed,
+                            config,
+                            provenance=author.provenance(),
+                        )
+                    else:
+                        output, attempts = generate_explanation(source, config, author)
+                        selectors = (
+                            {"subject_keys": [subject]}
+                            if args.kind == "municipal"
+                            else {"pidns": [subject.removeprefix("parcel:")]}
+                        )
+                        _, current_sources = _source_bundles(
+                            database, args.kind, **selectors
+                        )
+                        current = next(iter(current_sources), None)
+                        if current != source:
+                            raise ValueError(
+                                "Explanation source changed during authoring"
+                            )
+                        result = persist_explanation(
+                            database,
+                            source,
+                            output,
+                            config,
+                            attempts=attempts,
+                            provenance=author.provenance(),
+                        )
+                    counts["accepted" if result.accepted else "quarantined"] += 1
+                    print(
+                        json.dumps({"subject": subject, "accepted": result.accepted}),
+                        flush=True,
+                    )
+                except SubscriptionUnavailable:
+                    stop_reason = "subscription_unavailable"
+                    break
+                except (ValueError, ValidationError) as error:
+                    counts["errors"] += 1
+                    print(
+                        json.dumps({"subject": subject, "error": str(error)}),
+                        flush=True,
+                    )
+            write_status()
+            if stop_reason == "subscription_unavailable":
+                break
+            try:
+                check_error_budget(
+                    logging.getLogger(__name__),
+                    label="Subscription backfill",
+                    errors=counts["errors"],
+                    total=counts["accepted"] + counts["quarantined"] + counts["errors"],
+                )
+            except RuntimeError:
+                stop_reason = "error_budget"
+                break
+    return write_status(finished=True)
 
 
 def main():
@@ -284,6 +315,7 @@ def main():
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--limit", type=int, required=True)
     parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--model", default="gpt-6-astra")
     parser.add_argument("--ids", type=int, nargs="*")
     parser.add_argument("--subjects", nargs="*")
@@ -293,6 +325,8 @@ def main():
         parser.error("--limit must be positive")
     if not 1 <= args.batch_size <= 16:
         parser.error("--batch-size must be between 1 and 16")
+    if not 1 <= args.workers <= 4:
+        parser.error("--workers must be between 1 and 4")
     if args.ids and args.kind != "read":
         parser.error("--ids is only supported for source reads")
     if args.subjects and args.kind != "municipal":

@@ -30,6 +30,10 @@ def source():
 @pytest.fixture
 def explanation():
     return {
+        "presentation_language": "en",
+        "source_presentations": [
+            {"source_id": "P1", "language": "en", "english_text": None}
+        ],
         "headline": "Agenda proposes a hearing",
         "summary": "The agenda requests a hearing for September 8, 2026. [Evidence:source:P1]",
         "next_step": None,
@@ -60,6 +64,61 @@ def test_preserves_proposed_date_and_does_not_promote_it_to_scheduled(
     assert validate_explanation(explanation, source) == explanation
     explanation["record"]["dates"][0]["status"] = "scheduled"
     with pytest.raises(ValueError, match="must stay proposed"):
+        validate_explanation(explanation, source)
+
+
+def test_spanish_hearing_retains_original_quote_and_proposed_date(source, explanation):
+    original = "Audiencia pública. Fecha propuesta: 8 de septiembre de 2026, 6:00 pm."
+    source["sources"][0]["text"] = original
+    explanation["source_presentations"][0].update(
+        language="es",
+        english_text="Public hearing. Proposed date: September 8, 2026, 6:00 pm.",
+    )
+    explanation["record"]["dates"][0]["quote"] = original
+    assert (
+        validate_explanation(explanation, source)["record"]["dates"][0]["quote"]
+        == original
+    )
+    explanation["record"]["dates"][0]["status"] = "scheduled"
+    with pytest.raises(ValueError, match="must stay proposed"):
+        validate_explanation(explanation, source)
+
+
+def test_explicit_twelve_hour_time_can_use_equivalent_twenty_four_hour_format(
+    source, explanation
+):
+    explanation["record"]["dates"][0]["time"] = "18:00"
+    validate_explanation(explanation, source)
+    explanation["record"]["dates"][0]["time"] = "06:00"
+    with pytest.raises(ValueError, match="Date time is not stated"):
+        validate_explanation(explanation, source)
+    explanation["record"]["dates"][0]["time"] = "18:00 UTC"
+    with pytest.raises(ValueError, match="Date time is not stated"):
+        validate_explanation(explanation, source)
+
+
+def test_spanish_ambiguous_numeric_date_is_not_interpreted_as_us_date(
+    source, explanation
+):
+    source["sources"][0]["text"] = "Audiencia pública propuesta: 9/8/2026."
+    explanation["source_presentations"][0].update(
+        language="es", english_text="Proposed public hearing: 9/8/2026."
+    )
+    explanation["record"]["dates"][0].update(
+        quote=source["sources"][0]["text"], time=None
+    )
+    with pytest.raises(ValueError, match="Exact date is not stated"):
+        validate_explanation(explanation, source)
+
+
+@pytest.mark.parametrize(
+    "presentations", [[], [{"source_id": "P1", "language": "es", "english_text": None}]]
+)
+def test_missing_language_review_or_translation_cannot_be_accepted(
+    source, explanation, presentations
+):
+    explanation["source_presentations"] = presentations
+    with pytest.raises(ValueError):
         validate_explanation(explanation, source)
 
 
@@ -186,6 +245,9 @@ def test_grouped_known_citations_normalize_without_changing_sources(
     source, explanation, marker
 ):
     source["sources"].append({"id": "M1", "text": "Related plan."})
+    explanation["source_presentations"].append(
+        {"source_id": "M1", "language": "en", "english_text": None}
+    )
     original_source = deepcopy(source)
     explanation["summary"] = f"The agenda requests a hearing. {marker}"
     original = deepcopy(explanation)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from api.lib.source_explanations import explanation_payload
-from api.lib.source_locations import page_passages
 
 EVIDENCE_QUERY = """
     SELECT * FROM public.current_municipal_intelligence
@@ -69,12 +68,22 @@ def evidence_cards(rows: list[dict], *, limit: int) -> dict:
     for row in rows[:limit]:
         payload = row["payload"]
         card = row["card"]
-        passages = page_passages(card["passages"], payload.get("pages", []))
+        explanation = explanation_payload(row)
+        passages = []
+        if explanation:
+            for receipt in explanation["citation_evidence"]:
+                located = receipt["details"].get("passages")
+                if located:
+                    passages.extend(located)
+                elif receipt.get("excerpt"):
+                    passages.append({"text": receipt["excerpt"], "page": None})
         cards.append(
             {
                 "id": f"{row['inference_id']}:{card['id']}",
                 "event_key": row["event_key"],
-                "title": card["title"],
+                "title": explanation["headline"]
+                if explanation
+                else "Municipal record awaiting an English account",
                 "body_name": row["body_name"],
                 "meeting_date": _temporal(row["meeting_date"]),
                 "proceeding_type": payload.get("document_kind", "record"),
@@ -83,7 +92,7 @@ def evidence_cards(rows: list[dict], *, limit: int) -> dict:
                 "source_text_sha256": payload["source_text_sha256"],
                 "matched_properties": row["matched_properties"],
                 "observed_at": _temporal(row["observed_at"]),
-                "explanation": explanation_payload(row),
+                "explanation": explanation,
             }
         )
     return {"cards": cards, "more": len(rows) > limit}

@@ -76,7 +76,7 @@ function municipalCardSources(card: MunicipalEvidenceCard): EvidenceItem[] {
           body_name: card.body_name,
           document_kind: card.proceeding_type,
           meeting_date: card.meeting_date,
-          page: passage?.page ?? null,
+          page: passage?.page ?? item.details?.page ?? null,
         },
       }
     })

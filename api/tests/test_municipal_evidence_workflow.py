@@ -207,7 +207,7 @@ def test_source_to_property_signal_feed_owner_and_private_watch(
         "site_readiness_score": 50,
         "has_active_plan": False,
     }
-    _, _, payload = add_source()
+    add_source()
     project_current_sources()
 
     response = watch_client.get(f"/api/parcels/{TEST_PIDN}")
@@ -227,20 +227,19 @@ def test_source_to_property_signal_feed_owner_and_private_watch(
         for item in response.json()["record_brief"]["findings"]
         if item["signal_key"] == "municipal_record"
     )
-    assert "Agenda" in finding["text"]
-    assert "Consider approval" in finding["text"]
+    assert "municipal record" in finding["text"]
     assert len(cards) == 1
     assert cards[0]["matched_properties"] == [
         {"pidn": TEST_PIDN, "address": "1 Main St", "match_method": "address"}
     ]
     assert cards[0]["proceeding_type"] == "agenda"
-    assert cards[0]["passages"][0]["text"] == payload["cards"][0]["passages"][0]["text"]
+    assert cards[0]["passages"] == []
     event_key = cards[0]["event_key"]
     feed = watch_client.get("/api/feed", params={"pidn": TEST_PIDN}).json()
     event = next(item for item in feed["events"] if item["event_key"] == event_key)
     assert event["event_type"] == "municipal_record"
     assert event["event_tags"] == ["municipal_record"]
-    assert "Consider approval" in event["what_happened"]
+    assert event["what_happened"] == "An English account is being prepared."
     assert event["related_entities"] == ["Alpha Holdings LLC"]
     notices = watch_client.get("/api/watchspaces/notifications", headers=headers).json()
     assert any(
@@ -411,7 +410,7 @@ def test_ambiguous_references_remain_municipality_only(client, add_source, text)
     assert client.get(f"/api/parcels/{TEST_PIDN}/evidence").json()["cards"] == []
     municipal = client.get(f"/api/municipalities/{TEST_MUNICIPALITY}/evidence").json()
     assert any(
-        card["passages"][0]["text"] == text and not card["matched_properties"]
+        not card["passages"] and not card["matched_properties"]
         for card in municipal["cards"]
     )
 
@@ -450,7 +449,10 @@ def test_legacy_cards_remain_visible_without_rebuildable_property_links(
 
     assert client.get(f"/api/parcels/{TEST_PIDN}/evidence").json()["cards"] == []
     municipal = client.get(f"/api/municipalities/{TEST_MUNICIPALITY}/evidence").json()
-    assert any(card["title"] == "Final plan" for card in municipal["cards"])
+    assert any(
+        card["title"] == "Municipal record awaiting an English account"
+        for card in municipal["cards"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -547,7 +549,7 @@ def test_literal_reference_matching_preserves_units_and_rejects_fuzzy_names(
             assert cards[0]["matched_properties"] == [
                 {"pidn": TEST_PIDN, "address": address, "match_method": method}
             ]
-            assert cards[0]["passages"][0]["text"] == text
+            assert cards[0]["passages"] == []
     finally:
         with writer() as cur:
             cur.execute(

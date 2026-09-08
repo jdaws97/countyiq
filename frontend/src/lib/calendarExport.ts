@@ -115,6 +115,10 @@ export function buildCalendarReminder(
   }
 
   const status = date.status[0].toUpperCase() + date.status.slice(1)
+  const quoteLabel =
+    source.details?.translated === true
+      ? 'English translation of supporting passage'
+      : 'Supporting quote'
   const description = [
     'CountyIQ calendar reminder from a public record.',
     `Status: ${status} (stated in source; outcome unverified)`,
@@ -122,7 +126,7 @@ export function buildCalendarReminder(
     `Municipality: ${event.municipality ?? 'Not stated'}`,
     `Stated date: ${date.date}`,
     ...(date.time ? [`Stated local time: ${date.time}`] : []),
-    `Supporting quote: ${date.quote}`,
+    `${quoteLabel}: ${date.quote}`,
     `Original source: ${sourceUrl}`,
   ].join('\n')
   const uid = `${stableHash(`${event.event_key}|${date.source_id}|${date.date}|${date.label}`)}@countyiq.local`

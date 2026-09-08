@@ -8,6 +8,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from api.lib.english_presentation import (
+    english_explanation,
+    present_receipt,
+    present_record,
+)
+
 
 def page_passages(spans: Iterable[dict], pages: list[dict]) -> list[dict]:
     """Split selected wording at known physical pages, preserving every character."""
@@ -55,6 +61,8 @@ def page_passages(spans: Iterable[dict], pages: list[dict]) -> list[dict]:
 
 def municipal_source_details(source: dict, record: dict) -> dict:
     """Locate an individual cited span or a complete card in its current document."""
+    if not record.get("card"):
+        return {}
     if (source.get("document_url") or source.get("url")) != record.get("document_url"):
         return {}
     text = source.get("excerpt", source.get("text"))
@@ -99,18 +107,52 @@ def locate_feed_sources(cur, rows: list[dict]) -> None:
     if not event_keys:
         return
     cur.execute(
-        """SELECT event_key, document_url, body_name, meeting_date, card, payload
+        """SELECT *
            FROM public.current_municipal_intelligence WHERE event_key = ANY(%s::text[])""",
         (event_keys,),
     )
     records = {row["event_key"]: dict(row) for row in cur.fetchall()}
     for row in rows:
-        record = records.get(row["event_key"])
-        if not record:
+        if row.get("source_kind") != "municipal_evidence":
             continue
+        record = records.get(row["event_key"], {})
+        explanation = record.get("explanation")
+        ready = english_explanation(explanation)
+        originals = (record.get("explanation_source") or {}).get("sources", [])
+        if ready:
+            row["title"] = explanation["headline"]
+            row["what_happened"] = explanation["summary"]
+            row["what_happens_next"] = explanation["next_step"] or ""
+        else:
+            row["title"] = "Municipal record"
+            row["what_happened"] = "An English account is being prepared."
+            row["what_happens_next"] = ""
         for source in row.get("source_evidence") or []:
             if isinstance(source, dict):
                 source["details"] = {
                     **(source.get("details") or {}),
                     **municipal_source_details(source, record),
                 }
+                original = next(
+                    (
+                        item
+                        for item in originals
+                        if item["id"] == source.get("explanation_source_id")
+                        and item.get("text") == source.get("excerpt")
+                    ),
+                    {"id": None, "text": source.get("excerpt")},
+                )
+                present_receipt(source, original, explanation)
+                if not ready:
+                    source["label"] = "Municipal record"
+                    for key in (
+                        "record_dates",
+                        "decision_scope",
+                        "explanation_next_step",
+                    ):
+                        source["details"].pop(key, None)
+                elif "record_dates" in source["details"]:
+                    displayed = present_record(
+                        explanation["record"], originals, explanation
+                    )
+                    source["details"]["record_dates"] = displayed["dates"]

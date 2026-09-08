@@ -98,17 +98,14 @@ def cards(client):
     return response.json()["cards"]
 
 
-def test_original_agenda_wording_and_page_are_served_without_an_outcome(
-    client, source_read
-):
+def test_pending_english_presentation_withholds_raw_agenda_wording(client, source_read):
     _, inference_id, _ = source_read
     card = next(
         card for card in cards(client) if card["id"] == f"{inference_id}:example"
     )
     assert card["proceeding_type"] == "agenda"
-    assert card["passages"] == [
-        {"text": "Example Plan\nMotion to approve, revise, table or deny.\n", "page": 1}
-    ]
+    assert card["passages"] == []
+    assert card["title"] == "Municipal record awaiting an English account"
     assert "decision" not in card
     assert "pidn" not in card
 

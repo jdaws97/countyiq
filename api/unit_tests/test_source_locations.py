@@ -134,6 +134,12 @@ def test_locate_feed_sources_batches_current_view_records_and_enriches_only_matc
         "body_name": "Borough Council",
         "document_kind": "agenda",
         "meeting_date": "2026-09-10",
-        "passages": [{"text": "Repeated wording", "page": 3}],
+        "passages": [],
+        "translated": False,
     }
-    assert rows[1]["source_evidence"][0]["details"] == {"existing": "kept"}
+    assert rows[1]["source_evidence"][0]["details"] == {
+        "existing": "kept",
+        "passages": [],
+        "translated": False,
+    }
+    assert rows[0]["source_evidence"][0]["excerpt"] is None

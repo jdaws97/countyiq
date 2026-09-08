@@ -24,10 +24,22 @@ def append_explanation(
     headline="Agenda proposes final-plan approval",
     disposition="accepted",
     event_tags=None,
+    source_language="en",
+    english_text=None,
 ):
     municipal = source["kind"] == "municipal"
     source_id = source["sources"][0]["id"]
     explanation = {
+        "presentation_language": "en",
+        "source_presentations": [
+            {
+                "source_id": item["id"],
+                "language": source_language,
+                "english_text": english_text,
+            }
+            for item in source["sources"]
+            if "text" in item
+        ],
         "headline": headline,
         "summary": f"The source proposes consideration of the final plan. [Evidence:source:{source_id}]",
         "next_step": None,
@@ -68,6 +80,43 @@ def municipal_bundle(cur, proceeding_id):
         (proceeding_id,),
     )
     return cur.fetchone()[0]
+
+
+def test_spanish_original_is_retained_but_property_feed_and_sources_use_english(
+    client, add_source
+):
+    original = "Audiencia pública para 1 Main Street. Fecha propuesta: 8 de septiembre de 2026.\n"
+    translated = "Public hearing for 1 Main Street. Proposed date: September 8, 2026."
+    proceeding_id, _, _ = add_source(original)
+    project_current_sources()
+    with writer() as cur:
+        source = municipal_bundle(cur, proceeding_id)
+        append_explanation(
+            cur,
+            source,
+            headline="Agenda proposes a public hearing",
+            event_tags=["hearing"],
+            source_language="es",
+            english_text=translated,
+        )
+    project_current_sources()
+    card = next(
+        item
+        for item in client.get(f"/api/parcels/{TEST_PIDN}/evidence").json()["cards"]
+        if item["event_key"] == source["subject_key"]
+    )
+    assert card["title"] == "Agenda proposes a public hearing"
+    assert card["passages"][0]["text"] == translated
+    receipt = card["explanation"]["citation_evidence"][0]
+    assert receipt["excerpt"] == translated
+    assert receipt["details"]["translated"] is True
+    feed = client.get("/api/feed", params={"pidn": TEST_PIDN}).json()
+    event = next(
+        item for item in feed["events"] if item["event_key"] == source["subject_key"]
+    )
+    assert event["sources"][0]["excerpt"] == translated
+    with writer() as cur:
+        assert municipal_bundle(cur, proceeding_id)["sources"][0]["text"] == original
 
 
 def test_summary_reaches_property_feed_and_watch_with_resolvable_citations(

@@ -12,6 +12,9 @@ import json
 import os
 import subprocess
 import tempfile
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +25,43 @@ from countyiq.lib.llm_harness import HarnessResult
 
 class SubscriptionUnavailable(RuntimeError):
     """Stop the batch when the CLI, login, or subscription cannot continue."""
+
+
+@contextmanager
+def prefetched_batches(author, config, batches, *, workers=1):
+    """Bound model concurrency; retain ordered, single-threaded database writes.
+
+    Each worker has its own receipt list. At most one batch per worker is queued,
+    and exiting waits for those bounded calls to finish caching their artifacts.
+    No worker receives a database connection or application credentials.
+    """
+    if not 1 <= workers <= 4:
+        raise ValueError("Subscription workers must be between 1 and 4")
+    iterator = iter(batches)
+    pending = deque()
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+
+        def enqueue():
+            batch = next(iterator, None)
+            if batch is None:
+                return
+            worker = SubscriptionAuthor(
+                author.directory, model=author.model, timeout=author.timeout
+            )
+            future = executor.submit(
+                worker.prefetch, config, [item["prompt"] for item in batch]
+            )
+            pending.append((batch, worker, future))
+
+        for _ in range(workers):
+            enqueue()
+
+        def results():
+            while pending:
+                yield pending.popleft()
+                enqueue()
+
+        yield results()
 
 
 class SubscriptionAuthor:

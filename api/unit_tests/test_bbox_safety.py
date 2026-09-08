@@ -93,7 +93,7 @@ def test_radar_bbox_has_the_same_hard_limit_contract(monkeypatch):
         ]
     )
     monkeypatch.setattr(radar, "get_cursor", _cursor_context(cursor))
-    monkeypatch.setattr(radar, "_require_radar_sources", lambda _cur: None)
+    monkeypatch.setattr(radar, "_require_radar_sources", lambda _cur, **_kwargs: None)
 
     response = radar.development_bbox(
         west=-76.9,
@@ -102,6 +102,10 @@ def test_radar_bbox_has_the_same_hard_limit_contract(monkeypatch):
         north=40.0,
         view="momentum",
         min_score=0,
+        min_acres=None,
+        max_acres=None,
+        parcel_class=None,
+        plan_status=None,
         limit=1,
     )
 

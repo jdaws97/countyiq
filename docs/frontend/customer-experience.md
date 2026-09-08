@@ -131,6 +131,16 @@ silently strip essential context from printed output.
 
 ## Evidence and language rules
 
+Customer-facing prose and excerpts are English, including intelligence derived
+from Spanish or mixed-language municipal PDFs. Preserve original documents,
+literal source spans, proper names and identifiers. Store translations separately
+with the accepted explanation, label them as translations in the source viewer
+and copied excerpts, and retain the original PDF's verified starting page. Never
+split translated text using offsets in the original language or call a translation
+verbatim wording. Withhold excerpts awaiting an English presentation instead of
+falling back to raw non-English text. Original document links may open the original
+language outside the application.
+
 Keep exact public record titles, dates, relevant quoted wording, page references,
 source links and clear relationship descriptions. Use the shared customer field
 allowlist in `customerEvidence.ts`. Retain public parcel identifiers and deed

@@ -299,7 +299,11 @@ export function sourceMapLink(item: EvidenceItem): { path: string; label: string
 export function sourceExcerptText(item: EvidenceItem, passage: SourcePassage): string {
   const location = passage.page == null ? '' : ` — PDF page ${passage.page}`
   const url = sourceOriginalUrl(item, passage)
-  return [passage.text, `${sourceTitle(item)}${location}`, url].filter(Boolean).join('\n\n')
+  const translation =
+    item.details?.translated === true ? 'English translation of the source excerpt' : null
+  return [translation, passage.text, `${sourceTitle(item)}${location}`, url]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 export function citationKey(kind: string, value: string, group?: string): string {

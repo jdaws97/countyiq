@@ -40,6 +40,18 @@ limits. Each stage requires an explicit positive work-item limit. Batches keep
 whole sources together and bound combined input size. Property contexts are
 prepared incrementally.
 
+`--workers 1` is the default. Operators may select up to four concurrent authoring
+batches per stage. Database writes and source-freshness checks remain sequential;
+each worker keeps separate receipts and caches its finished batch on early exit.
+This changes throughput, not the selected model or source-validation contract.
+
+Explanations include a language review for each textual source. Non-English
+passages receive separate English translations; exact original spans and date
+quotes remain in the stored source. Customer presenters withhold raw excerpts
+until that language contract is satisfied. English source passages remain exact.
+Spanish named dates are supported; ambiguous non-English numeric dates must remain
+unresolved rather than being silently interpreted in US month/day order.
+
 The accepted-history check skips current outputs. An immutable response cache
 also avoids regenerating an output after interruption or during a transfer to
 production. Requests, schemas, source text, responses, response hashes, and CLI

@@ -280,7 +280,7 @@ def format_signal_label(key: str, signal: object) -> str:
     ev = _evidence(signal)
 
     if key == "municipal_record":
-        return f"Municipal record: {ev.get('title') or 'property reference'}"
+        return "Mentioned in a municipal record; read the source account for its scope."
     if key == "active_subdivision":
         distance = _distance_m(signal, ev)
         if distance is not None and _as_decimal(distance) > Decimal("0.5"):
@@ -418,7 +418,6 @@ def _signal_facts(key: str, signal: object) -> list[dict[str, str]]:
         ]
     elif key == "municipal_record":
         raw = [
-            _fact("Matter", ev.get("title")),
             _fact("Document", ev.get("document_kind")),
             _fact("Meeting", ev.get("meeting_date")),
         ]
