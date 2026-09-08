@@ -117,3 +117,11 @@ exact quote ending before the period. A further PDF record joins month and day a
 `theMay27,2026`; that literal date can now be quoted without adding spaces to its
 original text. All 59 record/account validation tests pass, including nine new
 punctuation, joined-text and invalid-date regressions.
+
+The complete-scope preflight found one 67-record bundle requiring 139,628 input
+characters after lossless record-key substitution. The account input guard now
+allows 160,000 characters; batching still isolates any single bundle larger than
+120,000 characters. Source text is never truncated. The configured Astra model
+catalog reports a 272,000-token context, leaving room for instructions and output.
+The record/account suite passes 61 tests, including preservation of a complete
+large source and rejection of an oversized source.

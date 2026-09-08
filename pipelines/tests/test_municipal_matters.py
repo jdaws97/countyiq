@@ -88,6 +88,24 @@ def _matter(keys, **account_options):
     return {"record_keys": keys, "account": _account(keys, **account_options)}
 
 
+def test_large_source_bundle_reaches_the_model_without_truncation():
+    text = "Opening source. " + "Supporting source text. " * 5800 + "Final condition."
+    source = _source(("stored-record-key", "2026-03-01", "P1", text))
+    original = deepcopy(source)
+
+    wire = json.loads(matter_prompt(source).split("\n", 1)[1])
+
+    assert wire["sources"][0]["text"] == text
+    assert wire["records"][0]["key"] == "R1"
+    assert source == original
+
+
+def test_oversized_source_bundle_is_rejected_instead_of_truncated():
+    source = _source(("stored-record-key", "2026-03-01", "P1", "Source text. " * 20000))
+    with pytest.raises(ValueError, match="exceeds the complete-context limit"):
+        matter_prompt(source)
+
+
 def test_model_references_round_trip_to_exact_stored_identities():
     first = "municipal:4692:" + "a5255e2281e6d383770fe742b67929e42" * 2
     second = "municipal:10689:" + "3774cca10305b4de4c23c65cded8a7fbb" * 2

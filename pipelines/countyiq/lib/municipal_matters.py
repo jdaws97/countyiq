@@ -117,7 +117,7 @@ PROMPT_VERSION = content_hash(
         "record_reference_contract": "bundle-local-aliases-v1",
     }
 )[:16]
-MAX_BUNDLE_CHARS = 120_000
+MAX_BUNDLE_CHARS = 160_000
 
 
 def _record_aliases(source: dict) -> dict[str, str]:
