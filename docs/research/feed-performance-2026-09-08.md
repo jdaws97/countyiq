@@ -125,3 +125,37 @@ allows 160,000 characters; batching still isolates any single bundle larger than
 catalog reports a 272,000-token context, leaving room for instructions and output.
 The record/account suite passes 61 tests, including preservation of a complete
 large source and rejection of an oversized source.
+
+Release `5e0d3b2` deployed with all six services healthy and schema 080 unchanged.
+All seven previously rejected historical responses passed the corrected date
+validator using their immutable cached model output. Reconciliation of the
+1,000-bundle historical tranche finished with six newly accepted bundles, 994
+already current, and zero errors or remaining work in that tranche. The seventh
+rejected bundle had already received the separately reviewed quote repair. These
+figures describe that tranche, not complete backfill coverage.
+
+The 67-record production canary also completed through the maintained subscription
+runner. Its first response failed a procedural consistency check; the normal
+correction attempt produced 30 accepted accounts covering all 67 histories and
+179 source passages. Primary AI review checked the complete sources, both output
+partitions and every accepted account. The final accounts separate the withdrawn
+AutoZone plan from the wellhead denial and appeal, preserve distinct earlier and
+later development proposals, and retain uncertain agenda items without inventing
+approval. Twelve accounts are ready for discovery, eleven need detail, and seven
+mixed or incomplete excerpts remain marked for source review. Production source,
+accepted response and alias assignments match the reviewed artifacts exactly.
+Native quality receipts were rebound to the deployed release and both bounded
+maintenance passes were restored.
+
+Publishing the larger accepted history exposed another poor plan in the complete
+account read. PostgreSQL estimated one result and repeatedly rebuilt account
+details; the original publication query was canceled after several minutes, and
+even a three-account default-plan sample exceeded a 45-second timeout. The
+publisher now discourages nested loops and disables JIT only inside its read-only
+transaction. It uses the identical account view and restores normal connection
+settings before any serving writes. The actual edited helper fetched 1,568
+accounts in 13.41 seconds. Every returned account, source, history membership,
+date, parcel association and inference identity matched its accepted record;
+there were zero differences in those checks. Fifty focused tests and eleven real
+Postgres freshness and identity tests passed. This is a publication-query
+adjustment, not a change to source eligibility, account authorship or validation.

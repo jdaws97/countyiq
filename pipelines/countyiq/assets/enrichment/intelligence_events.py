@@ -218,6 +218,20 @@ def _fetch_dicts(database: DatabaseResource, sql: str) -> list[dict]:
         return [dict(row) for row in cur.fetchall()]
 
 
+def _fetch_matter_accounts(database: DatabaseResource) -> list[dict]:
+    # PostgreSQL severely underestimates the rows surviving the source-current
+    # guards. Nested loops then rebuild complete account details for each result.
+    # Keep this planning adjustment inside the read transaction; later serving
+    # writes and other callers retain their normal database settings.
+    with database.read_snapshot() as cur:
+        cur.execute("SET LOCAL enable_nestloop = off")
+        # Penalizing nested loops raises plan costs enough to trigger expensive
+        # JIT compilation, which is unnecessary for this publication read.
+        cur.execute("SET LOCAL jit = off")
+        cur.execute("SELECT * FROM public.current_municipal_matter_accounts")
+        return [dict(row) for row in cur.fetchall()]
+
+
 def _insert_tuple(event: dict) -> tuple:
     values = []
     for column in _INSERT_COLUMNS:
@@ -254,9 +268,7 @@ def intelligence_events(
     municipal_rows = _fetch_dicts(
         database, "SELECT * FROM public.current_municipal_intelligence"
     )
-    matter_rows = _fetch_dicts(
-        database, "SELECT * FROM public.current_municipal_matter_accounts"
-    )
+    matter_rows = _fetch_matter_accounts(database)
 
     events = [build_parcel_event(row) for row in parcel_rows]
     events.extend(build_delinquency_event(row) for row in delinquency_rows)
