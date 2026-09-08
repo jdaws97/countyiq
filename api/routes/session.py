@@ -4,6 +4,7 @@ import os
 from fastapi import APIRouter, Request, Response
 from api.lib.auth import (
     auth_configuration,
+    is_operator,
     require_identity,
     require_workspace_write,
     login_url,
@@ -20,6 +21,7 @@ def session_payload(identity, account):
     return {
         "authenticated": True,
         "configured": True,
+        "operator": is_operator(identity),
         "user": {
             "id": str(account["user_id"]) if account else None,
             "email": identity.email,

@@ -121,6 +121,22 @@ def notification_policy(existing: dict) -> dict:
         "group_interval": "5m",
         "repeat_interval": "4h",
         "continue": False,
+        "routes": [
+            {
+                "receiver": "CountyIQ owner email",
+                "object_matchers": [
+                    ["alertname", "=", "Source unhealthy or stale"],
+                    ["source", "=", "municipal_proceedings"],
+                ],
+                "group_by": ["grafana_folder", "alertname"],
+                "group_wait": "30s",
+                # Batch changed coverage and unchanged reminders alike. Other
+                # sources and service outages retain the parent timings.
+                "group_interval": "24h",
+                "repeat_interval": "24h",
+                "continue": False,
+            }
+        ],
     }
     if owned:
         routes[routes.index(owned[0])] = route

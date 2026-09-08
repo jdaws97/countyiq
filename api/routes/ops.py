@@ -8,17 +8,18 @@ from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
 from api.lib.database import get_cursor
+from api.lib.auth import require_operator
 from api.lib.response_types import (
     IntelligenceIntegrityStatus,
     OpsHealthResponse,
     SourceStatus,
 )
 from api.lib.settings import county_metadata
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from psycopg2 import Error as PsycopgError
 from psycopg2.errors import UndefinedTable
 
-router = APIRouter(tags=["ops"])
+router = APIRouter(tags=["ops"], dependencies=[Depends(require_operator)])
 logger = logging.getLogger(__name__)
 
 # The frontend Nav fetches this endpoint on every client-side navigation and

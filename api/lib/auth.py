@@ -106,6 +106,22 @@ def require_identity(request: Request) -> Identity:
     return identity
 
 
+def is_operator(identity: Identity | None) -> bool:
+    allowed_emails = {
+        email.strip().casefold()
+        for email in os.environ.get("COUNTYIQ_OPERATOR_EMAILS", "").split(",")
+        if email.strip()
+    }
+    return identity is not None and identity.email.casefold() in allowed_emails
+
+
+def require_operator(request: Request) -> Identity:
+    identity = require_identity(request)
+    if not is_operator(identity):
+        raise HTTPException(403, "Operator access is required")
+    return identity
+
+
 def require_workspace_write(request: Request):
     # Cross-site forms cannot set this header. Origin is an additional check
     # for deployments using Access's browser cookie to inject the JWT.

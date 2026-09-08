@@ -173,7 +173,7 @@ function SearchForm({ compact = false }: { compact?: boolean }) {
   )
 }
 
-function Navigation({ onNavigate }: { onNavigate?: () => void }) {
+function Navigation({ onNavigate, operator }: { onNavigate?: () => void; operator?: boolean }) {
   return (
     <nav aria-label="Workspace navigation" className="workspace-shell-navigation">
       {NAVIGATION_GROUPS.map((group) => (
@@ -197,6 +197,15 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         </section>
       ))}
+      {operator && (
+        <section className="workspace-shell-nav-group">
+          <h2>Operations</h2>
+          <NavLink className="workspace-shell-nav-link" to="/ops/health" onClick={onNavigate}>
+            <Icon name="activity" />
+            <span>System health</span>
+          </NavLink>
+        </section>
+      )}
     </nav>
   )
 }
@@ -349,7 +358,7 @@ export default function WorkspaceShell({
             <small>County intelligence</small>
           </span>
         </NavLink>
-        <Navigation />
+        <Navigation operator={account?.authenticated && account.operator} />
         <WorkspaceControls account={account} onThemeChange={toggleTheme} theme={theme} />
       </aside>
 
@@ -400,7 +409,10 @@ export default function WorkspaceShell({
               </button>
             </div>
             <SearchForm compact />
-            <Navigation onNavigate={closeDrawer} />
+            <Navigation
+              onNavigate={closeDrawer}
+              operator={account?.authenticated && account.operator}
+            />
             <WorkspaceControls
               account={account}
               onNavigate={closeDrawer}

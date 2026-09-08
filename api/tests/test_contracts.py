@@ -34,7 +34,14 @@ def test_api_uses_dedicated_read_only_database_role(client):
 
 
 def test_ops_health_exposes_source_policy_review_state(client):
-    response = client.get("/api/ops/health")
+    from api.lib.auth import require_operator
+    from api.main import app
+
+    app.dependency_overrides[require_operator] = lambda: None
+    try:
+        response = client.get("/api/ops/health")
+    finally:
+        app.dependency_overrides.pop(require_operator, None)
 
     assert response.status_code == 200
     sources = response.json()["sources"]

@@ -22,6 +22,7 @@ import type { IntelligenceEvent } from '../types/api'
 export type AccountSession = {
   authenticated: boolean
   configured: boolean
+  operator?: boolean
   sync_enabled?: boolean
   user?: { id: string; email: string }
   workspace_id?: string

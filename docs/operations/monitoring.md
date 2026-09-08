@@ -63,11 +63,11 @@ transactions with an eight-second statement timeout. Existing application
 libraries execute in separate probe processes and return aggregate values;
 they do not change the running API or Dagster processes.
 
-| Cadence | Probe |
-| --- | --- |
-| 1 minute | Containers, Dagster heartbeats/queue, Caddy request metrics |
+| Cadence   | Probe                                                                       |
+| --------- | --------------------------------------------------------------------------- |
+| 1 minute  | Containers, Dagster heartbeats/queue, Caddy request metrics                 |
 | 5 minutes | PostgreSQL, source health, backups/restores, R2 guard, OpenRouter key usage |
-| 1 hour | Docker image/build-cache/volume storage inventory |
+| 1 hour    | Docker image/build-cache/volume storage inventory                           |
 
 OpenRouter reports usage for the configured runtime API key. This is not total
 account billing and does not include other keys, subscription-based Codex work,
@@ -151,6 +151,15 @@ Dashboards and alert rules reconcile by fixed UIDs. Notification routing adds
 only the CountyIQ route and preserves unrelated routes. Initial routing is
 email to the operator's Gmail address; a Slack contact point remains optional and requires
 the user's selected destination.
+
+Municipal coverage warnings (`Source unhealthy or stale`,
+`source=municipal_proceedings`) have a dedicated child notification route with
+24-hour group and repeat intervals. This batches coverage changes and limits
+reminders for an ongoing incident to once per day. Other source and outage
+alerts retain their existing five-minute group and four-hour repeat intervals.
+The daily coverage route was applied and read back from Grafana on September 8,
+2026; Grafana normalizes both durations to `1d`. The alert still evaluates and
+remains visible in the dashboard between emails.
 
 Grafana currently accepts email contact points only for existing organization
 members. Gmail is the initial registered member. ProtonMail is in the approved

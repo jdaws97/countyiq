@@ -95,6 +95,30 @@ class ProvisioningTests(unittest.TestCase):
         self.assertEqual(len(existing["routes"]), 1)
         self.assertEqual(notification_policy(updated), updated)
 
+    def test_daily_coverage_emails_do_not_delay_other_sources_or_outages(self):
+        policy = notification_policy({"receiver": "original"})
+        county_route = policy["routes"][0]
+        coverage_route = county_route["routes"][0]
+        for labels, expected_interval in (
+            (
+                {
+                    "alertname": "Source unhealthy or stale",
+                    "source": "municipal_proceedings",
+                },
+                "24h",
+            ),
+            ({"alertname": "Source unhealthy or stale", "source": "parcels"}, "4h"),
+            ({"alertname": "External readiness failed"}, "4h"),
+        ):
+            matches = all(
+                operator == "=" and labels.get(label) == value
+                for label, operator, value in coverage_route["object_matchers"]
+            )
+            selected = coverage_route if matches else county_route
+            with self.subTest(labels=labels):
+                self.assertEqual(selected["repeat_interval"], expected_interval)
+                self.assertEqual(selected["group_interval"], "24h" if matches else "5m")
+
     def test_service_account_does_not_grant_another_human_access(self):
         owner = {"email": "jarod.daws@protonmail.com"}
         service = {"email": "", "isServiceAccount": True}

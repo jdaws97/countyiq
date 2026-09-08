@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import PageShell from '../components/PageShell'
+import { Button, EmptyState, PageHeader, StatusMessage } from '../components/ui'
+import { useFetchJson } from '../lib/useFetchJson'
+import { watchSyncState } from '../lib/watchSync'
 import type { HealthData, OverallHealthStatus, SourceHealthReason } from '../types/ops'
 
 function formatSourceName(key: string): string {
@@ -36,159 +39,128 @@ const STATUS_LABELS: Record<SourceHealthReason, string> = {
 }
 
 const OVERALL_COLORS: Record<OverallHealthStatus, { bg: string; text: string; label: string }> = {
-  green: { bg: 'rgba(61, 189, 111, 0.15)', text: '#3dbd6f', label: 'All Systems Go' },
+  green: { bg: 'rgba(61, 189, 111, 0.15)', text: '#3dbd6f', label: 'Healthy' },
   yellow: { bg: 'rgba(212, 168, 67, 0.15)', text: '#d4a843', label: 'Degraded' },
   red: { bg: 'rgba(224, 82, 82, 0.15)', text: '#e05252', label: 'Incident' },
 }
 
 export default function OpsHealth() {
-  const [health, setHealth] = useState<HealthData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [session, setSession] = useState(watchSyncState)
 
   useEffect(() => {
-    fetch('/api/ops/health')
-      .then((r) => {
-        if (!r.ok) {
-          throw new Error(`HTTP ${r.status}`)
-        }
-        return r.json()
-      })
-      .then((data: HealthData) => {
-        setHealth(data)
-        setLoading(false)
-      })
-      .catch((err) => {
-        setError(err.message)
-        setLoading(false)
-      })
+    const update = () => setSession(watchSyncState())
+    window.addEventListener('countyiq-watch-sync-changed', update)
+    return () => window.removeEventListener('countyiq-watch-sync-changed', update)
   }, [])
 
-  const overall = health?.overall ?? 'green'
-  const overallStyle = OVERALL_COLORS[overall] ?? OVERALL_COLORS.green
-  const sourceEntries = health ? Object.entries(health.sources) : []
+  if (!session.initialized || !session.account?.authenticated || !session.account.operator) {
+    return (
+      <PageShell maxWidth={1200}>
+        <PageHeader eyebrow="Operations" title="System health" />
+        <StatusMessage>
+          {!session.initialized
+            ? 'Checking access…'
+            : 'This page is available to CountyIQ operators only.'}
+        </StatusMessage>
+      </PageShell>
+    )
+  }
+
+  return <OperatorHealth />
+}
+
+function OperatorHealth() {
+  const { data: health, loading, error, reload } = useFetchJson<HealthData>('/api/ops/health')
+  const [attentionOnly, setAttentionOnly] = useState(false)
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        reload()
+      }
+    }, 60_000)
+    return () => window.clearInterval(interval)
+  }, [reload])
+
+  const overallStyle = health ? OVERALL_COLORS[health.overall] : null
+  const sourceEntries = Object.entries(health?.sources ?? {}).sort(([nameA, a], [nameB, b]) => {
+    if (a.status !== b.status) {
+      return a.status === 'red' ? -1 : 1
+    }
+    return nameA.localeCompare(nameB)
+  })
+  const attentionCount = sourceEntries.filter(([, source]) => source.status !== 'green').length
+  const visibleSources = attentionOnly
+    ? sourceEntries.filter(([, source]) => source.status !== 'green')
+    : sourceEntries
+  const failedJobs = new Set(
+    sourceEntries
+      .filter(([, source]) => source.last_run_status === 'failure')
+      .map(([, source]) => source.last_run_job ?? source.refresh_job)
+      .filter(Boolean),
+  ).size
+  const staleCount = sourceEntries.filter(([, source]) => source.stale).length
   const integrity = health?.intelligence_integrity
 
   return (
     <PageShell maxWidth={1200}>
-      {/* Page header */}
-      <div
-        style={{
-          marginBottom: 48,
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 16,
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              letterSpacing: 3,
-              textTransform: 'uppercase',
-              color: 'var(--accent-gold)',
-              marginBottom: 12,
-            }}
-          >
-            Operations
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <h1
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 28,
-                fontWeight: 600,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                color: 'var(--text-primary)',
-              }}
-            >
-              System Health
-            </h1>
+      <PageHeader
+        eyebrow="Operations"
+        title="System health"
+        description="Source availability, scheduled refreshes, municipal coverage, policy reviews, and intelligence integrity."
+        meta="Refreshes every minute while this tab is visible. Results may be cached for up to a minute by default."
+        actions={
+          <Button onClick={reload} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh status'}
+          </Button>
+        }
+      />
 
-            {/* Overall status badge */}
-            {!loading && !error && health && (
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                  color: overallStyle.text,
-                  background: overallStyle.bg,
-                  border: `1px solid ${overallStyle.text}40`,
-                  borderRadius: 20,
-                  padding: '4px 14px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: overallStyle.text,
-                    boxShadow: `0 0 6px ${overallStyle.text}`,
-                    display: 'inline-block',
-                    animation: overall === 'green' ? 'pulse 3s ease-in-out infinite' : 'none',
-                  }}
-                />
-                {overallStyle.label}
-              </span>
-            )}
-          </div>
-
-          {health && (
-            <p
-              style={{
-                fontFamily: 'var(--font-sans)',
-                fontSize: 14,
-                color: 'var(--text-secondary)',
-                marginTop: 8,
-              }}
-            >
-              {health.summary}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Loading */}
-      {loading && (
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 13,
-            color: 'var(--text-muted)',
-            textAlign: 'center',
-            padding: '80px 0',
-          }}
-        >
-          Loading system status...
-        </div>
+      {loading && <StatusMessage>Loading system status…</StatusMessage>}
+      {error && (
+        <StatusMessage tone="error">
+          Health data could not be loaded. <Button onClick={reload}>Try again</Button>
+        </StatusMessage>
       )}
 
-      {/* Error */}
-      {error && (
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 13,
-            color: 'var(--accent-red)',
-            padding: '24px',
-            background: 'rgba(224, 82, 82, 0.08)',
-            border: '1px solid rgba(224, 82, 82, 0.2)',
-            borderRadius: 6,
-          }}
-        >
-          Failed to load health data: {error}
-        </div>
+      {health && overallStyle && (
+        <section aria-label="Health overview" style={{ marginBottom: 24 }}>
+          <p style={{ marginBottom: 16 }}>
+            <strong style={{ color: overallStyle.text }}>{overallStyle.label}</strong>
+            {' · '}
+            {health.summary}
+          </p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: 16,
+            }}
+          >
+            {[
+              [
+                'Sources healthy',
+                `${sourceEntries.length - attentionCount}/${sourceEntries.length}`,
+              ],
+              ['Sources needing attention', attentionCount],
+              ['Sources past refresh window', staleCount],
+              ['Jobs with a failed latest run', failedJobs],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                style={{
+                  padding: 20,
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                }}
+              >
+                <div style={{ fontSize: 28, fontWeight: 600 }}>{value}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {!loading && !error && integrity && (
@@ -269,6 +241,41 @@ export default function OpsHealth() {
         </section>
       )}
 
+      {health && (
+        <section aria-label="Source filters" style={{ margin: '24px 0 16px' }}>
+          <h2 style={{ marginBottom: 12 }}>Data sources & policy reviews</h2>
+          <div className="segmented" aria-label="Show sources">
+            <button
+              type="button"
+              aria-pressed={!attentionOnly}
+              onClick={() => setAttentionOnly(false)}
+            >
+              All sources ({sourceEntries.length})
+            </button>
+            <button
+              type="button"
+              aria-pressed={attentionOnly}
+              onClick={() => setAttentionOnly(true)}
+            >
+              Needs attention ({attentionCount})
+            </button>
+          </div>
+          {visibleSources.length === 0 && (
+            <EmptyState
+              title={
+                sourceEntries.length === 0
+                  ? 'No source health reported'
+                  : 'No sources need attention'
+              }
+            >
+              {sourceEntries.length === 0
+                ? 'The health response did not include any sources. Source availability is unknown.'
+                : 'All reported sources are healthy. Intelligence integrity is reported separately above.'}
+            </EmptyState>
+          )}
+        </section>
+      )}
+
       {/* Source grid */}
       {!loading && !error && health && (
         <div
@@ -278,7 +285,7 @@ export default function OpsHealth() {
             gap: 16,
           }}
         >
-          {sourceEntries.map(([key, source], idx) => {
+          {visibleSources.map(([key, source]) => {
             const isGreen = source.status === 'green'
             const borderColor = isGreen ? 'rgba(61, 189, 111, 0.5)' : 'rgba(224, 82, 82, 0.5)'
             const dotColor = isGreen ? 'var(--accent-green)' : 'var(--accent-red)'
@@ -294,8 +301,6 @@ export default function OpsHealth() {
                   borderRadius: 6,
                   padding: '20px',
                   position: 'relative',
-                  animationDelay: `${0.05 + idx * 0.04}s`,
-                  opacity: 0,
                   transition: 'background 0.15s ease, border-color 0.15s ease',
                 }}
                 onMouseEnter={(e) => {
@@ -400,7 +405,10 @@ export default function OpsHealth() {
                   >
                     {source.healthy_count}/{source.active_count} active bodies healthy
                     <br />
-                    {source.blocked_count} blocked · {source.unchecked_count} unchecked ·{' '}
+                    {(source.active_count ?? 0) - (source.healthy_count ?? 0)} active bodies need
+                    attention
+                    <br />
+                    {source.blocked_count} paused or blocked · {source.unchecked_count} unchecked ·{' '}
                     {source.stale_count ?? 0} stale
                     <br />
                     latest body check {formatTimestamp(source.last_checked_at)}
@@ -425,6 +433,8 @@ export default function OpsHealth() {
                     last success {formatTimestamp(source.last_success_at)}
                     <br />
                     freshness window {formatRefreshWindow(source.expected_refresh_hours)}
+                    <br />
+                    refresh due {formatTimestamp(source.freshness_due_at)}
                   </div>
                 )}
 

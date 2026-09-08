@@ -218,3 +218,54 @@ def test_optional_identity_rejects_bad_credentials(configured):
     with pytest.raises(HTTPException) as exc:
         auth.optional_identity(request({"Cf-Access-Jwt-Assertion": "invalid"}))
     assert exc.value.status_code == 401
+
+
+def test_ops_requires_verified_operator_even_when_health_is_cached(
+    configured, monkeypatch
+):
+    from fastapi.testclient import TestClient
+    from api.main import app
+    from api.routes import ops
+
+    monkeypatch.setenv("COUNTYIQ_OPERATOR_EMAILS", " OPERATOR@example.test ")
+    monkeypatch.setattr(
+        ops,
+        "_compute_health",
+        lambda: {
+            "overall": "green",
+            "sources": {},
+            "intelligence_integrity": ops._empty_integrity_status("query_failed"),
+            "summary": "Fixture health",
+        },
+    )
+    monkeypatch.setattr(ops, "_cached_response", None)
+    client = TestClient(app)
+    operator_headers = {"Cf-Access-Jwt-Assertion": token(email="operator@example.test")}
+    assert client.get("/api/ops/health", headers=operator_headers).status_code == 200
+    assert client.get("/api/ops/health").status_code == 401
+    assert (
+        client.get(
+            "/api/ops/health",
+            headers={
+                "Cf-Access-Jwt-Assertion": token(),
+                "Cf-Access-Authenticated-User-Email": "operator@example.test",
+            },
+        ).status_code
+        == 403
+    )
+    monkeypatch.delenv("COUNTYIQ_OPERATOR_EMAILS")
+    assert client.get("/api/ops/health", headers=operator_headers).status_code == 403
+    monkeypatch.setenv("COUNTYIQ_AUTH_PROVIDER", "disabled")
+    assert client.get("/api/ops/health").status_code == 401
+
+
+def test_session_operator_role_uses_verified_identity(configured, monkeypatch):
+    from api.routes.session import session_payload
+
+    monkeypatch.setenv("COUNTYIQ_OPERATOR_EMAILS", "operator@example.test")
+    identity = auth.require_identity(request({"Cf-Access-Jwt-Assertion": token()}))
+    assert session_payload(identity, None)["operator"] is False
+    operator = auth.require_identity(
+        request({"Cf-Access-Jwt-Assertion": token(email="operator@example.test")})
+    )
+    assert session_payload(operator, None)["operator"] is True

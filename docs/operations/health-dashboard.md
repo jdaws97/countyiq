@@ -1,5 +1,19 @@
 # Source Availability Page
 
+The page summarizes healthy sources, sources needing attention, stale refreshes,
+and distinct jobs whose latest observed run failed. Source cards put unhealthy
+entries first and can be filtered to **Needs attention**. Manual refresh and a
+one-minute refresh while the tab is visible reload the cached API response.
+Source cards remain visible without animation. Municipal counts distinguish
+active bodies needing attention from the broader paused-or-blocked count.
+
+Access requires a verified human identity whose email appears in the
+comma-separated `COUNTYIQ_OPERATOR_EMAILS` allowlist. The API checks this on
+every request, including cache hits. An empty allowlist denies everyone, and
+disabling authentication locally does not bypass operator authorization.
+The session exposes an `operator` flag; the page and navigation use it to show
+the dashboard only to operators. The server remains the authorization boundary.
+
 The React route `/ops/health` calls `GET /api/ops/health` and displays current
 row counts, scheduled-refresh freshness, the latest job outcome, source-policy
 review state, and municipal-source health. The API returns entries shaped like:
