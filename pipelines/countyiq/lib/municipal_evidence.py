@@ -417,19 +417,16 @@ def _budget_context_ranges(
         marker = re.match(r"^([•●▪\uf0b7*]|o)\s+", text)
         level = {"o": 1, "▪": 2}.get(marker[1], 0) if marker else 0
         content = text[marker.end() :] if marker else text
-        is_heading = budget_heading.fullmatch(content.rstrip(":").strip())
+        is_heading = marker and budget_heading.fullmatch(content.rstrip(".:").strip())
         if is_heading:
             heading = unit.number
             heading_level = level
         elif heading is not None and (
-            (marker and level <= heading_level)
-            or re.match(
-                r"^(new business|old business|adjournment|mayor.?s report)\b",
-                content,
-                re.IGNORECASE,
-            )
+            (marker and level <= heading_level) or (text and marker is None)
         ):
             heading = None
+        # Recover only explicit list nesting. Prose and unrelated report headings
+        # cannot establish budget scope; the author must select that context.
         if heading is not None and any(
             first <= unit.number <= last for first, last in ranges
         ):

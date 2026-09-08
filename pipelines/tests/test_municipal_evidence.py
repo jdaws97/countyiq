@@ -401,6 +401,33 @@ def test_future_budget_heading_is_recovered_without_neighboring_projects():
     assert len(unrelated["cards"][0]["passages"]) == 1
 
 
+@pytest.mark.parametrize("budget_heading", ["2026 BUDGET", "• 2026 BUDGET"])
+def test_budget_context_stops_before_an_unmarked_report(budget_heading):
+    document = index_source(
+        f"{budget_heading}\n"
+        "Council approved the budget.\n"
+        "ENGINEER'S REPORT\n"
+        "South Street Restoration Project is complete.\n"
+    )
+    result = bind_review(
+        {
+            "items": [
+                {
+                    "context": [],
+                    "references": [],
+                    "index": None,
+                    "title": "South Street Restoration Project",
+                    "passages": [[4, 4]],
+                }
+            ]
+        },
+        [],
+        document,
+    )
+    assert result["status"] == "complete"
+    assert result["cards"][0]["context_passages"] == []
+
+
 def test_budget_adoption_sentence_does_not_become_an_unrelated_section_heading():
     document = index_source(
         "▪ 2024 BUDGET\n"
