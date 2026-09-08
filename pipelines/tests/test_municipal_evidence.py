@@ -401,6 +401,47 @@ def test_future_budget_heading_is_recovered_without_neighboring_projects():
     assert len(unrelated["cards"][0]["passages"]) == 1
 
 
+def test_budget_adoption_sentence_does_not_become_an_unrelated_section_heading():
+    document = index_source(
+        "▪ 2024 BUDGET\n"
+        "Council authorized advertisement of the\n"
+        "proposed 2024 budget for public inspection and adoption in December.\n"
+        "▪ 2024-2027 COMMUNITY DEVELOPMENT BLOCK GRANT PROJECTS\n"
+        "Applications for planning grants are due in January.\n"
+        "▪ NEW BUSINESS\n"
+        "A transportation study will be presented in December.\n"
+    )
+    result = bind_review(
+        {
+            "items": [
+                {
+                    "context": [],
+                    "references": [],
+                    "index": None,
+                    "title": "planning grants",
+                    "passages": [[4, 5]],
+                },
+                {
+                    "context": [],
+                    "references": [],
+                    "index": None,
+                    "title": "transportation study",
+                    "passages": [[7, 7]],
+                },
+            ]
+        },
+        [],
+        document,
+    )
+    assert result["status"] == "complete"
+    assert all(not card["context_passages"] for card in result["cards"])
+    assert all(
+        "adoption" not in passage["text"]
+        for card in result["cards"]
+        for passage in card["passages"]
+    )
+
+
 @pytest.mark.parametrize("bullet", ["•", "*"])
 def test_inline_bullets_are_separable_without_changing_original_bytes(bullet):
     original = f"{bullet} Alpha extension denied. {bullet} Bravo extension approved.\n"

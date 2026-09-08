@@ -417,7 +417,7 @@ def _budget_context_ranges(
         marker = re.match(r"^([•●▪\uf0b7*]|o)\s+", text)
         level = {"o": 1, "▪": 2}.get(marker[1], 0) if marker else 0
         content = text[marker.end() :] if marker else text
-        is_heading = len(content) < 140 and budget_heading.match(content)
+        is_heading = budget_heading.fullmatch(content.rstrip(":").strip())
         if is_heading:
             heading = unit.number
             heading_level = level
