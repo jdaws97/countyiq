@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { Map, NavigationControl } from 'react-map-gl/maplibre'
+import { setWorkerUrl } from 'maplibre-gl'
+import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { DeckGL } from '@deck.gl/react'
 import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { PickingInfo, MapViewState } from '@deck.gl/core'
@@ -24,6 +26,9 @@ import type {
   RadarBboxResponse,
   ZoningProperties,
 } from '../types/api'
+
+// MapLibre 6 uses a separate module worker; let Vite publish its bundled URL.
+setWorkerUrl(mapWorkerUrl)
 
 type RadarBasis = 'opportunity' | 'momentum' | 'readiness'
 type ParcelFilter = 'all' | 'delinquent' | 'vacant' | 'vacant_delinquent' | 'radar'
