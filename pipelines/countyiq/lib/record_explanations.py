@@ -318,7 +318,7 @@ def _validate_date(
         short_month = parsed.strftime("%b")
         normalized = _normalized(quote).lower()
         named = re.search(
-            rf"\b(?:{month}|{short_month})\.?\s+0?{parsed.day}(?:st|nd|rd|th)?\b",
+            rf"\b(?:{month}|{short_month})\.?\s*0?{parsed.day}(?:st|nd|rd|th)?\b",
             normalized,
             flags=re.IGNORECASE,
         )

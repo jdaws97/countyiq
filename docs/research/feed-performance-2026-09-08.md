@@ -113,5 +113,7 @@ Historical processing found a valid `5/15.` date rejected because its sentence
 period was treated as an unfinished numeric date component. The date validator
 now permits sentence punctuation while still rejecting partial dates and changed
 years. The source-supported account was separately reviewed and accepted with an
-exact quote ending before the period. All 57 record/account validation tests pass,
-including seven new punctuation and invalid-date regressions.
+exact quote ending before the period. A further PDF record joins month and day as
+`May27,2026`; that literal date can now be quoted without adding spaces to its
+original text. All 58 record/account validation tests pass, including eight new
+punctuation, joined-text and invalid-date regressions.
