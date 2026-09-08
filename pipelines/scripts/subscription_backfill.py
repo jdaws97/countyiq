@@ -83,9 +83,16 @@ def previous_reads(database, kind):
         return {row["subject_key"]: dict(row) for row in cursor.fetchall()}
 
 
-def proceeding_rows(database):
+def proceeding_rows(database, ids=None):
     with database.dict_cursor() as cursor:
-        cursor.execute(PENDING_PROCEEDINGS_QUERY)
+        if ids is None:
+            cursor.execute(PENDING_PROCEEDINGS_QUERY)
+        else:
+            cursor.execute(
+                f"SELECT * FROM ({PENDING_PROCEEDINGS_QUERY}) eligible "
+                "WHERE eligible.id = ANY(%s)",
+                (list(ids),),
+            )
         return {row["id"]: dict(row) for row in cursor.fetchall()}
 
 
@@ -122,7 +129,7 @@ def run(database, args):
             acquisition_method="official_document_direct",
             asset_key="subscription_backfill",
         )
-        sources = list(proceeding_rows(database).values())
+        sources = list(proceeding_rows(database, args.ids or None).values())
         if args.ids:
             requested = set(args.ids)
             sources = [row for row in sources if row["id"] in requested]
@@ -253,7 +260,9 @@ def run(database, args):
                         reviewed = read_evidence(document, config, author)
                         # Recheck eligibility after slow authoring. Changed sources
                         # and expired rights fail before the persistence call.
-                        current = proceeding_rows(database).get(source["id"])
+                        current = proceeding_rows(database, [source["id"]]).get(
+                            source["id"]
+                        )
                         if current is None or record_snapshot(
                             current
                         ) != record_snapshot(source):
