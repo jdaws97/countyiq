@@ -7,6 +7,7 @@ partition the records, preserve each board's scope, and cite the supplied text.
 from __future__ import annotations
 
 import json
+import re
 from contextlib import contextmanager
 from copy import deepcopy
 
@@ -394,6 +395,81 @@ def check_identity_review_state(cur, source, review):
     return known
 
 
+def current_matter_source(cur, source):
+    """Recheck an isolated selection directly, or resolve its complete case scope.
+
+    A selection without a case reference, address title, or unique parcel cannot
+    collect other records under the candidate rules. Rebuild its complete source
+    from the governed evidence view instead of materializing every county case.
+    Property, address, and case scopes still use the full candidate resolver.
+    """
+    records = source.get("records", [])
+    record_key = records[0].get("key", "") if len(records) == 1 else ""
+    match = re.fullmatch(r"municipal:([0-9]+):[a-f0-9]{20}:[a-f0-9]{64}", record_key)
+    if not match or source.get("candidate_scope") != "selection:" + record_key:
+        cur.execute(
+            "SELECT source FROM public.current_municipal_matter_sources WHERE bundle_key = %s",
+            (source["subject_key"],),
+        )
+        current = cur.fetchone()
+        return current[0] if current else None
+
+    cur.execute(
+        r"""
+        SELECT public.municipal_explanation_source(evidence),
+            encode(sha256(convert_to(
+                public.municipal_explanation_source(evidence)::text, 'UTF8'
+            )), 'hex') AS source_fingerprint,
+            evidence.municipality, evidence.related_pidns,
+            'municipal-bundle:' || encode(sha256(convert_to(
+                evidence.municipality || '|selection:' || evidence.event_key,
+                'UTF8'
+            )), 'hex') AS bundle_key
+        FROM public.current_municipal_evidence evidence
+        WHERE evidence.proceeding_id = %s AND evidence.event_key = %s
+            AND cardinality(evidence.related_pidns) <> 1
+            AND public.municipal_case_reference(evidence.card->>'title') IS NULL
+            AND COALESCE(evidence.card->>'title', '') !~*
+                '^[0-9]+[[:space:]]+.+[[:space:]](st|street|rd|road|dr|drive|ave|avenue|ln|lane)[.]?$'
+        """,
+        (int(match[1]), record_key),
+    )
+    current = cur.fetchone()
+    if current is None:
+        return None
+    explanation, fingerprint, municipality, pidns, bundle_key = current
+    passages = [
+        {
+            **passage,
+            "id": "R1" + passage["id"],
+            "record_key": record_key,
+            "body_name": explanation["body_name"],
+            "meeting_date": explanation["meeting_date"],
+            "document_kind": explanation["document_kind"],
+        }
+        for passage in explanation["sources"]
+    ]
+    return {
+        "kind": "municipal_matters",
+        "subject_key": bundle_key,
+        "municipality": municipality,
+        "candidate_scope": "selection:" + record_key,
+        "records": [
+            {
+                "key": record_key,
+                "title": explanation["title"],
+                "body_name": explanation["body_name"],
+                "meeting_date": explanation["meeting_date"],
+                "document_kind": explanation["document_kind"],
+                "related_pidns": pidns,
+                "source_fingerprint": fingerprint,
+                "source_ids": [passage["id"] for passage in passages],
+            }
+        ],
+        "sources": passages,
+    }
+
+
 def persist_matters(
     database,
     source,
@@ -411,12 +487,7 @@ def persist_matters(
         )
         if identity_review is not None:
             cur.execute("LOCK TABLE public.watch_items IN SHARE MODE")
-        cur.execute(
-            "SELECT source FROM public.current_municipal_matter_sources WHERE bundle_key = %s",
-            (source["subject_key"],),
-        )
-        current = cur.fetchone()
-        if current is None or current[0] != source:
+        if current_matter_source(cur, source) != source:
             raise ValueError("Matter sources or eligibility changed during authoring")
         record_keys = [record["key"] for record in source["records"]]
         cur.execute(

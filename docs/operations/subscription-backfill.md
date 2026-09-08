@@ -98,6 +98,14 @@ batches per stage. Database writes and source-freshness checks remain sequential
 each worker keeps separate receipts and caches its finished batch on early exit.
 This changes throughput, not the selected model or source-validation contract.
 
+Matter persistence verifies an isolated, single-record selection directly against
+the current governed evidence. It checks that the record still has no case
+reference, address title, or unique parcel that would place it in a broader
+bundle. All other scopes retain complete candidate resolution. This avoids a
+county-wide source rebuild per isolated record while retaining the source check
+inside the alias transaction. The operator does not repeat that same check
+before calling matter persistence.
+
 Explanations include a language review for each textual source. Non-English
 passages receive separate English translations; exact original spans and date
 quotes remain in the stored source. Customer presenters withhold raw excerpts

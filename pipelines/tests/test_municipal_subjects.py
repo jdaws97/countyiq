@@ -98,6 +98,44 @@ def test_literal_role_is_retained_with_original_surrounding_units(role):
     assert "Suite 4" in reference["context"]["text"]
 
 
+def test_joined_ocr_address_requires_the_complete_source_token():
+    document, _ = source_document(
+        [
+            {
+                "page": None,
+                "text": "Council approved the parking application for312 N. 4th\nStreet.\n",
+            }
+        ]
+    )
+    payload = {
+        "items": [
+            {
+                "index": None,
+                "title": "parking application",
+                "passages": [[1, 2]],
+                "context": [],
+                "references": [
+                    {
+                        "quote": "312 N. 4th Street",
+                        "lines": [1, 2],
+                        "role": "subject_property",
+                    }
+                ],
+            }
+        ]
+    }
+    rejected = bind_review(payload, [], document)
+    assert rejected["status"] == "partial"
+    assert "complete source tokens" in rejected["errors"][0]
+
+    payload["items"][0]["references"][0]["quote"] = "for312 N. 4th Street"
+    accepted = bind_review(payload, [], document)
+    assert accepted["status"] == "complete", accepted["errors"]
+    reference = accepted["cards"][0]["references"][0]
+    assert reference["text"] == "for312 N. 4th\nStreet"
+    assert document.text[reference["start"] : reference["end"]] == reference["text"]
+
+
 @pytest.mark.parametrize("mutation", ["text", "hash", "bounds", "missing", "scalar"])
 def test_storage_revalidates_reference_provenance(mutation):
     document = source(CASES[0])

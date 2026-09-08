@@ -298,19 +298,22 @@ def run(database, args):
                         )
                     else:
                         output, attempts = generate(source, config, author)
-                        selectors = (
-                            {"subject_keys": [subject]}
-                            if args.kind in {"municipal", "matter"}
-                            else {"pidns": [subject.removeprefix("parcel:")]}
-                        )
-                        _, current_sources = _source_bundles(
-                            database, args.kind, **selectors
-                        )
-                        current = next(iter(current_sources), None)
-                        if current != source:
-                            raise ValueError(
-                                "Explanation source changed during authoring"
+                        # Matter persistence checks the complete current source
+                        # inside its alias transaction. Avoid rebuilding it twice.
+                        if not matter_accounts:
+                            selectors = (
+                                {"subject_keys": [subject]}
+                                if args.kind == "municipal"
+                                else {"pidns": [subject.removeprefix("parcel:")]}
                             )
+                            _, current_sources = _source_bundles(
+                                database, args.kind, **selectors
+                            )
+                            current = next(iter(current_sources), None)
+                            if current != source:
+                                raise ValueError(
+                                    "Explanation source changed during authoring"
+                                )
                         result = persist(
                             database,
                             source,

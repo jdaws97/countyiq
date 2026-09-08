@@ -59,6 +59,8 @@ def bind_references(
                 f"Reference {item['quote']!r} at lines {first}-{last}: {error}. "
                 "Use the smallest range containing one occurrence, and copy all "
                 "source characters, including whitespace inside wrapped parcel IDs. "
+                "Preserve complete source tokens: if OCR joined a preceding word "
+                "to an address, include that word in the quote. "
                 f"Selected source: {selected.text[:500]!r}"
             ) from error
         reference = source_span(document, quote.start, quote.end)
