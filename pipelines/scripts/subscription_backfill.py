@@ -99,7 +99,11 @@ def proceeding_rows(database, ids=None):
 
 
 def run(database, args):
-    author = SubscriptionAuthor(args.directory, model=args.model)
+    author = SubscriptionAuthor(
+        args.directory,
+        model=args.model,
+        timeout=getattr(args, "author_timeout", 600),
+    )
     author.check_login()
     refinements = (
         json.loads(args.unit_breaks.read_text())
@@ -173,6 +177,7 @@ def run(database, args):
     attempted = 0
     failures = []
     stop_reason = "scope_exhausted"
+    stop_detail = None
     started_at = datetime.now(UTC).isoformat()
 
     def write_status(*, finished=False):
@@ -187,6 +192,7 @@ def run(database, args):
             if finished
             else "running",
             "stop_reason": stop_reason if finished else None,
+            "stop_detail": stop_detail if finished else None,
             "failures": failures,
             "started_at": started_at,
             "updated_at": datetime.now(UTC).isoformat(),
@@ -262,8 +268,13 @@ def run(database, args):
         for batch, author, prefetch in batches:
             try:
                 prefetch.result()
-            except SubscriptionUnavailable:
+            except SubscriptionUnavailable as error:
                 stop_reason = "subscription_unavailable"
+                stop_detail = str(error)
+                print(
+                    json.dumps({"stop_reason": stop_reason, "detail": stop_detail}),
+                    flush=True,
+                )
                 break
             except (ValueError, ValidationError) as error:
                 # Preserve the rejected batch artifact, then author each original
@@ -328,8 +339,13 @@ def run(database, args):
                         json.dumps({"subject": subject, "accepted": result.accepted}),
                         flush=True,
                     )
-                except SubscriptionUnavailable:
+                except SubscriptionUnavailable as error:
                     stop_reason = "subscription_unavailable"
+                    stop_detail = str(error)
+                    print(
+                        json.dumps({"stop_reason": stop_reason, "detail": stop_detail}),
+                        flush=True,
+                    )
                     break
                 except (ValueError, ValidationError) as error:
                     counts["errors"] += 1
@@ -361,6 +377,12 @@ def main():
     parser.add_argument("--limit", type=int, required=True)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument(
+        "--author-timeout",
+        type=int,
+        default=600,
+        help="Maximum seconds per native authoring request (default: 600)",
+    )
     parser.add_argument("--model", default="gpt-6-astra")
     parser.add_argument("--ids", type=int, nargs="*")
     parser.add_argument(
@@ -377,6 +399,8 @@ def main():
         parser.error("--batch-size must be between 1 and 16")
     if not 1 <= args.workers <= MAX_SUBSCRIPTION_WORKERS:
         parser.error(f"--workers must be between 1 and {MAX_SUBSCRIPTION_WORKERS}")
+    if not 1 <= args.author_timeout <= 3600:
+        parser.error("--author-timeout must be between 1 and 3600 seconds")
     if args.ids and args.kind != "read":
         parser.error("--ids is only supported for source reads")
     if args.unit_breaks and (args.kind != "read" or not args.ids):

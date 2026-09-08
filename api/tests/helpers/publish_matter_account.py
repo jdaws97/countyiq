@@ -3,6 +3,8 @@ import sys
 
 PIDN = sys.argv[1]
 SPLIT = sys.argv[2] == "true"
+READINESS = sys.argv[3] if len(sys.argv) > 3 else "ready"
+MATTER_CATEGORY = sys.argv[4] if len(sys.argv) > 4 else "development"
 from countyiq.assets.enrichment.intelligence_events import _INSERT_SQL, _insert_tuple
 from countyiq.lib.llm_harness import HarnessConfig
 from countyiq.lib.municipal_matters import build_matter_event, persist_matters
@@ -44,11 +46,11 @@ for members in groups:
             "event_type": "approval",
             "event_tags": ["approval"],
             "record_status": "decision",
-            "matter_category": "development",
+            "matter_category": MATTER_CATEGORY,
             "decision_scope": None,
             "dates": [],
         },
-        "readiness": "ready",
+        "readiness": READINESS,
         "outcome": "approved",
         "outcome_summary": "The board approved the requested relief. " + citations,
         "connection": "The records identify the same store and relief request. "

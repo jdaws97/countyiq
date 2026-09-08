@@ -19,7 +19,9 @@ from api.tests.test_municipal_evidence_workflow import (  # noqa: F401
 from api.tests.test_watchspaces import watch_client  # noqa: F401
 
 
-def publish_test_account(*, split_latest=False):
+def publish_test_account(
+    *, split_latest=False, readiness="ready", matter_category="development"
+):
     """Use the real validator, persistence boundary and deterministic producer."""
     result = subprocess.run(
         [
@@ -27,6 +29,8 @@ def publish_test_account(*, split_latest=False):
             str(Path(__file__).parent / "helpers/publish_matter_account.py"),
             TEST_PIDN,
             str(split_latest).lower(),
+            readiness,
+            matter_category,
         ],
         cwd=PIPELINES_DIR,
         env={**os.environ, **DB_ENV, "PYTHONPATH": str(PIPELINES_DIR)},
@@ -77,6 +81,46 @@ def test_case_account_replaces_agendas_and_retains_individual_source_history(
     assert not client.get(
         "/api/feed", params={"pidns": TEST_PIDN, "view": "research"}
     ).json()["events"]
+
+
+@pytest.mark.parametrize(
+    "readiness,matter_category,view",
+    [
+        ("ready", "development", "activity"),
+        ("needs_detail", "development", "research"),
+        ("needs_source_review", "development", "research"),
+        ("ready", "minor_property", "research"),
+    ],
+)
+def test_direct_matter_case_retains_activity_and_research_accounts(
+    client, add_source, readiness, matter_category, view
+):
+    agenda, _ = add_case(add_source)
+    keys = publish_test_account(readiness=readiness, matter_category=matter_category)
+    response = client.get("/api/feed", params={"project_keys": keys[0], "view": view})
+    assert response.status_code == 200, response.text
+    expected = response.json()["events"]
+    assert len(expected) == 1
+
+    case_url = f"/api/cases/projects/{keys[0]}"
+    case = client.get(case_url)
+    assert case.status_code == 200, case.text
+    assert case.json()["events"] == expected
+    assert case.json()["summary"]["status"] == "Approval recorded"
+    account = case.json()["events"][0]
+    assert account["matter"]["readiness"] == readiness
+    assert len(account["matter"]["history"]) == 2
+    assert len({source["document_url"] for source in account["sources"]}) == 2
+
+    # The fallback must not revive a cached case after its source changes.
+    with writer() as cur:
+        cur.execute(
+            "UPDATE staging.public_proceedings SET raw_text=raw_text || ' amended' WHERE id=%s",
+            (agenda,),
+        )
+    withdrawn = client.get(case_url)
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["events"] == []
 
 
 def test_new_source_retracts_old_case_until_complete_scope_is_reexplained(
