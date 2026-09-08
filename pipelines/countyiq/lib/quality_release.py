@@ -147,6 +147,13 @@ def release_identity(pass_number: int) -> dict:
         )
     if pass_number == 2:
         source_paths.append(Path(__file__).with_name("pass2_signal_validation.py"))
+    if pass_number in (0, 3):
+        source_paths.extend(
+            [
+                Path(__file__).with_name("subscription_backfill.py"),
+                Path(__file__).parents[2] / "scripts/subscription_backfill.py",
+            ]
+        )
     # Library and asset modules can share a basename. Preserve both identities;
     # otherwise a validator change can silently retain an earlier approval.
     repository_root = Path(__file__).resolve().parents[3]

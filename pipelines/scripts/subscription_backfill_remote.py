@@ -67,7 +67,7 @@ def main():
             "sudo",
             "docker",
             "inspect",
-            "countyiq-dagster",
+            "countyiq-dagster-webserver",
             "--format",
             "{{.Config.Image}}",
         ]

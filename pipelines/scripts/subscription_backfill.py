@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 
 from countyiq.assets.enrichment.proceeding_extraction import PENDING_PROCEEDINGS_QUERY
@@ -12,6 +13,7 @@ from countyiq.assets.enrichment.record_explanations import (
     persist_explanation,
 )
 from countyiq.lib.county_config import get_county_config
+from countyiq.lib.error_budget import check_error_budget
 from countyiq.lib.intelligence_integrity import content_hash
 from countyiq.lib.llm_harness import HarnessConfig
 from countyiq.lib.municipal_evidence import (
@@ -188,9 +190,9 @@ def run(database, args):
             stop_reason = "subscription_unavailable"
             break
         except (ValueError, ValidationError) as error:
-            counts["errors"] += len(batch)
-            print(json.dumps({"batch_error": str(error)}), flush=True)
-            continue
+            # Preserve the rejected batch artifact, then author each original
+            # source separately. Never treat a missing batch item as an empty read.
+            print(json.dumps({"batch_split_reason": str(error)}), flush=True)
         for prepared in batch:
             author.receipts.clear()
             source = prepared["source"]
@@ -250,6 +252,16 @@ def run(database, args):
                 counts["errors"] += 1
                 print(json.dumps({"subject": subject, "error": str(error)}), flush=True)
         if stop_reason == "subscription_unavailable":
+            break
+        try:
+            check_error_budget(
+                logging.getLogger(__name__),
+                label="Subscription backfill",
+                errors=counts["errors"],
+                total=counts["accepted"] + counts["quarantined"] + counts["errors"],
+            )
+        except RuntimeError:
+            stop_reason = "error_budget"
             break
     remaining = total - counts["accepted"] - counts["unchanged"]
     report = {

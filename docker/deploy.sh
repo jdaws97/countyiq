@@ -83,6 +83,7 @@ countyiq_require_command rclone
 RELEASE_DIR="${COUNTYIQ_RELEASE_DIR:-/var/lib/countyiq/releases}"
 RESTORE_RECEIPT_DIR="${COUNTYIQ_RESTORE_RECEIPT_DIR:-/var/lib/countyiq/restore-drills}"
 BACKFILL_STATE_DIR="${COUNTYIQ_BACKFILL_STATE_DIR:-/var/lib/countyiq/intelligence}"
+ARCHIVE_HOST_DIR="${COUNTYIQ_ARCHIVE_HOST_DIR:-/var/lib/countyiq/archives}"
 CURRENT_RELEASE="$RELEASE_DIR/current.env"
 CURRENT_RESTORE_RECEIPT="$RESTORE_RECEIPT_DIR/current.env"
 RESTORE_MAX_AGE_DAYS="${COUNTYIQ_RESTORE_DRILL_MAX_AGE_DAYS:-120}"
@@ -92,6 +93,11 @@ if [[ ! "$BACKFILL_STATE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
 fi
 install -d -o root -g root -m 700 "$RELEASE_DIR" "$RESTORE_RECEIPT_DIR"
 install -d -o 10001 -g 10001 -m 700 "$BACKFILL_STATE_DIR"
+if [[ ! "$ARCHIVE_HOST_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+    echo "COUNTYIQ_ARCHIVE_HOST_DIR must be an absolute path using safe characters" >&2
+    exit 1
+fi
+install -d -o 10001 -g 10001 -m 700 "$ARCHIVE_HOST_DIR"
 
 if [ "$INITIAL_DEPLOY" = true ]; then
     if [ -f "$CURRENT_RELEASE" ]; then

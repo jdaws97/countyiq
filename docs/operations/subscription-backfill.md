@@ -89,7 +89,11 @@ legacy owner-alias or signal-voting backfill, nor any paid API expansion.
 `docker/install-operation-units.sh` renders backup and storage-guard units for
 the exact release checkout. `docker/deploy.sh` installs them after readiness,
 restores the prior units on a failed release promotion, and prepares the durable
-backfill state directory as container UID/GID 10001. The standard image includes
+backfill state and archive directories as container UID/GID 10001. LLM archives
+use `${COUNTYIQ_ARCHIVE_HOST_DIR:-/var/lib/countyiq/archives}`, independent of the
+checkout. The previously active September 7 release's archive
+directory and the legacy archive directory were both empty when this path was
+introduced; no existing transcripts needed migration. The standard image includes
 maintained scripts and evaluation fixtures. Scan OCR uses the separately locked
 operator runtime described in `pipelines/ocr/README.md`; missing preparation
 remains pending rather than becoming an empty read.

@@ -117,7 +117,7 @@ def test_deploy_requires_quiesced_verified_backup_before_migration() -> None:
     assert backup.index("rclone check") < manifest_upload
     assert "rclone delete" not in backup
     assert backup.index("MANIFEST_VERIFIED=true") < backup.index(
-        "find /opt/countyiq/archives"
+        'find "$ARCHIVE_HOST_DIR"'
     )
     assert "A manifest is uploaded last" in backup
     assert "COUNTYIQ_BACKUP_ID=" in backup

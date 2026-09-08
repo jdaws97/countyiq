@@ -145,7 +145,7 @@ x-dagster-common: &dagster-common
     - /tmp:size=256m,mode=1777
   volumes:
     - dagster-storage:/opt/dagster/storage
-    - ../archives:/opt/countyiq/archives
+    - ${COUNTYIQ_ARCHIVE_HOST_DIR:-/var/lib/countyiq/archives}:/opt/countyiq/archives
     - ${COUNTYIQ_BACKFILL_STATE_DIR:-/var/lib/countyiq/intelligence}:/opt/countyiq/intelligence
     - /var/lib/countyiq/cost-guard:/run/countyiq-cost-guard:ro
   networks:

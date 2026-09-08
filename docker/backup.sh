@@ -68,6 +68,7 @@ MANIFEST_FILE="$DUMP_DIR/backup-${BACKUP_ID}.manifest"
 REMOTE_POSTGRES_PATH="${COUNTYIQ_BACKUP_REMOTE}/postgres"
 REMOTE_MANIFEST_PATH="${COUNTYIQ_BACKUP_REMOTE}/manifests"
 LLM_ARCHIVE_RETENTION_DAYS="${COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS:-90}"
+ARCHIVE_HOST_DIR="${COUNTYIQ_ARCHIVE_HOST_DIR:-/var/lib/countyiq/archives}"
 DATABASE_USER="${DATABASE_USER:-dagster_admin}"
 PRIMARY_DATABASE="${DATABASE_NAME:-countyiq}"
 DAGSTER_DATABASE="${DAGSTER_POSTGRES_DB:-dagster}"
@@ -174,12 +175,12 @@ cmp --silent "$MANIFEST_FILE" "$remote_manifest_copy"
 MANIFEST_VERIFIED=true
 
 # Local privacy retention happens only after a complete off-host backup exists.
-if [ -d /opt/countyiq/archives ]; then
-    find /opt/countyiq/archives -mindepth 3 -maxdepth 3 -type f \
+if [ -d "$ARCHIVE_HOST_DIR" ]; then
+    find "$ARCHIVE_HOST_DIR" -mindepth 3 -maxdepth 3 -type f \
         -regextype posix-extended \
         -regex '.*/[0-9a-f]{16}_[0-9]{6}_[0-9]{6}\.json' \
         -mtime "+$LLM_ARCHIVE_RETENTION_DAYS" -delete
-    find /opt/countyiq/archives -mindepth 1 -type d -empty -delete
+    find "$ARCHIVE_HOST_DIR" -mindepth 1 -type d -empty -delete
 fi
 
 echo "[$(date -Iseconds)] Backup complete: $BACKUP_ID"
