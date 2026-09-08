@@ -16,6 +16,7 @@ const ProjectCaseFile = lazy(() => import('./pages/ProjectCaseFile'))
 const ParcelCompare = lazy(() => import('./pages/ParcelCompare'))
 const MunicipalityList = lazy(() => import('./pages/MunicipalityList'))
 const MunicipalityDetail = lazy(() => import('./pages/MunicipalityDetail'))
+const EmergingIntelligence = lazy(() => import('./pages/EmergingIntelligence'))
 
 const children = [
   { index: true, element: <WorkspaceHome /> },
@@ -39,6 +40,10 @@ const children = [
   { path: 'feed', element: <CountyFeed /> },
   { path: 'watch', element: <Watchlist /> },
   { path: 'compare', element: <ParcelCompare /> },
+  { path: 'intelligence', element: <EmergingIntelligence /> },
+  { path: 'intelligence/:caseKey', element: <EmergingIntelligence /> },
+  { path: 'opportunities', element: <EmergingIntelligence /> },
+  { path: 'my-work', element: <EmergingIntelligence /> },
 ]
 
 const router = createBrowserRouter([

@@ -95,6 +95,11 @@ class CountyConfig:
     tax_claims_pdf_url: str = ""  # DocumentCenter PDF URL
     tax_claims_min_records: int = 5000  # Truncation guard (unique parcels)
 
+    # Manual conservation-district review pilot; no automatic project links.
+    plan_review_listing_url: str = ""
+    plan_review_source_key: str = ""
+    plan_review_crawl_delay_seconds: float = 5.0
+
     # Zip codes (GIS layer)
     arcgis_zipcodes_url: str = ""  # FeatureServer URL for zip code polygons
 
@@ -181,6 +186,8 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             "jackson-township.org",
         ),
         open_data_source_key="york_open_data",
+        plan_review_listing_url="https://www.yorkccd.org/erosion-and-sediment-control/pending-plan-review-list",
+        plan_review_source_key="yccd_plan_reviews",
         plcb_filter="York County",
         plcb_min_records=500,
         arcgis_parcels_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Parcels/FeatureServer/0",

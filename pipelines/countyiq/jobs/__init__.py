@@ -18,6 +18,12 @@ from countyiq.lib.county_config import get_county_config
 
 _county = get_county_config()
 
+plan_review_pilot = define_asset_job(
+    name="plan_review_pilot",
+    selection=AssetSelection.assets("plan_review_snapshot"),
+    description="Manually retain the newest official review snapshot for private evaluation",
+)
+
 
 def _configured_assets(pairs: tuple[tuple[str, object], ...]) -> AssetSelection:
     """Select only assets backed by a configured county capability."""
@@ -204,6 +210,12 @@ county_narratives_refresh = define_asset_job(
     name="county_narratives_refresh",
     selection=AssetSelection.assets("county_narratives"),
     description="[Manual] Re-run Pass 4: cross-parcel patterns and county narratives",
+)
+
+emerging_intelligence_refresh = define_asset_job(
+    name="emerging_intelligence_refresh",
+    selection=AssetSelection.assets("emerging_intelligence_drafts"),
+    description="[Manual] Assess explicit evidence scopes; drafts require a separate publication review",
 )
 
 intelligence_data_refresh = define_asset_job(
