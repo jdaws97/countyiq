@@ -354,7 +354,7 @@ def test_source_governance_and_site_readiness_schema() -> None:
                 """
             )
             assert dict(cursor.fetchall()) == {
-                "conditional": 104,
+                "conditional": 112,
                 "paused": 18,
             }
 
