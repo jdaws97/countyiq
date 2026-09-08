@@ -29,12 +29,11 @@ application, DNS record, and tunnel route are applied. Anonymous UI and GraphQL
 requests redirect to Access; a Firefox check confirmed the login form. Owner
 sign-in and cloud ingestion still require account setup and verification.
 
-The internal operator network was attached to the existing two containers
-without restarting them. Caddy metrics were enabled through a graceful reload.
-The normal application release was deferred because production intelligence
-processing was enabled. The next application release must include the committed
-Compose and Caddy changes; until then a Caddy restart loses its runtime metrics
-setting. The monitoring probes will report that loss as a collector failure.
+Production release `124ad880a0e5b4ec2b2458a1a713d37d8fc95d88` includes the
+operator network and Caddy metrics setting. The release completed at
+`2026-09-08T15:37:54Z` with schema `075` unchanged; all eight monitoring probes
+reported success after deployment. These settings now persist across container
+recreation through the deployed Compose configuration and Caddy image.
 
 ## Components and retention
 
@@ -120,6 +119,7 @@ Enter credentials through hidden local prompts, never chat or repository text:
 
 ```bash
 pipelines/.venv/bin/python infra/monitoring/configure.py capture
+pipelines/.venv/bin/python infra/monitoring/configure.py resolve
 pipelines/.venv/bin/python infra/monitoring/provision.py --check
 pipelines/.venv/bin/python infra/monitoring/provision.py --apply
 pipelines/.venv/bin/python infra/monitoring/configure.py publish
@@ -128,6 +128,11 @@ bash infra/monitoring/deploy.sh
 
 Only encrypted `infra/secrets/monitoring.sops.env` is stored in Git. Publishing
 streams ingestion-only credentials over verified SSH to a root-owned 0600 file.
+Capture saves the verified service-account token before asking for the Cloud
+Access Policy token, and saves both before datasource discovery. If setup is
+interrupted or discovery fails, rerun `capture` to resume or `resolve` to retry
+discovery without entering tokens again. The first token belongs to the Grafana
+service account (`glsa_`); the second belongs to the Cloud Access Policy (`glc_`).
 Dashboards and alert rules reconcile by fixed UIDs. Notification routing adds
 only the CountyIQ route and preserves unrelated routes. Initial routing is
 email to the operator's ProtonMail address; a Slack contact point remains optional and requires
