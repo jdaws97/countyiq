@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 
 from api.lib.database import get_cursor
 from api.lib.evidence import normalize_source_evidence
+from api.lib.matter_accounts import locate_matter_sources, matter_payload
 from api.lib.municipality_names import municipality_event_patterns
 from api.lib.response_types import IntelligenceFeedResponse
 from api.lib.serialization import serialize_temporal_fields
@@ -109,7 +110,8 @@ _WATCHED_MATCH_SQL = f"""
 
 _PRIORITY_SQL = f"""
     CASE
-        WHEN event_type IN ('approval', 'denial', 'upcoming_decision') THEN 90
+        WHEN event_type IN ('approval', 'denial') THEN 90
+        WHEN event_type = 'upcoming_decision' THEN 65
         WHEN event_type IN ('condition', 'application', 'hearing') THEN 80
         WHEN event_type IN ('revision', 'continuance') THEN 70
         WHEN event_type = 'transfer' THEN 65
@@ -309,6 +311,7 @@ def intelligence_feed(
     ),
     near_radius_m: int = Query(default=400, ge=50, le=3000),
     sort: Literal["priority", "latest"] = Query(default="priority"),
+    view: Literal["activity", "research"] = Query(default="activity"),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     matter_category: Annotated[
@@ -342,6 +345,7 @@ def fetch_feed(
     near_pidns: str | None = None,
     near_radius_m: int = 400,
     sort: Literal["priority", "latest"] = "priority",
+    view: Literal["activity", "research"] = "activity",
     limit: int = 50,
     offset: int = 0,
     event_keys: list[str] | None = None,
@@ -400,11 +404,20 @@ def fetch_feed(
         )
         """,
     ]
+    if not event_keys and view == "research":
+        filters.append("""(
+                source_kind = 'municipal_evidence' AND NOT EXISTS (
+                    SELECT 1 FROM public.current_municipal_matter_accounts account
+                    WHERE account.record_keys ? intelligence_events.event_key
+                )
+                OR source_kind = 'municipal_matter' AND
+                    source_evidence->0->'details'->>'discovery_eligible' = 'false'
+            )""")
     if matter_category:
         filters.append(
             "source_evidence->0->'details'->>'matter_category' = %(matter_category)s"
         )
-    elif not any(
+    elif view != "research" and not any(
         (
             pidns,
             project_keys,
@@ -537,6 +550,11 @@ def fetch_feed(
         else "COALESCE(event_date, detected_at::date) DESC, detected_at DESC, event_key DESC"
     )
 
+    event_view = (
+        "current_activity_events"
+        if view == "activity" and not event_keys
+        else "current_intelligence_events"
+    )
     with get_cursor() as cur:
         parcel_source = open_data_source_key()
         required_sources = [parcel_source]
@@ -557,6 +575,7 @@ def fetch_feed(
                 event_tags,
                 title,
                 what_happened,
+                why_it_matters,
                 event_date,
                 detected_at,
                 confidence,
@@ -571,7 +590,7 @@ def fetch_feed(
                 interpretation_generated_at,
                 ({_PRIORITY_SQL})::integer AS priority_score,
                 ({_WATCHED_MATCH_SQL}) AS watched_match
-            FROM public.current_intelligence_events AS intelligence_events
+            FROM public.{event_view} AS intelligence_events
             WHERE {" AND ".join(filters)}
             ORDER BY {order_clause}
             LIMIT %(fetch_limit)s OFFSET %(offset)s
@@ -581,6 +600,7 @@ def fetch_feed(
         rows = [dict(row) for row in cur.fetchall()]
         entity_links_by_name = _resolve_entity_links(cur, rows)
         locate_feed_sources(cur, rows[:limit])
+        locate_matter_sources(cur, rows[:limit])
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -646,6 +666,8 @@ def fetch_feed(
                 "event_tags": list(row.get("event_tags") or []),
                 "title": title,
                 "what_happened": what_happened,
+                "why_it_matters": row.get("why_it_matters") or None,
+                "matter": matter_payload(row),
                 "event_date": row.get("event_date"),
                 "detected_at": row["detected_at"],
                 "confidence": display_confidence,

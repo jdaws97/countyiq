@@ -75,6 +75,7 @@ export default function CountyFeed() {
   const [events, setEvents] = useState<IntelligenceEvent[]>([])
   const watchParams = useWatchFeedParams()
   const following = searchParams.get('scope') === 'following'
+  const research = searchParams.get('view') === 'research'
   const category: CategoryFilter = parseChoice(searchParams.get('category'), CATEGORIES, 'all')
   const eventType: EventTypeFilter = parseChoice(searchParams.get('event'), EVENT_TYPES, 'all')
   const matterCategory: MatterCategory = parseChoice(
@@ -101,7 +102,7 @@ export default function CountyFeed() {
   const [saved, setSaved] = useState(false)
   const requestGeneration = useRef(0)
   const loadMoreController = useRef<AbortController | null>(null)
-  const requestKey = `${category}|${eventType}|${sinceDays}|${sortMode}|${municipality}|${matterCategory}|${textQuery}|${following}|${watchParams}`
+  const requestKey = `${category}|${eventType}|${sinceDays}|${sortMode}|${municipality}|${matterCategory}|${textQuery}|${following}|${research}|${watchParams}`
   const [resolvedKey, setResolvedKey] = useState<string | null>(null)
   const loading = resolvedKey !== requestKey
 
@@ -150,6 +151,7 @@ export default function CountyFeed() {
       textQuery,
       following,
       watchParams,
+      research,
       controller.signal,
     )
       .then((result) => {
@@ -223,6 +225,7 @@ export default function CountyFeed() {
       textQuery,
       following,
       watchParams,
+      research,
       controller.signal,
     )
       .then((result) => {
@@ -263,7 +266,7 @@ export default function CountyFeed() {
       <PageHeader
         eyebrow={county.county_name}
         title="Activity workspace"
-        description="Choose a record. Get the context. Decide what to follow."
+        description="Understand the proposed change, the latest decision, and why it matters."
         actions={
           <Button tone="quiet" onClick={saveCurrentSearch}>
             {saved ? 'Search saved' : 'Save this search'}
@@ -286,6 +289,27 @@ export default function CountyFeed() {
         >
           Explore county
         </Button>
+      </div>
+      <div className="activity-view-switch" aria-label="Activity and research leads">
+        <Button
+          tone={research ? 'quiet' : 'primary'}
+          aria-pressed={!research}
+          onClick={() => updateFilter('view', 'activity', 'activity')}
+        >
+          Explained activity
+        </Button>
+        <Button
+          tone={research ? 'primary' : 'quiet'}
+          aria-pressed={research}
+          onClick={() => updateFilter('view', 'research', 'activity')}
+        >
+          Research leads
+        </Button>
+        <p>
+          {research
+            ? 'Source mentions and routine updates that need more context. A listing does not establish a decision.'
+            : 'Distinct matters with a source-backed account. Related agendas and minutes appear together when their connection is established.'}
+        </p>
       </div>
       {following && (
         <p className="activity-scope-note">
@@ -454,8 +478,8 @@ export default function CountyFeed() {
           <CoverageSummary coverage={coverage.data.coverage} />
         ) : (
           <p className="activity-scope-note">
-            Showing published records in this scope. Coverage varies by municipality; missing
-            activity does not mean nothing happened.{' '}
+            Showing {research ? 'research leads' : 'explained activity'} in this scope. Coverage
+            varies by municipality; missing activity does not mean nothing happened.{' '}
             <ButtonLink
               to={
                 municipality
@@ -485,7 +509,9 @@ export default function CountyFeed() {
         <EmptyState
           title={
             events.length === 0
-              ? 'No published activity matches these filters'
+              ? research
+                ? 'No research leads match these filters'
+                : 'No explained activity matches these filters'
               : hasMore
                 ? 'No matching events in the loaded results'
                 : 'No unread activity in these results'
@@ -511,11 +537,24 @@ export default function CountyFeed() {
             )
           }
         >
-          {events.length === 0
-            ? 'Activity appears when source records change and are ready to review. Coverage varies by municipality. You can still investigate properties and save the places you want to follow.'
-            : hasMore
-              ? 'Load more activity to continue. Read and hidden items remain available under More filters.'
-              : 'Read and hidden items remain available under More filters.'}
+          {events.length === 0 ? (
+            <>
+              Activity appears when records provide enough detail to explain a matter. Coverage
+              varies by municipality.{' '}
+              {!research && (
+                <ButtonLink
+                  to={`/feed?${new URLSearchParams({ ...Object.fromEntries(searchParams), view: 'research' })}`}
+                  tone="quiet"
+                >
+                  Browse research leads
+                </ButtonLink>
+              )}
+            </>
+          ) : hasMore ? (
+            'Load more activity to continue. Read and hidden items remain available under More filters.'
+          ) : (
+            'Read and hidden items remain available under More filters.'
+          )}
         </EmptyState>
       )}
 
@@ -586,6 +625,7 @@ async function fetchPage(
   textQuery: string,
   following: boolean,
   watchParams: string,
+  research: boolean,
   signal?: AbortSignal,
 ): Promise<IntelligenceFeedResponse> {
   const params = new URLSearchParams({
@@ -593,6 +633,7 @@ async function fetchPage(
     offset: String(offset),
     since_days: String(sinceDays),
     sort: sortMode,
+    view: research ? 'research' : 'activity',
   })
   if (textQuery) {
     params.set('q', textQuery)

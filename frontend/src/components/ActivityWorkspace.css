@@ -127,3 +127,16 @@
     font-size: 12px;
   }
 }
+.activity-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 16px 0 22px;
+}
+.activity-view-switch p {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}

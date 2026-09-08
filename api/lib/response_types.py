@@ -277,6 +277,24 @@ class IntelligenceInterpretationPayload(TypedDict):
     generated_at: str | None
 
 
+class MatterHistoryPayload(TypedDict):
+    record_key: str
+    meeting_date: str
+    body_name: str
+    document_kind: str
+    record_status: str
+    summary: str
+
+
+class MatterAccountPayload(TypedDict):
+    request: str | None
+    outcome: str
+    outcome_summary: str | None
+    readiness: str
+    conditions: list[str]
+    history: list[MatterHistoryPayload]
+
+
 class IntelligenceEventPayload(TypedDict):
     event_key: str
     category: Literal["parcel", "development"]
@@ -284,6 +302,8 @@ class IntelligenceEventPayload(TypedDict):
     event_tags: list[str]
     title: str
     what_happened: str
+    why_it_matters: str | None
+    matter: MatterAccountPayload | None
     event_date: str | None
     detected_at: str
     confidence: float | None

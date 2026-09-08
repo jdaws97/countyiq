@@ -193,6 +193,20 @@ def watch_property(client):
     return headers
 
 
+def explain_current_sources():
+    """Give watch-policy fixtures an accepted explanation before alerting."""
+    from api.tests.test_source_explanations import append_explanation
+
+    with writer() as cur:
+        cur.execute(
+            "SELECT explanation_source FROM public.current_municipal_intelligence"
+        )
+        sources = [row[0] for row in cur.fetchall()]
+        for source in sources:
+            append_explanation(cur, source)
+    project_current_sources()
+
+
 def test_source_to_property_signal_feed_owner_and_private_watch(
     watch_client, add_source
 ):
@@ -235,14 +249,16 @@ def test_source_to_property_signal_feed_owner_and_private_watch(
     assert cards[0]["proceeding_type"] == "agenda"
     assert cards[0]["passages"] == []
     event_key = cards[0]["event_key"]
-    feed = watch_client.get("/api/feed", params={"pidn": TEST_PIDN}).json()
+    feed = watch_client.get(
+        "/api/feed", params={"pidns": TEST_PIDN, "view": "research"}
+    ).json()
     event = next(item for item in feed["events"] if item["event_key"] == event_key)
     assert event["event_type"] == "municipal_record"
     assert event["event_tags"] == ["municipal_record"]
     assert event["what_happened"] == "An English account is being prepared."
     assert event["related_entities"] == ["Alpha Holdings LLC"]
     notices = watch_client.get("/api/watchspaces/notifications", headers=headers).json()
-    assert any(
+    assert not any(
         item["event"]["event_key"] == event_key for item in notices["notifications"]
     )
     assert (
@@ -378,6 +394,7 @@ def test_identical_reread_and_projection_keep_one_notification(
     headers = watch_property(watch_client)
     source_id, _, payload = add_source()
     project_current_sources()
+    explain_current_sources()
     before = watch_client.get("/api/watchspaces/notifications", headers=headers).json()[
         "notifications"
     ]
@@ -615,6 +632,7 @@ def test_municipal_property_mention_reaches_an_existing_owner_watch(
     assert response.status_code == 200, response.text
     add_source()
     project_current_sources()
+    explain_current_sources()
     notices = watch_client.get(
         "/api/watchspaces/notifications", headers=headers
     ).json()["notifications"]
@@ -647,6 +665,7 @@ def test_obsolete_watch_match_stays_hidden_after_event_projection_rebuild(
     assert response.status_code == 200, response.text
     add_source()
     project_current_sources()
+    explain_current_sources()
     before = watch_client.get("/api/watchspaces/notifications", headers=headers).json()[
         "notifications"
     ]

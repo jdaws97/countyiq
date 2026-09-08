@@ -14,6 +14,7 @@ from countyiq.lib.intelligence_events import (
     build_municipal_evidence_event,
     build_parcel_event,
 )
+from countyiq.lib.municipal_matters import build_matter_event
 from countyiq.resources.database import DatabaseResource
 
 _INSERT_COLUMNS = (
@@ -235,6 +236,7 @@ def _insert_tuple(event: dict) -> tuple:
         "proceeding_extraction",
         "municipal_evidence_linking",
         "municipal_record_explanations",
+        "municipal_matter_explanations",
     ],
     description=(
         "Unified evidence-backed parcel and development intelligence events; "
@@ -252,10 +254,14 @@ def intelligence_events(
     municipal_rows = _fetch_dicts(
         database, "SELECT * FROM public.current_municipal_intelligence"
     )
+    matter_rows = _fetch_dicts(
+        database, "SELECT * FROM public.current_municipal_matter_accounts"
+    )
 
     events = [build_parcel_event(row) for row in parcel_rows]
     events.extend(build_delinquency_event(row) for row in delinquency_rows)
     events.extend(build_municipal_evidence_event(row) for row in municipal_rows)
+    events.extend(build_matter_event(row) for row in matter_rows)
     # Development identities are assigned under the same transaction as the
     # serving rebuild below, so persisted watches survive later title changes.
 

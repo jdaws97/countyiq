@@ -237,9 +237,9 @@ def notifications(
         row = account_workspace(cur, request)
         cur.execute(
             """SELECT n.notification_id,n.event_key,n.read_at
-          FROM public.watch_notifications n JOIN public.current_intelligence_events e USING(event_key)
+          FROM public.watch_notifications n JOIN public.current_activity_events e USING(event_key)
           WHERE workspace_id=%s AND n.read_at IS NULL AND (%s::bigint IS NULL OR n.notification_id<%s)
-            AND (e.source_kind <> 'municipal_evidence' OR EXISTS (
+            AND (e.source_kind NOT IN ('municipal_evidence', 'municipal_matter') OR EXISTS (
               SELECT 1 FROM public.watch_items w
               WHERE w.workspace_id=n.workspace_id AND e.detected_at > w.added_at
                 AND (

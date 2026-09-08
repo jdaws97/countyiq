@@ -43,6 +43,23 @@ export function supportingSource(
 }
 
 export function activityLabel(event: IntelligenceEvent): string {
+  if (event.matter?.readiness && event.matter.readiness !== 'ready') {
+    return 'Research lead'
+  }
+  if (event.matter?.outcome && event.matter.outcome !== 'not_established') {
+    if (event.matter.outcome === 'approved' && event.event_type === 'update') {
+      return 'Approval reported'
+    }
+    const labels = {
+      continued: 'Continued',
+      approved: 'Approved',
+      conditional: 'Approved with conditions',
+      denied: 'Denied',
+      withdrawn: 'Withdrawn',
+      mixed: 'Partial decision',
+    }
+    return labels[event.matter.outcome]
+  }
   if (event.event_type === 'scoped_decision') {
     const scope = event.sources.find((source) => typeof source.details?.decision_scope === 'string')
       ?.details.decision_scope
@@ -51,10 +68,10 @@ export function activityLabel(event: IntelligenceEvent): string {
     }
   }
   if (event.event_type === 'upcoming_decision') {
-    return 'On the agenda'
+    return 'Proposed action'
   }
   if (event.event_type === 'municipal_record') {
-    return 'Municipal record'
+    return 'Research lead'
   }
   return event.event_type.replace(/_/g, ' ')
 }
