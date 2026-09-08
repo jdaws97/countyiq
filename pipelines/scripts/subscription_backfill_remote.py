@@ -110,6 +110,7 @@ def main():
         parser.error("Pipeline database credentials are unavailable")
     environment = {
         **os.environ,
+        "PYTHONPATH": str(root / "pipelines"),
         "DATABASE_HOST": "127.0.0.1",
         "DATABASE_PORT": str(args.local_port),
         "DATABASE_USER": credentials[0],
