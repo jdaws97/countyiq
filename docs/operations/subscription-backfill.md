@@ -109,3 +109,18 @@ introduced; no existing transcripts needed migration. The standard image include
 maintained scripts and evaluation fixtures. Scan OCR uses the separately locked
 operator runtime described in `pipelines/ocr/README.md`; missing preparation
 remains pending rather than becoming an empty read.
+
+## Retry a joint source line
+
+When two separately identified cases share one printed line and exhaust the
+normal attribution correction, an operator may add finer selection boundaries.
+Use `read --ids ... --unit-breaks PATH` with a JSON object keyed by proceeding ID.
+Each value contains `source_text_sha256` and `offsets`, a list of character
+positions into the exact retained source. This changes only numbered selection
+units. It preserves all original text and rejects changed source hashes or any
+change to the accounting exclusion policy. The model rereads the complete source;
+the usual span binding, separate-case validation and contradiction gates still
+apply. Keep the specification alongside the immutable request/response receipts.
+Review both case-specific passages and their shared outcome before accepting
+the repair. Status reports retain failed subject keys and validation errors for
+explicit retries.

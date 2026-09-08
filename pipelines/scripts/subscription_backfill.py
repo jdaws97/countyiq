@@ -42,6 +42,7 @@ from countyiq.lib.source_rights import (
     authorize_source,
     require_source_use,
 )
+from countyiq.lib.source_unit_refinement import refine_source_units
 from countyiq.lib.subscription_backfill import (
     SubscriptionAuthor,
     SubscriptionUnavailable,
@@ -91,6 +92,11 @@ def proceeding_rows(database):
 def run(database, args):
     author = SubscriptionAuthor(args.directory, model=args.model)
     author.check_login()
+    refinements = (
+        json.loads(args.unit_breaks.read_text())
+        if getattr(args, "unit_breaks", None)
+        else {}
+    )
     reading = args.kind == "read"
     config = HarnessConfig(
         model_path=f"codex/subscription:{args.model}",
@@ -139,6 +145,7 @@ def run(database, args):
         "CountyIQ/1.0 (+https://countyiq.app)", product_token="CountyIQ"
     )
     attempted = 0
+    failures = []
     stop_reason = "scope_exhausted"
     started_at = datetime.now(UTC).isoformat()
 
@@ -154,6 +161,7 @@ def run(database, args):
             if finished
             else "running",
             "stop_reason": stop_reason if finished else None,
+            "failures": failures,
             "started_at": started_at,
             "updated_at": datetime.now(UTC).isoformat(),
             "selectors": {
@@ -202,6 +210,10 @@ def run(database, args):
                 prepared = {"source": source, "subject": subject}
                 if reading:
                     document, pages = prepare_source(source, authorizations, robots)
+                    if str(source["id"]) in refinements:
+                        document = refine_source_units(
+                            document, refinements[str(source["id"])]
+                        )
                     prepared.update(
                         document=document,
                         pages=pages,
@@ -212,6 +224,7 @@ def run(database, args):
                 yield prepared
             except ValueError as error:
                 counts["errors"] += 1
+                failures.append({"subject": subject, "error": str(error)})
                 print(json.dumps({"subject": subject, "error": str(error)}), flush=True)
 
     with prefetched_batches(
@@ -289,6 +302,7 @@ def run(database, args):
                     break
                 except (ValueError, ValidationError) as error:
                     counts["errors"] += 1
+                    failures.append({"subject": subject, "error": str(error)})
                     print(
                         json.dumps({"subject": subject, "error": str(error)}),
                         flush=True,
@@ -318,6 +332,11 @@ def main():
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--model", default="gpt-6-astra")
     parser.add_argument("--ids", type=int, nargs="*")
+    parser.add_argument(
+        "--unit-breaks",
+        type=Path,
+        help="JSON mapping proceeding IDs to source hashes and character offsets",
+    )
     parser.add_argument("--subjects", nargs="*")
     parser.add_argument("--pidns", nargs="*")
     args = parser.parse_args()
@@ -329,6 +348,8 @@ def main():
         parser.error("--workers must be between 1 and 4")
     if args.ids and args.kind != "read":
         parser.error("--ids is only supported for source reads")
+    if args.unit_breaks and (args.kind != "read" or not args.ids):
+        parser.error("--unit-breaks requires a source read with explicit --ids")
     if args.subjects and args.kind != "municipal":
         parser.error("--subjects is only supported for municipal explanations")
     if args.pidns and args.kind != "property":
