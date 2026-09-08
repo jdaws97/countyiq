@@ -172,16 +172,24 @@ def test_numeric_date_at_sentence_end_keeps_its_exact_source_quote(
     assert result["record"]["dates"][0]["quote"] == quote
 
 
-def test_explicit_named_date_can_be_quoted_from_joined_pdf_text(source, explanation):
+@pytest.mark.parametrize("quote_entire_source", [False, True])
+def test_explicit_named_date_can_be_quoted_from_joined_pdf_text(
+    source, explanation, quote_entire_source
+):
     source["sources"][0]["text"] = (
         "Proposed hearing. ItwillbepresentedattheSeptember8,2026,Councilmeeting."
     )
     item = explanation["record"]["dates"][0]
-    item.update(quote="September8,2026", time=None)
+    quote = source["sources"][0]["text"] if quote_entire_source else "September8,2026"
+    item.update(quote=quote, time=None)
     assert validate_explanation(explanation, source)["record"]["dates"][0] == item
 
     item["date"] = "2025-09-08"
     with pytest.raises(ValueError, match="Date changes its source year"):
+        validate_explanation(explanation, source)
+
+    item["date"] = "2026-09-09"
+    with pytest.raises(ValueError, match="Exact date is not stated"):
         validate_explanation(explanation, source)
 
 

@@ -316,11 +316,17 @@ def _validate_date(
         parsed = date.fromisoformat(value)
         month = parsed.strftime("%B")
         short_month = parsed.strftime("%b")
-        normalized = _normalized(quote).lower()
+        normalized_quote = _normalized(quote)
+        normalized = normalized_quote.lower()
         named = re.search(
             rf"\b(?:{month}|{short_month})\.?\s*0?{parsed.day}(?:st|nd|rd|th)?\b",
             normalized,
             flags=re.IGNORECASE,
+        )
+        # PDF text can join a preceding word to a capitalized month, as in "theMay27".
+        joined_named = re.search(
+            rf"(?<=[a-z])(?:{month}|{short_month})0?{parsed.day}(?:st|nd|rd|th)?\b",
+            normalized_quote,
         )
         spanish_month = (
             "enero",
@@ -348,7 +354,13 @@ def _validate_date(
         )
         if language != "en":
             numeric = None
-        if value not in quote and not named and not spanish_named and not numeric:
+        if (
+            value not in quote
+            and not named
+            and not joined_named
+            and not spanish_named
+            and not numeric
+        ):
             raise ValueError("Exact date is not stated in its supporting quote")
         years = re.findall(r"\b(?:19|20)\d{2}\b", quote)
         if years and str(parsed.year) not in years:
