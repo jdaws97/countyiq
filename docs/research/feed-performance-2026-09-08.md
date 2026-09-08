@@ -94,3 +94,17 @@ Every member must remain current for the group to apply. A candidate review does
 not update matter aliases or establish a merged account: the existing complete
 source, identity, watch, and contradiction checks still govern that separate step.
 The same source-change revision invalidates cached Activity immediately.
+
+Release `d9f683b` deployed successfully with schema 080. The four reviewed pairs
+were grouped and merged through separate candidate and identity reviews:
+Loganville's Westridge/Ferndale repaving and Columbia Gas main replacement,
+Fairview's Green Lane crosswalk study, and East Hopewell's stormwater rewrite.
+Each retains the earlier matter key and both source histories. The decisions
+remain limited to what the documents establish, including study authorization
+and ordinance drafting rather than installation or adoption.
+
+All 24 profiled production API handlers completed during the resumed historical
+backfill. Fresh Activity took 2.47 seconds, Research 3.61 seconds, and the Conewago
+profile 2.26 seconds. Research's immediate repeat took 0.009 seconds; Activity's
+repeat was invalidated by new accepted backfill output and took 2.48 seconds.
+These remain handler measurements, excluding browser, network and authentication.
