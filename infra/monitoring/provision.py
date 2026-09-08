@@ -14,7 +14,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from configure import OPERATOR_EMAIL, read_secrets, validate_url
+from configure import ALLOWED_EMAILS, OPERATOR_EMAIL, read_secrets, validate_url
+from errors import ConfigurationError
 
 ROOT = Path(__file__).resolve().parent
 FOLDER_UID = "countyiq-monitoring"
@@ -67,15 +68,20 @@ def select_datasource(datasources: list[dict], kind: str) -> str:
     if len(defaults) == 1:
         return defaults[0]["uid"]
     if len(matches) != 1:
-        raise ValueError(f"Expected one unambiguous {kind} datasource")
+        raise ConfigurationError(
+            f"Expected one unambiguous {kind} datasource; found {len(matches)}."
+        )
     return matches[0]["uid"]
 
 
-def verify_owner(users: list[dict], email: str) -> None:
+def verify_owner(users: list[dict], allowed_emails: frozenset[str]) -> None:
     humans = [user for user in users if not user.get("isServiceAccount", False)]
-    if not humans or any(user.get("email", "").lower() != email for user in humans):
-        raise ValueError(
-            "Grafana human membership does not match the single operator email"
+    if not humans or any(
+        user.get("email", "").lower() not in allowed_emails for user in humans
+    ):
+        raise ConfigurationError(
+            "Grafana has a human member outside the approved email allowlist, "
+            "or no human owner. Confirm account membership before connecting."
         )
 
 
@@ -190,7 +196,7 @@ def run(*, apply: bool) -> None:
     if settings.get("COUNTYIQ_OPERATOR_EMAIL") != OPERATOR_EMAIL:
         raise ValueError("Unexpected operator email in protected settings")
     api = Grafana(settings["GRAFANA_STACK_URL"], settings["GRAFANA_PROVISION_TOKEN"])
-    verify_owner(api.request("GET", "/api/org/users"), OPERATOR_EMAIL)
+    verify_owner(api.request("GET", "/api/org/users"), ALLOWED_EMAILS)
     sources = api.request("GET", "/api/datasources")
     metrics_uid = select_datasource(sources, "prometheus")
     logs_uid = select_datasource(sources, "loki")

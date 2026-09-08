@@ -13,9 +13,13 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
+from errors import ConfigurationError
+
 ROOT = Path(__file__).resolve().parents[2]
 SECRET_PATH = ROOT / "infra/secrets/monitoring.sops.env"
-OPERATOR_EMAIL = "jarod.daws@protonmail.com"
+STACK = json.loads(Path(__file__).with_name("stack.json").read_text())
+OPERATOR_EMAIL = STACK["operator_email"]
+ALLOWED_EMAILS = frozenset(STACK["allowed_emails"])
 INGEST_KEYS = (
     "GRAFANA_METRICS_URL",
     "GRAFANA_METRICS_USER",
@@ -37,9 +41,11 @@ def validate_url(value: str, *, path: str | None = None) -> str:
         or parsed.query
         or parsed.fragment
     ):
-        raise ValueError("Use the exact HTTPS endpoint from your Grafana Cloud stack.")
+        raise ConfigurationError(
+            "Use the exact HTTPS endpoint from your Grafana Cloud stack."
+        )
     if path is not None and parsed.path.rstrip("/") != path:
-        raise ValueError("Grafana endpoint has an unexpected path.")
+        raise ConfigurationError("Grafana datasource endpoint has an unexpected path.")
     return value.rstrip("/")
 
 
@@ -86,14 +92,15 @@ def capture() -> None:
     print("Use Grafana Cloud Free. Secret input is hidden and streamed into SOPS.")
     from provision import Grafana, select_datasource, verify_owner
 
-    stack = json.loads(Path(__file__).with_name("stack.json").read_text())
-    stack_url = validate_url(stack["url"], path="")
-    print(f"Connecting {stack_url} for {OPERATOR_EMAIL}.")
+    stack_url = validate_url(STACK["url"], path="")
+    print(
+        f"Connecting {stack_url}; allowed accounts: {', '.join(sorted(ALLOWED_EMAILS))}."
+    )
     provision_token = getpass.getpass(
         "Grafana service-account provisioning token (hidden): "
     ).strip()
     api = Grafana(stack_url, provision_token)
-    verify_owner(api.request("GET", "/api/org/users"), OPERATOR_EMAIL)
+    verify_owner(api.request("GET", "/api/org/users"), ALLOWED_EMAILS)
     sources = api.request("GET", "/api/datasources")
     by_uid = {source["uid"]: source for source in sources}
     metrics = by_uid[select_datasource(sources, "prometheus")]
@@ -116,9 +123,13 @@ def capture() -> None:
     }
     for name in ("GRAFANA_METRICS_USER", "GRAFANA_LOGS_USER"):
         if not values[name].isdigit():
-            raise ValueError("Grafana metrics/logs instance IDs must be numeric.")
+            raise ConfigurationError(
+                "Grafana metrics/logs instance IDs must be numeric."
+            )
     if any(not value or re.search(r"[\s\"'`$]", value) for value in values.values()):
-        raise ValueError("Connection values must be nonempty, single-line values.")
+        raise ConfigurationError(
+            "Connection values must be nonempty, single-line values."
+        )
     plaintext = "".join(f"{name}={value}\n" for name, value in values.items())
     result = subprocess.run(
         [
@@ -150,7 +161,7 @@ def publish() -> None:
     validate_url(values["GRAFANA_LOGS_URL"], path="/loki/api/v1/push")
     selected = {name: values[name] for name in INGEST_KEYS}
     if any(not value or re.search(r"[\s\"'`$]", value) for value in selected.values()):
-        raise ValueError("Ingestion settings contain invalid values.")
+        raise ConfigurationError("Ingestion settings contain invalid values.")
     remote_command = (
         "sudo -n sh -c 'set -eu; umask 077; "
         "install -d -m 700 /etc/countyiq; "
@@ -188,6 +199,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         {"capture": capture, "publish": publish}[args.action]()
+    except ConfigurationError as error:
+        print(f"Monitoring configuration failed: {error}")
+        raise SystemExit(1)
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         # Do not expose captured subprocess output or plaintext values.
         print(f"Monitoring configuration failed ({type(error).__name__}).")

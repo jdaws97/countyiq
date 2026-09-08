@@ -43,13 +43,16 @@ variable "raw_bucket_name" {
   default = "countyiq-raw"
 }
 
-variable "operator_email" {
-  description = "Single owner allowed to access Dagster; independent of tester access."
-  type        = string
+variable "operator_emails" {
+  description = "Owner's approved email addresses for Dagster; independent of tester access."
+  type        = set(string)
 
   validation {
-    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.operator_email))
-    error_message = "operator_email must be one exact email address."
+    condition = length(var.operator_emails) > 0 && alltrue([
+      for email in var.operator_emails :
+      can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", email))
+    ])
+    error_message = "operator_emails must contain exact email addresses."
   }
 }
 
