@@ -32,8 +32,9 @@ def test_subscription_rejects_api_authentication(tmp_path, monkeypatch):
         author.check_login()
 
 
+@pytest.mark.parametrize("prefetch", [False, True])
 def test_receipt_reuse_avoids_second_request_and_detects_tampering(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, prefetch
 ):
     calls = []
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-reach-child")
@@ -57,6 +58,8 @@ def test_receipt_reuse_avoids_second_request_and_detects_tampering(
 
     monkeypatch.setattr("subprocess.run", run)
     author = SubscriptionAuthor(tmp_path, model="test")
+    if prefetch:
+        author.prefetch(config(), ["SOURCE"])
     first = author(config(), "SOURCE")
     second = author(config(), "SOURCE")
     assert first.parsed == second.parsed == {"items": []}
@@ -123,15 +126,16 @@ def test_batch_keeps_source_identity_and_rejects_incomplete_results(
         assert len(list(tmp_path.glob("*.json"))) == 3
 
 
+@pytest.mark.parametrize("workers", [2, 8])
 def test_prefetch_concurrency_is_bounded_and_early_stop_does_not_consume_more_sources(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, workers
 ):
     from threading import Barrier
     from types import SimpleNamespace
 
     from countyiq.lib import subscription_backfill
 
-    barrier = Barrier(2)
+    barrier = Barrier(workers)
     cached = []
     consumed = []
 
@@ -144,18 +148,72 @@ def test_prefetch_concurrency_is_bounded_and_early_stop_does_not_consume_more_so
             cached.extend(prompts)
 
     def sources():
-        for index in range(5):
+        for index in range(workers + 3):
             consumed.append(index)
             yield [{"prompt": str(index)}]
 
     monkeypatch.setattr(subscription_backfill, "SubscriptionAuthor", Author)
     parent = SimpleNamespace(directory=tmp_path, model="test", timeout=10)
     with subscription_backfill.prefetched_batches(
-        parent, None, sources(), workers=2
+        parent, None, sources(), workers=workers
     ) as batches:
         batch, worker, future = next(batches)
         future.result()
-        assert batch == [{"prompt": "0"}]
+        assert 0 <= int(batch[0]["prompt"]) < workers
         assert worker.receipts == []
-    assert consumed == [0, 1]
-    assert sorted(cached) == ["0", "1"]
+    assert consumed == list(range(workers))
+    assert sorted(cached) == [str(index) for index in range(workers)]
+
+
+def test_completed_batches_refill_workers_while_an_earlier_batch_is_slow(
+    monkeypatch, tmp_path
+):
+    from threading import Event
+
+    from countyiq.lib import subscription_backfill
+
+    first_started = Event()
+    release_first = Event()
+    cached = []
+
+    class Author:
+        def __init__(self, *_args, **_kwargs):
+            self.receipts = []
+
+        def prefetch(self, _config, prompts):
+            if prompts == ["slow"]:
+                first_started.set()
+                assert release_first.wait(timeout=3)
+            else:
+                assert first_started.wait(timeout=3)
+            cached.extend(prompts)
+
+    monkeypatch.setattr(subscription_backfill, "SubscriptionAuthor", Author)
+    parent = SimpleNamespace(directory=tmp_path, model="test", timeout=10)
+    sources = [[{"prompt": prompt}] for prompt in ("slow", "ready", "next")]
+    with subscription_backfill.prefetched_batches(
+        parent, None, sources, workers=2
+    ) as batches:
+        try:
+            first, _, first_future = next(batches)
+            first_future.result()
+            assert first == [{"prompt": "ready"}]
+            second, _, second_future = next(batches)
+            second_future.result()
+            assert second == [{"prompt": "next"}]
+            assert "slow" not in cached
+        finally:
+            release_first.set()
+    assert sorted(cached) == ["next", "ready", "slow"]
+
+
+@pytest.mark.parametrize("workers", [0, 9])
+def test_worker_limit_rejects_unbounded_dispatch(tmp_path, workers):
+    from countyiq.lib.subscription_backfill import prefetched_batches
+
+    author = SubscriptionAuthor(tmp_path, model="test")
+    with (
+        pytest.raises(ValueError, match="between 1 and 8"),
+        prefetched_batches(author, config(), [], workers=workers),
+    ):
+        pytest.fail("Invalid concurrency was accepted")

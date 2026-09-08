@@ -93,10 +93,14 @@ limits. Each stage requires an explicit positive work-item limit. Batches keep
 whole sources together and bound combined input size. Property contexts are
 prepared incrementally.
 
-`--workers 1` is the default. Operators may select up to four concurrent authoring
+`--workers 1` is the default. Operators may select up to eight concurrent authoring
 batches per stage. Database writes and source-freshness checks remain sequential;
 each worker keeps separate receipts and caches its finished batch on early exit.
 This changes throughput, not the selected model or source-validation contract.
+Completed batches are consumed as they become ready, so an earlier slow response
+does not leave other workers idle. A batch containing one uncached source also
+runs in its worker. Source preparation and all database operations remain on the
+operator thread.
 
 Matter persistence verifies an isolated, single-record selection directly against
 the current governed evidence. It checks that the record still has no case
@@ -105,6 +109,12 @@ bundle. All other scopes retain complete candidate resolution. This avoids a
 county-wide source rebuild per isolated record while retaining the source check
 inside the alias transaction. The operator does not repeat that same check
 before calling matter persistence.
+
+Pinned municipal record checks also filter by the proceeding ID encoded in the
+record key, while still matching the complete key and current governed source.
+Unrecognized legacy key formats keep the unrestricted lookup, and an unknown or
+stale requested key still fails. This avoids reading the entire county's evidence
+to verify one record explanation.
 
 Explanations include a language review for each textual source. Non-English
 passages receive separate English translations; exact original spans and date

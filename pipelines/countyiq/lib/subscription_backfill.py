@@ -12,8 +12,7 @@ import json
 import os
 import subprocess
 import tempfile
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -22,6 +21,8 @@ from pathlib import Path
 from countyiq.lib.intelligence_integrity import content_hash
 from countyiq.lib.llm_harness import HarnessResult
 
+MAX_SUBSCRIPTION_WORKERS = 8
+
 
 class SubscriptionUnavailable(RuntimeError):
     """Stop the batch when the CLI, login, or subscription cannot continue."""
@@ -29,16 +30,18 @@ class SubscriptionUnavailable(RuntimeError):
 
 @contextmanager
 def prefetched_batches(author, config, batches, *, workers=1):
-    """Bound model concurrency; retain ordered, single-threaded database writes.
+    """Bound model concurrency; retain single-threaded database writes.
 
     Each worker has its own receipt list. At most one batch per worker is queued,
     and exiting waits for those bounded calls to finish caching their artifacts.
     No worker receives a database connection or application credentials.
     """
-    if not 1 <= workers <= 4:
-        raise ValueError("Subscription workers must be between 1 and 4")
+    if not 1 <= workers <= MAX_SUBSCRIPTION_WORKERS:
+        raise ValueError(
+            f"Subscription workers must be between 1 and {MAX_SUBSCRIPTION_WORKERS}"
+        )
     iterator = iter(batches)
-    pending = deque()
+    pending = {}
     with ThreadPoolExecutor(max_workers=workers) as executor:
 
         def enqueue():
@@ -51,15 +54,18 @@ def prefetched_batches(author, config, batches, *, workers=1):
             future = executor.submit(
                 worker.prefetch, config, [item["prompt"] for item in batch]
             )
-            pending.append((batch, worker, future))
+            pending[future] = (batch, worker)
 
         for _ in range(workers):
             enqueue()
 
         def results():
             while pending:
-                yield pending.popleft()
-                enqueue()
+                completed, _ = wait(pending, return_when=FIRST_COMPLETED)
+                for future in completed:
+                    batch, worker = pending.pop(future)
+                    yield batch, worker, future
+                    enqueue()
 
         yield results()
 
@@ -133,7 +139,11 @@ class SubscriptionAuthor:
             fingerprint = content_hash(request)
             if not (self.directory / f"{fingerprint}.json").exists():
                 pending[fingerprint] = request
-        if len(pending) < 2:
+        if not pending:
+            return
+        if len(pending) == 1:
+            request = next(iter(pending.values()))
+            self(config, request["prompt"])
             return
         schema = {
             "type": "object",

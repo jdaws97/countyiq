@@ -45,6 +45,7 @@ from countyiq.lib.source_rights import (
 )
 from countyiq.lib.source_unit_refinement import refine_source_units
 from countyiq.lib.subscription_backfill import (
+    MAX_SUBSCRIPTION_WORKERS,
     SubscriptionAuthor,
     SubscriptionUnavailable,
     prefetched_batches,
@@ -374,8 +375,8 @@ def main():
         parser.error("--limit must be positive")
     if not 1 <= args.batch_size <= 16:
         parser.error("--batch-size must be between 1 and 16")
-    if not 1 <= args.workers <= 4:
-        parser.error("--workers must be between 1 and 4")
+    if not 1 <= args.workers <= MAX_SUBSCRIPTION_WORKERS:
+        parser.error(f"--workers must be between 1 and {MAX_SUBSCRIPTION_WORKERS}")
     if args.ids and args.kind != "read":
         parser.error("--ids is only supported for source reads")
     if args.unit_breaks and (args.kind != "read" or not args.ids):

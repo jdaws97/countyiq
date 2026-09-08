@@ -1,6 +1,7 @@
 """Explain current records once, with the ordinary Pass 3 spend and release gates."""
 
 import os
+import re
 from dataclasses import replace
 
 from dagster import AssetExecutionContext, Field, MaterializeResult, Noneable, asset
@@ -106,6 +107,19 @@ def persist_explanation(
     )
 
 
+def _municipal_proceeding_ids(subject_keys):
+    """Narrow exact record lookups without excluding legacy subject formats."""
+    if not subject_keys:
+        return None
+    identifiers = set()
+    for key in subject_keys:
+        match = re.match(r"municipal:([0-9]+):", key)
+        if match is None:
+            return None
+        identifiers.add(int(match[1]))
+    return sorted(identifiers)
+
+
 def _source_bundles(
     database,
     kind: str,
@@ -139,11 +153,16 @@ def _source_bundles(
                 """
                 SELECT explanation_source AS source
                 FROM public.current_municipal_intelligence
-                WHERE (%(subject_keys)s::text[] IS NULL
+                WHERE (%(proceeding_ids)s::bigint[] IS NULL
+                    OR proceeding_id = ANY(%(proceeding_ids)s::bigint[]))
+                  AND (%(subject_keys)s::text[] IS NULL
                     OR explanation_source->>'subject_key' = ANY(%(subject_keys)s::text[]))
                 ORDER BY meeting_date DESC, proceeding_id DESC, card_position
             """,
-                {"subject_keys": subject_keys or None},
+                {
+                    "subject_keys": subject_keys or None,
+                    "proceeding_ids": _municipal_proceeding_ids(subject_keys),
+                },
             )
             sources = [row["source"] for row in cur.fetchall()]
             missing = set(subject_keys or []) - {

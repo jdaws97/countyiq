@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import os
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import psycopg2
 import pytest
+from countyiq.assets.enrichment.record_explanations import _source_bundles
 from countyiq.lib.municipal_matters import current_matter_source
-from psycopg2.extras import Json
+from psycopg2.extras import Json, RealDictCursor
 
 
 def _connect():
@@ -166,6 +169,34 @@ def test_direct_selection_source_equals_canonical_current_bundle(
         current_matter_source(fixture["cursor"], fixture["canonical"])
         == fixture["canonical"]
     )
+
+
+@pytest.mark.integration
+def test_pinned_record_lookup_keeps_exact_source_and_rejects_an_unknown_key(
+    seeded_selection_source,
+):
+    fixture = seeded_selection_source
+    cursor = fixture["cursor"]
+    record_key = fixture["canonical"]["records"][0]["key"]
+    cursor.execute(
+        "SELECT explanation_source FROM public.current_municipal_intelligence "
+        "WHERE event_key = %s",
+        (record_key,),
+    )
+    canonical = cursor.fetchone()[0]
+
+    @contextmanager
+    def dictionary_cursor():
+        with fixture["connection"].cursor(cursor_factory=RealDictCursor) as current:
+            yield current
+
+    database = SimpleNamespace(dict_cursor=dictionary_cursor)
+    count, sources = _source_bundles(database, "municipal", subject_keys=[record_key])
+    assert count == 1
+    assert sources == [canonical]
+
+    with pytest.raises(ValueError, match="Requested municipal records are not current"):
+        _source_bundles(database, "municipal", subject_keys=[record_key + ":missing"])
 
 
 @pytest.mark.integration

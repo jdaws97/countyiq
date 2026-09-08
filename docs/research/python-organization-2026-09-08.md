@@ -143,6 +143,22 @@ bundles retain canonical full-scope resolution. Regression coverage includes
 changed text, local/global rights revocation, and promotion of a selection to
 case, address, or uniquely linked property scope.
 
+The individual-record explanation path had the same county-wide lookup cost:
+16.48 seconds for one municipal record. Adding the proceeding-ID predicate while
+retaining the complete key and all governing predicates reproduced all 512
+exported recent sources exactly. Median lookup time was 10.84 ms and the 95th
+percentile was 19.31 ms. Property context preparation was measured separately
+at 2.50 seconds for one existing sample property; that is not a population
+benchmark.
+
+The subsequent scheduler change consumes completed batches as they become ready,
+prefetches singleton batches in their worker, and supports an explicit maximum
+of eight workers. Regression checks cover a slow first batch, replacement work
+starting before it finishes, bounded dispatch, early-stop caching, and unchanged
+receipt reuse. Model, reasoning effort, and source/identity acceptance rules
+remain unchanged. End-to-end gains still depend on model response time and the
+distribution of source sizes.
+
 The 3,506 eligible documents span February 9, 2000 through September 8, 2026,
 covering 1,791 distinct meeting dates. There are 578 documents from 2025 and
 490 from 2026. January–July 2026 contains 446 documents, about 64 per month in
