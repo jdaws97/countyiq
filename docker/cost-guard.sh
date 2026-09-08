@@ -53,10 +53,10 @@ STATUS_FILE="$GUARD_DIR/status.env"
 COMPOSE_FILE="${COUNTYIQ_COMPOSE_FILE:-/opt/countyiq/docker/docker-compose.yml}"
 
 load_hard_limit() {
-    HARD_LIMIT_BYTES="${COUNTYIQ_R2_HARD_LIMIT_BYTES:-8000000000}"
-    if ! [[ "$HARD_LIMIT_BYTES" =~ ^[1-9][0-9]{9}$ ]] \
-        || [ "$HARD_LIMIT_BYTES" -gt 9000000000 ]; then
-        echo "COUNTYIQ_R2_HARD_LIMIT_BYTES must be between 1 GB and 9 GB" >&2
+    HARD_LIMIT_BYTES="${COUNTYIQ_R2_HARD_LIMIT_BYTES:-20000000000}"
+    if ! [[ "$HARD_LIMIT_BYTES" =~ ^[1-9][0-9]{9,10}$ ]] \
+        || [ "$HARD_LIMIT_BYTES" -gt 20000000000 ]; then
+        echo "COUNTYIQ_R2_HARD_LIMIT_BYTES must be between 1 GB and 20 GB" >&2
         return 1
     fi
 }

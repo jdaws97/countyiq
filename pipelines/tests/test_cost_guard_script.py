@@ -79,10 +79,16 @@ def test_backup_sandbox_allows_its_guard_subprocess_to_update_state():
 
 @pytest.mark.integration
 @pytest.mark.parametrize(
-    "limit,expected_status", [("3000000000", 75), ("8000000000", 0)]
+    "limit,bucket_bytes,expected_status",
+    [
+        ("3000000000", 2000000000, 75),
+        ("8000000000", 2000000000, 0),
+        ("20000000000", 9000000000, 0),
+        ("20000000000", 10000000000, 75),
+    ],
 )
 def test_cost_guard_honors_limit_from_production_environment(
-    tmp_path, limit, expected_status
+    tmp_path, limit, bucket_bytes, expected_status
 ):
     bindir = tmp_path / "bin"
     bindir.mkdir()
@@ -91,7 +97,7 @@ def test_cost_guard_honors_limit_from_production_environment(
         path.write_text(
             "#!/bin/bash\n"
             + (
-                "echo " + shlex.quote(json.dumps({"bytes": 2000000000})) + "\n"
+                "echo " + shlex.quote(json.dumps({"bytes": bucket_bytes})) + "\n"
                 if name == "rclone"
                 else "exit 0\n"
             )
@@ -148,4 +154,4 @@ exit "$result"
     )
     assert result.returncode == expected_status, result.stderr
     assert f"hard_limit_bytes={limit}" in result.stdout
-    assert "projected_bytes=4000000000" in result.stdout
+    assert f"projected_bytes={bucket_bytes * 2}" in result.stdout
