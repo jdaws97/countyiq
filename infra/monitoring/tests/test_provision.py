@@ -26,9 +26,14 @@ class ProvisioningTests(unittest.TestCase):
     def test_service_account_does_not_grant_another_human_access(self):
         owner = {"email": "jarod.daws@protonmail.com"}
         service = {"email": "", "isServiceAccount": True}
-        verify_owner([owner, service], owner["email"])
+        allowed = frozenset((owner["email"], "jarod.daws@gmail.com"))
+        verify_owner([owner, service], allowed)
+        verify_owner([{"email": "jarod.daws@gmail.com"}, service], allowed)
+        verify_owner([owner, {"email": "jarod.daws@gmail.com"}, service], allowed)
         with self.assertRaises(ValueError):
-            verify_owner([owner, {"email": "someone@example.com"}], owner["email"])
+            verify_owner([owner, {"email": "someone@example.com"}], allowed)
+        with self.assertRaises(ValueError):
+            verify_owner([service], allowed)
 
     def test_credential_urls_cannot_target_another_provider(self):
         for url in (

@@ -83,8 +83,8 @@ resource "cloudflare_zero_trust_access_application" "dagster" {
     name       = "CountyIQ owner only"
     decision   = "allow"
     precedence = 1
-    include = [{
-      email = { email = var.operator_email }
+    include = [for email in sort(tolist(var.operator_emails)) : {
+      email = { email = email }
     }]
   }]
 }

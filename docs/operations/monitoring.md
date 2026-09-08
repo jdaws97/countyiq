@@ -8,11 +8,12 @@ alert delivery must be verified before claiming off-host monitoring is live.
 ## Browser access
 
 - Dagster: `https://dagster.countyiq.net`, through Cloudflare Tunnel and a separate
-  Access application allowing only `jarod.daws@protonmail.com`. The tester
+  Access application allowing only `jarod.daws@gmail.com` and
+  `jarod.daws@protonmail.com`. The tester
   allowlist does not grant operator access. Dagster can launch work; the hostname
   exposes its full operator UI, not a customer-facing dashboard.
 - Grafana: the private stack URL selected at account creation. The provisioner
-  checks that the only human stack member is the operator; it does not invite
+  checks that every human stack member uses one of these two addresses; it does not invite
   people or enable public/anonymous dashboards. Verify Cloud Portal organization
   membership and any automatic role assignments as part of account setup too.
 - Data health: `https://app.countyiq.net/ops/health`.
@@ -20,6 +21,20 @@ alert delivery must be verified before claiming off-host monitoring is live.
 The Dagster origin stays on `127.0.0.1:3000`. Only cloudflared and the Dagster
 webserver share the additional internal `countyiq-operator` bridge. No public
 host port is added. Access/DNS/Tunnel configuration remains in OpenTofu.
+
+### Installation status — 2026-09-08
+
+The host probes are installed and all eight reported success. Dagster's Access
+application, DNS record, and tunnel route are applied. Anonymous UI and GraphQL
+requests redirect to Access; a Firefox check confirmed the login form. Owner
+sign-in and cloud ingestion still require account setup and verification.
+
+The internal operator network was attached to the existing two containers
+without restarting them. Caddy metrics were enabled through a graceful reload.
+The normal application release was deferred because production intelligence
+processing was enabled. The next application release must include the committed
+Compose and Caddy changes; until then a Caddy restart loses its runtime metrics
+setting. The monitoring probes will report that loss as a collector failure.
 
 ## Components and retention
 
@@ -115,7 +130,7 @@ Only encrypted `infra/secrets/monitoring.sops.env` is stored in Git. Publishing
 streams ingestion-only credentials over verified SSH to a root-owned 0600 file.
 Dashboards and alert rules reconcile by fixed UIDs. Notification routing adds
 only the CountyIQ route and preserves unrelated routes. Initial routing is
-email to the sole operator; a Slack contact point remains optional and requires
+email to the operator's ProtonMail address; a Slack contact point remains optional and requires
 the user's selected destination.
 
 ## External checks and browser telemetry
@@ -143,7 +158,8 @@ cannot log in as a customer.
 
 Before calling the installation complete:
 
-1. Verify the exact Free plan and sole human membership in Grafana and Cloudflare.
+1. Verify the exact Free plan and that human access is limited to the owner's
+   two approved email addresses in Grafana and Cloudflare.
 2. Observe all eight probe success gauges and fresh node metrics in Grafana.
 3. Verify a synthetic harmless log arrives with redaction and bounded labels.
 4. Trigger an isolated monitoring test alert and receive its recovery email.
