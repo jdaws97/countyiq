@@ -1181,7 +1181,7 @@
       },
       "targets": [
         {
-          "expr": "100 * countyiq_r2_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",bucket=\"total\"} / countyiq_r2_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
+          "expr": "100 * countyiq_r2_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",bucket=\"total\"} / ignoring(bucket) countyiq_r2_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}",
           "legendFormat": "used",
           "refId": "A"
         }

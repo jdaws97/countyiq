@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly CountyIQ Docker retention
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+Unit=countyiq-docker-retention.service
+
+[Install]
+WantedBy=timers.target

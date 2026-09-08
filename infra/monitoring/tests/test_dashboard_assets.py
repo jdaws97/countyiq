@@ -658,6 +658,68 @@ class DashboardAssetTests(unittest.TestCase):
         os.environ.get("PROMTOOL") or PROMTOOL,
         "promtool is unavailable; set PROMTOOL to run PromQL behavior tests",
     )
+    def test_promtool_evaluates_r2_capacity_dashboard_panel(self):
+        dashboard = self.load_json("dashboards/countyiq.json")
+        capacity_expression = next(
+            panel["targets"][0]["expr"]
+            for panel in dashboard["panels"]
+            if panel["title"] == "R2 capacity"
+        )
+        root_labels = 'instance="countyiq-production",job="countyiq/host"'
+        bucket_labels = f'{root_labels},bucket="total"'
+
+        test_file = {
+            "rule_files": [],
+            "evaluation_interval": "1m",
+            "tests": [
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f"countyiq_r2_bytes{{{bucket_labels}}}",
+                            "values": "5368709120",
+                        },
+                        {
+                            "series": f"countyiq_r2_limit_bytes{{{root_labels}}}",
+                            "values": "21474836480",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": capacity_expression,
+                            "eval_time": "0m",
+                            "exp_samples": [self.promtool_sample(root_labels, 25)],
+                        }
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f"countyiq_r2_bytes{{{bucket_labels}}}",
+                            "values": "5368709120",
+                        }
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": capacity_expression,
+                            "eval_time": "0m",
+                            "exp_samples": [],
+                        }
+                    ],
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            test_path = Path(temporary_directory) / "r2-capacity-test.json"
+            test_path.write_text(json.dumps(test_file), encoding="utf-8")
+            self.run_promtool("test", "rules", str(test_path))
+
+    @unittest.skipUnless(
+        os.environ.get("PROMTOOL") or PROMTOOL,
+        "promtool is unavailable; set PROMTOOL to run PromQL behavior tests",
+    )
     def test_external_readiness_failure_recovery_and_missing_locations(self):
         alerts = {
             alert["uid"]: alert["expr"] for alert in self.load_json("alerts.json")

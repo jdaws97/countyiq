@@ -239,8 +239,59 @@ application support files 58 MiB, system logs 122 MiB, and container logs 364 Ki
 Monitoring binaries/runtime used 674 MiB and the Alloy buffer was under 1 MiB.
 Docker reported 24.3 GB reclaimable build cache and 11.84 GB reclaimable images;
 these overlap and must not be added as guaranteed recoverable bytes. No cleanup
-was performed. Current and previous release images require protection before
-reviewing old images for removal; reusable build cache needs a bounded policy.
+was performed during that read-only investigation. The owner subsequently
+authorized the retention policy below.
+
+### Docker retention
+
+`countyiq-docker-retention.timer` runs hourly with up to five minutes of jitter.
+The monitoring installer deploys it independently of application releases.
+It acquires `/var/lock/countyiq-deploy.lock`, which is also held by the production
+deployment script, and skips if another deployment or cleanup is running.
+
+The policy protects the current and previous release receipts, verifies all
+three application image tags against their recorded image identities, and
+protects images referenced by any container, including stopped containers.
+Missing or mismatched rollback images stop the cleanup before any deletion.
+Only full-commit tags in `countyiq-api`, `countyiq-dagster`, and `countyiq-web`
+are eligible, with a one-hour grace period after image creation. Images are
+removed by exact tag without forced deletion or parent pruning. Unrelated
+images, manual tags, volumes, containers, application state, and backups are
+outside the image cleanup scope.
+
+Unused Docker build cache is pruned toward a **4 GB** retention target using
+`docker builder prune --all --force --keep-storage 4GB`. Active or image-shared
+layers can keep reported cache above that target; it is not a filesystem quota.
+The next build may take longer when previously cached intermediate layers have
+been retired. No Docker daemon restart is required.
+
+To keep an additional rollback release, add its full commit SHA to the
+root-managed `/etc/countyiq/retained-releases.txt`, one per line. Its saved
+release receipt and three matching image tags must exist. Comments are allowed.
+
+Read-only inspection and service verification:
+
+```bash
+sudo /opt/countyiq-monitoring/.venv/bin/python /opt/countyiq-monitoring/retention.py
+systemctl list-timers countyiq-docker-retention.timer
+systemctl status countyiq-docker-retention.service
+journalctl -u countyiq-docker-retention.service --since '1 day ago'
+```
+
+The R2 capacity panel divides the `bucket="total"` byte series by the configured
+guard limit using `ignoring(bucket)`. The limit metric has no bucket label;
+ordinary vector matching previously discarded the result. A real PromQL
+regression verifies the percentage and preserves no-data behavior when the
+limit is absent. This panel describes the configured storage guard limit, not
+the provider's free allowance.
+
+The first authorized retention run completed successfully at
+`2026-09-08T16:37:04Z`, retiring 53 old application image tags and reclaiming
+33,084,231,680 filesystem bytes (30.8 GiB). Root usage dropped to 32%, with about
+50 GiB available. Docker reported 10 remaining images and 4.849 GB of build
+cache. All six containers remained running, and current/previous release image
+identities were verified again after cleanup. The R2 query returned 7.91 GB of
+20 GB configured capacity (39.5%).
 
 ## Validation
 

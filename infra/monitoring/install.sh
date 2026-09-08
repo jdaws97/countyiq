@@ -56,7 +56,7 @@ tar -xzf "$CACHE_DIR/uv-$UV_VERSION.tar.gz" -C "$temporary"
 install -m 755 "$temporary/uv-x86_64-unknown-linux-gnu/uv" "$INSTALL_DIR/bin/uv"
 
 if [ "$SOURCE_DIR" != "$INSTALL_DIR" ]; then
-    for filename in pyproject.toml uv.lock collect.py probes.py config.alloy; do
+    for filename in pyproject.toml uv.lock collect.py probes.py retention.py config.alloy; do
         install -m 644 "$SOURCE_DIR/$filename" "$INSTALL_DIR/$filename"
     done
 fi
@@ -78,6 +78,7 @@ for unit in "$SOURCE_DIR"/systemd/*; do
 done
 systemctl daemon-reload
 systemctl enable --now countyiq-monitor-fast.timer countyiq-monitor-slow.timer countyiq-monitor-storage.timer
+systemctl enable --now countyiq-docker-retention.timer
 systemctl start countyiq-monitor@fast.service countyiq-monitor@slow.service countyiq-monitor@storage.service
 
 if [ -f /etc/countyiq/monitoring.env ]; then

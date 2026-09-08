@@ -74,9 +74,12 @@ Credential boundaries:
 - External runtime images and Dockerfile bases are pinned by digest; Dependabot
   proposes reviewed digest updates rather than silently changing a deployment.
 - Container JSON logs rotate at 10 MiB with five files per service. Commit-tagged
-  images are retained for reviewed rollback, so operators still monitor
-  `docker system df` and prune only after release receipts and rollback needs
-  have been reviewed.
+  images for the current and previous release are retained for rollback. An
+  hourly monitoring-host retention service removes older CountyIQ images after
+  a one-hour grace period and trims unused build cache toward 4 GB. It verifies
+  receipt identities, protects all container-referenced images, and shares the
+  deployment lock. See [retention operations](operations/monitoring.md#docker-retention)
+  for additional release pins and failure behavior.
 
 ## Backups And Archives
 
