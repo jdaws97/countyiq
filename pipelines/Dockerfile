@@ -1,3 +1,8 @@
+FROM python:3.11-slim@sha256:1042b61448fef4ba92d16a8c7eb4996d027568ce64792a7877fd88511e0af7c6 AS codex-cli
+
+COPY docker/install-codex.py docker/codex-release.json /opt/codex-install/
+RUN python /opt/codex-install/install-codex.py --output /usr/local/bin/codex
+
 FROM python:3.11-slim@sha256:1042b61448fef4ba92d16a8c7eb4996d027568ce64792a7877fd88511e0af7c6
 
 WORKDIR /opt/pipelines
@@ -47,6 +52,8 @@ RUN rm -f /bin/uv /bin/uvx /usr/local/bin/pip* /usr/local/bin/wheel \
     && rm -rf /usr/local/lib/python3.11/site-packages/pip* \
         /usr/local/lib/python3.11/site-packages/setuptools* \
         /usr/local/lib/python3.11/site-packages/wheel*
+
+COPY --from=codex-cli /usr/local/bin/codex /usr/local/bin/codex
 
 USER 10001:10001
 

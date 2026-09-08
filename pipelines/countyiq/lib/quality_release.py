@@ -74,6 +74,8 @@ def release_identity(pass_number: int) -> dict:
         Path(__file__).with_name("intelligence_integrity.py"),
         Path(__file__).with_name("llm_harness.py"),
         Path(__file__).with_name("pass_llm_config.py"),
+        Path(__file__).with_name("pass_subscription.py"),
+        Path(__file__).with_name("subscription_backfill.py"),
     ]
     if pass_number == 0:
         source_paths.extend(
@@ -92,6 +94,7 @@ def release_identity(pass_number: int) -> dict:
                 "intelligence_resolution.py",
                 "pass0_source.py",
                 "pass0_documents.py",
+                "source_unit_refinement.py",
             )
         )
         source_paths.extend(
@@ -167,6 +170,11 @@ def release_identity(pass_number: int) -> dict:
         key: os.environ.get(key, "").strip()
         for key in (
             f"COUNTYIQ_PASS{pass_number}_THINKING",
+            "COUNTYIQ_LLM_BACKEND",
+            f"COUNTYIQ_PASS{pass_number}_BACKEND",
+            "COUNTYIQ_CODEX_MODEL",
+            f"COUNTYIQ_PASS{pass_number}_CODEX_MODEL",
+            f"COUNTYIQ_PASS{pass_number}_CODEX_ESCALATION_MODEL",
             f"COUNTYIQ_PASS{pass_number}_MAX_TOKENS",
             f"COUNTYIQ_PASS{pass_number}_ESCALATION_MODEL",
             f"COUNTYIQ_PASS{pass_number}_ESCALATION_REASONING_EFFORT",

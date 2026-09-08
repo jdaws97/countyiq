@@ -14,6 +14,10 @@ from countyiq.lib.pass_llm_config import (
     PassSpendLimitExceeded,
     resolve_pass_harness,
 )
+from countyiq.lib.pass_subscription import (
+    start_subscription_item,
+    subscription_provenance,
+)
 from countyiq.lib.record_explanations import (
     EXPLANATION_SCHEMA,
     PROMPT_VERSION,
@@ -232,15 +236,21 @@ def run_explanations(context, database, kind: str) -> MaterializeResult:
             stop_reason = "item_limit"
             break
         try:
+            start_subscription_item(invoke)
             explanation, attempts = generate_explanation(source, config, invoke)
             counts["corrected"] += int(attempts == 2)
             result = persist_explanation(
-                database, source, explanation, config, attempts=attempts
+                database,
+                source,
+                explanation,
+                config,
+                attempts=attempts,
+                provenance=subscription_provenance(invoke),
             )
             counts["accepted" if result.accepted else "quarantined"] += 1
-        except PassSpendLimitExceeded:
-            context.log.warning("Record explanation spend limit reached")
-            stop_reason = "spend_limit"
+        except PassSpendLimitExceeded as error:
+            context.log.warning("Record explanation execution stopped: %s", error)
+            stop_reason = getattr(error, "stop_reason", "spend_limit")
             break
         except (ValueError, ValidationError) as error:
             counts["errors"] += 1

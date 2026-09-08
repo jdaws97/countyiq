@@ -32,6 +32,10 @@ from countyiq.lib.pass_llm_config import (
     PassSpendLimitExceeded,
     resolve_pass_harness,
 )
+from countyiq.lib.pass_subscription import (
+    start_subscription_item,
+    subscription_provenance,
+)
 from countyiq.lib.robots import RobotsPolicy, get_with_robots
 from countyiq.lib.source_rights import require_source_use
 
@@ -339,8 +343,17 @@ def run_municipal_evidence(
             )
             continue
         try:
+            start_subscription_item(invoke)
             reviewed = read_evidence(document, config, invoke)
-            gate = persist_evidence(database, row, document, pages, reviewed, config)
+            gate = persist_evidence(
+                database,
+                row,
+                document,
+                pages,
+                reviewed,
+                config,
+                provenance=subscription_provenance(invoke),
+            )
             counts["processed" if gate.accepted else "quarantined"] += 1
             _update_pass_status(
                 database,
@@ -351,8 +364,8 @@ def run_municipal_evidence(
                 if gate.accepted
                 else "New selection awaits contradiction resolution",
             )
-        except PassSpendLimitExceeded:
-            stop_reason = "spend_limit"
+        except PassSpendLimitExceeded as error:
+            stop_reason = getattr(error, "stop_reason", "spend_limit")
             break
         except ValueError:
             context.log.exception("Municipal source %s was not published", row["id"])

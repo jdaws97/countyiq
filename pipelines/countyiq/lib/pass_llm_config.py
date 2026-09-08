@@ -1,4 +1,4 @@
-"""Pass-level OpenRouter configuration helpers for the CountyIQ LLM pipeline."""
+"""Explicit pass execution backends and their independent runtime limits."""
 
 from __future__ import annotations
 
@@ -30,6 +30,12 @@ class PassHarnessUnavailable(RuntimeError):
 
 class PassSpendLimitExceeded(RuntimeError):
     """Raised before a call that could exceed the explicit pass budget."""
+
+
+class PassSubscriptionPaused(PassSpendLimitExceeded):
+    """A subscription run stopped without dispatching any paid fallback."""
+
+    stop_reason = "subscription_paused"
 
 
 class SpendReservation(float):
@@ -99,6 +105,21 @@ _PASS_REASONING_DEFAULTS = {
 }
 
 
+def resolve_pass_backend(pass_number: int) -> str:
+    backend = (
+        (
+            os.environ.get(f"COUNTYIQ_PASS{pass_number}_BACKEND")
+            or os.environ.get("COUNTYIQ_LLM_BACKEND")
+            or "openrouter"
+        )
+        .strip()
+        .lower()
+    )
+    if backend not in {"openrouter", "codex_subscription"}:
+        raise PassHarnessUnavailable(f"Unknown LLM execution backend: {backend}")
+    return backend
+
+
 def resolve_pass_model(pass_number: int) -> str | None:
     """Resolve the OpenRouter model slug for a pass.
 
@@ -112,6 +133,15 @@ def resolve_pass_model(pass_number: int) -> str | None:
     to shadow them, which silently replaced every evidence-backed model
     choice in any environment built from ``.env.example``.
     """
+    if resolve_pass_backend(pass_number) == "codex_subscription":
+        model = (
+            os.environ.get(f"COUNTYIQ_PASS{pass_number}_CODEX_MODEL")
+            or os.environ.get("COUNTYIQ_CODEX_MODEL")
+            or "gpt-6-astra"
+        ).strip()
+        if not model or "/" in model:
+            raise PassHarnessUnavailable("Codex requires a native model name")
+        return f"codex/subscription:{model}"
     default_model = _PASS_MODEL_DEFAULTS.get(pass_number)
     if (
         pass_number == 0
@@ -154,7 +184,10 @@ def resolve_pass_item_limit(pass_number: int) -> int | None:
     the mandatory dollar reservation ledger, rather than a second item cap,
     stops dispatch.
     """
-    if _bool_env(f"COUNTYIQ_PASS{pass_number}_BACKFILL_MODE", False):
+    subscription = resolve_pass_backend(pass_number) == "codex_subscription"
+    if not subscription and _bool_env(
+        f"COUNTYIQ_PASS{pass_number}_BACKFILL_MODE", False
+    ):
         if pass_number == 4:
             raise ValueError("Pass 4 is outside the approved backfill")
         max_cost_usd = _float_env(f"COUNTYIQ_PASS{pass_number}_MAX_COST_USD")
@@ -186,6 +219,8 @@ class PassItemBudget:
 
     @property
     def mode(self) -> str:
+        if resolve_pass_backend(self.pass_number) == "codex_subscription":
+            return "subscription_item_and_call"
         return "dollar_ceiling" if self.limit is None else "item_and_dollar"
 
     def claim(self, log, *, label: str) -> bool:
@@ -404,6 +439,8 @@ def resolve_pass_reasoning_effort(pass_number: int) -> str | None:
     value = os.environ.get(f"COUNTYIQ_PASS{pass_number}_REASONING_EFFORT")
     if value:
         return value.strip().lower() or None
+    if resolve_pass_backend(pass_number) == "codex_subscription":
+        return _PASS_REASONING_DEFAULTS.get(pass_number, "medium")
     return _PASS_REASONING_DEFAULTS.get(pass_number)
 
 
@@ -447,6 +484,19 @@ def build_pass_harness_config(
     model_path = resolve_pass_model(pass_number)
     if not model_path:
         return None
+
+    if resolve_pass_backend(pass_number) == "codex_subscription":
+        return HarnessConfig(
+            model_path=model_path,
+            max_tokens=_int_env(
+                f"COUNTYIQ_PASS{pass_number}_MAX_TOKENS", default_max_tokens
+            )
+            or default_max_tokens,
+            reasoning_effort=resolve_pass_reasoning_effort(pass_number),
+            system_prompt=system_prompt,
+            json_schema=json_schema,
+            schema_name=schema_name,
+        )
 
     thinking = resolve_pass_thinking(pass_number, default_thinking)
     max_tokens = _int_env(f"COUNTYIQ_PASS{pass_number}_MAX_TOKENS", 0) or None
@@ -502,6 +552,18 @@ def resolve_escalation_config(
     ``COUNTYIQ_PASS{N}_ESCALATION_REASONING_EFFORT`` optionally overrides
     the effort for the escalation call. Returns None when unset.
     """
+    if resolve_pass_backend(pass_number) == "codex_subscription":
+        model = os.environ.get(f"COUNTYIQ_PASS{pass_number}_CODEX_ESCALATION_MODEL")
+        if not model or not model.strip():
+            return None
+        if "/" in model:
+            raise PassHarnessUnavailable(
+                "Codex escalation requires a native model name"
+            )
+        return dataclasses.replace(
+            base,
+            model_path=f"codex/subscription:{model.strip()}",
+        )
     model = os.environ.get(f"COUNTYIQ_PASS{pass_number}_ESCALATION_MODEL")
     if not model or not model.strip():
         return None
@@ -567,6 +629,20 @@ def resolve_pass_harness(
             pass_number,
         )
         raise PassHarnessUnavailable("pass disabled or no model configured")
+
+    if resolve_pass_backend(pass_number) == "codex_subscription":
+        from countyiq.lib.pass_subscription import SubscriptionPassRunner
+
+        if pass_number in range(4):
+            from countyiq.lib.quality_release import check_quality_release
+
+            quality = check_quality_release(pass_number)
+            if not quality["ok"]:
+                raise PassHarnessUnavailable(quality["reason"])
+        runner = SubscriptionPassRunner(pass_number)
+        runner.check_login()
+        log.info("Pass %d: Codex subscription model=%s", pass_number, config.model_path)
+        return config, runner
 
     if (
         config.max_price_prompt is None
