@@ -3,6 +3,7 @@ from collections.abc import Iterator
 import psycopg2
 import pytest
 from fastapi import HTTPException
+from psycopg2.extras import Json
 
 from api.lib.development_radar import (
     SIGNAL_CAVEATS,
@@ -164,12 +165,28 @@ def test_acre_range_rejects_an_inverted_screen():
 def radar_parity_rows() -> Iterator[None]:
     """Create matching, active-plan, and ineligible rows inside one map viewport."""
     original_rows: list[tuple] = []
+    inserted_pidns: list[str] = []
     try:
         with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn, conn.cursor() as cur:
+            for pidn in (TEST_PIDN, SECOND_PIDN, OTHER_PIDN):
+                cur.execute(
+                    """
+                    INSERT INTO public.development_momentum (
+                        pidn, score, opportunity_score, site_readiness_score,
+                        has_active_plan, eligible, exclusion_reasons, signals,
+                        top_signal, signal_count, score_version, computed_at
+                    ) VALUES (%s, 60, 60, 60, FALSE, TRUE, %s, %s, 'fixture', 0, 2, NOW())
+                    ON CONFLICT (pidn) DO NOTHING
+                    """,
+                    (pidn, Json([]), Json({})),
+                )
+                if cur.rowcount:
+                    inserted_pidns.append(pidn)
             cur.execute(
                 """
                     SELECT p.pidn, p.municipality, p."class", p.acres,
-                           dm.has_active_plan, dm.eligible
+                           dm.has_active_plan, dm.eligible, dm.score,
+                           dm.opportunity_score, dm.site_readiness_score
                     FROM staging.parcels p
                     JOIN public.development_momentum dm ON dm.pidn = p.pidn
                     WHERE p.pidn = ANY(%s)
@@ -194,12 +211,18 @@ def radar_parity_rows() -> Iterator[None]:
                             WHEN pidn = %s THEN TRUE
                             ELSE FALSE
                         END,
-                        eligible = CASE WHEN pidn = %s THEN FALSE ELSE TRUE END
+                        eligible = CASE WHEN pidn = %s THEN FALSE ELSE TRUE END,
+                        score = CASE WHEN pidn = %s THEN 40 ELSE 60 END,
+                        opportunity_score = CASE WHEN pidn = %s THEN 40 ELSE 60 END,
+                        site_readiness_score = CASE WHEN pidn = %s THEN 40 ELSE 60 END
                     WHERE pidn = ANY(%s)
                     """,
                 (
                     TEST_PIDN,
                     SECOND_PIDN,
+                    OTHER_PIDN,
+                    OTHER_PIDN,
+                    OTHER_PIDN,
                     OTHER_PIDN,
                     [TEST_PIDN, SECOND_PIDN, OTHER_PIDN],
                 ),
@@ -218,6 +241,9 @@ def radar_parity_rows() -> Iterator[None]:
                     acres,
                     has_active_plan,
                     eligible,
+                    score,
+                    opportunity_score,
+                    site_readiness_score,
                 ) in original_rows:
                     cur.execute(
                         """
@@ -230,10 +256,26 @@ def radar_parity_rows() -> Iterator[None]:
                     cur.execute(
                         """
                             UPDATE public.development_momentum
-                            SET has_active_plan = %s, eligible = %s
+                            SET has_active_plan = %s,
+                                eligible = %s,
+                                score = %s,
+                                opportunity_score = %s,
+                                site_readiness_score = %s
                             WHERE pidn = %s
                             """,
-                        (has_active_plan, eligible, pidn),
+                        (
+                            has_active_plan,
+                            eligible,
+                            score,
+                            opportunity_score,
+                            site_readiness_score,
+                            pidn,
+                        ),
+                    )
+                if inserted_pidns:
+                    cur.execute(
+                        "DELETE FROM public.development_momentum WHERE pidn = ANY(%s)",
+                        (inserted_pidns,),
                     )
 
 

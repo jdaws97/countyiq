@@ -86,14 +86,14 @@ export default function WorkspaceOverview({ watches }: { watches: number }) {
       <div className="overview-scope" aria-label="Activity scope">
         <div className="section-actions">
           <button
-            className="ciq-button"
+            className={`ciq-button ${following ? 'ciq-button-primary' : 'ciq-button-quiet'}`}
             aria-pressed={following}
             onClick={() => setSearchParams({ scope: 'following' })}
           >
             Following
           </button>
           <button
-            className="ciq-button"
+            className={`ciq-button ${following ? 'ciq-button-quiet' : 'ciq-button-primary'}`}
             aria-pressed={!following}
             onClick={() => setSearchParams({ scope: 'county' })}
           >

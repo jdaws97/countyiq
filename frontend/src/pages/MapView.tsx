@@ -544,10 +544,14 @@ export default function MapView() {
         setParcelStatus('idle')
         setParcelData(null)
         setHoverInfo(null)
-        setSelectedPidn(null)
-        setPropertyReport(null)
-        setReportLoading(false)
-        setReportFailed(false)
+        // A source link can arrive without coordinates. Keep its selection
+        // while the parcel summary supplies the center for the first zoom.
+        if (!highlightPidn || userNavigatedRef.current) {
+          setSelectedPidn(null)
+          setPropertyReport(null)
+          setReportLoading(false)
+          setReportFailed(false)
+        }
       }
 
       if (debounceRef.current) {
@@ -560,7 +564,7 @@ export default function MapView() {
         }
       }, 300)
     },
-    [fetchParcels, layers],
+    [fetchParcels, highlightPidn, layers],
   )
 
   useEffect(
@@ -607,7 +611,7 @@ export default function MapView() {
     if (
       !highlightPidn ||
       userNavigatedRef.current ||
-      centeredHighlightRef.current === highlightPidn ||
+      fittedHighlightRef.current === highlightPidn ||
       !parcelData
     ) {
       return
@@ -676,7 +680,7 @@ export default function MapView() {
             parcel.lng != null
           ) {
             const fitted = {
-              ...(viewStateRef.current || viewState),
+              ...(viewStateRef.current || initialViewState),
               latitude: parcel.lat,
               longitude: parcel.lng,
               zoom: 16,
@@ -704,7 +708,7 @@ export default function MapView() {
       cancelled = true
       controller.abort()
     }
-  }, [fetchParcels, highlightPidn, selectedPidn, viewState])
+  }, [fetchParcels, highlightPidn, initialViewState, selectedPidn])
 
   const handleToggle = useCallback((id: string) => {
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, enabled: !l.enabled } : l)))
@@ -1039,11 +1043,11 @@ export default function MapView() {
             style={{
               position: 'absolute',
               top: 76,
-              right: 16,
+              left: 16,
               zIndex: 10,
               display: 'grid',
               gap: 6,
-              maxWidth: 340,
+              maxWidth: 'min(340px, calc(100% - 32px))',
               padding: 12,
               background: 'var(--bg-panel)',
               border: '1px solid var(--border)',
@@ -1054,7 +1058,17 @@ export default function MapView() {
           >
             <strong>Radar screen</strong>
             <span>
-              {radarBasis} · score {radarMinScore}+ · {radarPlanStatus} recorded linked plan
+              {radarBasis === 'readiness'
+                ? 'Site readiness'
+                : radarBasis === 'momentum'
+                  ? 'Development activity'
+                  : 'Opportunity'}{' '}
+              · score {radarMinScore}+ ·{' '}
+              {radarPlanStatus === 'none'
+                ? 'No recorded linked plan'
+                : radarPlanStatus === 'active'
+                  ? 'Has a recorded linked plan'
+                  : 'Any linked-plan status'}
               {radarMunicipality ? ` · ${radarMunicipality}` : ''}
               {radarMinAcres ? ` · ${radarMinAcres}+ acres` : ''}
               {radarMaxAcres ? ` · up to ${radarMaxAcres} acres` : ''}

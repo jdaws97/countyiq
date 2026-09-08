@@ -140,7 +140,7 @@ export function SourceContent({
         )}
         {original ? (
           <a
-            className={`ciq-button${mapped ? '' : ' ciq-button-primary'}`}
+            className={`ciq-button ${mapped ? 'ciq-button-secondary' : 'ciq-button-primary'}`}
             href={original}
             target="_blank"
             rel="noreferrer"

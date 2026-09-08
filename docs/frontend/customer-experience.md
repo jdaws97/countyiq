@@ -64,6 +64,31 @@ On phones, the featured title and investigation action precede the map. Recent
 work supports recognition. Account-specific watch and synchronization behavior
 continues to belong to the existing workspace implementation.
 
+Overview defaults to **Following** when the workspace has followed subjects;
+otherwise it starts with **Explore county**. Both scopes remain selectable.
+Following includes records matching any followed property, project, organization
+or municipality, with filtering before pagination. An empty followed result
+must stay empty. It must not silently substitute county activity. Activity links
+retain this scope, and watch changes refresh the results.
+
+Exact upcoming dates with a source citation offer an all-day calendar reminder.
+The reminder retains proposed, expected, scheduled or deadline status, the
+supporting quote and original URL. Any stated time is included in its description;
+do not invent a timezone or represent a proposal as a confirmed appointment.
+Vague and historical dates do not receive this action.
+
+Municipal coverage distinguishes collected records from reviewed records and
+shows collection/review dates when known. These counts describe collected
+documents, not completeness of all municipal activity.
+
+### Property screening
+
+Radar exposes minimum/maximum acreage and recorded active-plan status. Ordinary
+Radar views carry score, municipality, acreage, property class and plan criteria
+into the map and back to the list. Both surfaces apply the same eligibility rule.
+The map covers its visible extent and may be capped. Movers compares snapshots;
+its map link explicitly opens current scores, since the map does not plot deltas.
+
 ### Activity investigation
 
 The queue is a selection surface, not thirty expanded reports. Desktop shows the
@@ -131,6 +156,14 @@ Source absence must be visible and truthful. An original-document button should
 open the relevant page when the source provides a reliable page reference. Never
 invent a source, resolved property, project boundary, utility connection or
 confirmed date to make a page look complete.
+
+Each retained municipal excerpt can be copied with its source attribution and
+opened at its physical PDF page when reliable page metadata exists. Preserve
+the original selected wording across page boundaries. Do not derive line numbers
+from wrapped screen text. Without page metadata, provide the document and exact
+excerpt without promising a page jump. GIS evidence leads to the related property
+on the map, enabling the relevant available layer, and retains the official data
+record as a separate source action.
 
 ## Change discipline
 
