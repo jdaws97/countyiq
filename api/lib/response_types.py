@@ -442,17 +442,20 @@ class MunicipalEvidencePayload(TypedDict):
     coverage: MunicipalCoveragePayload
 
 
-class PropertyReportResponse(TypedDict):
+class ParcelSummaryResponse(TypedDict):
     parcel: ParcelPayload
     tax_delinquency: TaxDelinquencyPayload
     flood_zone: FloodZonePayload
-    soil_profile: SoilProfilePayload
     structures: ParcelStructuresPayload
-    zoning: ZoningPayload | None
     development_momentum: DevelopmentMomentumPayload | None
+    source_explanation: SourceExplanationPayload | None
+
+
+class PropertyReportResponse(ParcelSummaryResponse):
+    soil_profile: SoilProfilePayload
+    zoning: ZoningPayload | None
     parcel_brief: ParcelBriefPayload | None
     record_brief: RecordBriefPayload | None
-    source_explanation: SourceExplanationPayload | None
     related_narratives: list[CountyNarrativePayload]
     intelligence_summary: IntelligenceSummaryPayload | None
     linked_proceedings: list[LinkedProceedingPayload]

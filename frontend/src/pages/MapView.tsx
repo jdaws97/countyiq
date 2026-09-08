@@ -18,7 +18,7 @@ import type {
   ParcelFeatureCollection,
   ParcelFeatureProperties,
   PenndotProjectProperties,
-  PropertyReport,
+  ParcelSummary,
   RadarBboxItem,
   RadarBboxResponse,
   ZoningProperties,
@@ -198,7 +198,7 @@ export default function MapView() {
   const [selectedPidn, setSelectedPidn] = useState<string | null>(() =>
     searchParams.get('highlight'),
   )
-  const [propertyReport, setPropertyReport] = useState<PropertyReport | null>(null)
+  const [propertyReport, setPropertyReport] = useState<ParcelSummary | null>(null)
   const [reportLoading, setReportLoading] = useState(() => Boolean(searchParams.get('highlight')))
   const [reportFailed, setReportFailed] = useState(false)
   const panelOpen = selectedPidn !== null
@@ -599,14 +599,17 @@ export default function MapView() {
       return
     }
     let cancelled = false
-    fetch(`/api/parcels/${encodeURIComponent(selectedPidn)}`)
+    const controller = new AbortController()
+    fetch(`/api/parcels/${encodeURIComponent(selectedPidn)}/summary`, {
+      signal: controller.signal,
+    })
       .then((r) => {
         if (!r.ok) {
           throw new Error(`${r.status}`)
         }
         return r.json()
       })
-      .then((data: PropertyReport) => {
+      .then((data: ParcelSummary) => {
         if (!cancelled) {
           setPropertyReport(data)
         }
@@ -624,6 +627,7 @@ export default function MapView() {
       })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [selectedPidn])
 
@@ -1200,7 +1204,7 @@ function PropertyPanel({
   failed,
   onClose,
 }: {
-  report: PropertyReport | null
+  report: ParcelSummary | null
   loading: boolean
   failed: boolean
   onClose: () => void

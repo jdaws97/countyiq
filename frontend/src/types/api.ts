@@ -557,6 +557,16 @@ export interface PropertyReport {
   source_explanation?: SourceExplanationData | null
 }
 
+export type ParcelSummary = Pick<
+  PropertyReport,
+  | 'parcel'
+  | 'tax_delinquency'
+  | 'flood_zone'
+  | 'structures'
+  | 'development_momentum'
+  | 'source_explanation'
+>
+
 export interface MunicipalEvidenceCoverage {
   total_documents: number
   eligible_documents: number

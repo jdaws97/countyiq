@@ -25,7 +25,11 @@ from api.lib.municipal_evidence import fetch_municipal_evidence
 from api.lib.query_bounds import MAX_BBOX_RESULTS, validate_bbox
 from api.lib.record_briefs import build_record_brief
 from api.lib.source_explanations import fetch_property_explanation
-from api.lib.response_types import ParcelBboxResponse, PropertyReportResponse
+from api.lib.response_types import (
+    ParcelBboxResponse,
+    ParcelSummaryResponse,
+    PropertyReportResponse,
+)
 from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import county_metadata, open_data_source_key
 from api.lib.source_policy import require_source_use, source_use_allowed
@@ -497,9 +501,27 @@ def parcels_summary(
     }
 
 
+@router.get("/{pidn}/summary")
+def parcel_summary(pidn: str) -> ParcelSummaryResponse:
+    """Map facts without calculating the full report's soil coverage."""
+    report = _parcel_report(pidn, include_soils=False)
+    return {
+        "parcel": report["parcel"],
+        "tax_delinquency": report["tax_delinquency"],
+        "flood_zone": report["flood_zone"],
+        "structures": report["structures"],
+        "development_momentum": report["development_momentum"],
+        "source_explanation": report["source_explanation"],
+    }
+
+
 @router.get("/{pidn}")
 def parcel_detail(pidn: str) -> PropertyReportResponse:
     """Full property report card for a single parcel."""
+    return _parcel_report(pidn, include_soils=True)
+
+
+def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
     with get_cursor(snapshot=True) as cur:
         parcel_source = open_data_source_key()
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
@@ -602,17 +624,19 @@ def parcel_detail(pidn: str) -> PropertyReportResponse:
         )
         flood = cur.fetchone()
 
-        cur.execute(
-            """
-            SELECT s.*
-            FROM staging.parcels p
-            CROSS JOIN LATERAL public.parcel_soil_units(p.geom) s
-            WHERE p.pidn = %(pidn)s AND p.valid_to IS NULL
-            ORDER BY s.coverage_pct DESC, s.source_record_ids
-        """,
-            {"pidn": pidn},
-        )
-        soil_rows = cur.fetchall()
+        soil_rows = []
+        if include_soils:
+            cur.execute(
+                """
+                SELECT s.*
+                FROM staging.parcels p
+                CROSS JOIN LATERAL public.parcel_soil_units(p.geom) s
+                WHERE p.pidn = %(pidn)s AND p.valid_to IS NULL
+                ORDER BY s.coverage_pct DESC, s.source_record_ids
+                """,
+                {"pidn": pidn},
+            )
+            soil_rows = cur.fetchall()
 
         cur.execute(
             """

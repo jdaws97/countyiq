@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 
+import pytest
 from psycopg2.extras import Json
 
 from api.tests.conftest import TEST_PIDN
@@ -53,7 +54,11 @@ def append_explanation(
     return cur.fetchone()[0]
 
 
-def test_property_explanation_requires_current_raw_facts_and_source_rights(client):
+@pytest.mark.parametrize("suffix", ["", "/summary"])
+def test_property_explanation_requires_current_raw_facts_and_source_rights(
+    client, suffix
+):
+    path = f"/api/parcels/{TEST_PIDN}{suffix}"
     with writer() as cur:
         cur.execute(
             "SELECT public.property_explanation_source(%s,'york_open_data',250,500)",
@@ -63,7 +68,7 @@ def test_property_explanation_requires_current_raw_facts_and_source_rights(clien
         assert any(item["id"] == "parcel" for item in source["sources"])
         append_explanation(cur, source, headline="Current property explanation")
     assert (
-        client.get(f"/api/parcels/{TEST_PIDN}").json()["source_explanation"]["headline"]
+        client.get(path).json()["source_explanation"]["headline"]
         == "Current property explanation"
     )
     with writer() as cur:
@@ -73,9 +78,7 @@ def test_property_explanation_requires_current_raw_facts_and_source_rights(clien
         )
         previous_acres = cur.fetchone()[0]
     try:
-        assert (
-            client.get(f"/api/parcels/{TEST_PIDN}").json()["source_explanation"] is None
-        )
+        assert client.get(path).json()["source_explanation"] is None
     finally:
         with writer() as cur:
             cur.execute(
@@ -87,7 +90,7 @@ def test_property_explanation_requires_current_raw_facts_and_source_rights(clien
             "UPDATE meta.source_rights SET derived_product_allowed=FALSE WHERE source_key='york_open_data'"
         )
     try:
-        response = client.get(f"/api/parcels/{TEST_PIDN}")
+        response = client.get(path)
         assert response.status_code == 503
         assert "source_explanation" not in response.json()
     finally:

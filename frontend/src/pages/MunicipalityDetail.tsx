@@ -36,10 +36,24 @@ export default function MunicipalityDetail() {
   const coverage = useFetchJson<MunicipalEvidenceResponse>(
     name ? `/api/municipalities/${encodeURIComponent(name)}/evidence?limit=1` : null,
   )
-  const [municipality, setMunicipality] = useState<MunicipalityProfile | null>(null)
-  const [feed, setFeed] = useState<IntelligenceFeedResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    data: municipality,
+    loading,
+    error,
+  } = useFetchJson<MunicipalityProfile>(
+    name ? `/api/municipalities/${encodeURIComponent(name)}` : null,
+  )
+  const feedParams = new URLSearchParams({
+    municipality: municipality?.name ?? '',
+    since_days: '365',
+    sort: 'priority',
+    limit: '6',
+  })
+  const {
+    data: feed,
+    loading: feedLoading,
+    error: feedError,
+  } = useFetchJson<IntelligenceFeedResponse>(municipality ? `/api/feed?${feedParams}` : null)
   const [, setWatchRevision] = useState(0)
 
   useEffect(() => {
@@ -47,55 +61,6 @@ export default function MunicipalityDetail() {
     window.addEventListener('countyiq-watchlist-changed', refresh)
     return () => window.removeEventListener('countyiq-watchlist-changed', refresh)
   }, [])
-
-  useEffect(() => {
-    if (!name) {
-      return
-    }
-    const muniName = name
-    let cancelled = false
-
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const response = await fetch(`/api/municipalities/${encodeURIComponent(muniName)}`)
-        if (!response.ok) {
-          throw new Error(`Municipality request failed (${response.status})`)
-        }
-        const data: MunicipalityProfile = await response.json()
-        if (cancelled) {
-          return
-        }
-        setMunicipality(data)
-        const feedParams = new URLSearchParams({
-          municipality: data.name,
-          since_days: '365',
-          sort: 'priority',
-          limit: '6',
-        })
-        const feedResponse = await fetch(`/api/feed?${feedParams}`)
-        if (!cancelled && feedResponse.ok) {
-          setFeed((await feedResponse.json()) as IntelligenceFeedResponse)
-        }
-      } catch (loadError) {
-        console.error('Failed to load municipality profile', loadError)
-        if (!cancelled) {
-          setMunicipality(null)
-          setError('Unable to load municipality profile.')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [name])
 
   if (loading) {
     return (
@@ -108,7 +73,7 @@ export default function MunicipalityDetail() {
     return (
       <PageShell>
         <div className="error-box" role="alert">
-          {error}
+          Unable to load municipality profile.
         </div>
       </PageShell>
     )
@@ -169,7 +134,15 @@ export default function MunicipalityDetail() {
       {coverage.data?.coverage && <CoverageSummary coverage={coverage.data.coverage} />}
       <UpcomingDates events={events} />
       <Section title="Recent activity">
-        {events.length === 0 ? (
+        {feedLoading ? (
+          <div className="status-message" role="status">
+            Loading recent activity…
+          </div>
+        ) : feedError ? (
+          <div className="error-box" role="alert">
+            Recent activity is unavailable. The municipality profile is still available above.
+          </div>
+        ) : events.length === 0 ? (
           <div className="status-message">
             No feed events reference this municipality in the last year.
           </div>

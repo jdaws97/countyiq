@@ -22,7 +22,7 @@ surface is:
 | Area | Routes |
 |---|---|
 | Health and summary | `/api/health`, `/api/ready`, `/api/ops/health`, `/api/stats` |
-| Parcels | `/api/parcels/bbox`, `/api/parcels/near`, `/api/parcels/summary`, `/api/parcels/{pidn}` |
+| Parcels | `/api/parcels/bbox`, `/api/parcels/near`, `/api/parcels/summary`, `/api/parcels/{pidn}/summary`, `/api/parcels/{pidn}` |
 | Owners | `/api/owners/top`, `/api/owners/{owner_id}` |
 | Municipalities and layers | `/api/municipalities`, `/api/municipalities/{name}`, `/api/layers/{layer_name}` |
 | Conditional distress | `/api/delinquent/parcels`, `/api/delinquent/top-owners`, `/api/scores/distressed`, `/api/scores/assemblage` (not mounted by default) |
@@ -180,6 +180,11 @@ hosted on a separate production origin, set a comma-separated
 
 ## Database Connections
 
+API connections disable PostgreSQL JIT compilation at connection startup. The
+interactive serving views can spend seconds compiling queries that execute in
+milliseconds without JIT. This setting is scoped to the API pool; pipeline
+connections retain their own configuration.
+
 Each of the two Uvicorn worker processes owns a thread-safe psycopg2 pool using
 the dedicated `DATABASE_API_USER` login. That role can read the serving schemas and can write only private watchspace
 state and account identity/membership: workspace/item creation and updates, saved investigations, deletion, and notification review. These writes require verified identity and account ownership.
@@ -194,6 +199,13 @@ request. Broken connections are discarded and the pool closes during FastAPI
 shutdown. When all connections are busy, requests wait for at most
 `DATABASE_POOL_WAIT_SECONDS` (default 5) and then receive HTTP 503 instead of
 an internal-server error.
+
+Map selection uses `/api/parcels/{pidn}/summary`, which preserves the full
+report's displayed parcel, flood, structure, tax, momentum and accepted source
+explanation fields but skips its soil coverage query. The complete
+`/api/parcels/{pidn}` contract still includes detailed soils. Both routes retain
+the same source policy and explanation freshness checks. Municipality profiles
+render independently of their recent-activity feed's loading and error state.
 
 The API accepts `COUNTYIQ_TRUSTED_HOSTS` plus loopback/test hostnames required
 for internal health checks; unrestricted wildcard, URL, and path values are
