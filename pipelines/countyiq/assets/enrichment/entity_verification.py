@@ -307,7 +307,11 @@ def entity_verification(
                 # Check bounds before reuse; a previous result cannot exempt a
                 # changed input from the reviewed context limits.
                 prompt = build_entity_cluster_prompt(records)
-                if len(prompt) > MAX_DYNAMIC_PROMPT_CHARACTERS:
+                if records.get("portfolio_summary"):
+                    context_reason = (
+                        "truncated_source_inventory requires complete per-name dossiers"
+                    )
+                elif len(prompt) > MAX_DYNAMIC_PROMPT_CHARACTERS:
                     context_reason = (
                         f"dynamic_prompt_characters={len(prompt)} "
                         f"limit={MAX_DYNAMIC_PROMPT_CHARACTERS}"
