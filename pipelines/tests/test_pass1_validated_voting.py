@@ -254,8 +254,13 @@ def test_anchored_deterministic_resolution_needs_no_paid_trial_quorum(
     records = deepcopy(RECORDS)
     records["candidate_names"] = ["ALPHA LLC", "ALPHA, L.L.C."]
     records["parcels"] = [records["parcels"][0]]
+    records["parcels"][0]["mail_addr_full"] = "10 MAIN ST, YORK PA 17401"
     records["corporate_entities"] = [
-        {"entity_name": "ALPHA LLC", "entity_number": "123"}
+        {
+            "entity_name": "ALPHA LLC",
+            "entity_number": "123",
+            "office_address": "10 Main St, York, PA, 17401",
+        }
     ]
     calls, result = _run(
         monkeypatch, [], records=records, paid_available=paid_available
@@ -270,6 +275,20 @@ def test_anchored_deterministic_resolution_needs_no_paid_trial_quorum(
 
 def test_disabled_paid_path_does_not_guess_unanchored_identity(monkeypatch):
     calls, result = _run(monkeypatch, [], paid_available=False)
+    assert calls["invoke"] == []
+    assert calls["graphs"] == []
+    assert result.metadata["clusters_deferred_scope"].value == 1
+
+
+def test_disabled_paid_path_does_not_attach_unconnected_parcels_to_a_registration(
+    monkeypatch,
+):
+    records = deepcopy(RECORDS)
+    records["corporate_entities"] = [
+        {"entity_name": "ALPHA LLC", "entity_number": "123"},
+        {"entity_name": "BETA LLC", "entity_number": "456"},
+    ]
+    calls, result = _run(monkeypatch, [], records=records, paid_available=False)
     assert calls["invoke"] == []
     assert calls["graphs"] == []
     assert result.metadata["clusters_deferred_scope"].value == 1
