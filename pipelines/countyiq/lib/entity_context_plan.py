@@ -11,15 +11,19 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass
 
+from countyiq.lib.intelligence_common import compute_input_hash
 from countyiq.lib.pass1_entity_verification import (
+    CANDIDATE_CLUSTERS_QUERY,
+    ENTITY_REGISTRATION_ROWS_QUERY,
     _legal_name_key,
     _registered_entity_type,
     build_deterministic_entity_resolution,
     build_entity_cluster_prompt,
+    gather_cluster_records,
     stable_cluster_key,
 )
 
-PLAN_VERSION = "bounded-entity-dossiers-v1"
+PLAN_VERSION = "bounded-entity-dossiers-v2"
 SOURCE_KINDS = (
     "parcels",
     "tax_claims",
@@ -31,6 +35,10 @@ SOURCE_KINDS = (
 
 class EntityContextLimit(ValueError):
     """A complete comparison cannot fit the reviewed context bounds."""
+
+
+class EntitySourceChanged(ValueError):
+    """The original parent no longer matches a complete candidate component."""
 
 
 @dataclass(frozen=True)
@@ -45,6 +53,7 @@ class EntityReviewUnit:
 class EntityContextPlan:
     parent_key: str
     source: dict
+    manifest: dict
     units: tuple[EntityReviewUnit, ...]
     anchors: dict[str, tuple[str, str]]
     deterministic_partition: dict | None
@@ -71,6 +80,11 @@ def combine_name_dossiers(dossiers: dict[str, dict], names) -> dict:
     records["source_inventory_hashes"] = {
         name: dossiers[name]["source_inventory_hash"] for name in names
     }
+    records["identity_inventories"] = [
+        {"candidate_name": name, "inventory": dossiers[name]["identity_inventory"]}
+        for name in names
+        if "identity_inventory" in dossiers[name]
+    ]
     return records
 
 
@@ -93,7 +107,7 @@ def make_review_unit(
         )
     unit_key = stable_cluster_key(list(names)).removeprefix("entity_cluster:")
     return EntityReviewUnit(
-        key=f"{parent_key}:{PLAN_VERSION}:{unit_key}",
+        key=f"{parent_key}:{PLAN_VERSION}:{unit_key}:{compute_input_hash(source)}",
         names=names,
         source=source,
         prompt=prompt,
@@ -232,6 +246,18 @@ def build_context_plan(
         raise ValueError("Candidate edges must contain two distinct names")
     if {name for edge in edges for name in edge} != selected:
         raise ValueError("Candidate edges must account for every component name")
+    adjacent = defaultdict(set)
+    for left, right in edges:
+        adjacent[left].add(right)
+        adjacent[right].add(left)
+    reached = {names[0]}
+    pending = [names[0]]
+    while pending:
+        for neighbor in adjacent[pending.pop()] - reached:
+            reached.add(neighbor)
+            pending.append(neighbor)
+    if reached != selected:
+        raise EntitySourceChanged("The candidate parent has split into components")
     anchors, registration_evidence = _registration_anchors(
         names, dossiers, registration_rows
     )
@@ -274,15 +300,47 @@ def build_context_plan(
 
     source = combine_name_dossiers(dossiers, names)
     source["name_dossiers"] = {name: dossiers[name] for name in names}
-    source["review_plan"] = {
+    source["candidate_edges"] = edges
+    source["registration_evidence"] = registration_evidence
+    manifest = {
         "version": PLAN_VERSION,
         "parent_key": parent_key,
         "max_candidate_names": max_names,
         "max_dynamic_prompt_characters": max_characters,
-        "candidate_edges": edges,
-        "registration_evidence": registration_evidence,
         "resolved_edges": resolved_edges,
         "units": [{"key": unit.key, "names": unit.names} for unit in units],
     }
     deterministic = build_deterministic_entity_resolution(source, sorted(anchors))
-    return EntityContextPlan(parent_key, source, units, anchors, deterministic)
+    return EntityContextPlan(
+        parent_key, source, manifest, units, anchors, deterministic
+    )
+
+
+def gather_context_plan(cursor, names, *, max_names=40, max_characters=64_000):
+    """Gather inside a caller-owned snapshot; reject changed parent boundaries."""
+    selected = set(names)
+    cursor.execute(CANDIDATE_CLUSTERS_QUERY)
+    edges = []
+    for row in cursor.fetchall():
+        left, right = row["name_a"], row["name_b"]
+        if left not in selected and right not in selected:
+            continue
+        if left not in selected or right not in selected:
+            raise EntitySourceChanged(
+                "The candidate parent has joined another component"
+            )
+        edges.append((left, right))
+    cursor.execute(ENTITY_REGISTRATION_ROWS_QUERY)
+    registrations = [dict(row) for row in cursor.fetchall()]
+    dossiers = {
+        name: gather_cluster_records(cursor, [name], stable_source_snapshot=True)
+        for name in sorted(selected)
+    }
+    return build_context_plan(
+        names,
+        edges,
+        dossiers,
+        registrations,
+        max_names=max_names,
+        max_characters=max_characters,
+    )

@@ -5,8 +5,11 @@ from copy import deepcopy
 import pytest
 from countyiq.lib.entity_context_plan import (
     EntityContextLimit,
+    EntitySourceChanged,
     build_context_plan,
     combine_name_dossiers,
+    gather_context_plan,
+    make_review_unit,
 )
 from countyiq.lib.intelligence_integrity import content_hash
 from countyiq.lib.pass1_entity_verification import (
@@ -54,6 +57,13 @@ def test_large_connected_component_keeps_one_parent_and_covers_every_edge():
     )
     assert content_hash(plan.source) == content_hash(reversed_plan.source)
 
+    smaller_contexts = build_context_plan(names, edges, dossiers, [], max_names=20)
+    assert len(smaller_contexts.units) > len(plan.units)
+    assert content_hash(plan.manifest) != content_hash(smaller_contexts.manifest)
+    # A planning change must not pretend the evidence changed and bypass the
+    # same-source contradiction review for a later identity decision.
+    assert content_hash(plan.source) == content_hash(smaller_contexts.source)
+
 
 def test_exact_registered_spellings_and_distinct_numbers_leave_unknown_edges_for_review():
     names = ["ALPHA LLC", "ALPHA, LLC", "BETA LLC", "UNKNOWN OWNER"]
@@ -67,7 +77,7 @@ def test_exact_registered_spellings_and_distinct_numbers_leave_unknown_edges_for
     edges = [(names[0], name) for name in names[1:]]
     plan = build_context_plan(names, edges, dossiers, registrations)
     assert set(plan.anchors) == {"ALPHA LLC", "ALPHA, LLC", "BETA LLC"}
-    assert {row["reason"] for row in plan.source["review_plan"]["resolved_edges"]} == {
+    assert {row["reason"] for row in plan.manifest["resolved_edges"]} == {
         "distinct_registration_numbers",
         "exact_registered_legal_spelling",
     }
@@ -91,9 +101,9 @@ def test_registration_name_history_outside_the_component_disables_the_shortcut()
     ]
     plan = build_context_plan(names, [names], dossiers, registrations)
     assert "ALPHA LLC" not in plan.anchors
-    assert plan.source["review_plan"]["resolved_edges"] == []
+    assert plan.manifest["resolved_edges"] == []
     assert len(plan.units) == 1
-    assert registrations[1] in plan.source["review_plan"]["registration_evidence"]
+    assert registrations[1] in plan.source["registration_evidence"]
 
 
 def test_registration_index_cannot_override_conflicting_dossier_evidence():
@@ -123,7 +133,7 @@ def test_a_matching_index_number_does_not_hide_another_number_in_the_dossier():
     ]
     plan = build_context_plan(names, [names], dossiers, registrations)
     assert "ALPHA LLC" not in plan.anchors
-    assert plan.source["review_plan"]["resolved_edges"] == []
+    assert plan.manifest["resolved_edges"] == []
     assert len(plan.units) == 1
     assert set(plan.units[0].names) == set(names)
 
@@ -134,6 +144,26 @@ def test_uncovered_candidate_name_is_rejected_before_any_review():
         build_context_plan(
             names, [("A", "B")], {name: dossier(name) for name in names}, []
         )
+
+
+def test_a_parent_that_has_split_cannot_be_reviewed_as_one_current_component():
+    names = ["A", "B", "C", "D"]
+    with pytest.raises(EntitySourceChanged, match="split"):
+        build_context_plan(
+            names, [("A", "B"), ("C", "D")], {name: dossier(name) for name in names}, []
+        )
+
+
+def test_a_parent_that_has_joined_another_cannot_publish_its_old_subset():
+    class Cursor:
+        def execute(self, query):
+            pass
+
+        def fetchall(self):
+            return [{"name_a": "A", "name_b": "B"}, {"name_a": "B", "name_b": "C"}]
+
+    with pytest.raises(EntitySourceChanged, match="joined"):
+        gather_context_plan(Cursor(), ["A", "B"])
 
 
 def test_an_overlarge_pair_is_deferred_without_truncating_its_records():
@@ -183,6 +213,17 @@ def test_dossier_detail_is_stable_and_omitted_rows_still_change_its_source_hash(
     assert build_entity_cluster_prompt(original) == build_entity_cluster_prompt(revised)
     assert original["source_inventory_hash"] != revised["source_inventory_hash"]
 
+    names = ["OWNER", "PEER"]
+    parent_key = stable_cluster_key(names)
+    first_unit = make_review_unit(
+        parent_key, {"OWNER": original, "PEER": dossier("PEER")}, names
+    )
+    revised_unit = make_review_unit(
+        parent_key, {"OWNER": revised, "PEER": dossier("PEER")}, names
+    )
+    assert first_unit.prompt == revised_unit.prompt
+    assert first_unit.key != revised_unit.key
+
 
 def test_one_owners_portfolio_cannot_consume_another_owners_detail_allowance():
     dossiers = {}
@@ -200,3 +241,24 @@ def test_one_owners_portfolio_cannot_consume_another_owners_detail_allowance():
     assert "PORTFOLIO SUMMARY FOR candidate:LARGE OWNER" in prompt
     assert "PORTFOLIO SUMMARY FOR candidate:OTHER OWNER" in prompt
     assert prompt.count("Total parcels: 51 (showing 50 above)") == 2
+
+
+def test_the_last_parcels_conflicting_mailing_address_is_visible_in_the_prompt():
+    rows = [
+        {"pidn": f"{number:03d}", "owner_full": "OWNER", "mail_addr_full": "10 MAIN ST"}
+        for number in range(51)
+    ]
+    rows[-1]["mail_addr_full"] = "999 OTHER ST"
+    records = gather_cluster_records(
+        SourceCursor(rows), ["OWNER"], stable_source_snapshot=True
+    )
+    assert not any(
+        row["mail_addr_full"] == "999 OTHER ST" for row in records["parcels"]
+    )
+    assert "999 OTHER ST" in build_entity_cluster_prompt(records)
+    combined = combine_name_dossiers({"OWNER": records}, ["OWNER"])
+    assert "999 OTHER ST" in build_entity_cluster_prompt(combined)
+    assert records["identity_inventory"]["parcels_by_mailing_address"][-1] == {
+        "mailing_address": "999 OTHER ST",
+        "pidns": ["050"],
+    }

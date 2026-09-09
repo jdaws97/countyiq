@@ -444,6 +444,20 @@ def _current_source_hash(
         from countyiq.lib.pass1_entity_verification import gather_cluster_records
 
         names = _candidate_names(prior, challenger)
+        bounded = (challenger.get("payload") or {}).get("bounded_review") or (
+            prior.get("payload") or {}
+        ).get("bounded_review")
+        if names and bounded:
+            from countyiq.lib.entity_context_plan import gather_context_plan
+
+            manifest = bounded["plan"]
+            current = gather_context_plan(
+                cur,
+                names,
+                max_names=manifest["max_candidate_names"],
+                max_characters=manifest["max_dynamic_prompt_characters"],
+            )
+            return compute_input_hash(current.source)
         return compute_input_hash(gather_cluster_records(cur, names)) if names else ""
 
     if kind == "signal_validation":

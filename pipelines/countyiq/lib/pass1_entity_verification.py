@@ -840,6 +840,25 @@ def build_entity_cluster_prompt(records: dict) -> str:
             )
         )
 
+    identity_inventories = list(records.get("identity_inventories", []))
+    if records.get("identity_inventory"):
+        identity_inventories.append(
+            {
+                "candidate_name": candidate_names[0],
+                "inventory": records["identity_inventory"],
+            }
+        )
+    for item in identity_inventories:
+        sections.append(
+            "COMPLETE IDENTITY INDEX FOR "
+            f"candidate:{item['candidate_name']}:\n"
+            "The index includes records omitted from the detail above. Different "
+            "mailing addresses or unexplained PIDNs can indicate unresolved "
+            "identity within one recorded name. Index-only identifiers are for "
+            "comparison; linked_records must cite identifiers in the detail sections.\n"
+            + json.dumps(item["inventory"], sort_keys=True, default=str)
+        )
+
     combined_sections = "\n\n".join(sections) if sections else "(no records)"
 
     # Returns only the dynamic user block; the static instructions travel
@@ -1190,6 +1209,21 @@ def gather_cluster_records(
         result["source_inventory_hash"] = hashlib.sha256(
             json.dumps(inventory, sort_keys=True, default=str).encode()
         ).hexdigest()
+        if (
+            len(all_parcels) > _MAX_PARCELS_DETAIL
+            or len(all_tax) > _MAX_TAX_CLAIMS_DETAIL
+        ):
+            mailing_groups = {}
+            for row in all_parcels:
+                address = str(row.get("mail_addr_full") or "").strip()
+                mailing_groups.setdefault(address, set()).add(str(row["pidn"]))
+            result["identity_inventory"] = {
+                "parcels_by_mailing_address": [
+                    {"mailing_address": address or None, "pidns": sorted(pidns)}
+                    for address, pidns in sorted(mailing_groups.items())
+                ],
+                "tax_claim_pidns": sorted({str(row["pidn"]) for row in all_tax}),
+            }
 
     # For large entities, add a portfolio summary so the LLM knows the
     # full scale even though the detail is truncated.
