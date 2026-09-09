@@ -127,12 +127,12 @@ def _registration_anchors(names, dossiers, registration_rows):
         # evidence. It cannot supply this exact-spelling registration shortcut.
         if len(keys_by_number[number]) != 1:
             continue
-        matching_rows = [
-            row
+        dossier_numbers = {
+            str(row["entity_number"]).strip()
             for row in corporate_by_key[key]
-            if str(row.get("entity_number") or "").strip() == number
-        ]
-        if matching_rows:
+            if str(row.get("entity_number") or "").strip()
+        }
+        if dossier_numbers == {number}:
             anchors[name] = (key, number)
 
     selected_keys = {_legal_name_key(name) for name in names}

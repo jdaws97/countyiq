@@ -108,6 +108,26 @@ def test_registration_index_cannot_override_conflicting_dossier_evidence():
     assert len(plan.units) == 1
 
 
+def test_a_matching_index_number_does_not_hide_another_number_in_the_dossier():
+    names = ["ALPHA LLC", "BETA LLC"]
+    dossiers = {
+        "ALPHA LLC": dossier("ALPHA LLC", "100"),
+        "BETA LLC": dossier("BETA LLC", "200"),
+    }
+    dossiers["ALPHA LLC"]["corporate_entities"].append(
+        {"entity_name": "ALPHA LLC", "entity_number": "999", "status": "Active"}
+    )
+    registrations = [
+        {"entity_name": "ALPHA LLC", "entity_number": "100"},
+        {"entity_name": "BETA LLC", "entity_number": "200"},
+    ]
+    plan = build_context_plan(names, [names], dossiers, registrations)
+    assert "ALPHA LLC" not in plan.anchors
+    assert plan.source["review_plan"]["resolved_edges"] == []
+    assert len(plan.units) == 1
+    assert set(plan.units[0].names) == set(names)
+
+
 def test_uncovered_candidate_name_is_rejected_before_any_review():
     names = ["A", "B", "C"]
     with pytest.raises(ValueError, match="account for every component name"):
