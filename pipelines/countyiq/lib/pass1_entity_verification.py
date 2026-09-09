@@ -1142,16 +1142,18 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
         owner_counts = {}
         class_counts = {}
         muni_counts = {}
-        for p in all_parcels:
-            owner_counts[p.get("owner_full", "?")] = (
-                owner_counts.get(p.get("owner_full", "?"), 0) + 1
-            )
-            class_counts[p.get("class", "?")] = (
-                class_counts.get(p.get("class", "?"), 0) + 1
-            )
-            muni_counts[p.get("municipality", "?")] = (
-                muni_counts.get(p.get("municipality", "?"), 0) + 1
-            )
+        for parcel in all_parcels:
+            for field, counts in (
+                ("owner_full", owner_counts),
+                ("class", class_counts),
+                ("municipality", muni_counts),
+            ):
+                label = parcel.get(field)
+                if label is None:
+                    # SQL NULL and an absent value are the same unknown bucket.
+                    # Mixed None/string keys cannot be sorted for source hashing.
+                    label = "?"
+                counts[label] = counts.get(label, 0) + 1
 
         result["portfolio_summary"] = {
             "total_parcels": len(all_parcels),
