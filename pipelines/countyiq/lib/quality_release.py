@@ -153,6 +153,7 @@ def release_identity(pass_number: int) -> dict:
             Path(__file__).parents[1] / "assets/enrichment/entity_verification.py"
         )
         source_paths.append(Path(__file__).with_name("entity_types.py"))
+        source_paths.append(Path(__file__).with_name("intelligence_resolution.py"))
     if pass_number in (2, 3):
         source_paths.extend(
             Path(__file__).with_name(name)

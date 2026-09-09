@@ -45,6 +45,7 @@ from countyiq.lib.pass1_entity_verification import (
     ENTITY_CANDIDATE_PAIRS_READY_QUERY,
     ENTITY_REGISTRATION_ROWS_QUERY,
     ENTITY_VERIFICATION_SYSTEM_PROMPT,
+    PARTITION_VOTING_VERSION,
     PROMPT_VERSION,
     build_deterministic_entity_resolution,
     build_entity_cluster_prompt,
@@ -53,6 +54,7 @@ from countyiq.lib.pass1_entity_verification import (
     merge_entity_trial_partitions,
     parse_entity_verification_output,
     priority_entity_names,
+    project_entity_relationships,
     resolve_pass1_scope,
     select_pass1_clusters,
     select_pass1_work,
@@ -322,7 +324,7 @@ def entity_verification(
                 DETERMINISTIC_VARIANT_VERSION
                 if deterministic_resolution is not None
                 else (
-                    f"{config.model_path}|trials={n_trials}|"
+                    f"{config.model_path}|voting={PARTITION_VOTING_VERSION}|trials={n_trials}|"
                     f"escalation={escalation_config.model_path if escalation_config else ''}"
                 )
             )
@@ -830,7 +832,7 @@ def _replace_cluster_entities(
         )
 
         inserted = 0
-        for entity in entities:
+        for entity in project_entity_relationships(entities):
             linked_records = entity.get("linked_records", {})
             cur.execute(
                 """

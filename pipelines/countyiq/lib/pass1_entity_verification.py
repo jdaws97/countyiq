@@ -23,6 +23,32 @@ from countyiq.lib.entity_types import is_organization_name
 from countyiq.lib.pass_schemas import PASS1_ENTITY_VERIFICATION_SCHEMA
 from countyiq.lib.prompt_prefix import schema_block
 
+
+def project_entity_relationships(entities: list[dict]) -> list[dict]:
+    """Bind graph edges only to identities accepted in this partition.
+
+    A cited observation about an unresolved candidate is still retained in the
+    immutable inference. Publishing it as an owner edge would lose that source
+    qualification and could link a different owner with the same printed name.
+    """
+    canonical_by_name = {}
+    for entity in entities:
+        canonical = entity["canonical_name"]
+        for name in [canonical, *entity.get("member_names", [])]:
+            canonical_by_name[name] = canonical
+
+    projected = []
+    for entity in entities:
+        relationships = []
+        for relationship in entity.get("relationships", []):
+            target = canonical_by_name.get(relationship.get("related_entity"))
+            if target is None or target == entity["canonical_name"]:
+                continue
+            relationships.append({**relationship, "related_entity": target})
+        projected.append({**entity, "relationships": relationships})
+    return projected
+
+
 # =============================================================================
 # SQL CONSTANTS
 # =============================================================================
@@ -553,6 +579,11 @@ RULES FOR NAMES, RELATIONSHIPS, AND CITATIONS:
   One owner-of-record on one parcel can be retained without inventing a personal
   identifier; this does not establish that every other record with that name
   belongs to the same person or organization.
+  A corporate registration number connects the corporate rows that print it.
+  It does not connect a same-name parcel, tax, or license record that lacks it.
+  Independently substantiate each record's connection to that registration;
+  an address match on one parcel cannot cover other parcels with unconnected
+  addresses merely because their owner names match a registered name variant.
 - If identity remains unresolved within one candidate name, put that name in
   a single-name abstention and omit it from entities. The output contract cannot
   split one candidate name into multiple entities. Do not assign the ambiguous
@@ -982,7 +1013,11 @@ _MAX_TAX_CLAIMS_DETAIL = 30
 # only when a strict majority of trials grouped that pair. Merges without
 # majority support are demoted to abstentions ("disagreement → abstain"),
 # never resolved by guessing.
+# A self-pair records whether the candidate was assigned to an entity at all.
+# This distinguishes a supported singleton from a within-name abstention.
 # =============================================================================
+
+PARTITION_VOTING_VERSION = "pair-and-membership-majority-v2"
 
 
 def _entity_member_names(entity: dict, cluster_names: list[str]) -> set[str]:
@@ -1010,7 +1045,7 @@ def _entity_member_names(entity: dict, cluster_names: list[str]) -> set[str]:
 def _trial_pair_verdicts(
     parsed: dict, cluster_names: list[str]
 ) -> dict[tuple[str, str], bool]:
-    """Map each cluster-name pair to this trial's same-entity verdict."""
+    """Map pairs to merge verdicts and self-pairs to identity assignments."""
     groups = [
         _entity_member_names(e, cluster_names)
         for e in parsed.get("entities", [])
@@ -1019,6 +1054,7 @@ def _trial_pair_verdicts(
     same: dict[tuple[str, str], bool] = {}
     ordered = sorted(cluster_names)
     for i, a in enumerate(ordered):
+        same[(a, a)] = any(a in group for group in groups)
         for b in ordered[i + 1 :]:
             same[(a, b)] = any(a in g and b in g for g in groups)
     return same
@@ -1029,12 +1065,12 @@ def entity_trial_majority_decided(
     cluster_names: list[str],
     target_trials: int,
 ) -> bool:
-    """Return whether future trials can no longer change any pair verdict.
+    """Return whether further trials can change any merge or assignment verdict.
 
     For the default target of three trials, two identical pair partitions are
-    already a strict majority. Skipping the third call in that case preserves
-    the exact merge/no-merge decision while saving one inference call. If any
-    pair disagrees, the deciding trial still runs.
+    already a strict majority when they also agree on which candidates have
+    supported identities. A singleton versus abstention disagreement requires
+    the deciding trial even when all cross-name merge verdicts agree.
     """
     if target_trials <= 1:
         return bool(trials_parsed)
@@ -1061,12 +1097,12 @@ def merge_entity_trial_partitions(
     *,
     target_trials: int | None = None,
 ) -> dict:
-    """Aggregate N parsed Pass 1 runs by majority pair voting.
+    """Aggregate validated runs by majority merge and identity-assignment votes.
 
     The representative trial (highest agreement with the majority pair
     verdicts) supplies the entity payloads; any of its entities that
-    contain a pair WITHOUT strict-majority support is demoted to an
-    abstention. No merge beyond what a trial itself proposed is created.
+    contain a merge or identity assignment WITHOUT strict-majority support is
+    demoted to an abstention. No entity beyond a trial's proposal is created.
 
     Only source-validated trials may be supplied. Production passes the
     configured trial count so failed calls cannot lower the merge threshold.
@@ -1126,7 +1162,7 @@ def merge_entity_trial_partitions(
         unsupported = [
             (a, b)
             for i, a in enumerate(members)
-            for b in members[i + 1 :]
+            for b in members[i:]
             if not majority.get((a, b), False)
         ]
         if unsupported:
@@ -1134,8 +1170,9 @@ def merge_entity_trial_partitions(
                 {
                     "names": members,
                     "reason": (
-                        f"cross-trial disagreement: {len(unsupported)} pair(s) in this "
-                        f"grouping lacked majority support across {target} configured "
+                        f"cross-trial disagreement: {len(unsupported)} merge or "
+                        f"identity-assignment verdict(s) lacked majority support "
+                        f"across {target} configured "
                         f"trials ({n} validated) "
                         "[Evidence: trial:voting]"
                     ),

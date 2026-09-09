@@ -17,11 +17,27 @@ an already connected parcel. Licenses, proceedings, truncated portfolios and
 unconnected records go to the existing model review. Uncertainty does not
 trigger a paid fallback when model execution is disabled.
 
-The deterministic execution version changes, while the LLM prompt and ordinary
-source snapshots remain unchanged. Existing results that lose eligibility must
-receive actual source review. Changed identity decisions go through the normal
-same-source contradiction process; neither old inference rows nor immutable
-model receipts are rewritten.
+The model review found the same gap in non-deterministic outputs: a registration
+identifier printed only in corporate rows was being used to attach other parcels
+with unconnected addresses. The prompt now explicitly requires an independently
+supported connection for those records. Its version changes, while ordinary
+source snapshots remain unchanged. Existing results must receive actual source
+review. Changed identity decisions go through the normal same-source
+contradiction process; old inference rows and model receipts remain immutable.
+
+Voting now counts whether each candidate is assigned to an entity, in addition
+to cross-name merge decisions. Two trials that agree not to merge names can
+still disagree about a singleton's identity. That disagreement requires a third
+trial, and a failed third call cannot create majority support for the singleton.
+The execution hash includes the voting version. Archived responses retain their
+actual prompts and can be reused only for identical requests.
+
+Both ordinary publication and contradiction resolution project relationships
+only when their target belongs to an accepted entity in the same partition.
+Member aliases resolve to that entity's canonical name; internal edges are
+omitted. Qualified observations about unresolved candidates remain in the
+immutable inference without becoming owner links in downstream context. The
+Pass 1 quality identity now includes the contradiction projector's source file.
 
 The first production audit found 69 active deterministic partitions, of which
 62 require model review under this intentionally narrow rule. That is a review
@@ -29,8 +45,10 @@ queue, not a count of proven identity errors: source review may establish
 ordinary address abbreviations or other explicit connections. The backfill is
 paused at batch boundaries before Pass 2 consumes the refreshed identities.
 
-Validation: 1,971 non-integration pipeline tests passed; 137 integration tests
+Validation: 1,977 non-integration pipeline tests passed; 137 integration tests
 were deselected. Changed Python files passed Ruff formatting and lint checks.
 Regression coverage includes unconnected addresses, street-number separation,
 different five-digit ZIPs, claims without a connected parcel, truncated
-portfolios, license/applicant records, and disabled model execution.
+portfolios, license/applicant records, disabled model execution, singleton vote
+disagreement, failed deciding calls, and relationship projection through both
+publication paths without mutating the inference payload.

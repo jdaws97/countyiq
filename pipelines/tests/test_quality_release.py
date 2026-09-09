@@ -58,6 +58,7 @@ def test_quality_receipts_fail_closed_on_bad_shape(tmp_path):
         ((0,), "public_proceedings.py"),
         ((2, 3), "066_parcel_spatial_facts.py"),
         ((1,), "entity_verification.py"),
+        ((0, 1), "intelligence_resolution.py"),
         ((0, 1, 2, 3), "llm_harness.py"),
         ((0, 1, 2, 3), "pass_llm_config.py"),
     ],
