@@ -257,7 +257,7 @@ def stable_cluster_key(cluster_names: list[str]) -> str:
     return f"entity_cluster:{digest}"
 
 
-DETERMINISTIC_VARIANT_VERSION = "exact-pa-dos-legal-partition-v2"
+DETERMINISTIC_VARIANT_VERSION = "exact-pa-dos-corroborated-partition-v3"
 
 
 def _legal_name_key(name: str) -> str:
@@ -281,6 +281,56 @@ def _registered_entity_type(legal_key: str) -> str | None:
     return None
 
 
+def _exact_address_key(value) -> str:
+    """Match printed address tokens and the five-digit ZIP, without geocoding."""
+    value = str(value or "").upper().replace(",", " ").replace(".", "")
+    value = re.sub(r"\s+", " ", value).strip()
+    value = re.sub(r"\b([A-Z]{2} \d{5})-\d{4}$", r"\1", value)
+    if not re.search(r"\S+\s+\S+\s+[A-Z]{2}\s+\d{5}$", value):
+        return ""
+    return value
+
+
+def _registration_record_refs(records, members, corporate_rows) -> list[str] | None:
+    """Require every non-registration record to connect to a registration.
+
+    This intentionally narrow shortcut leaves address abbreviations, changed
+    addresses, licenses and proceeding roles to the source reviewer. An exact
+    legal name does not attach an otherwise unconnected parcel to a registry row.
+    """
+    if records.get("portfolio_summary") or records.get("portfolio_summaries"):
+        return None
+    for kind, fields in (
+        ("plcb_licenses", ("licensee", "premises_owner")),
+        ("proceedings", ("applicant_name",)),
+    ):
+        for row in records.get(kind, []):
+            if any(row.get(field) in members for field in fields):
+                return None
+    offices = {
+        address
+        for row in corporate_rows
+        if (address := _exact_address_key(row.get("office_address")))
+    }
+    parcels = [
+        row for row in records.get("parcels", []) if row.get("owner_full") in members
+    ]
+    if any(
+        _exact_address_key(row.get("mail_addr_full")) not in offices for row in parcels
+    ):
+        return None
+    parcel_ids = {str(row["pidn"]) for row in parcels}
+    claims = [
+        row for row in records.get("tax_claims", []) if row.get("owner_name") in members
+    ]
+    if any(str(row.get("pidn")) not in parcel_ids for row in claims):
+        return None
+    return sorted(
+        {f"parcels:{pidn}" for pidn in parcel_ids}
+        | {f"tax_claims:{row['pidn']}" for row in claims}
+    )
+
+
 def build_deterministic_entity_resolution(
     records: dict,
     cluster_names: list[str],
@@ -291,11 +341,13 @@ def build_deterministic_entity_resolution(
     similarities, and conflicting PA DOS entity numbers. Punctuation/case
     variants of an anchored name may merge. Different names with different
     registration numbers stay separate even when they share an office address.
-    Every unanchored or ambiguous cluster remains unresolved by this tier.
+    Every non-registration record must also connect through a matching complete
+    mailing/office address or an already connected parcel identifier. Every
+    unanchored or ambiguous cluster remains unresolved by this tier.
     """
 
     names = sorted({name.strip() for name in cluster_names if name and name.strip()})
-    if len(names) < 2:
+    if not names:
         return None
     names_by_key: dict[str, list[str]] = {}
     for name in names:
@@ -341,6 +393,9 @@ def build_deterministic_entity_resolution(
         )
         if not anchored_names:
             return None
+        record_refs = _registration_record_refs(records, members, matching_corporate)
+        if record_refs is None:
+            return None
         canonical_name = anchored_names[0]
         linked_records = {}
         for source, (identifier_field, name_fields) in record_fields.items():
@@ -360,6 +415,15 @@ def build_deterministic_entity_resolution(
             f"{entity_number}; only case, spacing and punctuation are normalized "
             f"{candidate_refs} {corporate_ref}."
         )
+        if record_refs:
+            source_refs = " ".join(f"[Evidence: {ref}]" for ref in record_refs)
+            reasoning += (
+                " Parcel mailing addresses match a registration office address "
+                "using the printed street/locality and five-digit ZIP, ignoring "
+                "case, commas, periods and repeated spaces; any tax claims "
+                "use those same parcel identifiers "
+                f"{source_refs} {corporate_ref}."
+            )
         entities.append(
             {
                 "canonical_name": canonical_name,

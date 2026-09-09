@@ -22,7 +22,13 @@ from countyiq.lib.pass1_entity_verification import (
 def dossier(name, number=None):
     records = {
         "candidate_names": [name],
-        "parcels": [{"pidn": name, "owner_full": name, "mail_addr_full": "10 MAIN ST"}],
+        "parcels": [
+            {
+                "pidn": name,
+                "owner_full": name,
+                "mail_addr_full": "10 MAIN ST, YORK PA 17401",
+            }
+        ],
         "tax_claims": [],
         "plcb_licenses": [],
         "corporate_entities": [],
@@ -30,7 +36,12 @@ def dossier(name, number=None):
     }
     if number is not None:
         records["corporate_entities"] = [
-            {"entity_name": name, "entity_number": number, "status": "Active"}
+            {
+                "entity_name": name,
+                "entity_number": number,
+                "status": "Active",
+                "office_address": "10 MAIN ST, YORK PA 17401",
+            }
         ]
     records["source_inventory_hash"] = content_hash(records)
     return records
@@ -87,6 +98,22 @@ def test_exact_registered_spellings_and_distinct_numbers_leave_unknown_edges_for
         tuple(entity["member_names"])
         for entity in plan.deterministic_partition["entities"]
     } == {("ALPHA LLC", "ALPHA, LLC"), ("BETA LLC",)}
+
+
+def test_unconnected_records_cannot_be_hidden_behind_a_resolved_registration_edge():
+    names = ["ALPHA LLC", "BETA LLC"]
+    dossiers = {name: dossier(name, str(index)) for index, name in enumerate(names)}
+    dossiers["ALPHA LLC"]["parcels"][0]["mail_addr_full"] = "20 OTHER ST"
+    registrations = [
+        {"entity_name": name, "entity_number": str(index)}
+        for index, name in enumerate(names)
+    ]
+    plan = build_context_plan(names, [names], dossiers, registrations)
+    assert set(plan.anchors) == set(names)
+    assert plan.manifest["resolved_edges"] == []
+    assert len(plan.units) == 1
+    assert set(plan.units[0].names) == set(names)
+    assert plan.manifest["deterministic_names"] == ["BETA LLC"]
 
 
 def test_registration_name_history_outside_the_component_disables_the_shortcut():
@@ -245,7 +272,11 @@ def test_one_owners_portfolio_cannot_consume_another_owners_detail_allowance():
 
 def test_the_last_parcels_conflicting_mailing_address_is_visible_in_the_prompt():
     rows = [
-        {"pidn": f"{number:03d}", "owner_full": "OWNER", "mail_addr_full": "10 MAIN ST"}
+        {
+            "pidn": f"{number:03d}",
+            "owner_full": "OWNER",
+            "mail_addr_full": "10 MAIN ST, YORK PA 17401",
+        }
         for number in range(51)
     ]
     rows[-1]["mail_addr_full"] = "999 OTHER ST"

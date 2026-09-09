@@ -22,6 +22,24 @@ majority rule. Exact-registration shortcuts are validated against both the
 registration index and complete dossier registration numbers. Units that merge
 different proven registration numbers cannot vote.
 
+The registration shortcut also requires corroboration for every attached
+non-registration record. Each parcel's complete mailing address must match a
+registration office after normalizing case, commas, periods, repeated spaces
+and an optional ZIP+4 extension. Street tokens, unit designators, locality and
+the five-digit ZIP remain significant. Every tax claim must use one of those
+connected parcel identifiers. Licenses, proceedings, truncated portfolios and
+unconnected records require source review. A registry identifier alone does
+not identify the owner of a same-name parcel. Only fully corroborated groups
+can remove candidate edges from model review.
+
+This restriction also applies to ordinary small components. The production
+source audit identified an earlier deterministic FF YORK / FFYORK assignment
+that attached records at Wicklow Drive and Market Street without a source
+bridge. The initial canary's structural acceptance did not establish this
+cross-record identity. Existing deterministic results that do not meet the
+corroboration rule require fresh source review and ordinary contradiction
+handling before the next pass consumes the refreshed graph.
+
 Overlapping positive proposals only define the scope of another review. When
 membership, entity type, rejection or within-group uncertainty conflicts, all
 names in that overlap receive a complete new review. No transitive identity

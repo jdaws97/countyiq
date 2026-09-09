@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from countyiq.lib.intelligence_common import compute_input_hash
 from countyiq.lib.pass1_entity_verification import (
     CANDIDATE_CLUSTERS_QUERY,
+    DETERMINISTIC_VARIANT_VERSION,
     ENTITY_REGISTRATION_ROWS_QUERY,
     _legal_name_key,
     _registered_entity_type,
@@ -23,7 +24,8 @@ from countyiq.lib.pass1_entity_verification import (
     stable_cluster_key,
 )
 
-PLAN_VERSION = "bounded-entity-dossiers-v2"
+PLAN_VERSION = "bounded-entity-dossiers-v3"
+REVIEW_UNIT_VERSION = "bounded-entity-dossiers-v2"
 SOURCE_KINDS = (
     "parcels",
     "tax_claims",
@@ -107,7 +109,9 @@ def make_review_unit(
         )
     unit_key = stable_cluster_key(list(names)).removeprefix("entity_cluster:")
     return EntityReviewUnit(
-        key=f"{parent_key}:{PLAN_VERSION}:{unit_key}:{compute_input_hash(source)}",
+        # A changed planner must not invent new votes for an unchanged complete
+        # review input. The parent execution hash separately binds the full plan.
+        key=f"{parent_key}:{REVIEW_UNIT_VERSION}:{unit_key}:{compute_input_hash(source)}",
         names=names,
         source=source,
         prompt=prompt,
@@ -261,10 +265,22 @@ def build_context_plan(
     anchors, registration_evidence = _registration_anchors(
         names, dossiers, registration_rows
     )
+    anchored_groups = defaultdict(list)
+    for name, anchor in anchors.items():
+        anchored_groups[anchor].append(name)
+    deterministic_entities = []
+    safe_names = set()
+    for members in anchored_groups.values():
+        proposal = build_deterministic_entity_resolution(
+            combine_name_dossiers(dossiers, members), members
+        )
+        if proposal is not None:
+            deterministic_entities.extend(proposal["entities"])
+            safe_names.update(members)
     resolved_edges = []
     unresolved = []
     for left, right in edges:
-        if left in anchors and right in anchors:
+        if left in safe_names and right in safe_names:
             if anchors[left][1] != anchors[right][1]:
                 resolved_edges.append(
                     {"names": [left, right], "reason": "distinct_registration_numbers"}
@@ -288,7 +304,7 @@ def build_context_plan(
         max_names=max_names,
         max_characters=max_characters,
     )
-    accounted = set(anchors)
+    accounted = set(safe_names)
     for unit in units:
         accounted.update(unit.names)
     if accounted != selected:
@@ -308,9 +324,19 @@ def build_context_plan(
         "max_candidate_names": max_names,
         "max_dynamic_prompt_characters": max_characters,
         "resolved_edges": resolved_edges,
+        "deterministic_names": sorted(safe_names),
         "units": [{"key": unit.key, "names": unit.names} for unit in units],
     }
-    deterministic = build_deterministic_entity_resolution(source, sorted(anchors))
+    deterministic = (
+        {
+            "entities": deterministic_entities,
+            "rejected_matches": [],
+            "abstentions": [],
+            "resolution_tier": DETERMINISTIC_VARIANT_VERSION,
+        }
+        if deterministic_entities
+        else None
+    )
     return EntityContextPlan(
         parent_key, source, manifest, units, anchors, deterministic
     )
