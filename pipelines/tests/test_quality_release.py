@@ -60,7 +60,7 @@ def test_quality_receipts_fail_closed_on_bad_shape(tmp_path):
         ((1,), "entity_verification.py"),
         ((1,), "entity_context_plan.py"),
         ((1,), "entity_context_review.py"),
-        ((1,), "intelligence_resolution.py"),
+        ((0, 1), "intelligence_resolution.py"),
         ((0, 1, 2, 3), "llm_harness.py"),
         ((0, 1, 2, 3), "pass_llm_config.py"),
     ],

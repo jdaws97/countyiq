@@ -723,6 +723,7 @@ def _project_entities(cur, prior, challenger, payload, inference_id: int) -> Non
         _merge_linked_sources,
         _merge_relationships,
     )
+    from countyiq.lib.pass1_entity_verification import project_entity_relationships
 
     names = _candidate_names(prior, challenger)
     cur.execute(
@@ -733,7 +734,7 @@ def _project_entities(cur, prior, challenger, payload, inference_id: int) -> Non
         """,
         (names, names),
     )
-    for entity in payload.get("entities", []):
+    for entity in project_entity_relationships(payload.get("entities", [])):
         linked_records = entity.get("linked_records", {})
         cur.execute(
             """

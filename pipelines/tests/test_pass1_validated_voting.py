@@ -213,6 +213,52 @@ def test_self_abstaining_identity_cannot_supply_the_required_trial_quorum(monkey
     assert result.metadata["errors"].value == 1
 
 
+@pytest.mark.parametrize("deciding_assignment", [True, False])
+def test_singleton_assignment_disagreement_requires_a_majority(
+    monkeypatch, deciding_assignment
+):
+    assigned = _partition(merged=False)
+    withheld = deepcopy(assigned)
+    withheld["entities"] = withheld["entities"][:1]
+    withheld["abstentions"] = [
+        {
+            "names": [NAMES[1]],
+            "reason": "Cross-record identity is unresolved [Evidence: parcels:P2].",
+        }
+    ]
+    deciding = assigned if deciding_assignment else withheld
+    calls, result = _run(
+        monkeypatch,
+        [
+            _response(assigned, "first"),
+            _response(withheld, "second"),
+            _response(deciding, "third"),
+        ],
+    )
+    assert len(calls["invoke"]) == 3
+    assert calls["graphs"] == [deciding["entities"]]
+    assert result.metadata["voting_early_stops"].value == 0
+
+
+def test_failed_deciding_trial_cannot_publish_a_minority_singleton(monkeypatch):
+    assigned = _partition(merged=False)
+    withheld = deepcopy(assigned)
+    withheld["entities"] = withheld["entities"][:1]
+    withheld["abstentions"] = [
+        {
+            "names": [NAMES[1]],
+            "reason": "Cross-record identity is unresolved [Evidence: parcels:P2].",
+        }
+    ]
+    failed = HarnessResult(raw_output="", parsed=None, success=False, error="HTTP 503")
+    calls, _ = _run(
+        monkeypatch,
+        [_response(assigned, "first"), _response(withheld, "second"), failed],
+    )
+    assert len(calls["invoke"]) == 3
+    assert calls["graphs"] == [withheld["entities"]]
+
+
 def test_invalid_escalation_cannot_replace_a_valid_primary_abstention(monkeypatch):
     abstained = {
         "entities": [],
