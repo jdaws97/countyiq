@@ -156,13 +156,11 @@ command performs reviewed SCD2 repairs; schema migration alone does not repair o
 release historical records. See the [cleanup report](../research/municipal-source-cleanup-2026-09-04.md)
 for the dry-run/apply workflow and local verification.
 
-
 Revision 059 adds caller-permission SQL functions for parcel brief source context
 and its SHA-256 fingerprint. Generation and API serving use the same database
 definition for property/entity facts, resolved owner names, portfolio membership
 and totals. Upgrade changes no source data; downgrade removes only these
 functions and must be paired with compatible application code.
-
 
 Revision 061 adds extraction_details to proceeding extractions, a shared
 proceeding_parcel_matches resolver for explicit IDs and unique municipality-scoped
@@ -173,7 +171,6 @@ contract; deploy the migration before the matching application code. Downgrade
 removes the new contract projection and alias table and must be paired with
 compatible code; existing project watches must be reviewed before discarding aliases.
 
-
 ### 062 — parcel geography proximity index
 
 Adds idx_parcels_current_geography, a partial GiST expression index on
@@ -182,7 +179,6 @@ Supports meter-based nearby parcel and event searches after removing the
 inaccurate degree envelope. The transactional index build can block writes;
 measure it on a representative restore and schedule deployment accordingly.
 Downgrade removes only this index.
-
 
 ### Schema-test isolation
 
@@ -196,6 +192,21 @@ DATABASE_PORT and DATABASE_NAME=countyiq_test explicitly for the schema suite.
 The 2026-09-04 review verified a fresh 001 -> 062 chain and all 23 schema checks
 on a separate localhost:5435 instance.
 
+### 083 — emerging evidence query performance
+
+Adds a current-row GiST geography index for planning proximity and narrows
+property municipal-evidence reads to inference IDs linked to the requested PIDN.
+The existing final relationship, current-source, and rights predicates remain
+in force. The migration changes no packet fields or retained reviews. Its index
+build runs during the ordinary quiesced deployment window; downgrade restores
+the original predicate and drops only the added index.
+
+The isolated full-data rehearsal preserved all four scope hashes, all 20 property
+packets, and all 13 current analysis IDs. Individual scope reconstruction fell
+from 2.30/3.40/2.96/0.40 seconds to 0.50/0.61/0.60/0.41 seconds; the full current
+analysis query fell from 12.46 to 5.67 seconds. These are local measurements,
+not a production latency guarantee. Upgrade/downgrade packet equality was also
+verified in a rolled-back transaction.
 
 ### 063 — scoped municipal event types
 
