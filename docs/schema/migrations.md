@@ -208,6 +208,21 @@ analysis query fell from 12.46 to 5.67 seconds. These are local measurements,
 not a production latency guarantee. Upgrade/downgrade packet equality was also
 verified in a rolled-back transaction.
 
+### 084 — shared current inputs for emerging cases
+
+Materializes the live municipal scope inputs once for the current published
+analyses, then passes those typed rows to copies of the canonical source
+builders. Full source equality, publication selection, policy dates, and source
+rights remain live in the request's database snapshot. This is query-local
+reuse; no retained cache or asynchronous refresh is introduced.
+
+The isolated rehearsal returned the same four scope packets and 13 current
+analysis IDs. Full-feed source validation fell from 5.67 seconds with migration
+083 to 0.61 seconds with 084. The original single-scope builder remains the
+producer contract. Downgrade restores the original serving function calls and
+removes only the two helper functions. Future changes to the scoped-input view's
+row type or canonical source builders must update the typed helpers as well.
+
 ### 063 — scoped municipal event types
 
 Expands chk_intelligence_events_type to accept policy_action, recommendation,

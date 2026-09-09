@@ -118,6 +118,51 @@ def analysis_for(packet):
     }
 
 
+def test_shared_scope_builder_matches_canonical_sources(client, add_source):  # noqa: F811
+    add_source()
+    project_current_sources()
+    with writer() as cur:
+        cur.execute(
+            "SELECT bundle_key FROM public.current_municipal_matter_sources "
+            "WHERE source->>'candidate_scope'=%s",
+            ("property:" + TEST_PIDN,),
+        )
+        bundle_key = cur.fetchone()[0]
+        for requested_bundle in (bundle_key, "municipal-bundle:missing"):
+            for neighbors, planning_radius, environmental_radius in (
+                (0, 250, 500),
+                (6, 500, 500),
+                (12, 1500, 2000),
+                (13, 500, 500),
+            ):
+                cur.execute(
+                    """
+                    WITH scoped AS MATERIALIZED (
+                        SELECT array_agg(input) AS rows
+                        FROM public.current_municipal_matter_scoped_inputs input
+                    ), settings AS (
+                        SELECT %s::text AS bundle, %s::integer AS planning_radius,
+                            %s::integer AS environmental_radius, %s::integer AS neighbors
+                    )
+                    SELECT public.emerging_scope_source(
+                        bundle, 'york_open_data', planning_radius,
+                        environmental_radius, neighbors
+                    ), public.emerging_scope_source_from_inputs(
+                        bundle, 'york_open_data', planning_radius,
+                        environmental_radius, neighbors, scoped.rows
+                    ) FROM settings CROSS JOIN scoped
+                    """,
+                    (
+                        requested_bundle,
+                        planning_radius,
+                        environmental_radius,
+                        neighbors,
+                    ),
+                )
+                canonical, shared = cur.fetchone()
+                assert shared == canonical
+
+
 def test_review_currentness_and_source_receipts(client, add_source):  # noqa: F811
     add_source()
     project_current_sources()
