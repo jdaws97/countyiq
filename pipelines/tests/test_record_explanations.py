@@ -84,6 +84,48 @@ def test_spanish_hearing_retains_original_quote_and_proposed_date(source, explan
         validate_explanation(explanation, source)
 
 
+@pytest.mark.parametrize("month", ["Sept", "Sept.", "Sep", "September"])
+def test_september_spelling_preserves_exact_day_and_rejects_a_changed_day(
+    source, explanation, month
+):
+    quote = f"A hearing will be held on {month} 8th, 2026."
+    source["sources"][0]["text"] = quote
+    item = explanation["record"]["dates"][0]
+    item.update(quote=quote, time=None, status="scheduled")
+    validate_explanation(explanation, source)
+    item["date"] = "2026-09-09"
+    with pytest.raises(ValueError, match="Exact date is not stated"):
+        validate_explanation(explanation, source)
+
+
+def test_scheduled_hearing_on_proposed_amendment_keeps_its_date_status(
+    source, explanation
+):
+    quote = (
+        "A public hearing on a proposed amendment to the zoning code "
+        "will be held on September 8, 2026, at 6:00 pm."
+    )
+    source["sources"][0]["text"] = quote
+    explanation["record"]["dates"][0].update(quote=quote, status="scheduled")
+    validate_explanation(explanation, source)
+
+
+def test_hearing_subject_exception_preserves_a_separately_proposed_date(
+    source, explanation
+):
+    quote = (
+        "A public hearing on a proposed amendment to the zoning code. "
+        "The proposed date is September 8, 2026, at 6:00 pm."
+    )
+    source["sources"][0]["text"] = quote
+    item = explanation["record"]["dates"][0]
+    item.update(quote=quote, status="scheduled")
+    with pytest.raises(ValueError, match="must stay proposed"):
+        validate_explanation(explanation, source)
+    item["status"] = "proposed"
+    validate_explanation(explanation, source)
+
+
 def test_explicit_twelve_hour_time_can_use_equivalent_twenty_four_hour_format(
     source, explanation
 ):
