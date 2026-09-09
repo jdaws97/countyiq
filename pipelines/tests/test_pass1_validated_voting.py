@@ -190,6 +190,29 @@ def test_two_valid_matching_trials_publish_without_paying_for_the_third(monkeypa
     assert result.metadata["voting_early_stops"].value == 1
 
 
+def test_self_abstaining_identity_cannot_supply_the_required_trial_quorum(monkeypatch):
+    conflicting = _partition(merged=True)
+    conflicting["abstentions"] = [
+        {
+            "names": [NAMES[0]],
+            "reason": "Identity within this name is unresolved [Evidence: parcels:P1].",
+        }
+    ]
+    calls, result = _run(
+        monkeypatch,
+        [
+            _response(conflicting, "first"),
+            _response(conflicting, "second"),
+            _response(_partition(merged=False), "third"),
+        ],
+    )
+    assert len(calls["invoke"]) == 3
+    assert calls["inferences"] == []
+    assert calls["graphs"] == []
+    assert result.metadata["trial_validation_rejections"].value == 2
+    assert result.metadata["errors"].value == 1
+
+
 def test_invalid_escalation_cannot_replace_a_valid_primary_abstention(monkeypatch):
     abstained = {
         "entities": [],

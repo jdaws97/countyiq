@@ -130,6 +130,53 @@ def test_identity_membership_accepts_exact_partition() -> None:
     )
 
 
+@pytest.mark.parametrize("names", [["ACME LLC"], ["ACME LLC", "ACME LLC"]])
+def test_an_unresolved_exact_name_cannot_also_be_an_entity_assignment(names) -> None:
+    parsed = _valid_entity_partition()
+    parsed["abstentions"] = [
+        {
+            "names": names,
+            "reason": (
+                "The identically named owners lack an independent identity link "
+                "[Evidence: candidate:ACME LLC]."
+            ),
+        }
+    ]
+    errors = validate_entity_membership(
+        parsed, _entity_records(), ["ACME LLC", "ACME HOLDINGS"]
+    )
+    assert any(
+        "entity assignment and an unresolved identity" in error for error in errors
+    )
+
+
+def test_unresolved_match_between_separate_owner_groups_stays_allowed() -> None:
+    parsed = _valid_entity_partition()
+    parsed["entities"][0]["member_names"] = ["ACME LLC"]
+    parsed["entities"][0]["linked_records"] = {"parcels": ["P1"]}
+    parsed["entities"].append(
+        {
+            "canonical_name": "ACME HOLDINGS",
+            "member_names": ["ACME HOLDINGS"],
+            "reasoning": "Its printed name is retained [Evidence: candidate:ACME HOLDINGS].",
+            "linked_records": {"corporate_entities": ["ACME HOLDINGS"]},
+            "relationships": [],
+        }
+    )
+    parsed["abstentions"] = [
+        {
+            "names": ["ACME LLC", "ACME HOLDINGS"],
+            "reason": "The proposed identity link remains unresolved [Evidence: candidate:ACME LLC].",
+        }
+    ]
+    assert (
+        validate_entity_membership(
+            parsed, _entity_records(), ["ACME LLC", "ACME HOLDINGS"]
+        )
+        == []
+    )
+
+
 @pytest.mark.parametrize("candidate_target", [False, True])
 def test_relationship_targets_require_candidate_membership(candidate_target) -> None:
     records = _entity_records()

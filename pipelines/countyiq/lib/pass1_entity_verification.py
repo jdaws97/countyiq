@@ -481,6 +481,22 @@ reason must cite one or more printed refs inline as
 [Evidence: group:identifier]; end each factual sentence with its marker.
 
 RULES FOR NAMES, RELATIONSHIPS, AND CITATIONS:
+- A candidate name can refer to more than one real-world owner. The exact same
+  printed name alone does not establish identity across separate records. To
+  combine them, cite additional evidence connecting those records, such as the
+  same parcel identifier, a matching full mailing address, an unambiguous
+  registration identifier, or an explicit source statement linking the owners.
+  Apply this requirement even when an entity has only one member_names entry.
+  One owner-of-record on one parcel can be retained without inventing a personal
+  identifier; this does not establish that every other record with that name
+  belongs to the same person or organization.
+- If identity remains unresolved within one candidate name, put that name in
+  a single-name abstention and omit it from entities. The output contract cannot
+  split one candidate name into multiple entities. Do not assign the ambiguous
+  records to an entity, even with reduced confidence, while saying their identity
+  is unresolved in reasoning or in a broader multi-name abstention. An unresolved
+  match between different candidate names may still leave separately supported
+  owner-of-record groups; do not confuse that with uncertainty within one name.
 - rejected_matches name_a/name_b, abstention names, and relationship
   related_entity must be names printed under CANDIDATE NAMES. A prior owner,
   seller, buyer, or any other name that appears only inside a record is not a
