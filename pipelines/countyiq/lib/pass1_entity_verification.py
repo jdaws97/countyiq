@@ -15,6 +15,7 @@ Two stages:
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 
@@ -737,6 +738,18 @@ def _format_proceedings(procs: list[dict]) -> str:
 # =============================================================================
 
 
+def _portfolio_summary_lines(summary: dict) -> list[str]:
+    return [
+        f"- Total parcels: {summary['total_parcels']} (showing {summary['parcels_shown']} above)",
+        f"- Total assessed value: ${summary['total_assessed_value']:,.0f}",
+        f"- Total tax claims: {summary['total_tax_claims']} (showing {summary['tax_claims_shown']} above)",
+        f"- Total tax owed: ${summary['total_tax_owed']:,.2f}",
+        f"- Owner name variants: {summary['owners']}",
+        f"- Property classes: {summary['classes']}",
+        f"- Municipalities: {summary['municipalities']}",
+    ]
+
+
 def build_entity_cluster_prompt(records: dict) -> str:
     """Format cluster records into the entity verification template.
 
@@ -794,15 +807,22 @@ def build_entity_cluster_prompt(records: dict) -> str:
     if summary:
         summary_lines = [
             "PORTFOLIO SUMMARY (records truncated — full statistics below):",
-            f"- Total parcels: {summary['total_parcels']} (showing {summary['parcels_shown']} above)",
-            f"- Total assessed value: ${summary['total_assessed_value']:,.0f}",
-            f"- Total tax claims: {summary['total_tax_claims']} (showing {summary['tax_claims_shown']} above)",
-            f"- Total tax owed: ${summary['total_tax_owed']:,.2f}",
-            f"- Owner name variants: {summary['owners']}",
-            f"- Property classes: {summary['classes']}",
-            f"- Municipalities: {summary['municipalities']}",
+            *_portfolio_summary_lines(summary),
         ]
         sections.append("\n".join(summary_lines))
+
+    for item in records.get("portfolio_summaries", []):
+        sections.append(
+            "\n".join(
+                [
+                    (
+                        f"PORTFOLIO SUMMARY FOR candidate:{item['candidate_name']} "
+                        "(records truncated — full statistics below):"
+                    ),
+                    *_portfolio_summary_lines(item["summary"]),
+                ]
+            )
+        )
 
     combined_sections = "\n\n".join(sections) if sections else "(no records)"
 
@@ -1085,7 +1105,9 @@ def merge_entity_trial_partitions(
 # =============================================================================
 
 
-def gather_cluster_records(cursor, names: list[str]) -> dict:
+def gather_cluster_records(
+    cursor, names: list[str], *, stable_source_snapshot: bool = False
+) -> dict:
     """Gather all records for a list of candidate entity names.
 
     Executes SQL queries against parcels, tax_claims, plcb_licenses,
@@ -1099,6 +1121,8 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
     Args:
         cursor: psycopg2 cursor (RealDictCursor or similar).
         names: List of entity name strings to query for.
+        stable_source_snapshot: Canonicalize rows before choosing detail records
+            and fingerprint the complete queried inventory for bounded dossiers.
 
     Returns:
         Dict with keys: parcels, tax_claims, plcb_licenses,
@@ -1125,6 +1149,17 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
     cursor.execute(CLUSTER_RECORDS_QUERY_PROCEEDINGS, params)
     proceedings = [dict(row) for row in cursor.fetchall()] if cursor.description else []
 
+    inventory = {
+        "parcels": all_parcels,
+        "tax_claims": all_tax,
+        "plcb_licenses": plcb_licenses,
+        "corporate_entities": corporate_entities,
+        "proceedings": proceedings,
+    }
+    if stable_source_snapshot:
+        for rows in inventory.values():
+            rows.sort(key=lambda row: json.dumps(row, sort_keys=True, default=str))
+
     result = {
         "candidate_names": sorted(names),
         "parcels": all_parcels[:_MAX_PARCELS_DETAIL],
@@ -1133,6 +1168,12 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
         "corporate_entities": corporate_entities,
         "proceedings": proceedings,
     }
+    if stable_source_snapshot:
+        # Facts omitted from the displayed detail still affect source freshness.
+        # The source manifest retains this fingerprint alongside the actual dossier.
+        result["source_inventory_hash"] = hashlib.sha256(
+            json.dumps(inventory, sort_keys=True, default=str).encode()
+        ).hexdigest()
 
     # For large entities, add a portfolio summary so the LLM knows the
     # full scale even though the detail is truncated.
