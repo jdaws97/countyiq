@@ -239,3 +239,22 @@ withdrawn, removed and scoped_decision, matching current event builders and API
 filters. Apply before publishing events from the new extraction contract.
 Existing events are not rewritten. Downgrade validates the older type set and
 refuses while any newer types remain; it does not delete or relabel events.
+
+### 086 — indexed emerging case candidates
+
+Adds a rebuildable summary index for the latest accepted analysis in each scope.
+History and publication triggers maintain it in the same writer transaction;
+concurrent decisions for a scope serialize their projection. A newer unpublished
+analysis supersedes an older publication, while an action on an older analysis
+cannot change the latest publication state. The index retains no source packet
+or evidence excerpts. Its search, parcel, commercial, and ordering
+indexes support filtering before a bounded candidate page is selected.
+
+An index entry is not proof of source currentness. The API still compares every
+selected inference's source against the canonical builder, including current
+rights and policy dates, before serving any summary or detail. Pagination never
+requires that check for the entire collection. The existing full current views
+remain available for audit and compatibility. Rebuilding the projection is not
+executable by the read-only API role. Downgrade removes only these rebuildable
+objects and requires the preceding API version; immutable reviews and publication
+actions remain intact.

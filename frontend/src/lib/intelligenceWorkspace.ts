@@ -39,7 +39,11 @@ export function useIntelligenceWorkspace() {
     work,
     storageMessage,
     setProfile: (value: IntelligenceProfile) => commit(value, getIntelligenceWork()),
-    saveCase: (item: EmergingCase, status: IntelligenceWorkItem['status'], note: string) => {
+    saveCase: (
+      item: Pick<EmergingCase, 'case_key' | 'revision'>,
+      status: IntelligenceWorkItem['status'],
+      note: string,
+    ) => {
       const previous = getIntelligenceWork().filter((entry) => entry.case_key !== item.case_key)
       if (previous.length >= 100) {
         setStorageMessage('Your workspace holds 100 cases. Remove a case before saving another.')

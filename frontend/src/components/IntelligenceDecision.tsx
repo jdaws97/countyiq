@@ -7,7 +7,7 @@ export default function IntelligenceDecision({
   item,
   note,
 }: {
-  item: EmergingCase
+  item: Pick<EmergingCase, 'case_key' | 'title' | 'revision'>
   note?: string
 }) {
   const { work, saveCase, storageMessage } = useIntelligenceWorkspace()

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 
 import Badge from '../components/Badge'
@@ -26,6 +26,7 @@ import {
 } from '../lib/intelligenceFlow'
 import type {
   EmergingCase,
+  EmergingCaseSummary,
   EmergingResponse,
   HypothesisFamily,
   IntelligenceProfile,
@@ -68,7 +69,13 @@ const SERVICES = [
 
 const SERVICE_IDS: string[] = SERVICES.map(([value]) => value)
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 20
+
+function resetPaging(params: URLSearchParams) {
+  for (const key of ['cursor', 'back', 'offset']) {
+    params.delete(key)
+  }
+}
 
 export default function EmergingIntelligence() {
   const location = useLocation()
@@ -85,6 +92,7 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
   const location = useLocation()
   const { profile, work, setProfile, storageMessage } = useIntelligenceWorkspace()
   const [searchParams, setSearchParams] = useSearchParams()
+  const canonicalReady = searchParams.has('filters')
   const [showProfile, setShowProfile] = useState(searchParams.has('edit_profile'))
   const query = searchParams.get('q') ?? ''
   const activeProfile = profileFromSearchParams(profile, searchParams)
@@ -104,7 +112,17 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
     setSearchParams(canonical, { replace: true })
   }, [activeProfile, searchParams, setSearchParams])
   const params = new URLSearchParams(searchParams)
-  const offset = Math.max(0, Number.parseInt(params.get('offset') ?? '0', 10) || 0)
+  const cursor = searchParams.get('cursor')
+  const pagingState = location.state?.intelligencePaging
+  const previousCursors: string[] =
+    cursor &&
+    pagingState?.cursor === cursor &&
+    Array.isArray(pagingState.previousCursors) &&
+    pagingState.previousCursors.every((value: unknown) => typeof value === 'string')
+      ? pagingState.previousCursors
+      : []
+  params.delete('back')
+  params.delete('offset')
   setRepeatedParams(params, 'family', activeProfile.families)
   setRepeatedParams(params, 'municipality', activeProfile.municipalities)
   setRepeatedParams(params, 'service', activeProfile.services)
@@ -116,7 +134,6 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
     params.set('audience', activeProfile.audience)
   }
   params.set('limit', String(PAGE_SIZE))
-  params.set('offset', String(offset))
   if (opportunitiesMode) {
     params.set('opportunities_only', 'true')
   } else {
@@ -140,8 +157,20 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
       work.filter((item) => item.status === 'rejected').map((item) => item.case_key),
     )
   }
+  const filterParams = new URLSearchParams(params)
+  filterParams.delete('cursor')
+  const filterKey = filterParams.toString()
+  const previousFilters = useRef(filterKey)
+  useEffect(() => {
+    if (previousFilters.current !== filterKey && searchParams.has('cursor')) {
+      const firstPage = new URLSearchParams(searchParams)
+      resetPaging(firstPage)
+      setSearchParams(firstPage, { replace: true })
+    }
+    previousFilters.current = filterKey
+  }, [filterKey, searchParams, setSearchParams])
   const { data, loading, error, reload } = useFetchJson<EmergingResponse>(
-    view === 'work' ? null : `/api/intelligence?${params}`,
+    view === 'work' || !canonicalReady ? null : `/api/intelligence?${params}`,
   )
 
   const cases = data?.cases ?? []
@@ -168,7 +197,7 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
     } else {
       nextParams.set('audience', nextProfile.audience)
     }
-    nextParams.delete('offset')
+    resetPaging(nextParams)
     nextParams.set('view', 'for_you')
     setSearchParams(nextParams)
   }
@@ -180,14 +209,37 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
     } else {
       nextParams.delete('q')
     }
-    nextParams.delete('offset')
+    resetPaging(nextParams)
     setSearchParams(nextParams)
   }
 
-  const movePage = (nextOffset: number) => {
+  const movePage = (direction: 'next' | 'previous') => {
     const nextParams = new URLSearchParams(searchParams)
-    nextParams.set('offset', String(Math.max(0, nextOffset)))
-    setSearchParams(nextParams)
+    nextParams.delete('back')
+    let nextHistory: string[]
+    if (direction === 'next') {
+      if (!data?.next_cursor) {
+        return
+      }
+      nextHistory = [...previousCursors, cursor ?? '']
+      nextParams.set('cursor', data.next_cursor)
+    } else {
+      const previous = previousCursors.at(-1)
+      nextHistory = previousCursors.slice(0, -1)
+      if (previous) {
+        nextParams.set('cursor', previous)
+      } else {
+        nextParams.delete('cursor')
+      }
+    }
+    setSearchParams(nextParams, {
+      state: {
+        intelligencePaging: {
+          cursor: nextParams.get('cursor'),
+          previousCursors: nextHistory,
+        },
+      },
+    })
   }
 
   return (
@@ -234,7 +286,7 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
         ].map(([path, nextView, label]) => {
           const next = new URLSearchParams(searchParams)
           next.set('view', nextView)
-          next.delete('offset')
+          resetPaging(next)
           const selected = opportunitiesMode
             ? path === '/opportunities'
             : path !== '/opportunities' && view === nextView
@@ -425,23 +477,40 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
           </form>
 
           {data?.coverage && <p className="emerging-scope">{data.coverage.note}</p>}
-          {loading && <StatusMessage>Loading current intelligence…</StatusMessage>}
+          {(loading || !canonicalReady) && (
+            <StatusMessage>Loading current intelligence…</StatusMessage>
+          )}
           {error && (
             <StatusMessage tone="error">
               Intelligence could not be loaded. <button onClick={reload}>Try again</button>
+              {cursor && (
+                <button
+                  onClick={() => {
+                    const firstPage = new URLSearchParams(searchParams)
+                    resetPaging(firstPage)
+                    setSearchParams(firstPage)
+                  }}
+                >
+                  Return to the first page
+                </button>
+              )}
             </StatusMessage>
           )}
-          {!loading && !error && cases.length === 0 && (
+          {canonicalReady && !loading && !error && cases.length === 0 && (
             <EmptyState
               title={
-                opportunitiesMode
-                  ? 'No qualified opportunities match your work yet'
-                  : 'No current cases match your criteria'
+                data?.has_more
+                  ? 'No current cases in this page'
+                  : opportunitiesMode
+                    ? 'No qualified opportunities match your work yet'
+                    : 'No current cases match your criteria'
               }
             >
-              {opportunitiesMode
-                ? 'Early hypotheses and research questions remain in intelligence. Follow a relevant case while its commercial scope and timing become clearer.'
-                : 'Adjust your criteria or explore all reviewed cases. An empty result does not establish that no activity exists.'}
+              {data?.has_more
+                ? 'These assessments need updated evidence. Continue to the next page to check more cases.'
+                : opportunitiesMode
+                  ? 'Early hypotheses and research questions remain in intelligence. Follow a relevant case while its commercial scope and timing become clearer.'
+                  : 'Adjust your criteria or explore all reviewed cases. An empty result does not establish that no activity exists.'}
               <p>
                 <Link to="/intelligence?view=all">Explore intelligence cases →</Link>
               </p>
@@ -457,23 +526,18 @@ function IntelligenceList({ opportunitiesMode }: { opportunitiesMode: boolean })
               />
             ))}
           </div>
-          {!loading && !error && data && data.total > PAGE_SIZE && (
+          {!loading && !error && data && (cursor || data.has_more) && (
             <nav className="emerging-pagination" aria-label="Intelligence pages">
-              <Button
-                tone="quiet"
-                disabled={offset === 0}
-                onClick={() => movePage(offset - PAGE_SIZE)}
-              >
-                Previous
+              <Button tone="quiet" disabled={!cursor} onClick={() => movePage('previous')}>
+                {cursor && previousCursors.length === 0 ? 'First page' : 'Previous'}
               </Button>
               <span>
-                Showing {offset + 1}–{Math.min(offset + cases.length, data.total)} of {data.total}
+                {cursor && previousCursors.length === 0
+                  ? 'Current page'
+                  : `Page ${previousCursors.length + 1}`}{' '}
+                · {cases.length} current cases
               </span>
-              <Button
-                tone="quiet"
-                disabled={offset + PAGE_SIZE >= data.total}
-                onClick={() => movePage(offset + PAGE_SIZE)}
-              >
+              <Button tone="quiet" disabled={!data.has_more} onClick={() => movePage('next')}>
                 Next
               </Button>
             </nav>
@@ -489,7 +553,7 @@ function CaseCard({
   profile,
   opportunitiesMode,
 }: {
-  item: EmergingCase
+  item: EmergingCaseSummary
   profile: IntelligenceProfile
   opportunitiesMode: boolean
 }) {
@@ -503,11 +567,11 @@ function CaseCard({
         <span>{formatLabel(item.status)}</span>
       </div>
       <h2>
-        <Link to={detailPath}>{item.title}</Link>
+        <Link to={detailPath} state={location.state}>
+          {item.title}
+        </Link>
       </h2>
-      <p className="emerging-hypothesis">
-        <CitedText text={item.hypothesis} evidence={item.citation_evidence} />
-      </p>
+      <p className="emerging-hypothesis">{item.hypothesis}</p>
       <p className="emerging-fit">
         <strong>For your work:</strong> {caseFit(item, profile)}
       </p>
@@ -515,36 +579,29 @@ function CaseCard({
         ? matchingPossibilities(item, profile, true).map((opportunity) => (
             <div key={opportunity.opportunity_key} className="emerging-commercial-summary">
               <strong>{opportunity.title}</strong>
+              <p>{opportunity.rationale}</p>
               <p>
-                <CitedText text={opportunity.rationale} evidence={item.citation_evidence} />
-              </p>
-              <p>
-                <strong>Why now:</strong>{' '}
-                <CitedText
-                  text={opportunity.commercial_basis?.timing ?? ''}
-                  evidence={item.citation_evidence}
-                />
+                <strong>Why now:</strong> {opportunity.commercial_basis?.timing}
               </p>
             </div>
           ))
         : item.supporting_facts[0] && (
             <p className="emerging-why">
-              <strong>Evidence to review:</strong>{' '}
-              <CitedText text={item.supporting_facts[0]} evidence={item.citation_evidence} />
+              <strong>Evidence to review:</strong> {item.supporting_facts[0]}
             </p>
           )}
       <div className="emerging-card-meta">
         <Badge color="var(--accent-cyan)">{formatLabel(item.evidence_strength)} evidence</Badge>
-        <span>
-          Stage: <CitedText text={item.stage} evidence={item.citation_evidence} />
-        </span>
+        <span>Stage: {item.stage}</span>
         {item.municipalities.map((municipality) => (
           <span key={municipality}>{municipality}</span>
         ))}
       </div>
       <div className="emerging-card-footer">
         <Freshness value={item.as_of} label="Assessed" />
-        <Link to={detailPath}>Open case →</Link>
+        <Link to={detailPath} state={location.state}>
+          Open case and evidence →
+        </Link>
       </div>
       <IntelligenceDecision item={item} />
     </article>
@@ -622,7 +679,10 @@ function OpportunityCards({ item, profile }: { item: EmergingCase; profile: Inte
         </details>
       )}
       <p className="emerging-scope">
-        Based on: <Link to={detailPath}>{item.title}</Link>
+        Based on:{' '}
+        <Link to={detailPath} state={location.state}>
+          {item.title}
+        </Link>
       </p>
     </article>
   ))
@@ -653,7 +713,11 @@ function IntelligenceDetail({ caseKey }: { caseKey: string }) {
   if (error || !data) {
     return (
       <PageShell>
-        <ButtonLink to={{ pathname: '/intelligence', search: location.search }} tone="quiet">
+        <ButtonLink
+          to={{ pathname: '/intelligence', search: location.search }}
+          state={location.state}
+          tone="quiet"
+        >
           ← Back to emerging intelligence
         </ButtonLink>
         <EmptyState title="This hypothesis is unavailable">
@@ -670,7 +734,11 @@ function IntelligenceDetail({ caseKey }: { caseKey: string }) {
   const revisionChanged = item && item.last_seen_revision !== data.revision
   return (
     <PageShell maxWidth={1040} className="emerging-page">
-      <Link className="emerging-back" to={{ pathname: '/intelligence', search: location.search }}>
+      <Link
+        className="emerging-back"
+        to={{ pathname: '/intelligence', search: location.search }}
+        state={location.state}
+      >
         ← Back to emerging intelligence
       </Link>
       {revisionChanged && (

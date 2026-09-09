@@ -1,6 +1,7 @@
 import type {
   ActionReadiness,
-  EmergingCase,
+  EmergingCaseSummary,
+  IntelligenceOpportunitySummary,
   IntelligenceProfile,
   IntelligenceWorkItem,
   ProjectType,
@@ -28,8 +29,8 @@ export const WORK_LABELS: Record<IntelligenceWorkItem['status'], string> = {
   rejected: 'Dismissed',
 }
 
-export function matchingPossibilities(
-  item: EmergingCase,
+export function matchingPossibilities<T extends IntelligenceOpportunitySummary>(
+  item: { opportunities: T[]; implications: T[] },
   profile: IntelligenceProfile,
   qualifiedOnly = false,
 ) {
@@ -65,7 +66,7 @@ export function profileQuery(profile: IntelligenceProfile): URLSearchParams {
   return params
 }
 
-export function caseFit(item: EmergingCase, profile: IntelligenceProfile): string {
+export function caseFit(item: EmergingCaseSummary, profile: IntelligenceProfile): string {
   if (
     profile.municipalities.length &&
     !item.municipalities.some((place) =>
@@ -101,6 +102,9 @@ export function caseFit(item: EmergingCase, profile: IntelligenceProfile): strin
   return 'Set your work criteria to see its relevance to your business.'
 }
 
-export function workNeedsReview(item: IntelligenceWorkItem, current?: EmergingCase): boolean {
+export function workNeedsReview(
+  item: IntelligenceWorkItem,
+  current?: Pick<EmergingCaseSummary, 'revision'>,
+): boolean {
   return item.status !== 'rejected' && (!current || current.revision !== item.last_seen_revision)
 }

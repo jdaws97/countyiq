@@ -103,6 +103,19 @@ project types, changes of interest and preferred action stage. Unknown project
 types do not match a selected type. For you excludes dismissed cases; All cases
 retains them for discovery and recovery. Overview uses the same profile criteria.
 
+Case lists show compact, current summaries. Opening a case loads its complete
+interpretation and shared source viewer; list cards do not preload document
+excerpts or inline source dialogs. Preserve the summary's qualifications and
+provide a clear **Open case and evidence** action. This keeps the investigation
+journey usable as the reviewed collection grows.
+
+Lists use continuation pages, with filters applied before selecting candidates.
+Each page checks only its selected evidence scopes. A page can contain fewer
+cases when an earlier assessment needs updated evidence; an empty page with a
+continuation must still offer **Next**. Do not show a purported exact current
+county-wide total from this bounded read. Changing criteria restarts paging;
+returning from a case preserves the list position.
+
 Opportunities requires a specific commercial need, a timing reason and an
 evidenced qualification route, plus customer fit, next action, blockers and
 disqualifiers. An opportunity can be early and conditional; an advertised bid or

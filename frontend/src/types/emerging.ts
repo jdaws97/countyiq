@@ -28,15 +28,19 @@ export interface IntelligenceNextCheck {
   why_it_changes_the_case: string
 }
 
-export interface IntelligenceOpportunity {
+export interface IntelligenceOpportunitySummary {
   opportunity_key: string
   audience: OpportunityAudience
   services: string[]
   title: string
   rationale: string
+  readiness: ActionReadiness
+  commercial_basis: { timing: string } | null
+}
+
+export interface IntelligenceOpportunity extends IntelligenceOpportunitySummary {
   next_action: string
   target_role: string
-  readiness: ActionReadiness
   blockers: string[]
   disqualifiers: string[]
   commercial_basis: { need: string; timing: string; qualification_route: string } | null
@@ -50,7 +54,7 @@ export interface EmergingProperty {
   relationship: 'subject' | 'adjoining'
 }
 
-export interface EmergingCase {
+export interface EmergingCaseSummary {
   case_key: string
   family: HypothesisFamily
   title: string
@@ -59,38 +63,42 @@ export interface EmergingCase {
   evidence_strength: 'limited' | 'moderate' | 'strong'
   stage: string
   supporting_facts: string[]
+  opportunities: IntelligenceOpportunitySummary[]
+  implications: IntelligenceOpportunitySummary[]
+  project_types: ProjectType[]
+  municipalities: string[]
+  as_of: string
+  revision: string
+}
+
+export interface EmergingCase extends EmergingCaseSummary {
   contrary_evidence: string[]
   alternatives: IntelligenceAlternative[]
   unknowns: string[]
   next_checks: IntelligenceNextCheck[]
   opportunities: IntelligenceOpportunity[]
   implications: IntelligenceOpportunity[]
-  project_types: ProjectType[]
-  municipalities: string[]
   properties: EmergingProperty[]
   source_document_count: number
   latest_record_date: string | null
   assessed_at: string
-  as_of: string
   scope_note: string
   change_summary: string | null
-  revision: string
   citation_evidence: EvidenceItem[]
   activity_links: Array<{ label: string; path: string }>
 }
 
 export interface EmergingCoverage {
-  available_records: number
-  assessed_scopes: number
-  current_cases: number
-  awaiting_refresh: number
+  checked_scopes: number
+  awaiting_refresh_in_page: number
   note: string
   missing_source_families: string[]
 }
 
 export interface EmergingResponse {
-  cases: EmergingCase[]
-  total: number
+  cases: EmergingCaseSummary[]
+  has_more: boolean
+  next_cursor: string | null
   coverage: EmergingCoverage
 }
 

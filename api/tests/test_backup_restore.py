@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import uuid
+from contextlib import closing
 
 import psycopg2
 from psycopg2 import sql
@@ -12,12 +13,14 @@ from api.tests.conftest import API_DB_USER, DB_ENV, PIPELINES_DIR
 
 
 def _database_inventory(database: str) -> dict:
-    with psycopg2.connect(
-        host=DB_ENV["DATABASE_HOST"],
-        port=DB_ENV["DATABASE_PORT"],
-        dbname=database,
-        user=DB_ENV["DATABASE_USER"],
-        password=DB_ENV["DATABASE_PASSWORD"],
+    with closing(
+        psycopg2.connect(
+            host=DB_ENV["DATABASE_HOST"],
+            port=DB_ENV["DATABASE_PORT"],
+            dbname=database,
+            user=DB_ENV["DATABASE_USER"],
+            password=DB_ENV["DATABASE_PASSWORD"],
+        )
     ) as connection:
         connection.set_session(readonly=True)
         with connection.cursor() as cursor:

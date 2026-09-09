@@ -6,7 +6,10 @@ import subprocess
 from copy import deepcopy
 from datetime import UTC, datetime
 
-from api.tests.conftest import DB_ENV, PIPELINES_DIR, TEST_PIDN
+import pytest
+
+from api.lib import emerging_pages
+from api.tests.conftest import API_DB_USER, DB_ENV, PIPELINES_DIR, TEST_PIDN
 from api.tests.test_municipal_evidence import writer
 from api.tests.test_municipal_evidence_workflow import (
     add_source,  # noqa: F401
@@ -181,46 +184,52 @@ def test_review_currentness_and_source_receipts(client, add_source):  # noqa: F8
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["total"] == 1
+    assert len(body["cases"]) == 1
     case = body["cases"][0]
     key = case["case_key"]
     assert case["opportunities"] == []
     assert len(case["implications"]) == 1
     assert (
         client.get("/api/intelligence", params={"opportunities_only": True}).json()[
-            "total"
+            "cases"
         ]
-        == 0
+        == []
     )
     assert (
         client.get("/api/intelligence", params={"exclude_case_key": key}).json()[
-            "total"
+            "cases"
         ]
-        == 0
+        == []
     )
     assert (
         client.get("/api/intelligence", params={"project_type": "housing"}).json()[
-            "total"
+            "cases"
         ]
-        == 0
+        == []
     )
     assert (
-        client.get("/api/intelligence", params={"readiness": "qualify"}).json()["total"]
-        == 0
+        client.get("/api/intelligence", params={"readiness": "qualify"}).json()["cases"]
+        == []
     )
+    assert "citation_evidence" not in case
+    assert "[Evidence:" not in json.dumps(case)
+    case = client.get(f"/api/intelligence/{key}").json()
     assert any(item["pidn"] == TEST_PIDN for item in case["properties"])
     assert case["citation_evidence"][0]["details"]["passages"][0]["page"] == 1
     assert "payload" not in case and "packet" not in case
     assert (
         client.get("/api/intelligence", params={"service": "electrical"}).json()[
-            "total"
+            "cases"
         ]
-        == 0
+        == []
     )
     assert (
-        client.get("/api/intelligence", params={"case_key": key}).json()["total"] == 1
+        client.get("/api/intelligence", params={"case_key": key}).json()["cases"][0][
+            "case_key"
+        ]
+        == key
     )
-    assert client.get("/api/intelligence", params={"offset": 1}).json()["cases"] == []
+    assert client.get("/api/intelligence", params={"offset": 1}).status_code == 422
     changed_meaning = deepcopy(analysis)
     changed_meaning["hypotheses"][0]["hypothesis"] = (
         "This may instead be a replacement project. "
@@ -269,7 +278,10 @@ def test_review_currentness_and_source_receipts(client, add_source):  # noqa: F8
     add_source("Consider the revised final plan at 1 Main Street.\n")
     project_current_sources()
     assert client.get(f"/api/intelligence/{key}").status_code == 404
-    assert client.get("/api/intelligence").json()["coverage"]["awaiting_refresh"] == 1
+    assert (
+        client.get("/api/intelligence").json()["coverage"]["awaiting_refresh_in_page"]
+        == 1
+    )
     assert (
         "Evidence changed"
         in pipeline("publish", inference_id=retained["inference_id"])["error"]
@@ -280,7 +292,10 @@ def test_review_currentness_and_source_receipts(client, add_source):  # noqa: F8
     assert client.get(f"/api/intelligence/{key}").status_code == 200
     pipeline("withdraw", inference_id=updated["inference_id"])
     assert client.get(f"/api/intelligence/{key}").status_code == 404
-    assert client.get("/api/intelligence").json()["coverage"]["awaiting_refresh"] == 0
+    assert (
+        client.get("/api/intelligence").json()["coverage"]["awaiting_refresh_in_page"]
+        == 0
+    )
 
 
 def test_private_intelligence_work_survives_legacy_client(watch_client):  # noqa: F811
@@ -394,8 +409,11 @@ def test_qualified_opportunity_filters_and_receipts(client, add_source):  # noqa
         "limit": 1,
     }
     body = client.get("/api/intelligence", params=params).json()
-    assert body["total"] == 1
-    case = body["cases"][0]
+    assert len(body["cases"]) == 1
+    summary = body["cases"][0]
+    assert "citation_evidence" not in summary
+    assert "[Evidence:" not in json.dumps(summary)
+    case = client.get(f"/api/intelligence/{summary['case_key']}").json()
     assert case["implications"] == []
     assert (
         "[Evidence:source:"
@@ -404,17 +422,203 @@ def test_qualified_opportunity_filters_and_receipts(client, add_source):  # noqa
     assert "quote" not in case["opportunities"][0]["commercial_basis"]
     assert (
         client.get("/api/intelligence", params={**params, "readiness": "act"}).json()[
-            "total"
+            "cases"
         ]
-        == 0
+        == []
     )
     assert (
         client.get(
             "/api/intelligence", params={**params, "service": "electrical"}
-        ).json()["total"]
-        == 0
-    )
-    assert (
-        client.get("/api/intelligence", params={**params, "offset": 1}).json()["cases"]
+        ).json()["cases"]
         == []
     )
+    assert (
+        client.get("/api/intelligence", params={**params, "offset": 1}).status_code
+        == 422
+    )
+
+
+def test_page_filters_precede_bounded_source_checks(client, add_source, monkeypatch):  # noqa: F811
+    add_source()
+    project_current_sources()
+    packet = pipeline("export", pidn=TEST_PIDN)
+    analysis = analysis_for(packet)
+    original = analysis["hypotheses"][0]
+    analysis["hypotheses"] = []
+    for family in ("construction_timing", "business_expansion", "use_transition"):
+        hypothesis = deepcopy(original)
+        hypothesis["family"] = family
+        hypothesis["title"] = "A_100% plan: " + family
+        analysis["hypotheses"].append(hypothesis)
+    retained = pipeline("retain", packet=packet, analysis=analysis)
+    assert retained["accepted"]
+    pipeline("publish", inference_id=retained["inference_id"])
+
+    checked = []
+    hydrated = []
+    original_check = emerging_pages.current_inference_ids
+    original_present = emerging_pages.present_cases
+
+    def check(cur, identifiers):
+        checked.append(list(identifiers))
+        return original_check(cur, identifiers)
+
+    def present(cur, rows):
+        hydrated.append(len(rows))
+        return original_present(cur, rows)
+
+    monkeypatch.setattr(emerging_pages, "current_inference_ids", check)
+    monkeypatch.setattr(emerging_pages, "present_cases", present)
+    params = {"q": "A_100%", "limit": 1}
+    seen = []
+    first_cursor = None
+    while True:
+        response = client.get("/api/intelligence", params=params)
+        assert response.status_code == 200, response.text
+        page = response.json()
+        assert len(page["cases"]) == 1
+        assert "total" not in page
+        assert "citation_evidence" not in page["cases"][0]
+        seen.append(page["cases"][0]["case_key"])
+        if not page["has_more"]:
+            assert page["next_cursor"] is None
+            break
+        first_cursor = first_cursor or page["next_cursor"]
+        params["cursor"] = page["next_cursor"]
+        assert len(seen) < 4
+    assert len(seen) == len(set(seen)) == 3
+    assert seen == sorted(seen)
+    assert all(len(identifiers) == 1 for identifiers in checked)
+    assert hydrated == []
+
+    # Wildcards are literal search input, and a cursor cannot change its filters.
+    assert client.get("/api/intelligence", params={"q": "A_999%"}).json()["cases"] == []
+    assert (
+        client.get(
+            "/api/intelligence", params={"q": "changed", "cursor": first_cursor}
+        ).status_code
+        == 422
+    )
+    filtered = client.get(
+        "/api/intelligence", params={"family": "use_transition", "limit": 1}
+    ).json()
+    assert [case["family"] for case in filtered["cases"]] == ["use_transition"]
+    assert not filtered["has_more"]
+
+    assert client.get(f"/api/intelligence/{seen[-1]}").status_code == 200
+    assert hydrated == [1]
+    assert checked[-1] == [retained["inference_id"]]
+    pipeline("withdraw", inference_id=retained["inference_id"])
+    assert client.get("/api/intelligence", params={"q": "A_100%"}).json()["cases"] == []
+
+
+def test_stale_page_retains_continuation_without_scanning_all_cases(client, add_source):  # noqa: F811
+    add_source()
+    project_current_sources()
+    packet = pipeline("export", pidn=TEST_PIDN)
+    analysis = analysis_for(packet)
+    second = deepcopy(analysis["hypotheses"][0])
+    second["family"] = "use_transition"
+    analysis["hypotheses"].append(second)
+    retained = pipeline("retain", packet=packet, analysis=analysis)
+    pipeline("publish", inference_id=retained["inference_id"])
+    with writer() as cur:
+        cur.execute(
+            "UPDATE meta.source_rights SET derived_product_allowed=FALSE "
+            "WHERE source_key='public_proceedings'"
+        )
+    try:
+        first = client.get("/api/intelligence", params={"limit": 1}).json()
+        assert first["cases"] == []
+        assert first["has_more"]
+        assert first["coverage"]["checked_scopes"] == 1
+        assert first["coverage"]["awaiting_refresh_in_page"] == 1
+        second = client.get(
+            "/api/intelligence", params={"limit": 1, "cursor": first["next_cursor"]}
+        ).json()
+        assert second["cases"] == []
+        assert not second["has_more"]
+        assert second["coverage"]["checked_scopes"] == 1
+    finally:
+        with writer() as cur:
+            cur.execute(
+                "UPDATE meta.source_rights SET derived_product_allowed=TRUE "
+                "WHERE source_key='public_proceedings'"
+            )
+    assert len(client.get("/api/intelligence").json()["cases"]) == 2
+    pipeline("withdraw", inference_id=retained["inference_id"])
+
+
+@pytest.mark.parametrize("cursor", ["broken", "@@@", "e30", "bnVsbA", "W10", "MQ"])
+def test_malformed_cursor_is_rejected(client, cursor):
+    assert client.get("/api/intelligence", params={"cursor": cursor}).status_code == 422
+
+
+def test_api_cannot_rebuild_candidate_projection(client):
+    with writer() as cur:
+        cur.execute(
+            "SELECT has_function_privilege(%s, "
+            "'public.rebuild_emerging_case_index(text)', 'EXECUTE')",
+            (API_DB_USER,),
+        )
+        assert cur.fetchone()[0] is False
+
+
+def test_commercial_filters_match_one_possibility(client, add_source):  # noqa: F811
+    add_source()
+    project_current_sources()
+    packet = pipeline("export", pidn=TEST_PIDN)
+    analysis = analysis_for(packet)
+    possibilities = analysis["hypotheses"][0]["opportunities"]
+    second = deepcopy(possibilities[0])
+    second.update(
+        title="Wait for a defined electrical scope",
+        services=["electrical"],
+        readiness="wait",
+    )
+    possibilities.append(second)
+    retained = pipeline("retain", packet=packet, analysis=analysis)
+    assert retained["accepted"]
+    pipeline("publish", inference_id=retained["inference_id"])
+    assert (
+        client.get(
+            "/api/intelligence", params={"service": "engineering", "readiness": "wait"}
+        ).json()["cases"]
+        == []
+    )
+    assert (
+        len(
+            client.get(
+                "/api/intelligence",
+                params={"service": "electrical", "readiness": "wait"},
+            ).json()["cases"]
+        )
+        == 1
+    )
+    pipeline("withdraw", inference_id=retained["inference_id"])
+
+
+def test_new_unpublished_analysis_supersedes_old_publication(client, add_source):  # noqa: F811
+    add_source()
+    project_current_sources()
+    packet = pipeline("export", pidn=TEST_PIDN)
+    old = pipeline("retain", packet=packet, analysis=analysis_for(packet))
+    pipeline("publish", inference_id=old["inference_id"])
+    key = client.get("/api/intelligence").json()["cases"][0]["case_key"]
+    add_source("Consider the revised final plan at 1 Main Street.\n")
+    project_current_sources()
+    packet = pipeline("export", pidn=TEST_PIDN)
+    new = pipeline("retain", packet=packet, analysis=analysis_for(packet))
+    assert new["accepted"]
+    assert client.get(f"/api/intelligence/{key}").status_code == 404
+    assert client.get("/api/intelligence").json()["cases"] == []
+    pipeline("publish", inference_id=new["inference_id"])
+    assert client.get(f"/api/intelligence/{key}").json()["revision"] == str(
+        new["inference_id"]
+    )
+    # A later action on the older review cannot change the latest projection.
+    pipeline("withdraw", inference_id=old["inference_id"])
+    assert client.get(f"/api/intelligence/{key}").json()["revision"] == str(
+        new["inference_id"]
+    )
+    pipeline("withdraw", inference_id=new["inference_id"])

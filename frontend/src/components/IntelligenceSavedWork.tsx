@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useIntelligenceWorkspace } from '../lib/intelligenceWorkspace'
 import { useFetchJson } from '../lib/useFetchJson'
 import { WORK_LABELS, workNeedsReview } from '../lib/intelligenceFlow'
-import { CitedText } from './EvidencePanel'
 import IntelligenceDecision from './IntelligenceDecision'
 import type { EmergingResponse } from '../types/emerging'
 
@@ -92,8 +91,7 @@ export default function IntelligenceSavedWork({ fullPage = false }: { fullPage?:
               {current && current.revision !== item.last_seen_revision && (
                 <div className="emerging-change">
                   <p>
-                    <strong>Current stage:</strong>{' '}
-                    <CitedText text={current.stage} evidence={current.citation_evidence} />
+                    <strong>Current stage:</strong> {current.stage}
                   </p>
                   <p>
                     {current.opportunities.length
