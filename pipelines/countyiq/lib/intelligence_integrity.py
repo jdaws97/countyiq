@@ -555,6 +555,15 @@ def validate_entity_membership(
             else:
                 accounted_for.add(name)
         if isinstance(abstention, dict):
+            names = {
+                name for name in abstention.get("names", []) if isinstance(name, str)
+            }
+            if len(names) == 1 and names & claimed_by.keys():
+                name = next(iter(names))
+                errors.append(
+                    f"candidate name {name!r} has an entity assignment and an "
+                    "unresolved identity within that same name"
+                )
             validate_cited_text(abstention.get("reason"), "abstention reason")
 
     missing = cluster_set - accounted_for
