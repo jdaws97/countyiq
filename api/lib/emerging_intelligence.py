@@ -144,9 +144,15 @@ def present_cases(cur, rows: list[dict]) -> list[dict]:
     records = {}
     if keys:
         cur.execute(
-            """SELECT event_key, document_url, body_name, meeting_date, card, payload
-            FROM public.current_municipal_evidence WHERE event_key=ANY(%s)""",
-            (keys,),
+            """
+            SELECT event_key, document_url, body_name, meeting_date, card, payload
+            FROM public.current_municipal_evidence evidence
+            WHERE evidence.inference_id IN (
+                SELECT indexed.inference_id FROM public.municipal_card_index indexed
+                WHERE indexed.event_key=ANY(%s)
+            ) AND evidence.event_key=ANY(%s)
+            """,
+            (keys, keys),
         )
         records = {row["event_key"]: dict(row) for row in cur.fetchall()}
     return [present_case(row, records) for row in rows]

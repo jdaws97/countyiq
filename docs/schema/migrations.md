@@ -223,6 +223,15 @@ producer contract. Downgrade restores the original serving function calls and
 removes only the two helper functions. Future changes to the scoped-input view's
 row type or canonical source builders must update the typed helpers as well.
 
+### 085 — environmental geography proximity index
+
+Adds a current-row GiST index matching the geography expression used by
+meter-based environmental context reads. The existing geometry index does not
+support that expression. It changes no query predicates or retained data.
+The isolated rehearsal preserved all four full source packets and reduced
+the shared current-analysis query from 0.61 to 0.28 seconds. Downgrade drops
+only this index; the build uses the ordinary quiesced deployment window.
+
 ### 063 — scoped municipal event types
 
 Expands chk_intelligence_events_type to accept policy_action, recommendation,
