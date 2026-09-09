@@ -299,12 +299,18 @@ def entity_verification(
             # Build before the reusable-hash skip so a previously accepted
             # projection cannot bypass a newly reviewed context bound.
             prompt = build_entity_cluster_prompt(records)
-            if len(prompt) > MAX_DYNAMIC_PROMPT_CHARACTERS:
-                message = (
-                    "deferred: context exceeds reviewed limits: "
+            context_reason = None
+            if records.get("portfolio_summary"):
+                context_reason = (
+                    "truncated_source_inventory requires complete per-name dossiers"
+                )
+            elif len(prompt) > MAX_DYNAMIC_PROMPT_CHARACTERS:
+                context_reason = (
                     f"dynamic_prompt_characters={len(prompt)} "
                     f"limit={MAX_DYNAMIC_PROMPT_CHARACTERS}"
                 )
+            if context_reason:
+                message = f"deferred: context exceeds reviewed limits: {context_reason}"
                 _update_pass_status(database, cluster_key, 1, "error", "", message)
                 log.warning("Cluster %s %s", cluster_key, message)
                 errors += 1

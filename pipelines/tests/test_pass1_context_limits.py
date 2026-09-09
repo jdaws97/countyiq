@@ -42,7 +42,7 @@ def _pairs(count: int) -> list[tuple[str, str]]:
     return [(f"NAME {index}", f"NAME {index + 1}") for index in range(count - 1)]
 
 
-def _run_asset(monkeypatch, pairs, *, prompt, prior=None):
+def _run_asset(monkeypatch, pairs, *, prompt, prior=None, portfolio_summary=None):
     calls = {"gather": 0, "invoke": 0, "record": 0, "replace": 0, "status": []}
     prior_hashes = (
         {
@@ -86,6 +86,7 @@ def _run_asset(monkeypatch, pairs, *, prompt, prior=None):
                 "parcels": [],
                 "tax_claims": [],
                 "corporate_entities": [],
+                "portfolio_summary": portfolio_summary,
             }
         ),
     )
@@ -181,3 +182,17 @@ def test_context_limits_are_inclusive_at_the_boundary(monkeypatch):
         calls["gather"] == calls["invoke"] == calls["record"] == calls["replace"] == 1
     )
     assert result.metadata["clusters_deferred_context"].value == 0
+
+
+def test_truncated_inventory_cannot_publish_or_reuse_a_name_level_identity(monkeypatch):
+    calls, result = _run_asset(
+        monkeypatch,
+        _pairs(2),
+        prompt="A short prompt with an incomplete parcel inventory",
+        prior=True,
+        portfolio_summary={"total_parcels": 102, "parcels_shown": 50},
+    )
+    assert calls["gather"] == 1
+    assert calls["invoke"] == calls["record"] == calls["replace"] == 0
+    assert result.metadata["clusters_deferred_context"].value == 1
+    assert "truncated_source_inventory" in calls["status"][0][-1]

@@ -39,6 +39,12 @@ omitted. Qualified observations about unresolved candidates remain in the
 immutable inference without becoming owner links in downstream context. The
 Pass 1 quality identity now includes the contradiction projector's source file.
 
+Ordinary truncated portfolio prompts are now deferred before reuse or model
+execution. A name-level owner projection can include records outside the prompt's
+50-parcel or 30-tax-row detail limit. Those cases need the bounded dossier path,
+which fingerprints the complete inventory and exposes every parcel's mailing
+address and identifier. A sample of records cannot silently verify the rest.
+
 The first production audit found 69 active deterministic partitions, of which
 62 require model review under this intentionally narrow rule. That is a review
 queue, not a count of proven identity errors: source review may establish
