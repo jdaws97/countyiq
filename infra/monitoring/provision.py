@@ -124,14 +124,11 @@ def notification_policy(existing: dict) -> dict:
         "routes": [
             {
                 "receiver": "CountyIQ owner email",
-                "object_matchers": [
-                    ["alertname", "=", "Source unhealthy or stale"],
-                    ["source", "=", "municipal_proceedings"],
-                ],
-                "group_by": ["grafana_folder", "alertname"],
+                "object_matchers": [["severity", "=", "warning"]],
+                "group_by": ["grafana_folder", "severity"],
                 "group_wait": "30s",
-                # Batch changed coverage and unchanged reminders alike. Other
-                # sources and service outages retain the parent timings.
+                # Warn promptly once, then batch changes and reminders daily.
+                # Critical incidents retain the parent route's faster cadence.
                 "group_interval": "24h",
                 "repeat_interval": "24h",
                 "continue": False,

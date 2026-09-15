@@ -219,7 +219,7 @@ class DashboardAssetTests(unittest.TestCase):
         self.assertIn("scalar(up", alerts["collector-failed-or-stale"])
         self.assertIn('collector="storage"', alerts["docker-storage-stale"])
         self.assertIn(
-            "max_over_time(countyiq_container_oom_killed",
+            "increase(countyiq_container_oom_kills_total",
             alerts["container-restart-or-oom"],
         )
         self.assertIn("ignoring(bucket)", alerts["r2-capacity-or-guard"])
@@ -341,6 +341,66 @@ class DashboardAssetTests(unittest.TestCase):
                             ("1m", 1),
                             ("2m", 0),
                         )
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f"countyiq_container_restarts_total{{{service_labels}}}",
+                            "values": "0 0",
+                        },
+                        {
+                            "series": f"countyiq_container_oom_kills_total{{{service_labels}}}",
+                            "values": "0 1",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": alerts["container-restart-or-oom"],
+                            "eval_time": "1m",
+                            "exp_samples": [self.promtool_sample(service_labels, 1)],
+                        }
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f"countyiq_container_restarts_total{{{service_labels}}}",
+                            "values": "0x62",
+                        },
+                        {
+                            "series": f"countyiq_container_oom_kills_total{{{service_labels}}}",
+                            "values": "0 1 1x60",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": alerts["container-restart-or-oom"],
+                            "eval_time": "61m",
+                            "exp_samples": [self.promtool_sample(service_labels, 0)],
+                        }
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f"countyiq_container_restarts_total{{{service_labels}}}",
+                            "values": "0 0",
+                        },
+                        {
+                            "series": f"countyiq_container_oom_kills_total{{{service_labels}}}",
+                            "values": "3 0",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": alerts["container-restart-or-oom"],
+                            "eval_time": "1m",
+                            "exp_samples": [self.promtool_sample(service_labels, 0)],
+                        }
                     ],
                 },
                 {

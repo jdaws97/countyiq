@@ -30,6 +30,7 @@ SERVICES = (
 BASE_DIR = Path("/var/lib/countyiq")
 METRICS_DIR = BASE_DIR / "monitoring" / "metrics"
 PROBE_FILE = Path(__file__).with_name("probes.py")
+CGROUP_ROOT = Path("/sys/fs/cgroup")
 
 POSTGRES_QUERY = """
 BEGIN READ ONLY;
@@ -116,6 +117,30 @@ def size_bytes(value: str) -> float:
     return float(number) * base**exponent
 
 
+def oom_kill_count(
+    pid: int,
+    *,
+    proc_root: Path = Path("/proc"),
+    cgroup_root: Path = CGROUP_ROOT,
+) -> int:
+    """Read the cgroup-v2 OOM-kill counter for a running container process."""
+    relative_path = None
+    for line in (proc_root / str(pid) / "cgroup").read_text().splitlines():
+        hierarchy, controllers, path = line.split(":", 2)
+        if hierarchy == "0" and controllers == "":
+            relative_path = path
+            break
+    if relative_path is None or not relative_path.startswith("/"):
+        raise ValueError("Running container does not have a cgroup-v2 path")
+
+    events_path = cgroup_root / relative_path.lstrip("/") / "memory.events"
+    for line in events_path.read_text().splitlines():
+        name, value = line.split(maxsplit=1)
+        if name == "oom_kill" and value.isdecimal():
+            return int(value)
+    raise ValueError("Container cgroup does not expose an OOM-kill counter")
+
+
 class Metrics:
     def __init__(self):
         self.lines: list[str] = []
@@ -143,7 +168,8 @@ def collect_containers(metrics: Metrics) -> None:
         '{"name":{{json .Name}},"running":{{.State.Running}},'
         '"health":{{if .State.Health}}{{json .State.Health.Status}}'
         '{{else}}"none"{{end}},"oom":{{.State.OOMKilled}},'
-        '"restarts":{{.RestartCount}},"memory_limit":{{.HostConfig.Memory}},'
+        '"pid":{{.State.Pid}},"restarts":{{.RestartCount}},'
+        '"memory_limit":{{.HostConfig.Memory}},'
         '"log_path":{{json .LogPath}}}'
     )
     names = command(["docker", "ps", "-a", "--format", "{{.Names}}"])
@@ -167,7 +193,13 @@ def collect_containers(metrics: Metrics) -> None:
             running and item.get("health") in ("healthy", "none"),
             service=service,
         )
-        metrics.add("container_oom_killed", item.get("oom", False), service=service)
+        if running:
+            pid = item.get("pid")
+            if not isinstance(pid, int) or pid < 1:
+                raise ValueError("Running container does not expose a valid PID")
+            metrics.add(
+                "container_oom_kills_total", oom_kill_count(pid), service=service
+            )
         metrics.add(
             "container_restarts_total", item.get("restarts", 0), service=service
         )

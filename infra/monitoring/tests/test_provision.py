@@ -95,29 +95,35 @@ class ProvisioningTests(unittest.TestCase):
         self.assertEqual(len(existing["routes"]), 1)
         self.assertEqual(notification_policy(updated), updated)
 
-    def test_daily_coverage_emails_do_not_delay_other_sources_or_outages(self):
+    def test_warnings_batch_daily_while_critical_alerts_remain_prompt(self):
         policy = notification_policy({"receiver": "original"})
         county_route = policy["routes"][0]
-        coverage_route = county_route["routes"][0]
+        warning_route = county_route["routes"][0]
         for labels, expected_interval in (
             (
                 {
                     "alertname": "Source unhealthy or stale",
                     "source": "municipal_proceedings",
+                    "severity": "warning",
                 },
                 "24h",
             ),
-            ({"alertname": "Source unhealthy or stale", "source": "parcels"}, "4h"),
-            ({"alertname": "External readiness failed"}, "4h"),
+            (
+                {"alertname": "PostgreSQL capacity or blocking", "severity": "warning"},
+                "24h",
+            ),
+            ({"alertname": "External readiness failed", "severity": "critical"}, "4h"),
         ):
             matches = all(
                 operator == "=" and labels.get(label) == value
-                for label, operator, value in coverage_route["object_matchers"]
+                for label, operator, value in warning_route["object_matchers"]
             )
-            selected = coverage_route if matches else county_route
+            selected = warning_route if matches else county_route
             with self.subTest(labels=labels):
                 self.assertEqual(selected["repeat_interval"], expected_interval)
                 self.assertEqual(selected["group_interval"], "24h" if matches else "5m")
+                self.assertEqual(selected["group_wait"], "30s")
+        self.assertEqual(warning_route["group_by"], ["grafana_folder", "severity"])
 
     def test_service_account_does_not_grant_another_human_access(self):
         owner = {"email": "jarod.daws@protonmail.com"}

@@ -83,11 +83,11 @@
   {
     "uid": "container-restart-or-oom",
     "title": "Container restart or OOM",
-    "expr": "((increase(countyiq_container_restarts_total{instance=\"countyiq-production\",job=\"countyiq/host\"}[1h]) > bool 3) + (max_over_time(countyiq_container_oom_killed{instance=\"countyiq-production\",job=\"countyiq/host\"}[1h]) > bool 0)) > bool 0",
+    "expr": "((increase(countyiq_container_restarts_total{instance=\"countyiq-production\",job=\"countyiq/host\"}[1h]) > bool 3) + (increase(countyiq_container_oom_kills_total{instance=\"countyiq-production\",job=\"countyiq/host\"}[1h]) > bool 0)) > bool 0",
     "for": "5m",
     "severity": "warning",
     "summary": "A managed service has restarted repeatedly or was OOM-killed.",
-    "description": "OOMKilled is a gauge, so this checks its maximum rather than its increase."
+    "description": "OOM kills are read from the cgroup-v2 counter, so an old Docker inspect state cannot keep this alert firing."
   },
   {
     "uid": "dagster-heartbeat-missing",
