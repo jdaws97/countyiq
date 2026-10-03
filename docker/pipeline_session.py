@@ -142,6 +142,21 @@ def message(value: dict) -> None:
     print(json.dumps(value), flush=True)
 
 
+def database_address() -> str:
+    """Return the container address while the deployment lock prevents replacement."""
+    return subprocess.check_output(
+        [
+            "docker",
+            "inspect",
+            "--format",
+            '{{(index .NetworkSettings.Networks "countyiq_database").IPAddress}}',
+            "countyiq-postgres",
+        ],
+        text=True,
+        timeout=10,
+    ).strip()
+
+
 def writer_login(values: dict[str, str], *, enabled: bool) -> None:
     identifiers = [
         values[key]
@@ -214,7 +229,12 @@ def serve(reference: str) -> None:
         environment = pipeline_environment(values)
         with writer_access(values):
             message(
-                {"type": "session", "reference": reference, "environment": environment}
+                {
+                    "type": "session",
+                    "reference": reference,
+                    "database_address": database_address(),
+                    "environment": environment,
+                }
             )
             while True:
                 ready, _, _ = select.select([sys.stdin], [], [], 20)

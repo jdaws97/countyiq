@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import select
@@ -89,15 +90,7 @@ class PipelineSession:
         self.process = None
         self.last_heartbeat = 0.0
         self.environment = {}
-        command = [
-            "sudo",
-            "-n",
-            "python3",
-            "/opt/countyiq/docker/pipeline_session.py",
-            "--ref",
-            self.reference,
-        ]
-        self.arguments = [
+        ssh = [
             "ssh",
             "-T",
             "-i",
@@ -110,6 +103,33 @@ class PipelineSession:
             "StrictHostKeyChecking=yes",
             "-o",
             "ConnectTimeout=15",
+        ]
+        inspect = [
+            "sudo",
+            "-n",
+            "docker",
+            "inspect",
+            "--format",
+            '{{(index .NetworkSettings.Networks "countyiq_database").IPAddress}}',
+            "countyiq-postgres",
+        ]
+        address = subprocess.check_output(
+            [*ssh, target, shlex.join(inspect)], text=True, timeout=25
+        ).strip()
+        parsed = ipaddress.ip_address(address)
+        if parsed.version != 4 or not parsed.is_private:
+            raise ValueError("The database must have a private Docker IPv4 address")
+        self.database_address = address
+        command = [
+            "sudo",
+            "-n",
+            "python3",
+            "/opt/countyiq/docker/pipeline_session.py",
+            "--ref",
+            self.reference,
+        ]
+        self.arguments = [
+            *ssh,
             "-o",
             "ServerAliveInterval=5",
             "-o",
@@ -117,7 +137,7 @@ class PipelineSession:
             "-o",
             "ExitOnForwardFailure=yes",
             "-L",
-            f"127.0.0.1:{self.port}:127.0.0.1:5432",
+            f"127.0.0.1:{self.port}:{address}:5432",
             target,
             shlex.join(command),
         ]
@@ -136,6 +156,7 @@ class PipelineSession:
             if (
                 response.get("type") != "session"
                 or response.get("reference") != self.reference
+                or response.get("database_address") != self.database_address
                 or not isinstance(values, dict)
                 or any(not isinstance(value, str) for value in values.values())
             ):

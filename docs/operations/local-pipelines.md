@@ -83,7 +83,9 @@ stop before starting and during heartbeats.
 
 The helper enables the separate writer role for this session and lends only
 the required database/source settings in memory. The PC connects through a
-temporary loopback SSH tunnel. It does not download the production environment
+temporary PC loopback SSH tunnel to the database container's private address.
+The address is checked again under the deployment lock before execution.
+It does not download the production environment
 file. On exit, interruption, lost heartbeat, or a cost stop, the wrapper stops
 local child processes and the helper restores writer `NOLOGIN`, terminates
 writer connections, and releases the host lock. Do not bypass this wrapper

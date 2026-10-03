@@ -10,6 +10,7 @@ import argparse
 import fcntl
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -139,6 +140,10 @@ def main() -> int:
         print("Another pipeline uses this local state directory.", file=sys.stderr)
     except (ValueError, RuntimeError, OSError) as error:
         print(str(error), file=sys.stderr)
+    except subprocess.SubprocessError:
+        print(
+            "Could not inspect the protected VPS database connection.", file=sys.stderr
+        )
     except KeyboardInterrupt:
         return 130
     return 1

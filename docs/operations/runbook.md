@@ -46,8 +46,8 @@ API. For failed jobs, inspect the executing PC's Dagster history beneath
 `~/.local/state/countyiq/pipeline/dagster`. The VPS has no pipeline daemon to
 restart.
 
-Postgres is reachable inside Compose and on host loopback port 5432. Production
-pipeline access uses the protected SSH wrapper:
+Postgres is reachable inside Compose without a published host port. Production
+pipeline access uses the protected SSH wrapper to its private container address:
 
     ciq exec -T postgres psql -U dagster_admin -d countyiq \
       -c "SELECT pg_size_pretty(pg_database_size('countyiq'));"

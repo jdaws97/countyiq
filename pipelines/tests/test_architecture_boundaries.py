@@ -41,6 +41,7 @@ def test_compose_enforces_credentials_networks_and_versioned_images() -> None:
         (REPO_ROOT / "docker/docker-compose.yml").read_text(encoding="utf-8")
     )
     services = compose["services"]
+    assert not services["postgres"].get("ports")
     api = services["api"]
     migration = services["migrate"]
 
