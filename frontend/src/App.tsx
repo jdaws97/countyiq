@@ -22,6 +22,7 @@ const SiteInquiries = lazy(() => import('./pages/SiteInquiries'))
 const children = [
   { index: true, element: <Navigate replace to="/sites" /> },
   { path: 'sites', element: <SiteInquiries /> },
+  { path: 'sites/new', element: <SiteInquiries creating /> },
   { path: 'sites/:id', element: <SiteInquiries /> },
   { path: 'overview', element: <WorkspaceHome /> },
   { path: 'organizations', element: <Organizations /> },

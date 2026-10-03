@@ -1,4 +1,5 @@
 import { siteReviewTopics } from '../../lib/sitePacket'
+import { SITE_QUESTION_KEYS } from '../../lib/siteInquiries'
 import type { SiteInquiry, SiteIntakePacket, SiteQuestionReview } from '../../types/siteIntake'
 
 const TOPIC_LABELS = {
@@ -11,12 +12,12 @@ const TOPIC_LABELS = {
 
 type Props = {
   inquiry: SiteInquiry
-  packet: SiteIntakePacket
+  packet: SiteIntakePacket | null
   onChange: (reviews: SiteQuestionReview[]) => void
 }
 
 export default function SiteQuestions({ inquiry, packet, onChange }: Props) {
-  const topics = siteReviewTopics(packet)
+  const topics = packet ? siteReviewTopics(packet) : []
   const reviews = inquiry.question_reviews ?? []
   function update(key: SiteQuestionReview['key'], change: Partial<SiteQuestionReview>) {
     const previous: SiteQuestionReview = reviews.find((review) => review.key === key) ?? {
@@ -28,28 +29,25 @@ export default function SiteQuestions({ inquiry, packet, onChange }: Props) {
   }
   return (
     <div className="site-question-list">
-      {topics.map((topic, index) => {
-        const review = reviews.find((item) => item.key === topic.key)
+      {SITE_QUESTION_KEYS.map((key, index) => {
+        const topic = topics.find((item) => item.key === key)
+        const review = reviews.find((item) => item.key === key)
         const status = review?.status ?? 'open'
         return (
-          <article
-            key={topic.key}
-            className="site-question"
-            aria-labelledby={`site-question-${topic.key}`}
-          >
+          <article key={key} className="site-question" aria-labelledby={`site-question-${key}`}>
             <div className="site-question-number" aria-hidden="true">
               {index + 1}
             </div>
             <div>
-              <h3 id={`site-question-${topic.key}`}>{TOPIC_LABELS[topic.key]}</h3>
-              <p>{topic.question}</p>
+              <h3 id={`site-question-${key}`}>{TOPIC_LABELS[key]}</h3>
+              {topic && <p>{topic.question}</p>}
               <div className="site-question-inputs">
                 <label>
                   Your progress
                   <select
                     value={status}
                     onChange={(event) =>
-                      update(topic.key, {
+                      update(key, {
                         status: event.target.value as SiteQuestionReview['status'],
                       })
                     }
@@ -65,7 +63,7 @@ export default function SiteQuestions({ inquiry, packet, onChange }: Props) {
                     value={review?.note ?? ''}
                     maxLength={1500}
                     rows={2}
-                    onChange={(event) => update(topic.key, { note: event.target.value })}
+                    onChange={(event) => update(key, { note: event.target.value })}
                     placeholder="Who confirmed what, when, and where can it be checked?"
                   />
                   {status !== 'open' && !review?.note.trim() && (

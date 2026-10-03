@@ -3,10 +3,10 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import PageShell from '../components/PageShell'
 import SiteSearch from '../components/site-inquiries/SiteSearch'
 import InquiryEditor from '../components/site-inquiries/InquiryEditor'
+import InquiryList from '../components/site-inquiries/InquiryList'
 import { ButtonLink, EmptyState, PageHeader, StatusMessage } from '../components/ui'
 import { getSiteInquiries } from '../lib/siteInquiries'
 import { watchSyncState } from '../lib/watchSync'
-import { formatShortDate } from '../lib/format'
 import type { SiteInquiry } from '../types/siteIntake'
 import './SiteInquiries.css'
 
@@ -31,7 +31,7 @@ function readInquiries(): InquiryWorkspace {
   }
 }
 
-export default function SiteInquiries() {
+export default function SiteInquiries({ creating = false }: { creating?: boolean }) {
   const { id } = useParams()
   const [params] = useSearchParams()
   const [saved, setSaved] = useState(readInquiries)
@@ -67,20 +67,29 @@ export default function SiteInquiries() {
   const pidn = selected?.pidn ?? params.get('pidn') ?? ''
   const validPidn = /^[A-Za-z0-9_-]{1,100}$/.test(pidn)
   const accountKey = sync.account?.user?.id ?? 'guest'
+  const showEditor = validPidn && (!saved.error || selected) && (!id || selected)
   return (
     <PageShell maxWidth={1220} className="site-inquiries">
-      <PageHeader
-        eyebrow="York County · Site research"
-        title="Site inquiries"
-        description="Turn a candidate property into a cited research handoff for your first municipal conversation."
-        actions={<ButtonLink to="/sites">New inquiry</ButtonLink>}
-      />
-      <div className="site-workspace-note">
-        {sync.connected
-          ? 'Private account workspace'
-          : 'Saved in this browser. Sign in to sync across devices.'}{' '}
-        <Link to="/watch">Workspace settings & backup</Link>
-      </div>
+      {!showEditor && (
+        <PageHeader
+          eyebrow="York County · Site research"
+          title={creating ? 'Find a property' : 'Site inquiries'}
+          description={
+            creating
+              ? 'Choose the candidate site before adding the client’s brief.'
+              : 'Keep the brief, evidence and open questions together for each candidate site.'
+          }
+          actions={
+            creating ? (
+              <ButtonLink to="/sites">All inquiries</ButtonLink>
+            ) : (
+              <ButtonLink tone="primary" to="/sites/new">
+                New inquiry
+              </ButtonLink>
+            )
+          }
+        />
+      )}
       {saved.error && <StatusMessage tone="error">{saved.error}</StatusMessage>}
       {selected && !current && !saved.error && (
         <StatusMessage tone="error">
@@ -89,57 +98,33 @@ export default function SiteInquiries() {
         </StatusMessage>
       )}
       {id && !selected && (
-        <EmptyState title="Inquiry unavailable">
+        <EmptyState
+          title="Inquiry unavailable"
+          actions={<ButtonLink to="/sites">All inquiries</ButtonLink>}
+        >
           This inquiry is not in the current workspace. Check the signed-in account or import your
           exported workspace.
         </EmptyState>
       )}
-      {validPidn && (!saved.error || selected) && (!id || selected) ? (
+      {pidn && !validPidn && (
+        <StatusMessage tone="error">
+          That parcel ID is not valid. Find a property to continue.
+        </StatusMessage>
+      )}
+      {showEditor ? (
         <InquiryEditor key={`${accountKey}:${id ?? pidn}`} pidn={pidn} initial={selected} />
       ) : (
-        !id && (
-          <>
-            <SiteSearch />
-            <section aria-labelledby="saved-sites-heading" className="site-section">
-              <div className="site-section-title">
-                <h2 id="saved-sites-heading">Your inquiries</h2>
-                <span className="site-count-label">{saved.items.length} saved</span>
-              </div>
-              {saved.items.length ? (
-                <div className="site-inquiry-list">
-                  {saved.items.map((item) => (
-                    <Link className="site-inquiry-card" to={`/sites/${item.id}`} key={item.id}>
-                      <div className="site-card-heading">
-                        <strong>{item.label}</strong>
-                        <span className="site-stage">{item.status.replaceAll('_', ' ')}</span>
-                      </div>
-                      <span>{item.proposed_use || 'Proposed use not supplied'}</span>
-                      <small>
-                        PIDN {item.pidn} · Saved {formatShortDate(item.updated_at)}
-                      </small>
-                      <div className="site-card-footer">
-                        <span>
-                          {5 -
-                            (item.question_reviews ?? []).filter(
-                              (question) => question.status !== 'open',
-                            ).length}{' '}
-                          review questions open
-                        </span>
-                        <span>Continue inquiry →</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState title="Start with a property">
-                  Find a client’s candidate site, confirm its identity, then add the proposed use
-                  and questions.
-                </EmptyState>
-              )}
-            </section>
-          </>
-        )
+        !id &&
+        (creating || pidn ? <SiteSearch /> : !saved.error && <InquiryList items={saved.items} />)
       )}
+      <div className="site-workspace-note">
+        <span>
+          {sync.connected
+            ? 'Private account workspace'
+            : 'Saved in this browser. Sign in to sync across devices.'}
+        </span>
+        <Link to="/watch">Workspace settings & backup</Link>
+      </div>
     </PageShell>
   )
 }

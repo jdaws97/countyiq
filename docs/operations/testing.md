@@ -156,10 +156,26 @@ cannot resolve. It does not contact R2, mutate Docker, or prove the live host.
 PostGIS test container and runs the migration-backed API contract suite for API
 or pipeline changes.
 
-`.github/workflows/security.yml` runs dependency review on pull requests and
-CodeQL for Python and TypeScript on pushes, pull requests, and a weekly
-schedule. Actions are pinned to full commit SHAs. Local release review should
-also run Gitleaks against the exact working tree; CI repeats that scan.
+`.github/workflows/security.yml` declares the availability of GitHub-hosted
+dependency review and CodeQL. On October 3, both were unavailable for this private
+repository: dependency review rejected its missing entitlement/dependency graph,
+and CodeQL rejected uploads because code scanning was disabled. The checked-in
+`CODEQL_STATE` and `DEPENDENCY_REVIEW_STATE` declarations are `unavailable`;
+the workflow reports those scanners as skipped, without claiming they passed.
+Missing or invalid declarations fail. When the relevant feature is enabled in
+GitHub, change its declaration to `enabled`; ordinary scanner failures then remain
+enforcing. No billing or repository feature settings are changed by this workflow.
+
+CI still enforces Gitleaks, npm/pip dependency audits and high-severity Python
+Bandit checks on every pull request and main push. These do not replace CodeQL's
+semantic analysis coverage. Weekly and manual Security runs reuse the complete
+CI workflow so those available checks also run without a code change. Actions
+remain pinned to full commit SHAs. Local release review should also run Gitleaks
+against the exact working tree; CI repeats that scan.
+
+GitHub documents [private-repository code scanning availability](https://docs.github.com/en/code-security/reference/code-scanning/troubleshoot-analysis-errors/private-repository-enablement),
+[dependency-review requirements](https://github.com/actions/dependency-review-action#installation-standard)
+and [reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows).
 
 The API contract fixture provisions the same dedicated read-only database role
 used by production and asserts the API connection has

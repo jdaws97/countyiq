@@ -66,7 +66,7 @@ source scope and the distinction between evidence strength and action readiness.
 
 `WorkspaceShell` owns grouped persistent navigation, global search, account state
 and theme. Desktop uses a restrained deep-teal sidebar and a small utility bar.
-Phones use a keyboard-accessible drawer. Use `PageShell` for normal pages and the
+Phones and narrow tablets use a keyboard-accessible drawer. Use `PageShell` for normal pages and the
 shared map mode for the map. Do not reintroduce an independent top navigation or a
 second navigation scheme for individual customer pages.
 
@@ -353,3 +353,25 @@ passages, source links, acquisition dates and scope limitations. Preparing or
 exporting the handoff rechecks the current API evidence and saved inquiry version.
 The print layout hides navigation and controls, retains full source text and uses
 browser print-to-PDF. Commercial workflow validation remains outstanding.
+
+### Productization and daily return
+
+The site-inquiry landing page leads with saved work. Inquiry-name/parcel search
+and saved-stage filters stay in the URL, so returning from an inquiry retains
+the selection. Cards summarize the private brief; the editor retains the whole
+text. Their stage is the user's saved workflow choice, and current evidence is
+checked on opening. New inquiry has its own `/sites/new` property finder with
+results explicitly labeled by the submitted query. Older `/sites?pidn=…` links
+remain usable.
+
+The editor places the client brief beside the actual parcel context. Desktop
+save controls remain below the shared utility bar; phones have ordinary Save
+and Preview controls at the end as well as the beginning. Saving unfinished work
+is separate from acknowledging a source revision. Public-evidence failures must
+leave all private question responses editable and savable for existing inquiries,
+while review acknowledgement and handoff export require current evidence.
+
+One navigation definition supplies sidebar groups, active aliases, context labels
+and page titles. My work remains in the private workspace group. The shared shell
+includes a skip link, and its phone drawer traps focus through visible links,
+controls and the expandable county-intelligence group.

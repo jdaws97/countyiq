@@ -283,7 +283,16 @@ test('saved question responses roundtrip while older inquiries stay readable', (
   )
   state.replaceWorkspace(portable)
   assert.deepEqual(inquiries.getSiteInquiries()[0].question_reviews, question_reviews)
+  assert.equal(inquiries.openSiteQuestionCount(inquiries.getSiteInquiries()[0]), 4)
   assert.equal(inquiries.isSiteInquiries([siteInquiry]), true)
+  assert.equal(inquiries.openSiteQuestionCount(siteInquiry), 5)
+  assert.equal(
+    inquiries.openSiteQuestionCount({
+      ...siteInquiry,
+      question_reviews: [{ ...question_reviews[0], note: ' ' }],
+    }),
+    5,
+  )
   assert.equal(
     inquiries.isSiteInquiries([
       { ...siteInquiry, question_reviews: [{ ...question_reviews[0], note: ' ' }] },

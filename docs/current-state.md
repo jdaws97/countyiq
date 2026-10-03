@@ -2,10 +2,14 @@
 
 This file is the fast answer to "where are we really with this repo?"
 
-For the current deployed commit, recovery receipts and qualification evidence,
-use the [September 5 launch record](operations/production-launch-2026-09-05.md).
-The private app is live; municipal extraction publication and full backfill
-remain gated. The model defaults below are configuration, not quality approval.
+The private application is live. The authoritative deployed commit and rollback
+backup are recorded on the VPS in `/var/lib/countyiq/releases/current.env`.
+See the [October 3 verification](research/site-inquiry-local-worker-verification-2026-10-03.md)
+for the current site-inquiry and source-recovery evidence, and the
+[September 5 launch record](operations/production-launch-2026-09-05.md) for the
+original deployment qualification. Municipal extraction publication and full
+backfill remain gated. The historical model defaults below are configuration,
+not quality approval.
 
 ## October 3 direction and assessment status
 
@@ -13,35 +17,40 @@ The selected next direction is [site-intake research for York County civil and
 land-planning firms](products/site-intake.md): a client-supplied property and
 proposed use become a cited research handoff with explicit unresolved questions.
 This reopens the earlier investor-only audience below. The inquiry workflow,
-private persistence, cited export and conservative flood-screening contract are
-implemented on the October 3 branch. Commercial validation remains open.
+private persistence, question responses, cited print/text handoff and conservative
+flood-screening contract are implemented. The default entry is `/sites`, with
+saved-work filters and a separate `/sites/new` property finder. Commercial
+validation remains open.
 
-Production inspection confirmed running Dagster daemons, enabled schedules and
-23 unhealthy source indicators. Grouped job outcomes were incorrectly masking
-successful sibling datasets. Monitoring repairs were deployed and verified;
-source-ledger and product rollout status belong in the release receipt. See
-[source refresh recovery](operations/source-refresh-recovery.md). A fresh probe
-on October 3 found county GIS TLS working again; PennDOT, DEP and the county
-website still timed out from the VPS while answering locally.
+At 21:21 UTC on October 3, production reported 25/27 sources healthy and
+intelligence integrity green. Address-point duplicate identities and incomplete
+municipal coverage remained visible holds. The controlled
+[local PC worker](operations/local-source-worker.md) recovered five source assets
+that the VPS could not reach, and their affected intelligence outputs rebuilt
+successfully. Runs are manual while the PC is online. Source receipts, archive
+requirements, policy checks and SCD2 history remain on the ordinary VPS pipeline.
+Paid Pass 0 and Pass 3 remain disabled.
 
-The current product baseline is `codex/emerging-intelligence-pilot`, ahead of
-`main`. Historical counts and status below are dated records.
+The earlier emerging-intelligence workspace remains available as supporting
+research and saved private work. Historical counts and status below are dated
+records; they do not override the October 3 direction or live health receipts.
 
 ## What CountyIQ Is Right Now
 
 CountyIQ is a real-estate intelligence platform for York County, PA. The repo contains:
 
-- a React frontend with home, feed, radar, map, municipality, search, property, entity/owner, project, watch, compare, and ops-health views; the legacy `/delinquent`, `/licenses`, `/projects`, `/distressed`, and `/assemblage` bookmarks redirect into Feed, Radar, or Search
+- a React frontend centered on site inquiries, with supporting county activity, property screening, maps, municipalities, search, property/organization investigations, private saved work, comparison, and operator health; legacy bookmarks retain their redirects
 - a FastAPI API serving those surfaces under `/api/*`
 - a Dagster pipeline layer that handles both source ingestion and an LLM-backed intelligence workflow
 
 ## Target Buyer
 
-CountyIQ is a **real-estate intelligence product for private-market investors and
-developers in South-Central PA**, starting in York County. See
-`docs/products/real-estate-intelligence.md` for the full lane, personas, and
-roadmap. All new surfaces should serve an investor or developer job. This is
-the only audience; earlier civic/journalist/government framings are dead.
+The current product hypothesis serves **York County civil and land-planning
+firms preparing an initial site inquiry**. A supplied property and client brief
+lead to source-backed screening, recorded questions and a professional handoff.
+See [Site intake](products/site-intake.md). This is an implemented workflow, not
+proof of customer demand, site suitability or municipal approval. Existing
+investor/developer intelligence and private work remain supporting surfaces.
 
 ## Honest Gap Assessment (2026-08-28 review)
 

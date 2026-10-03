@@ -16,14 +16,14 @@ Run `caba69ec-84d6-462c-9bc8-2193216bfd71` succeeded on October 3. Its bundle ID
 was `a248211905f9bc8438c6c0f75c1b46f90dfe325de4de4a589f43013434e59620`.
 All five assets materialized and all seven registered asset checks passed.
 
-| Source | Imported records |
-| --- | ---: |
-| PennDOT roads | 2,272 |
-| PennDOT transportation projects | 137 |
-| PennDOT traffic | 1,819 |
-| DEP regulated tank facilities | 382 |
-| DEP cleanup locations within the configured query extent | 1,314 |
-| County tax claims, report dated October 2 | 37,017 authority rows |
+| Source                                                   |      Imported records |
+| -------------------------------------------------------- | --------------------: |
+| PennDOT roads                                            |                 2,272 |
+| PennDOT transportation projects                          |                   137 |
+| PennDOT traffic                                          |                 1,819 |
+| DEP regulated tank facilities                            |                   382 |
+| DEP cleanup locations within the configured query extent |                 1,314 |
+| County tax claims, report dated October 2                | 37,017 authority rows |
 
 Each source's refresh status became successful. Six dataset watermarks were
 committed with their staging changes; the two DEP layers have separate
@@ -62,6 +62,45 @@ Local artifacts are under `output/playwright/`: desktop and phone screenshots,
 `site-handoff-mobile.png` and `site-inquiry-handoff.pdf`. Generated examples are
 not committed as customer records.
 
+## UI productization follow-up
+
+The return journey now starts with searchable saved inquiries and URL-persisted
+stage filters. `/sites/new` provides a distinct property finder; result headings
+retain the submitted query when the input changes. The brief and real parcel map
+share the editor's opening view. Shared navigation labels and browser titles now
+come from one definition, and narrow tablets use the compact navigation drawer.
+
+The follow-up browser checks used the same actual production public parcel data
+and an actual production search response for `467 CAPITOL`. They remained local
+browser checks, not a signed-in production-browser session. Verification entries
+and temporary response changes were restored after the checks.
+
+Verified follow-up behavior:
+
+- Inquiry-name and saved-stage filters work together; browser return retains
+  the search, and filter changes retain the page's scroll position. A new
+  unsaved inquiry preserves its draft when choosing Stay.
+- A simulated evidence restriction leaves private question responses editable.
+  Correcting and saving a response succeeds while preview and review
+  acknowledgement remain disabled.
+- Desktop save controls clear the shared header. Layouts at 1440, 1024, 800
+  and 390 pixels do not overflow horizontally; the 800px layout was visually
+  refined to use compact navigation. Phones have ordinary Save at the bottom.
+- Keyboard focus remains inside both collapsed and expanded phone navigation.
+  Escape closes it; resizing to desktop releases the drawer and scroll lock.
+- Dark theme persists through reload. An empty workspace offers a working
+  property-finder entry.
+- A fresh handoff reaches printing and retains the brief, responses, citations
+  and scope in a native PDF. A saved version changed on the animation frame
+  between source validation and printing blocks the print and removes preview.
+
+Artifacts use the `productize-` prefix under `output/playwright/`, including
+desktop/tablet/phone and dark-theme screenshots and `productize-handoff.pdf`.
+The frontend's 73 tests, typecheck, lint and production build passed. Prettier was
+applied to the changed source, tests and helpers. Actionlint 1.7.12 accepted both
+changed workflows; executing their availability script accepted enabled and
+unavailable declarations and rejected missing/unknown values.
+
 ## Validation
 
 The final implementation passed the complete pipeline unit suite (2,084 tests),
@@ -75,6 +114,9 @@ ESLint and the production Vite build. Ruff formatting was applied to Python code
 The map remains a separate lazy-loaded bundle; its existing bundle-size advisory
 still appears during builds.
 
-Repository Security workflows cannot complete their CodeQL and dependency-review
-jobs while those GitHub repository features are disabled. Ordinary CI checks and
-application tests remain separate from that configuration limitation.
+At the source-worker release, repository Security workflows could not complete
+CodeQL and dependency-review jobs because those GitHub features were unavailable.
+The productization follow-up now declares and reports those scanners as unavailable
+and skipped. Ordinary CI retains its enforcing secrets, dependency and Python
+security checks, and weekly/manual Security runs reuse that CI workflow. This does
+not provide equivalent CodeQL coverage; see [testing operations](../operations/testing.md).

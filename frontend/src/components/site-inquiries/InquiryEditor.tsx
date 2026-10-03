@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import ParcelContextMap from '../ParcelContextMap'
-import { Button, ButtonLink, StatusMessage } from '../ui'
+import { Link, useNavigate } from 'react-router-dom'
+import { Button, ButtonLink, PageHeader, StatusMessage } from '../ui'
 import { useFetchJson } from '../../lib/useFetchJson'
-import { getSiteInquiries, removeSiteInquiry } from '../../lib/siteInquiries'
+import { getSiteInquiries, openSiteQuestionCount, removeSiteInquiry } from '../../lib/siteInquiries'
 import { watchSyncState } from '../../lib/watchSync'
 import { downloadText } from '../../lib/investigationState'
 import { sitePacketText } from '../../lib/sitePacket'
@@ -14,6 +13,8 @@ import SiteEvidence from './SiteEvidence'
 import SiteQuestions from './SiteQuestions'
 import SiteHandoff from './SiteHandoff'
 import UnsavedInquiryDialog from './UnsavedInquiryDialog'
+import InquiryActions from './InquiryActions'
+import InquiryProposal from './InquiryProposal'
 
 export default function InquiryEditor({ pidn, initial }: { pidn: string; initial?: SiteInquiry }) {
   const navigate = useNavigate()
@@ -27,8 +28,7 @@ export default function InquiryEditor({ pidn, initial }: { pidn: string; initial
   const active = useRef(true)
   const edits = useRef(0)
   const reviewed = Boolean(packet && draft.reviewed_revision === packet.revision)
-  const openQuestions =
-    5 - (draft.question_reviews ?? []).filter((question) => question.status !== 'open').length
+  const openQuestions = openSiteQuestionCount(draft)
   useEffect(() => {
     active.current = true
     return () => {
@@ -102,9 +102,18 @@ export default function InquiryEditor({ pidn, initial }: { pidn: string; initial
           await new Promise<void>((resolve) =>
             window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())),
           )
-          if (active.current && account === (watchSyncState().account?.user?.id ?? null)) {
-            window.print()
+          if (!active.current || account !== (watchSyncState().account?.user?.id ?? null)) {
+            return
           }
+          if (
+            editVersion !== edits.current ||
+            getSiteInquiries().find((item) => item.id === draft.id)?.updated_at !== draft.updated_at
+          ) {
+            throw new Error(
+              'The inquiry changed before printing. Review the saved version and try again.',
+            )
+          }
+          window.print()
         } else {
           window.scrollTo({ top: 0, behavior: 'smooth' })
         }
@@ -135,17 +144,31 @@ export default function InquiryEditor({ pidn, initial }: { pidn: string; initial
     )
   }
 
+  const saveActions = (
+    <InquiryActions
+      busy={exporting}
+      canSave={Boolean(packet || initial)}
+      canPreview={Boolean(packet && !dirty && initial)}
+      onSave={() => save()}
+      onPreview={() => void prepareHandoff('preview')}
+    />
+  )
+
   return (
     <div className="site-editor">
-      <div className="site-toolbar site-context-links">
-        <ButtonLink to="/sites">← All inquiries</ButtonLink>
-        <ButtonLink to={`/property/${encodeURIComponent(pidn)}`}>
-          Full property investigation
-        </ButtonLink>
-        <Button onClick={response.reload} disabled={response.loading}>
-          Refresh evidence
-        </Button>
-      </div>
+      <Link className="site-back-link" to="/sites">
+        ← All inquiries
+      </Link>
+      <PageHeader
+        eyebrow={initial ? 'Site inquiry' : 'New site inquiry'}
+        title={draft.label || packet?.report.parcel.propadr || `Parcel ${pidn}`}
+        description="Your working brief, source evidence and questions for the next conversation."
+        actions={
+          <ButtonLink to={`/property/${encodeURIComponent(pidn)}`}>
+            Full property investigation
+          </ButtonLink>
+        }
+      />
       <div className="site-review-bar" aria-label="Inquiry save and review status">
         <div className="site-save-state" role="status">
           <strong>
@@ -163,21 +186,7 @@ export default function InquiryEditor({ pidn, initial }: { pidn: string; initial
                 : 'Confirm the property and describe the proposed use.'}
           </span>
         </div>
-        <div className="site-review-actions">
-          <Button
-            tone="primary"
-            onClick={() => save()}
-            disabled={exporting || (!packet && !initial)}
-          >
-            Save inquiry
-          </Button>
-          <Button
-            onClick={() => void prepareHandoff('preview')}
-            disabled={!packet || dirty || !initial || exporting}
-          >
-            {exporting ? 'Checking evidence…' : 'Preview handoff'}
-          </Button>
-        </div>
+        {saveActions}
       </div>
       {editor.message && <StatusMessage tone="success">{editor.message}</StatusMessage>}
       {(editor.failure || exportError) && (
@@ -191,93 +200,38 @@ export default function InquiryEditor({ pidn, initial }: { pidn: string; initial
         </StatusMessage>
       )}
 
-      {packet && (
-        <section className="site-identity" aria-labelledby="site-identity-heading">
-          <div>
-            <div className="page-eyebrow">The candidate property</div>
-            <h2 id="site-identity-heading">{packet.report.parcel.propadr || `Parcel ${pidn}`}</h2>
-            <p>
-              {packet.report.parcel.municipality || 'Municipality unknown'} ·{' '}
-              {packet.report.parcel.acres ?? 'Unknown'} acres
-            </p>
-            <dl className="site-identity-details">
-              <div>
-                <dt>Parcel ID</dt>
-                <dd>{pidn}</dd>
-              </div>
-              <div>
-                <dt>Recorded owner</dt>
-                <dd>{packet.report.parcel.owner_full || 'Unknown'}</dd>
-              </div>
-            </dl>
-            <p className="site-muted">
-              Confirm the boundary and reviewing authority before using the handoff.
-            </p>
-          </div>
-          <ParcelContextMap report={packet.report} />
-        </section>
-      )}
       <nav className="site-section-nav" aria-label="Inquiry sections">
         <a href="#site-proposal">1 · Proposed use</a>
         <a href="#site-evidence">2 · Site evidence</a>
         <a href="#site-history">3 · Municipal record</a>
         <a href="#site-questions">4 · Questions & handoff</a>
       </nav>
-      <section id="site-proposal" className="site-section" aria-labelledby="inquiry-input-heading">
-        <div className="site-section-title">
-          <div>
-            <div className="page-eyebrow">01 · Frame the inquiry</div>
-            <h2 id="inquiry-input-heading">What is the client considering?</h2>
+      <InquiryProposal draft={draft} packet={packet} reviewed={reviewed} onChange={update} />
+      <div className="site-evidence-toolbar">
+        <p className="site-muted">Review public records separately from your private assessment.</p>
+        <Button onClick={response.reload} disabled={response.loading}>
+          Refresh evidence
+        </Button>
+      </div>
+      {packet ? (
+        <SiteEvidence packet={packet} pidn={pidn} />
+      ) : (
+        <section
+          className="site-section"
+          id="site-evidence"
+          aria-labelledby="site-evidence-heading"
+        >
+          <h2 id="site-evidence-heading">Site evidence</h2>
+          <p>
+            {response.loading
+              ? 'Loading current records…'
+              : 'Current public evidence cannot be shown. Your private brief and responses remain editable below.'}
+          </p>
+          <div id="site-history">
+            <p>Municipal records will appear when current evidence is available.</p>
           </div>
-        </div>
-        <p className="site-muted">Your private working brief. Source evidence stays separate.</p>
-        <div className="site-form-grid">
-          <label>
-            Inquiry name
-            <input
-              value={draft.label}
-              placeholder={packet?.report.parcel.propadr || `Parcel ${pidn}`}
-              onChange={(event) => update({ label: event.target.value })}
-              maxLength={200}
-            />
-          </label>
-          <label>
-            Workflow stage
-            <select
-              value={draft.status}
-              onChange={(event) => update({ status: event.target.value as SiteInquiry['status'] })}
-            >
-              <option value="researching">Researching</option>
-              <option value="ready_for_handoff" disabled={!reviewed}>
-                Ready for handoff
-              </option>
-              <option value="on_hold">On hold</option>
-            </select>
-            {!reviewed && (
-              <span className="site-field-note">
-                Review the current evidence before marking ready.
-              </span>
-            )}
-          </label>
-          <label className="site-full">
-            Proposed use
-            <textarea
-              value={draft.proposed_use}
-              onChange={(event) =>
-                update({
-                  proposed_use: event.target.value,
-                  reviewed_revision: null,
-                  status: draft.status === 'ready_for_handoff' ? 'researching' : draft.status,
-                })
-              }
-              maxLength={2000}
-              rows={3}
-              placeholder="What does the client want to do? Include scale, existing conditions and the current stage."
-            />
-          </label>
-        </div>
-      </section>
-      {packet && <SiteEvidence packet={packet} pidn={pidn} />}
+        </section>
+      )}
       <section
         id="site-questions"
         className="site-section"
@@ -292,13 +246,11 @@ export default function InquiryEditor({ pidn, initial }: { pidn: string; initial
           Keep the questions that need an answer. Record who confirmed an answer and when; these
           responses are your assessment.
         </p>
-        {packet && (
-          <SiteQuestions
-            inquiry={draft}
-            packet={packet}
-            onChange={(question_reviews) => update({ question_reviews })}
-          />
-        )}
+        <SiteQuestions
+          inquiry={draft}
+          packet={packet}
+          onChange={(question_reviews) => update({ question_reviews })}
+        />
         <div className="site-form-grid site-handoff-notes">
           <label className="site-full">
             Additional open questions
@@ -348,6 +300,16 @@ export default function InquiryEditor({ pidn, initial }: { pidn: string; initial
           </Button>
         </div>
         {packet && <p className="site-muted">{packet.scope_note}</p>}
+        <div className="site-editor-footer">
+          <p>
+            Save unfinished research at any time. Marking reviewed is a separate acknowledgement.
+          </p>
+          {saveActions}
+        </div>
+        {(editor.failure || exportError) && (
+          <p className="site-inline-feedback site-inline-error">{editor.failure || exportError}</p>
+        )}
+        {editor.message && <p className="site-inline-feedback">{editor.message}</p>}
         {initial && (
           <Button tone="quiet" onClick={remove}>
             Remove inquiry

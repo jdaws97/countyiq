@@ -3,6 +3,12 @@ import type { SiteInquiry, SiteQuestionKey, SiteQuestionReview } from '../types/
 
 const KEY = 'countyiq_site_inquiries_v1'
 
+export const SITE_STAGE_LABELS: Record<SiteInquiry['status'], string> = {
+  researching: 'Researching',
+  ready_for_handoff: 'Ready for handoff',
+  on_hold: 'On hold',
+}
+
 export const SITE_QUESTION_KEYS: SiteQuestionKey[] = [
   'identity',
   'zoning',
@@ -10,6 +16,13 @@ export const SITE_QUESTION_KEYS: SiteQuestionKey[] = [
   'utilities_access',
   'municipal_history',
 ]
+
+export function openSiteQuestionCount(inquiry: SiteInquiry): number {
+  const completed = (inquiry.question_reviews ?? []).filter(
+    (question) => question.status !== 'open' && question.note.trim().length > 0,
+  )
+  return SITE_QUESTION_KEYS.length - completed.length
+}
 
 export function validQuestionReviews(value: unknown): value is SiteQuestionReview[] {
   if (!Array.isArray(value) || value.length > SITE_QUESTION_KEYS.length) {
