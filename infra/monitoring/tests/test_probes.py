@@ -116,9 +116,7 @@ class SourceProbeTests(unittest.TestCase):
             health["sources"]["municipal_proceedings"]["refresh_job"],
             "proceedings_refresh",
         )
-        self.assertEqual(
-            health["sources"]["source_governance"]["refresh_job"], "none"
-        )
+        self.assertEqual(health["sources"]["source_governance"]["refresh_job"], "none")
         self.assertEqual(health["sources"]["unexpected"]["reason"], "unknown")
         self.assertEqual(health["sources"]["unexpected"]["refresh_job"], "unknown")
         diagnostics = [
