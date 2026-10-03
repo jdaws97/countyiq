@@ -330,3 +330,26 @@ See [frontend architecture](architecture.md) for implementation boundaries,
 [the workflow audit](../research/customer-workflow-ux-audit-2026-09-07.md) for the
 original evidence, and [the redesign verification](../research/customer-workspace-redesign-2026-09-07.md)
 for this iteration's actual checks and screenshots.
+
+### October 3 inquiry refinement
+
+Site research now leads the sidebar: inquiries, map, properties and municipalities.
+County-wide activity and the existing intelligence workspace remain together in an
+expandable navigation group. The inquiry editor has a visible save state and a
+section index for the proposal, evidence, municipal trail and handoff questions.
+Navigating away from an edited inquiry requires saving, staying, or explicitly
+discarding the changes. A newer saved version blocks a stale draft from overwriting
+it; the draft remains available to copy and reconcile.
+
+Five stable question topics retain the reviewer's progress and response separately
+from public evidence. Answered and inapplicable topics require an explanation.
+Older free-text questions and notes remain readable and portable. Marking evidence
+reviewed requires a proposed use; it acknowledges a particular evidence revision,
+not a land-use determination. Changed source evidence requires a new review.
+
+The printable handoff and text download share one presenter. Both include the
+client brief, parcel identity, mapped evidence, reviewer responses, municipal
+passages, source links, acquisition dates and scope limitations. Preparing or
+exporting the handoff rechecks the current API evidence and saved inquiry version.
+The print layout hides navigation and controls, retains full source text and uses
+browser print-to-PDF. Commercial workflow validation remains outstanding.

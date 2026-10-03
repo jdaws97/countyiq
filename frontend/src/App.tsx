@@ -20,7 +20,7 @@ const EmergingIntelligence = lazy(() => import('./pages/EmergingIntelligence'))
 const SiteInquiries = lazy(() => import('./pages/SiteInquiries'))
 
 const children = [
-  { index: true, element: <SiteInquiries /> },
+  { index: true, element: <Navigate replace to="/sites" /> },
   { path: 'sites', element: <SiteInquiries /> },
   { path: 'sites/:id', element: <SiteInquiries /> },
   { path: 'overview', element: <WorkspaceHome /> },

@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
@@ -70,6 +71,14 @@ def authorize_assets(assets: list[str]) -> AcquisitionPermit:
 def fetch_bundle(permit_path: Path, output: Path) -> dict:
     permit = AcquisitionPermit.model_validate_json(permit_path.read_bytes())
     permit.validate_for_acquisition()
+    clock_lead = (permit.issued_at - utc_now()).total_seconds()
+    if clock_lead > 5:
+        raise ValueError(
+            "PC clock is behind the VPS; synchronize it before acquisition"
+        )
+    if clock_lead > 0:
+        # Preserve strict timestamp ordering across small PC/VPS clock offsets.
+        time.sleep(clock_lead)
     bundle_id = uuid4().hex
     output.mkdir(mode=0o700, parents=True, exist_ok=True)
     temporary = output / f".{bundle_id}.partial"
@@ -114,8 +123,13 @@ def fetch_bundle(permit_path: Path, output: Path) -> dict:
     manifest_path.write_bytes(manifest_bytes)
     manifest_path.chmod(0o600)
     digest = hashlib.sha256(manifest_bytes).hexdigest()
-    temporary.rename(output / bundle_id)
-    bundle = SourceBundle(output, bundle_id, digest)
+    completed = output / bundle_id
+    temporary.rename(completed)
+    try:
+        bundle = SourceBundle(output, bundle_id, digest)
+    except Exception:
+        completed.rename(temporary)
+        raise
     return {
         "bundle_id": bundle_id,
         "manifest_sha256": digest,

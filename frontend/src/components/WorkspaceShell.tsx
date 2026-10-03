@@ -30,31 +30,32 @@ type NavigationItem = {
 type IconName =
   'activity' | 'building' | 'compare' | 'home' | 'map' | 'pin' | 'properties' | 'watch'
 
-const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
+const NAVIGATION_GROUPS: Array<{ label: string; collapsed?: boolean; items: NavigationItem[] }> = [
   {
-    label: 'Explore',
+    label: 'Site research',
     items: [
       { to: '/sites', label: 'Site inquiries', icon: 'home' },
-      { to: '/overview', label: 'County overview', icon: 'activity' },
-      { to: '/feed', label: 'Activity', icon: 'activity' },
-      { to: '/intelligence', label: 'Emerging intelligence', icon: 'activity' },
       { to: '/map', label: 'Map', icon: 'map' },
-    ],
-  },
-  {
-    label: 'Research',
-    items: [
       { to: '/radar', label: 'Properties', icon: 'properties' },
-      { to: '/organizations', label: 'Organizations', icon: 'building' },
       { to: '/municipalities', label: 'Municipalities', icon: 'pin' },
     ],
   },
   {
     label: 'My workspace',
     items: [
-      { to: '/my-work', label: 'My work', icon: 'building' },
       { to: '/watch', label: 'Following', icon: 'watch' },
       { to: '/compare', label: 'Compare', icon: 'compare' },
+    ],
+  },
+  {
+    label: 'County intelligence',
+    collapsed: true,
+    items: [
+      { to: '/overview', label: 'County overview', icon: 'activity' },
+      { to: '/feed', label: 'Activity', icon: 'activity' },
+      { to: '/intelligence', label: 'Emerging intelligence', icon: 'activity' },
+      { to: '/organizations', label: 'Organizations', icon: 'building' },
+      { to: '/my-work', label: 'My work', icon: 'building' },
     ],
   },
 ]
@@ -71,8 +72,11 @@ function contextLabel(pathname: string): string {
   if (/^\/my-work/.test(pathname)) {
     return 'My workspace / My work'
   }
-  if (/^\/$|^\/app$/.test(pathname)) {
-    return 'Workspace / Overview'
+  if (/^\/$|^\/sites/.test(pathname)) {
+    return 'Site research / Site inquiries'
+  }
+  if (/^\/(overview|app)$/.test(pathname)) {
+    return 'County intelligence / Overview'
   }
   if (/^\/feed/.test(pathname)) {
     return 'Explore / Activity'
@@ -84,16 +88,16 @@ function contextLabel(pathname: string): string {
     return 'Explore / Opportunities'
   }
   if (/^\/map/.test(pathname)) {
-    return 'Explore / Map'
+    return 'Site research / Map'
   }
   if (/^\/radar/.test(pathname)) {
-    return 'Research / Properties'
+    return 'Site research / Properties'
   }
   if (/^\/organizations/.test(pathname)) {
     return 'Research / Organizations'
   }
   if (/^\/municipalities/.test(pathname)) {
-    return 'Research / Municipalities'
+    return 'Site research / Municipalities'
   }
   if (/^\/watch/.test(pathname)) {
     return 'My workspace / Following'
@@ -186,11 +190,11 @@ function SearchForm({ compact = false }: { compact?: boolean }) {
 }
 
 function Navigation({ onNavigate, operator }: { onNavigate?: () => void; operator?: boolean }) {
+  const location = useLocation()
   return (
     <nav aria-label="Workspace navigation" className="workspace-shell-navigation">
-      {NAVIGATION_GROUPS.map((group) => (
-        <section className="workspace-shell-nav-group" key={group.label}>
-          <h2>{group.label}</h2>
+      {NAVIGATION_GROUPS.map((group) => {
+        const links = (
           <div>
             {group.items.map((item) => (
               <NavLink
@@ -207,8 +211,23 @@ function Navigation({ onNavigate, operator }: { onNavigate?: () => void; operato
               </NavLink>
             ))}
           </div>
-        </section>
-      ))}
+        )
+        return group.collapsed ? (
+          <details
+            className="workspace-shell-nav-group workspace-shell-secondary-nav"
+            key={group.label}
+            open={group.items.some((item) => location.pathname.startsWith(item.to)) || undefined}
+          >
+            <summary>{group.label}</summary>
+            {links}
+          </details>
+        ) : (
+          <section className="workspace-shell-nav-group" key={group.label}>
+            <h2>{group.label}</h2>
+            {links}
+          </section>
+        )
+      })}
       {operator && (
         <section className="workspace-shell-nav-group">
           <h2>Operations</h2>
@@ -367,7 +386,7 @@ export default function WorkspaceShell({
           <span className="workspace-shell-brand-mark">CIQ</span>
           <span>
             <strong>CountyIQ</strong>
-            <small>County intelligence</small>
+            <small>Site research</small>
           </span>
         </NavLink>
         <Navigation operator={account?.authenticated && account.operator} />

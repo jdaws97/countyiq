@@ -115,3 +115,8 @@ run record. Do not remove another in-progress run's bundle. Failed snapshots
 remain private and should be removed after diagnosis, within the source's
 reviewed retention policy. No raw snapshots are committed to Git or exported in
 customer packets.
+
+The PC permits at most a five-second clock lead from the VPS and waits for that
+instant before fetching. A larger lead fails before making source requests; sync
+the PC clock and retry. Final validation failures return the directory to its
+hidden partial name instead of leaving an apparently completed bundle.

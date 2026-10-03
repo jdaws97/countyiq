@@ -13,6 +13,9 @@ for (const name of [
   'watchlist',
   'intelligenceState',
   'siteInquiries',
+  'format',
+  'floodScreening',
+  'sitePacket',
   'investigationState',
 ]) {
   const source = readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8')
@@ -29,6 +32,7 @@ const storage = await import(pathToFileURL(join(directory, 'browserStorage.mjs')
 const watches = await import(pathToFileURL(join(directory, 'watchlist.mjs')))
 const intelligence = await import(pathToFileURL(join(directory, 'intelligenceState.mjs')))
 const inquiries = await import(pathToFileURL(join(directory, 'siteInquiries.mjs')))
+const handoff = await import(pathToFileURL(join(directory, 'sitePacket.mjs')))
 after(() => rmSync(directory, { recursive: true, force: true }))
 let values
 let alerts
@@ -264,4 +268,104 @@ test('verified accounts isolate watches, searches, comparisons and recent invest
   assert.equal(state.getRecentInvestigations()[0].label, 'Property A')
   storage.setWorkspaceAccount(null)
   assert.deepEqual(watches.getWatchlist(), ['guest'])
+})
+
+test('saved question responses roundtrip while older inquiries stay readable', () => {
+  const question_reviews = [
+    {
+      key: 'zoning',
+      status: 'answered',
+      note: 'Planner confirmed the district on October 3; check the ordinance.',
+    },
+  ]
+  const portable = state.parseWorkspace(
+    JSON.stringify({ ...workspace(), siteInquiries: [{ ...siteInquiry, question_reviews }] }),
+  )
+  state.replaceWorkspace(portable)
+  assert.deepEqual(inquiries.getSiteInquiries()[0].question_reviews, question_reviews)
+  assert.equal(inquiries.isSiteInquiries([siteInquiry]), true)
+  assert.equal(
+    inquiries.isSiteInquiries([
+      { ...siteInquiry, question_reviews: [{ ...question_reviews[0], note: ' ' }] },
+    ]),
+    false,
+  )
+  assert.equal(
+    inquiries.isSiteInquiries([
+      { ...siteInquiry, question_reviews: [...question_reviews, ...question_reviews] },
+    ]),
+    false,
+  )
+})
+
+test('an edited draft cannot overwrite a newer saved inquiry or recreate a removed one', () => {
+  inquiries.saveSiteInquiry(siteInquiry, null)
+  const latest = { ...siteInquiry, note: 'Newer notes', updated_at: '2026-10-03T13:00:00Z' }
+  inquiries.saveSiteInquiry(latest, siteInquiry.updated_at)
+  assert.throws(
+    () =>
+      inquiries.saveSiteInquiry(
+        { ...siteInquiry, note: 'Unsaved old draft' },
+        siteInquiry.updated_at,
+      ),
+    /changed in another/,
+  )
+  assert.equal(inquiries.getSiteInquiries()[0].note, 'Newer notes')
+  inquiries.removeSiteInquiry(siteInquiry.id)
+  assert.throws(() => inquiries.saveSiteInquiry(latest, latest.updated_at), /changed in another/)
+  assert.deepEqual(inquiries.getSiteInquiries(), [])
+})
+
+test('handoff keeps stale-review, incomplete-source and user-response qualifications together', () => {
+  const packet = {
+    revision: 'b'.repeat(64),
+    questions: ['Confirm the parcel boundary.'],
+    sources: [],
+    municipal_collection: [],
+    scope_note: 'This packet does not determine permitted use.',
+    report: {
+      parcel: { propadr: '1 Main St', municipality: 'Test Township', owner_full: 'Example Owner' },
+      zoning: null,
+      flood_zone: { status: 'unknown', mapped_coverage_pct: 40, freshness: { status: 'stale' } },
+      soil_profile: { mapped_coverage_pct: 0, considerations: [] },
+      municipal_evidence: {
+        cards: [
+          {
+            title: 'Agenda',
+            body_name: 'Planning Commission',
+            meeting_date: '2026-10-01',
+            proceeding_type: 'agenda',
+            document_url: 'https://example.org/agenda.pdf',
+            passages: [],
+          },
+        ],
+        more: true,
+        coverage: { reviewed_documents: 1, total_documents: 5 },
+      },
+      evidence: [],
+    },
+  }
+  const inquiry = {
+    ...siteInquiry,
+    status: 'ready_for_handoff',
+    question_reviews: [
+      {
+        key: 'identity',
+        status: 'answered',
+        note: 'Reviewer response retained separately from records.',
+      },
+    ],
+  }
+  const text = handoff.sitePacketText(inquiry, packet)
+  assert.match(text, /DRAFT — evidence needs review/)
+  assert.match(text, /Previously marked ready; current evidence needs review/)
+  assert.match(text, /Reviewer response retained separately from records/)
+  assert.match(text, /an agenda does not establish an outcome/)
+  assert.match(text, /reviewed English excerpt is not available/)
+  assert.match(text, /Additional linked passages exist/)
+  assert.match(text, /Loaded mapping is stale/)
+  assert.doesNotMatch(text, /No SFHA overlap/)
+  assert.ok(text.includes(packet.scope_note))
+  assert.ok(text.includes('https://example.org/agenda.pdf'))
+  assert.ok(!text.includes(packet.revision))
 })

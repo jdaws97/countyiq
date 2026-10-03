@@ -5,7 +5,45 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+QuestionKey = Literal[
+    "identity", "zoning", "site_conditions", "utilities_access", "municipal_history"
+]
+
+REVIEW_TOPICS = (
+    ("identity", "Confirm the parcel boundary and municipal reviewing authority."),
+    (
+        "zoning",
+        "Check the proposed use, dimensional standards and any split zoning against the current municipal ordinance.",
+    ),
+    (
+        "site_conditions",
+        "Confirm flood mapping, soils and any site-specific investigations with the project professional.",
+    ),
+    (
+        "utilities_access",
+        "Obtain written utility service/capacity and access requirements; mapped proximity does not establish availability.",
+    ),
+    (
+        "municipal_history",
+        "Ask the municipality about uncollected applications, conditions and current review status.",
+    ),
+)
+
+
+class SiteQuestionReview(BaseModel):
+    key: QuestionKey
+    status: Literal["open", "answered", "not_applicable"]
+    note: str = Field(max_length=1500)
+
+    @model_validator(mode="after")
+    def require_response_for_closed_question(self):
+        if self.status != "open" and not self.note.strip():
+            raise ValueError(
+                "Answered or inapplicable questions require a reviewer explanation"
+            )
+        return self
 
 
 class SiteInquiry(BaseModel):
@@ -18,6 +56,16 @@ class SiteInquiry(BaseModel):
     status: Literal["researching", "ready_for_handoff", "on_hold"]
     reviewed_revision: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     updated_at: datetime
+    question_reviews: list[SiteQuestionReview] = Field(
+        default_factory=list, max_length=5
+    )
+
+    @model_validator(mode="after")
+    def unique_question_reviews(self):
+        keys = [review.key for review in self.question_reviews]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Each review topic may appear once")
+        return self
 
 
 def intake_packet(cur, report: dict) -> dict:
@@ -79,12 +127,9 @@ def intake_packet(cur, report: dict) -> dict:
         "report": report,
         "sources": sources,
         "municipal_collection": coverage,
-        "questions": [
-            "Confirm the parcel boundary and municipal reviewing authority.",
-            "Check the proposed use, dimensional standards and any split zoning against the current municipal ordinance.",
-            "Confirm flood mapping, soils and any site-specific investigations with the project professional.",
-            "Obtain written utility service/capacity and access requirements; mapped proximity does not establish availability.",
-            "Ask the municipality about uncollected applications, conditions and current review status.",
+        "questions": [question for _, question in REVIEW_TOPICS],
+        "review_topics": [
+            {"key": key, "question": question} for key, question in REVIEW_TOPICS
         ],
         "scope_note": "Research for an initial municipal conversation and proposal scoping. This packet does not determine permitted use, buildability, utility capacity or approval. Municipal passages are literal site associations, not a complete project history.",
     }

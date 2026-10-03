@@ -74,3 +74,37 @@ def test_packet_revision_is_stable_and_changes_with_mapping(client):
     assert changed["revision"] != first.json()["revision"]
     assert changed["report"]["flood_zone"]["status"] == "unknown"
     assert "buildability" in changed["scope_note"]
+
+
+def test_question_responses_roundtrip_and_reject_unexplained_answers(watch_client):  # noqa: F811
+    client = watch_client
+    _, owner = create(client)
+    item = inquiry()
+    review = {
+        "key": "zoning",
+        "status": "answered",
+        "note": "Planner confirmed the district; ordinance review is still needed.",
+    }
+    item["question_reviews"] = [review]
+    response = client.put(
+        "/api/watchspaces/current",
+        headers=owner,
+        json={"version": 0, "items": [], "site_inquiries": [item]},
+    )
+    assert response.status_code == 200
+    assert response.json()["site_inquiries"][0]["question_reviews"] == [review]
+    for invalid in [
+        [{**review, "note": " "}],
+        [review, review],
+        [{**review, "key": "invented"}],
+    ]:
+        item["question_reviews"] = invalid
+        rejected = client.put(
+            "/api/watchspaces/current",
+            headers=owner,
+            json={"version": 1, "items": [], "site_inquiries": [item]},
+        )
+        assert rejected.status_code == 422
+    assert client.get("/api/watchspaces/current", headers=owner).json()[
+        "site_inquiries"
+    ][0]["question_reviews"] == [review]

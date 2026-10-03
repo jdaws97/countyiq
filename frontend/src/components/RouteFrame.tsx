@@ -5,7 +5,9 @@ import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
 import SourceViewerProvider from './SourceViewer'
 
 const ROUTE_TITLES: Array<[RegExp, string]> = [
-  [/^\/$/, 'Your Workspace — CountyIQ'],
+  [/^\/$/, 'Site inquiries — CountyIQ'],
+  [/^\/sites/, 'Site inquiries — CountyIQ'],
+  [/^\/overview/, 'County overview — CountyIQ'],
   [/^\/app$/, 'Your Workspace — CountyIQ'],
   [/^\/organizations/, 'Organizations — CountyIQ'],
   [/^\/feed/, 'Activity workspace — CountyIQ'],

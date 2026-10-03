@@ -243,3 +243,39 @@ def test_incomplete_or_changing_upstream_count_rejects_acquisition(monkeypatch, 
     )
     with pytest.raises(ValueError):
         snapshots.fetch_arcgis(snapshots.source_specs()["traffic_counts"])
+
+
+@pytest.mark.parametrize("clock_lead", [0.5, 6])
+def test_pc_clock_offset_is_handled_before_fetching(tmp_path, monkeypatch, clock_lead):
+    from scripts import local_source_worker as worker
+
+    now = snapshots.utc_now()
+    permit = snapshots.AcquisitionPermit(
+        issued_at=now + timedelta(seconds=clock_lead),
+        contract=snapshots.contract_fingerprint(),
+        keys=["traffic_counts"],
+        policy_receipts={"penndot_open_data": "b" * 64},
+    )
+    permit_path = tmp_path / "permit.json"
+    permit_path.write_text(permit.model_dump_json())
+    clock = [now]
+    monkeypatch.setattr(worker, "utc_now", lambda: clock[0])
+
+    def advance_clock(seconds):
+        clock[0] += timedelta(seconds=seconds)
+
+    monkeypatch.setattr(worker.time, "sleep", advance_clock)
+    fetch = Mock(return_value=arcgis_payload())
+    monkeypatch.setattr(worker, "fetch_arcgis", fetch)
+    output = tmp_path / "bundles"
+    if clock_lead > 5:
+        with pytest.raises(ValueError, match="synchronize"):
+            worker.fetch_bundle(permit_path, output)
+        fetch.assert_not_called()
+    else:
+        receipt = worker.fetch_bundle(permit_path, output)
+        bundle = snapshots.SourceBundle(
+            output, receipt["bundle_id"], receipt["manifest_sha256"]
+        )
+        assert bundle.manifest.started_at >= permit.issued_at
+        assert fetch.call_count == 1
