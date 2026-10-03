@@ -84,19 +84,17 @@ def test_duplicate_polygons_do_not_inflate_overlap(client):
 
 def test_empty_coverage_and_missing_parcel_geometry_are_unknown(client):
     set_mapping(copies=0)
-    assert (
-        client.get(f"/api/parcels/{TEST_PIDN}").json()["flood_zone"]["status"]
-        == "unknown"
-    )
+    flood = client.get(f"/api/parcels/{TEST_PIDN}").json()["flood_zone"]
+    assert flood["status"] == "unknown"
+    assert flood["mapped_coverage_pct"] is None
     set_mapping()
     with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn, conn.cursor() as cur:
         cur.execute(
             "UPDATE staging.parcels SET geom = NULL WHERE pidn = %s", (TEST_PIDN,)
         )
-    assert (
-        client.get(f"/api/parcels/{TEST_PIDN}").json()["flood_zone"]["status"]
-        == "unknown"
-    )
+    flood = client.get(f"/api/parcels/{TEST_PIDN}").json()["flood_zone"]
+    assert flood["status"] == "unknown"
+    assert flood["mapped_coverage_pct"] is None
 
 
 def test_failed_latest_refresh_qualifies_loaded_mapping(client):
@@ -118,6 +116,7 @@ def test_boundary_contact_is_not_positive_overlap(client):
     flood = client.get(f"/api/parcels/{TEST_PIDN}").json()["flood_zone"]
     assert flood["status"] == "unknown"
     assert flood["in_flood_zone"] is False
+    assert flood["mapped_coverage_pct"] is None
 
 
 def test_rounding_cannot_erase_a_coverage_gap(client):

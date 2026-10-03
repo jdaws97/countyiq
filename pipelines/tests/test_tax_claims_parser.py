@@ -114,6 +114,27 @@ def test_parse_owner_and_address():
     assert hits[0]["property_address"] == "21 -25 S GEORGE ST"
 
 
+def test_county_named_owner_is_not_mistaken_for_the_report_header():
+    text = """YORK COUNTY, PA
+AS OF BUSINESS DATE 10/02/2026
+TAX DIST CODE/NAME : 11 / YORK CITY 11TH WARD
+11-332-04-0055.00-00000 2025 COUNTY 7.59 0.76 0.54 137.23 0.00 0.00 0.00 0.00 146.12
+YORK COUNTY AGRICULTURAL SOCIET SCHOOL 41.45 4.15 3.06 0.00 0.00 0.00 0.00 0.00 48.66
+MADISON AVE MUNICIPAL 20.87 2.09 1.53 0.00 0.00 0.00 0.00 0.00 24.49
+"""
+    records = parse_tax_claims_text(text)
+    assert {record["authority_name"] for record in records} == {
+        "COUNTY",
+        "SCHOOL",
+        "MUNICIPAL",
+    }
+    assert {record["owner_name"] for record in records} == {
+        "YORK COUNTY AGRICULTURAL SOCIET"
+    }
+    assert {record["property_address"] for record in records} == {"MADISON AVE"}
+    assert sum(record["total"] for record in records) == 219.27
+
+
 def test_parse_alpha_map_code():
     records = parse_tax_claims_text(_fixture_text())
     hits = [r for r in records if r["parcel_id_raw"] == "20-000-NC-0073.A0-00000"]

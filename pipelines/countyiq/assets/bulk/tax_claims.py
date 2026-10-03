@@ -60,6 +60,27 @@ VALUE_COLUMNS = [
 CARRY_COLUMNS = ["report_date"]
 
 
+def _extract_pdf_text(
+    pdf_path: str, text_path: str, context: AssetExecutionContext
+) -> None:
+    """Extract every page while bounding the number of retained page objects."""
+    with pdfplumber.open(pdf_path) as pdf:
+        total_pages = len(pdf.pages)
+    context.log.info(f"PDF has {total_pages} pages")
+
+    chunk_size = 20
+    with open(text_path, "w") as output:
+        for start in range(0, total_pages, chunk_size):
+            end = min(start + chunk_size, total_pages)
+            # pdfplumber selects physical pages using one-based page numbers.
+            with pdfplumber.open(pdf_path, pages=range(start + 1, end + 1)) as pdf:
+                for page in pdf.pages:
+                    output.write((page.extract_text() or "") + "\n")
+            gc.collect()
+            if end % 100 == 0 or end == total_pages:
+                context.log.info(f"  Extracted {end}/{total_pages} pages")
+
+
 @asset(
     group_name="bulk",
     description="Delinquent tax claims from York County Tax Claim Bureau PDF → staging.tax_claims",
@@ -107,23 +128,7 @@ def tax_claims(
         gc.collect()
         context.log.info("Saved PDF to disk, extracting text page-by-page...")
 
-        # Count pages first with minimal memory
-        with pdfplumber.open(pdf_path) as pdf:
-            total_pages = len(pdf.pages)
-        context.log.info(f"PDF has {total_pages} pages")
-
-        # Extract text one page at a time, reopening in chunks
-        # to avoid pdfplumber holding all page objects in memory
-        CHUNK = 20
-        with open(txt_path, "w") as txt_out:
-            for start in range(0, total_pages, CHUNK):
-                end = min(start + CHUNK, total_pages)
-                with pdfplumber.open(pdf_path, pages=list(range(start, end))) as pdf:
-                    for page in pdf.pages:
-                        txt_out.write((page.extract_text() or "") + "\n")
-                gc.collect()
-                if end % 100 == 0 or end == total_pages:
-                    context.log.info(f"  Extracted {end}/{total_pages} pages")
+        _extract_pdf_text(pdf_path, txt_path, context)
 
         # 4. Parse from the text file
         with open(txt_path, "r") as f:

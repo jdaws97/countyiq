@@ -2,7 +2,7 @@
 
 Source: FEMA National Flood Hazard Layer (NFHL) MapServer
 Layer 28: S_Fld_Haz_Ar (Flood Hazard Zones)
-Records: ~5,238 polygons for York County (DFIRM_ID=42133C)
+Records: ~5,263 polygons for York County (DFIRM_ID=42133C)
 Schedule: Weekly (Sunday 04:00)
 """
 
@@ -20,6 +20,7 @@ from dagster import (
     MetadataValue,
 )
 
+from countyiq.lib.arcgis_client import _get_feature_count
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.parsers.fema import parse_fema_geojson
@@ -28,10 +29,18 @@ from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
 
-PAGE_SIZE = 1000  # FEMA MapServer returns 500 at 2000 with geometry; 1000 is reliable
+# A 1,000-feature page at offset 4,000 returned an HTTP-200 service error on
+# October 3. Smaller geometry responses fit the provider's query limits.
+PAGE_SIZE = 250
 REQUEST_TIMEOUT = 120
 MAX_RETRIES = 3
 RETRY_BACKOFF = 5  # seconds, multiplied by attempt number
+MAX_PAGE_REQUESTS = 128
+
+
+class FemaQueryError(RuntimeError):
+    """A server-side query failure that may fit in a smaller geometry page."""
+
 
 # Only request the fields we need (reduces server load vs outFields=*)
 OUT_FIELDS = ",".join(
@@ -87,6 +96,9 @@ def _fetch_page(url: str, attempt: int = 1) -> dict:
         if not isinstance(page, dict):
             raise RuntimeError("FEMA returned an invalid page response")
         if "error" in page:
+            error = page["error"]
+            if isinstance(error, dict) and error.get("code") == 500:
+                raise FemaQueryError("FEMA returned an ArcGIS service error")
             raise RuntimeError("FEMA returned an ArcGIS service error")
         if not isinstance(page.get("features"), list):
             raise RuntimeError("FEMA response is missing its feature list")
@@ -110,32 +122,72 @@ def _fetch_all_pages(base_url: str, layer_id: int, dfirm_id: str, context) -> di
     Uses f=json (not f=geojson) because FEMA's GeoJSON endpoint returns 500
     errors at higher offsets with geometry. The parser handles both formats.
     """
+    expected_count = _get_feature_count(
+        f"{base_url}/{layer_id}", where=f"DFIRM_ID='{dfirm_id}'"
+    )
+    if not expected_count:
+        raise RuntimeError("FEMA returned no flood hazard features for the county")
     all_features = []
     offset = 0
-    while True:
+    page_size = PAGE_SIZE
+    requests_made = 0
+    while offset < expected_count:
+        requests_made += 1
+        if requests_made > MAX_PAGE_REQUESTS:
+            raise RuntimeError("FEMA exceeded the bounded pagination request limit")
         url = (
             f"{base_url}/{layer_id}/query"
             f"?where=DFIRM_ID%3D%27{dfirm_id}%27"
             f"&outFields={OUT_FIELDS}"
             f"&outSR=4326"
-            f"&resultRecordCount={PAGE_SIZE}"
+            f"&resultRecordCount={min(page_size, expected_count - offset)}"
             f"&resultOffset={offset}"
             f"&f=json"
         )
         context.log.info(f"Fetching page at offset {offset}")
-        page = _fetch_page(url)
-        features = page.get("features", [])
+        try:
+            page = _fetch_page(url)
+        except FemaQueryError:
+            if page_size == 1:
+                raise
+            page_size = max(1, page_size // 2)
+            context.log.warning(
+                f"FEMA query failed at offset {offset}; retrying with {page_size} features"
+            )
+            continue
+        features = page["features"]
+        if not features:
+            raise RuntimeError(
+                f"FEMA stopped after {offset} of {expected_count} expected features"
+            )
         all_features.extend(features)
         context.log.info(f"  Got {len(features)} features (total: {len(all_features)})")
 
-        # Some ArcGIS services incorrectly retain exceededTransferLimit=true
-        # after the final offset. An empty page is always terminal.
-        if not features or not page.get("exceededTransferLimit"):
-            break
-        offset += PAGE_SIZE
+        # Verify completion against the count query. The provider has returned
+        # unreliable transfer flags, which cannot certify a complete snapshot.
+        offset += len(features)
 
-    if not all_features:
-        raise RuntimeError("FEMA returned no flood hazard features for the county")
+    if len(all_features) != expected_count:
+        raise RuntimeError("FEMA feature count changed during pagination")
+    identifiers = []
+    for feature in all_features:
+        attributes = feature.get("attributes") if isinstance(feature, dict) else None
+        if not isinstance(attributes, dict):
+            raise RuntimeError("FEMA returned a feature without valid attributes")
+        identifier = attributes.get("FLD_AR_ID")
+        if (
+            not isinstance(identifier, str)
+            or not identifier.strip()
+            or identifier != identifier.strip()
+        ):
+            raise RuntimeError(
+                "FEMA returned a missing or malformed flood zone identifier"
+            )
+        if attributes.get("DFIRM_ID") != dfirm_id:
+            raise RuntimeError("FEMA returned a feature outside the requested county")
+        identifiers.append(identifier)
+    if len(set(identifiers)) != len(identifiers):
+        raise RuntimeError("FEMA returned missing or repeated flood zone identifiers")
     return {"type": "FeatureCollection", "features": all_features}
 
 
@@ -178,10 +230,14 @@ def fema_flood_zones(
         filename="flood_zones.geojson",
     )
 
-    # 3. Parse features. Each record carries a "geojson" key holding the
-    # raw Polygon coords; pop it out into geom_lookup and let scd2_upsert_geom
-    # wrap with ST_Multi() so the column type (MultiPolygon) is satisfied.
+    # 3. Parse features and retain multipart geometry for the SCD2 upsert.
     records = parse_fema_geojson(geojson)
+    if len(records) != len(geojson["features"]) or any(
+        not record.get("geojson") for record in records
+    ):
+        raise RuntimeError(
+            "FEMA snapshot contains unparsed records or missing geometry"
+        )
     geom_lookup: dict[str, str] = {}
     for rec in records:
         rec["source_url"] = county.fema_nfhl_url

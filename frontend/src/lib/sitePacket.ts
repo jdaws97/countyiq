@@ -46,6 +46,9 @@ export function sitePacketText(inquiry: SiteInquiry, packet: SiteIntakePacket): 
     if (card.proceeding_type === 'agenda') {
       lines.push('Proposed business only; an agenda does not establish an outcome.')
     }
+    if (!card.passages.length) {
+      lines.push('A reviewed English excerpt is not available. Consult the source document.')
+    }
     for (const passage of card.passages) {
       lines.push(`Page ${passage.page ?? 'unknown'}: ${passage.text}`)
     }

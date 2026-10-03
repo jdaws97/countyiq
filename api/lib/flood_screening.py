@@ -41,10 +41,14 @@ def parcel_flood_screening(cur, pidn: str) -> dict:
                COALESCE(ST_Area(c.sfha) > 0, FALSE) AS has_overlap,
                COALESCE(ST_Covers(c.known_non_sfha, p.geom), FALSE)
                    AND NOT COALESCE(c.unclassified, FALSE) AS complete_negative,
-               LEAST(100.0, 100 * ST_Area(ST_Transform(c.mapped, 32618))
-                   / NULLIF(ST_Area(ST_Transform(p.geom, 32618)), 0)) AS coverage_pct,
-               LEAST(100.0, 100 * ST_Area(ST_Transform(c.sfha, 32618))
-                   / NULLIF(ST_Area(ST_Transform(p.geom, 32618)), 0)) AS overlap_pct,
+               CASE WHEN c.mapped IS NOT NULL AND ST_Area(p.geom) > 0 THEN
+                   LEAST(100.0, 100 * ST_Area(ST_Transform(c.mapped, 32618))
+                       / ST_Area(ST_Transform(p.geom, 32618)))
+               END AS coverage_pct,
+               CASE WHEN c.sfha IS NOT NULL AND ST_Area(p.geom) > 0 THEN
+                   LEAST(100.0, 100 * ST_Area(ST_Transform(c.sfha, 32618))
+                       / ST_Area(ST_Transform(p.geom, 32618)))
+               END AS overlap_pct,
                c.ids, c.zones, c.zone, c.source_url, c.observed_at
         FROM parcel p CROSS JOIN coverage c
         """,
