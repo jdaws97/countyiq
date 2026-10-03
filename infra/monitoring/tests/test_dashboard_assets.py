@@ -900,7 +900,7 @@ class DashboardAssetTests(unittest.TestCase):
                                     {
                                         "alert": "HostTelemetryMissing",
                                         # Grafana's C threshold fires only above zero.
-                                        "expr": f'({alert["expr"]}) > 0',
+                                        "expr": f"({alert['expr']}) > 0",
                                         "for": alert["for"],
                                     }
                                 ],
