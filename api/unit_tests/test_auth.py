@@ -318,9 +318,10 @@ def test_real_jwks_client_bounds_refresh_and_accepts_rotation(monkeypatch):
     )
     auth.signing_keys.cache_clear()
     try:
-        assert auth.require_identity(
-            request({"Cf-Access-Jwt-Assertion": token()})
-        ).subject == "user-one"
+        assert (
+            auth.require_identity(request({"Cf-Access-Jwt-Assertion": token()})).subject
+            == "user-one"
+        )
         claims = jwt.decode(token(), options={"verify_signature": False})
         keys.append({**public_key, "kid": "rotated-key", "use": "sig"})
         rotated = jwt.encode(
@@ -328,16 +329,12 @@ def test_real_jwks_client_bounds_refresh_and_accepts_rotation(monkeypatch):
         )
         for _ in range(3):
             with pytest.raises(HTTPException) as exc:
-                auth.require_identity(
-                    request({"Cf-Access-Jwt-Assertion": rotated})
-                )
+                auth.require_identity(request({"Cf-Access-Jwt-Assertion": rotated}))
             assert exc.value.status_code == 401
         assert fetched == [ISSUER + "/cdn-cgi/access/certs"]
 
         clock[0] += 31
-        identity = auth.require_identity(
-            request({"Cf-Access-Jwt-Assertion": rotated})
-        )
+        identity = auth.require_identity(request({"Cf-Access-Jwt-Assertion": rotated}))
         assert identity.subject == "user-one"
         assert len(fetched) == 2
     finally:
