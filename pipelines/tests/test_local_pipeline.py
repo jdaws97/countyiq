@@ -102,7 +102,7 @@ def test_local_runner_preserves_checks_for_selected_assets(
     assert len(writes) == 2
     assert writes[0]["asset_key"] == "plcb_licenses"
     if not success:
-        assert writes[0]["failure_reason"] == "check_failed"
+        assert writes[0]["failure_reason"] == "unverified_result"
     assert all(write["status"] == report["status"] for write in writes)
 
 

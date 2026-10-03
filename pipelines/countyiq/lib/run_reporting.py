@@ -88,7 +88,7 @@ def record_run_outcome(instance, database, run_id: str) -> dict:
                     asset_key=check["asset"],
                     finished_at=finished_at,
                     status="failure",
-                    failure_reason="check_failed",
+                    failure_reason="unverified_result",
                 ),
             )
     success = (
