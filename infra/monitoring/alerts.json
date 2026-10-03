@@ -56,11 +56,11 @@
   {
     "uid": "collector-failed-or-stale",
     "title": "Monitoring collector failed or stale",
-    "expr": "(((max(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"} == bool 0) or vector(0)) + (max((time() - countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter\"}) > bool 900) or vector(0)) + ((((count(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"}) or vector(0)) < bool 8) + ((count(countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"}) or vector(0)) < bool 8)) * scalar(up{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 1))) > bool 0)",
+    "expr": "(((max(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|caddy|postgres|sources|recovery|openrouter|storage\"} == bool 0) or vector(0)) + (max((time() - countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|caddy|postgres|sources|recovery|openrouter\"}) > bool 900) or vector(0)) + ((((count(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|caddy|postgres|sources|recovery|openrouter|storage\"}) or vector(0)) < bool 7) + ((count(countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|caddy|postgres|sources|recovery|openrouter|storage\"}) or vector(0)) < bool 7)) * scalar(up{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 1))) > bool 0)",
     "for": "15m",
     "severity": "critical",
     "summary": "A required monitoring collector is failing, stale, or missing.",
-    "description": "The eight required collectors are containers, dagster, caddy, postgres, sources, recovery, openrouter, and storage. Missing custom metrics are suppressed while the host is down."
+    "description": "The seven required collectors are containers, caddy, postgres, sources, recovery, openrouter, and storage. Missing custom metrics are suppressed while the host is down."
   },
   {
     "uid": "docker-storage-stale",
@@ -88,33 +88,6 @@
     "severity": "warning",
     "summary": "A managed service has restarted repeatedly or was OOM-killed.",
     "description": "OOM kills are read from the cgroup-v2 counter, so an old Docker inspect state cannot keep this alert firing."
-  },
-  {
-    "uid": "dagster-heartbeat-missing",
-    "title": "Dagster heartbeat missing",
-    "expr": "(time() - countyiq_dagster_heartbeat_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 300",
-    "for": "5m",
-    "severity": "critical",
-    "summary": "A Dagster daemon heartbeat is older than five minutes.",
-    "description": "Check daemon health and service logs."
-  },
-  {
-    "uid": "dagster-queue-delayed",
-    "title": "Dagster queued run delayed",
-    "expr": "(countyiq_dagster_runs{instance=\"countyiq-production\",job=\"countyiq/host\",status=\"QUEUED\"} > bool 0) * (countyiq_dagster_oldest_run_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",status=\"QUEUED\"} > bool 1800)",
-    "for": "10m",
-    "severity": "warning",
-    "summary": "A queued Dagster run has waited over 30 minutes.",
-    "description": "Inspect queue capacity and daemon health."
-  },
-  {
-    "uid": "dagster-run-too-old",
-    "title": "Dagster run exceeds six hours",
-    "expr": "(countyiq_dagster_oldest_run_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",status=~\"STARTED|STARTING\"} > bool 21600)",
-    "for": "15m",
-    "severity": "warning",
-    "summary": "A running or starting Dagster run is older than six hours.",
-    "description": "Inspect run state without creating an alert per run identifier."
   },
   {
     "uid": "backup-missing-or-failed",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Restore one completed off-host backup set into disposable sibling databases.
+# Restore one completed primary database backup into a disposable sibling database.
 
 set -euo pipefail
 umask 077
@@ -42,9 +42,7 @@ countyiq_validate_r2_backup_environment
 
 DATABASE_USER="${DATABASE_USER:-dagster_admin}"
 PRIMARY_DATABASE="${DATABASE_NAME:-countyiq}"
-DAGSTER_DATABASE="${DAGSTER_POSTGRES_DB:-dagster}"
 PRIMARY_DRILL_DATABASE="${PRIMARY_DATABASE}_restore_drill"
-DAGSTER_DRILL_DATABASE="${DAGSTER_DATABASE}_restore_drill"
 RECEIPT_DIR="${COUNTYIQ_RESTORE_RECEIPT_DIR:-/var/lib/countyiq/restore-drills}"
 REMOTE_POSTGRES_PATH="${COUNTYIQ_BACKUP_REMOTE}/postgres"
 REMOTE_MANIFEST="${COUNTYIQ_BACKUP_REMOTE}/manifests/backup-${BACKUP_ID}.manifest"
@@ -55,14 +53,11 @@ CREATED_DRILL_DATABASE=""
 for identifier in \
     "$DATABASE_USER" \
     "$PRIMARY_DATABASE" \
-    "$DAGSTER_DATABASE" \
-    "$PRIMARY_DRILL_DATABASE" \
-    "$DAGSTER_DRILL_DATABASE"; do
+    "$PRIMARY_DRILL_DATABASE"; do
     countyiq_require_identifier "$identifier" "restore-drill database or user"
 done
 countyiq_validate_restore_targets \
-    "$PRIMARY_DATABASE" "$DAGSTER_DATABASE" \
-    "$PRIMARY_DRILL_DATABASE" "$DAGSTER_DRILL_DATABASE"
+    "$PRIMARY_DATABASE" "$PRIMARY_DRILL_DATABASE"
 
 # Restore verification must not race a deployment's migration or host changes.
 exec 8>/var/lock/countyiq-deploy.lock
@@ -106,72 +101,50 @@ if ! grep -Fxq "backup_id=$BACKUP_ID" "$manifest_file"; then
 fi
 BACKUP_CODE_REF="$(awk -F= '$1 == "code_ref" {print $2}' "$manifest_file")"
 TARGET_DEPLOY_REF="$(awk -F= '$1 == "target_deploy_ref" {print $2}' "$manifest_file")"
-PRIMARY_ROW_COUNT="unknown"
-DAGSTER_TABLE_COUNT="unknown"
 
-for database_name in "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"; do
-    if [ "$database_name" = "$PRIMARY_DATABASE" ]; then
-        drill_database="$PRIMARY_DRILL_DATABASE"
-    else
-        drill_database="$DAGSTER_DRILL_DATABASE"
-    fi
-    dump_name="$(awk -F= -v key="database.${database_name}.file" '$1 == key {print $2}' "$manifest_file")"
-    if [ "$dump_name" != "${database_name}-${BACKUP_ID}.dump" ]; then
-        echo "Manifest has no safe dump filename for $database_name" >&2
-        exit 1
-    fi
-    dump_file="$WORK_DIR/$dump_name"
-    checksum_file="${dump_file}.sha256"
-    manifest_sha256="$(awk -F= -v key="database.${database_name}.sha256" '$1 == key {print $2}' "$manifest_file")"
-    manifest_bytes="$(awk -F= -v key="database.${database_name}.bytes" '$1 == key {print $2}' "$manifest_file")"
-    if ! [[ "$manifest_sha256" =~ ^[0-9a-f]{64}$ ]] \
-        || ! [[ "$manifest_bytes" =~ ^[0-9]+$ ]]; then
-        echo "Manifest integrity metadata is invalid for $database_name" >&2
-        exit 1
-    fi
-    rclone copyto "${REMOTE_POSTGRES_PATH}/${dump_name}" "$dump_file"
-    rclone copyto "${REMOTE_POSTGRES_PATH}/${dump_name}.sha256" "$checksum_file"
-    sidecar_sha256="$(awk 'NR == 1 {print $1}' "$checksum_file")"
-    sidecar_name="$(awk 'NR == 1 {print $2}' "$checksum_file")"
-    actual_sha256="$(sha256sum "$dump_file" | awk '{print $1}')"
-    if [ "$sidecar_name" != "$dump_name" ] \
-        || [ "$sidecar_sha256" != "$manifest_sha256" ] \
-        || [ "$actual_sha256" != "$manifest_sha256" ] \
-        || [ "$(stat -c '%s' "$dump_file")" != "$manifest_bytes" ]; then
-        echo "Downloaded dump does not match completion manifest for $database_name" >&2
-        exit 1
-    fi
-    pg_restore --list "$dump_file" >/dev/null
+dump_name="$(awk -F= -v key="database.${PRIMARY_DATABASE}.file" '$1 == key {print $2}' "$manifest_file")"
+if [ "$dump_name" != "${PRIMARY_DATABASE}-${BACKUP_ID}.dump" ]; then
+    echo "Manifest has no safe dump filename for $PRIMARY_DATABASE" >&2
+    exit 1
+fi
+dump_file="$WORK_DIR/$dump_name"
+checksum_file="${dump_file}.sha256"
+manifest_sha256="$(awk -F= -v key="database.${PRIMARY_DATABASE}.sha256" '$1 == key {print $2}' "$manifest_file")"
+manifest_bytes="$(awk -F= -v key="database.${PRIMARY_DATABASE}.bytes" '$1 == key {print $2}' "$manifest_file")"
+if ! [[ "$manifest_sha256" =~ ^[0-9a-f]{64}$ ]] \
+    || ! [[ "$manifest_bytes" =~ ^[0-9]+$ ]]; then
+    echo "Manifest integrity metadata is invalid for $PRIMARY_DATABASE" >&2
+    exit 1
+fi
+rclone copyto "${REMOTE_POSTGRES_PATH}/${dump_name}" "$dump_file"
+rclone copyto "${REMOTE_POSTGRES_PATH}/${dump_name}.sha256" "$checksum_file"
+sidecar_sha256="$(awk 'NR == 1 {print $1}' "$checksum_file")"
+sidecar_name="$(awk 'NR == 1 {print $2}' "$checksum_file")"
+actual_sha256="$(sha256sum "$dump_file" | awk '{print $1}')"
+if [ "$sidecar_name" != "$dump_name" ] \
+    || [ "$sidecar_sha256" != "$manifest_sha256" ] \
+    || [ "$actual_sha256" != "$manifest_sha256" ] \
+    || [ "$(stat -c '%s' "$dump_file")" != "$manifest_bytes" ]; then
+    echo "Downloaded dump does not match completion manifest for $PRIMARY_DATABASE" >&2
+    exit 1
+fi
+pg_restore --list "$dump_file" >/dev/null
 
-    # Refuse an occupied name. Never reset a pre-existing database implicitly.
-    docker exec countyiq-postgres createdb -U "$DATABASE_USER" "$drill_database"
-    CREATED_DRILL_DATABASE="$drill_database"
-    docker cp "$dump_file" "countyiq-postgres:$CONTAINER_DUMP" >/dev/null
-    docker exec countyiq-postgres pg_restore \
-        -U "$DATABASE_USER" --exit-on-error --no-owner \
-        -d "$drill_database" "$CONTAINER_DUMP"
-    if [ "$database_name" = "$PRIMARY_DATABASE" ]; then
-        PRIMARY_ROW_COUNT="$(docker exec countyiq-postgres psql \
-            -U "$DATABASE_USER" -d "$drill_database" -v ON_ERROR_STOP=1 \
-            -Atc "SELECT COUNT(*) FROM public.properties;")"
-    else
-        table_count="$(
-            docker exec countyiq-postgres psql \
-                -U "$DATABASE_USER" -d "$drill_database" -v ON_ERROR_STOP=1 \
-                -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';"
-        )"
-        if [ "$table_count" -lt 1 ]; then
-            echo "Restored Dagster database contains no public tables" >&2
-            exit 1
-        fi
-        DAGSTER_TABLE_COUNT="$table_count"
-    fi
-    docker exec countyiq-postgres rm -f "$CONTAINER_DUMP"
-    docker exec countyiq-postgres dropdb \
-        -U "$DATABASE_USER" --if-exists --force "$drill_database"
-    CREATED_DRILL_DATABASE=""
-    echo "Restored and verified $database_name in disposable database $drill_database"
-done
+# Refuse an occupied name. Never reset a pre-existing database implicitly.
+docker exec countyiq-postgres createdb -U "$DATABASE_USER" "$PRIMARY_DRILL_DATABASE"
+CREATED_DRILL_DATABASE="$PRIMARY_DRILL_DATABASE"
+docker cp "$dump_file" "countyiq-postgres:$CONTAINER_DUMP" >/dev/null
+docker exec countyiq-postgres pg_restore \
+    -U "$DATABASE_USER" --exit-on-error --no-owner \
+    -d "$PRIMARY_DRILL_DATABASE" "$CONTAINER_DUMP"
+PRIMARY_ROW_COUNT="$(docker exec countyiq-postgres psql \
+    -U "$DATABASE_USER" -d "$PRIMARY_DRILL_DATABASE" -v ON_ERROR_STOP=1 \
+    -Atc "SELECT COUNT(*) FROM public.properties;")"
+docker exec countyiq-postgres rm -f "$CONTAINER_DUMP"
+docker exec countyiq-postgres dropdb \
+    -U "$DATABASE_USER" --if-exists --force "$PRIMARY_DRILL_DATABASE"
+CREATED_DRILL_DATABASE=""
+echo "Restored and verified $PRIMARY_DATABASE in disposable database $PRIMARY_DRILL_DATABASE"
 
 install -d -m 700 "$RECEIPT_DIR"
 receipt_timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -187,9 +160,8 @@ receipt_temp="$(mktemp "$RECEIPT_DIR/.restore.XXXXXX")"
     printf 'deploy_ref=%s\n' "${COUNTYIQ_DEPLOY_REF:-unknown}"
     printf 'backup_code_ref=%s\n' "$BACKUP_CODE_REF"
     printf 'backup_target_deploy_ref=%s\n' "$TARGET_DEPLOY_REF"
-    printf 'databases=%s,%s\n' "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"
+    printf 'databases=%s\n' "$PRIMARY_DATABASE"
     printf 'primary_property_rows=%s\n' "$PRIMARY_ROW_COUNT"
-    printf 'dagster_public_tables=%s\n' "$DAGSTER_TABLE_COUNT"
 } > "$receipt_temp"
 chmod 400 "$receipt_temp"
 mv "$receipt_temp" "$receipt_file"

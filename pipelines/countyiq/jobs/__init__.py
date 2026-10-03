@@ -1,15 +1,7 @@
-"""Dagster asset jobs.
+"""Named asset selections for explicit local pipeline commands.
 
-Two categories:
-
-1. **Scheduled jobs** — cost-isolated jobs wired to cron in
-   ``schedules/__init__.py``. These cover source refreshes and deterministic
-   enrichment only. Paid LLM passes are never selected by a schedule.
-
-2. **Manual-trigger jobs** — single-asset or composite jobs that target a specific
-   pass or source. They are redundant with the scheduled group jobs and exist
-   only so an operator can re-run one pass (e.g. after a prompt change) without
-   rematerializing the full enrichment chain. Launch from the Dagster UI.
+Source jobs and deterministic enrichment do not select paid inference passes.
+Pass-specific jobs retain their existing opt-in and budget checks.
 """
 
 from dagster import AssetSelection, define_asset_job
@@ -17,18 +9,6 @@ from dagster import AssetSelection, define_asset_job
 from countyiq.lib.county_config import get_county_config
 
 _county = get_county_config()
-
-local_source_refresh = define_asset_job(
-    name="local_source_refresh",
-    selection=AssetSelection.assets(
-        "penndot_roads_arcgis",
-        "penndot_projects_arcgis",
-        "traffic_counts_arcgis",
-        "pa_dep_environmental_diligence",
-        "tax_claims",
-    ),
-    description="Manual import of validated public source snapshots acquired on an operator PC",
-)
 
 plan_review_pilot = define_asset_job(
     name="plan_review_pilot",
@@ -44,7 +24,7 @@ def _configured_assets(pairs: tuple[tuple[str, object], ...]) -> AssetSelection:
 
 
 # -----------------------------------------------------------------------------
-# Scheduled jobs (production refresh path)
+# Source refresh jobs
 # -----------------------------------------------------------------------------
 
 arcgis_refresh = define_asset_job(
@@ -144,7 +124,7 @@ deterministic_enrichment_refresh = define_asset_job(
 # -----------------------------------------------------------------------------
 # Manual-trigger jobs (operator re-runs for individual sources / passes)
 #
-# These do NOT have schedules. They exist so you can re-run one piece of the
+# These select bounded pieces of the pipeline. They exist so you can re-run one piece of the
 # pipeline without rematerializing its whole group. Example: tweaking the
 # Pass 2 validation prompt and wanting to re-score without re-running Pass 1.
 # -----------------------------------------------------------------------------

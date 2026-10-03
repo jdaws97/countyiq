@@ -68,7 +68,7 @@ if [ "$CHECK_ONLY" = true ]; then
     echo "Deployment configuration preflight is valid for $DEPLOY_REF"
     echo "Actual deployment also requires the root-only docker/check-host.sh host gate"
     echo "API image: countyiq-api:$COUNTYIQ_IMAGE_TAG"
-    echo "Dagster image: countyiq-dagster:$COUNTYIQ_IMAGE_TAG"
+    echo "Migration image: countyiq-migrate:$COUNTYIQ_IMAGE_TAG"
     echo "Web image: countyiq-web:$COUNTYIQ_IMAGE_TAG"
     exit 0
 fi
@@ -82,29 +82,10 @@ countyiq_require_command rclone
 
 RELEASE_DIR="${COUNTYIQ_RELEASE_DIR:-/var/lib/countyiq/releases}"
 RESTORE_RECEIPT_DIR="${COUNTYIQ_RESTORE_RECEIPT_DIR:-/var/lib/countyiq/restore-drills}"
-BACKFILL_STATE_DIR="${COUNTYIQ_BACKFILL_STATE_DIR:-/var/lib/countyiq/intelligence}"
-ARCHIVE_HOST_DIR="${COUNTYIQ_ARCHIVE_HOST_DIR:-/var/lib/countyiq/archives}"
-CODEX_AUTH_DIR="${COUNTYIQ_CODEX_AUTH_DIR:-/var/lib/countyiq/codex-auth}"
 CURRENT_RELEASE="$RELEASE_DIR/current.env"
 CURRENT_RESTORE_RECEIPT="$RESTORE_RECEIPT_DIR/current.env"
 RESTORE_MAX_AGE_DAYS="${COUNTYIQ_RESTORE_DRILL_MAX_AGE_DAYS:-120}"
-if [[ ! "$BACKFILL_STATE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
-    echo "COUNTYIQ_BACKFILL_STATE_DIR must be an absolute path using safe characters" >&2
-    exit 1
-fi
 install -d -o root -g root -m 700 "$RELEASE_DIR" "$RESTORE_RECEIPT_DIR"
-install -d -o 10001 -g 10001 -m 700 "$BACKFILL_STATE_DIR"
-if [[ ! "$CODEX_AUTH_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
-    echo "COUNTYIQ_CODEX_AUTH_DIR must be an absolute path using safe characters" >&2
-    exit 1
-fi
-install -d -o 10001 -g 10001 -m 700 "$CODEX_AUTH_DIR"
-if [[ ! "$ARCHIVE_HOST_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
-    echo "COUNTYIQ_ARCHIVE_HOST_DIR must be an absolute path using safe characters" >&2
-    exit 1
-fi
-install -d -o 10001 -g 10001 -m 700 "$ARCHIVE_HOST_DIR"
-install -d -o 10001 -g 10001 -m 700 /var/lib/countyiq/source-inbox
 
 if [ "$INITIAL_DEPLOY" = true ]; then
     if [ -f "$CURRENT_RELEASE" ]; then
@@ -282,22 +263,21 @@ on_exit() {
         if [ "$MIGRATION_STARTED" = false ] && [ "$current_schema" = "$SCHEMA_BEFORE" ] \
             && countyiq_require_cost_guard_clear; then
             echo "Schema is unchanged; restarting the stopped prior containers." >&2
-            "${COMPOSE[@]}" start api dagster-webserver dagster-daemon >/dev/null 2>&1 || true
+            "${COMPOSE[@]}" start api >/dev/null 2>&1 || true
         else
             echo "A migration started or the schema may have changed; application services remain stopped for reviewed recovery." >&2
-            "${COMPOSE[@]}" stop api dagster-webserver dagster-daemon >/dev/null 2>&1 || true
+            "${COMPOSE[@]}" stop api >/dev/null 2>&1 || true
         fi
     fi
 }
 trap on_exit EXIT
 
 echo "[1/8] Building commit-addressed application images..."
-"${COMPOSE[@]}" build --pull api dagster-webserver caddy
+"${COMPOSE[@]}" build --pull api migrate caddy
 "${COMPOSE[@]}" pull cloudflared
 "${COMPOSE[@]}" run --rm --no-deps api \
     /app/.venv/bin/python -c "from api.main import app; assert app"
-"${COMPOSE[@]}" run --rm --no-deps dagster-webserver \
-    python -c "from countyiq.definitions import defs; assert defs"
+"${COMPOSE[@]}" run --rm --no-deps migrate alembic heads
 "${COMPOSE[@]}" run --rm --no-deps caddy \
     caddy validate --config /etc/caddy/Caddyfile
 
@@ -310,10 +290,19 @@ countyiq_require_cost_guard_clear
 "${COMPOSE[@]}" up -d --wait --wait-timeout 120 postgres
 SCHEMA_BEFORE="$(read_schema_revision)"
 
-echo "[3/8] Quiescing API and Dagster before the rollback backup..."
+echo "[3/8] Quiescing API and local pipeline access before the rollback backup..."
 # A failed stop can still have stopped some containers; recovery must handle it.
 SERVICES_STOPPED=true
-"${COMPOSE[@]}" stop -t 60 api dagster-webserver dagster-daemon
+"${COMPOSE[@]}" stop -t 60 api
+writer_can_login="$(
+    "${COMPOSE[@]}" exec -T postgres psql \
+        -U "$DATABASE_USER" -d "$DATABASE_NAME" -At -v ON_ERROR_STOP=1 \
+        -c "SELECT rolcanlogin FROM pg_roles WHERE rolname = '$DATABASE_PIPELINE_USER';"
+)"
+if [ "$writer_can_login" != "f" ]; then
+    echo "Refusing migration without a confirmed NOLOGIN pipeline writer; revoke an abandoned local session first" >&2
+    exit 1
+fi
 active_sessions="$(
     "${COMPOSE[@]}" exec -T postgres psql \
         -U "$DATABASE_USER" -d "$DATABASE_NAME" -At -v ON_ERROR_STOP=1 \
@@ -348,7 +337,7 @@ SCHEMA_AFTER="$(read_schema_revision)"
 echo "[6/8] Replacing services with commit-addressed images..."
 countyiq_require_cost_guard_clear
 "${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 240 \
-    api dagster-webserver dagster-daemon caddy cloudflared
+    api caddy cloudflared
 countyiq_require_cost_guard_clear
 "${COMPOSE[@]}" exec -T api \
     curl --fail --silent --show-error http://localhost:8000/api/ready >/dev/null
@@ -371,7 +360,7 @@ if [ -e "$receipt_file" ]; then
 fi
 receipt_temp="$(mktemp "$RELEASE_DIR/.release.XXXXXX")"
 api_image_id="$(docker image inspect --format '{{.Id}}' "countyiq-api:$COUNTYIQ_IMAGE_TAG")"
-dagster_image_id="$(docker image inspect --format '{{.Id}}' "countyiq-dagster:$COUNTYIQ_IMAGE_TAG")"
+migrate_image_id="$(docker image inspect --format '{{.Id}}' "countyiq-migrate:$COUNTYIQ_IMAGE_TAG")"
 web_image_id="$(docker image inspect --format '{{.Id}}' "countyiq-web:$COUNTYIQ_IMAGE_TAG")"
 cloudflared_image_id="$(docker image inspect --format '{{.Id}}' 'cloudflare/cloudflared:2026.8.3@sha256:51c9cefcb4569df44e1ad403ab1d3d8065aa8e84339bcfc6aee75502e1140339')"
 {
@@ -382,7 +371,7 @@ cloudflared_image_id="$(docker image inspect --format '{{.Id}}' 'cloudflare/clou
     printf 'schema_before=%s\n' "$SCHEMA_BEFORE"
     printf 'schema_after=%s\n' "$SCHEMA_AFTER"
     printf 'api_image=%s\n' "$api_image_id"
-    printf 'dagster_image=%s\n' "$dagster_image_id"
+    printf 'migrate_image=%s\n' "$migrate_image_id"
     printf 'web_image=%s\n' "$web_image_id"
     printf 'cloudflared_image=%s\n' "$cloudflared_image_id"
 } > "$receipt_temp"

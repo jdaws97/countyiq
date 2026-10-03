@@ -6,12 +6,6 @@
   "graphTooltip": 1,
   "links": [
     {
-      "title": "Dagster",
-      "type": "link",
-      "url": "https://dagster.countyiq.net",
-      "targetBlank": true
-    },
-    {
       "title": "Operations health",
       "type": "link",
       "url": "https://app.countyiq.net/ops/health",
@@ -38,13 +32,13 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Check the highlighted cards, then inspect service and source status below. [Open Dagster](https://dagster.countyiq.net) \u00b7 [Data health](https://app.countyiq.net/ops/health) \u00b7 [Alert rules](/alerting/list)"
+        "content": "Check the highlighted cards, then inspect service and source status below. [Data health](https://app.countyiq.net/ops/health) · [Alert rules](/alerting/list)"
       }
     },
     {
       "id": 2,
       "type": "stat",
-      "title": "Services /6",
+      "title": "Services /4",
       "description": "Managed containers reporting healthy. A missing series does not count as healthy.",
       "datasource": {
         "type": "prometheus",
@@ -75,11 +69,11 @@
               },
               {
                 "color": "yellow",
-                "value": 5
+                "value": 3
               },
               {
                 "color": "green",
-                "value": 6
+                "value": 4
               }
             ]
           },
@@ -91,9 +85,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -105,7 +97,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Collectors /8",
+      "title": "Collectors /7",
       "description": "Required collectors succeeding at their last attempt. Missing collectors are not assumed healthy.",
       "datasource": {
         "type": "prometheus",
@@ -119,7 +111,7 @@
       },
       "targets": [
         {
-          "expr": "sum(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"})",
+          "expr": "sum(countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|caddy|postgres|sources|recovery|openrouter|storage\"})",
           "refId": "A",
           "instant": true
         }
@@ -136,11 +128,11 @@
               },
               {
                 "color": "yellow",
-                "value": 7
+                "value": 6
               },
               {
                 "color": "green",
-                "value": 8
+                "value": 7
               }
             ]
           },
@@ -152,9 +144,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -213,9 +203,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -274,9 +262,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -335,171 +321,7 @@
       },
       "options": {
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
-      }
-    },
-    {
-      "id": 7,
-      "type": "stat",
-      "title": "Dagster running",
-      "description": "Dagster runs in STARTING or STARTED; run ages appear below. Native CLI backfills are not included.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 7,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "expr": "sum(countyiq_dagster_runs{instance=\"countyiq-production\",job=\"countyiq/host\",status=~\"STARTING|STARTED\"})",
-          "refId": "A",
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "value"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
-      }
-    },
-    {
-      "id": 8,
-      "type": "stat",
-      "title": "Dagster queued",
-      "description": "Dagster runs waiting in the queue; queue age appears below. Native CLI backfills are not included.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 7,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "expr": "sum(countyiq_dagster_runs{instance=\"countyiq-production\",job=\"countyiq/host\",status=\"QUEUED\"})",
-          "refId": "A",
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
-      }
-    },
-    {
-      "id": 9,
-      "type": "stat",
-      "title": "Dagster failed/24h",
-      "description": "Failures reported by Dagster in the last 24 hours.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 7,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "expr": "countyiq_dagster_failures_24h{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "refId": "A",
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 3
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -511,16 +333,16 @@
     {
       "id": 23,
       "type": "bargauge",
-      "title": "External readiness \u2014 two locations",
+      "title": "External readiness — two locations",
       "description": "Authenticated HTTP 200 and database readiness every five minutes. Missing probe data is alerted separately after 15 minutes.",
       "datasource": {
         "type": "prometheus",
         "uid": "${METRICS_UID}"
       },
       "gridPos": {
-        "x": 0,
-        "y": 11,
-        "w": 24,
+        "x": 6,
+        "y": 7,
+        "w": 18,
         "h": 4
       },
       "targets": [
@@ -573,9 +395,7 @@
       "options": {
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -594,7 +414,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 11,
         "w": 8,
         "h": 8
       },
@@ -648,9 +468,7 @@
       "options": {
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -669,7 +487,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 15,
+        "y": 11,
         "w": 16,
         "h": 8
       },
@@ -797,13 +615,13 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 19,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"}",
+          "expr": "countyiq_monitor_collector_success{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|caddy|postgres|sources|recovery|openrouter|storage\"}",
           "legendFormat": "{{collector}}",
           "refId": "A",
           "instant": true
@@ -851,9 +669,7 @@
       "options": {
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -872,100 +688,14 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 23,
+        "y": 19,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "time() - countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage\"}",
+          "expr": "time() - countyiq_monitor_last_attempt_timestamp_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",collector=~\"containers|caddy|postgres|sources|recovery|openrouter|storage\"}",
           "legendFormat": "{{collector}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 14,
-      "type": "timeseries",
-      "title": "Dagster pipeline status counts",
-      "description": "Dagster run counts by status. Ages are intentionally shown in the neighboring panel; native CLI backfills are not included.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 31,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "expr": "countyiq_dagster_runs{instance=\"countyiq-production\",job=\"countyiq/host\"}",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 15,
-      "type": "timeseries",
-      "title": "Oldest Dagster pipeline run age",
-      "description": "Dagster run age by status; queued runs above 30 minutes and running runs above six hours need review. Native CLI backfills are not included.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${METRICS_UID}"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 31,
-        "w": 12,
-        "h": 8
-      },
-      "targets": [
-        {
-          "expr": "countyiq_dagster_oldest_run_seconds{instance=\"countyiq-production\",job=\"countyiq/host\",status=~\"QUEUED|STARTING|STARTED\"}",
-          "legendFormat": "{{status}}",
           "refId": "A"
         }
       ],
@@ -1001,7 +731,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 27,
         "w": 8,
         "h": 8
       },
@@ -1043,7 +773,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 39,
+        "y": 27,
         "w": 8,
         "h": 8
       },
@@ -1087,7 +817,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 39,
+        "y": 27,
         "w": 8,
         "h": 8
       },
@@ -1131,7 +861,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 47,
+        "y": 35,
         "w": 8,
         "h": 8
       },
@@ -1175,7 +905,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 47,
+        "y": 35,
         "w": 8,
         "h": 8
       },
@@ -1219,7 +949,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 47,
+        "y": 35,
         "w": 8,
         "h": 8
       },
@@ -1262,7 +992,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 55,
+        "y": 43,
         "w": 24,
         "h": 9
       },
@@ -1281,10 +1011,7 @@
   ],
   "refresh": "1m",
   "schemaVersion": 41,
-  "tags": [
-    "countyiq",
-    "operations"
-  ],
+  "tags": ["countyiq", "operations"],
   "templating": {
     "list": []
   },

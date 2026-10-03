@@ -1,4 +1,4 @@
-"""Dagster entry point — registers all assets, jobs, schedules, sensors, and resources."""
+"""Local Dagster execution: assets, checks, jobs and resources."""
 
 from dagster import (
     Definitions,
@@ -20,7 +20,6 @@ from countyiq.jobs import (
     fema_refresh,
     intelligence_data_refresh,
     intelligence_full_pipeline,
-    local_source_refresh,
     owner_briefs_refresh,
     pa_dos_refresh,
     plan_review_pilot,
@@ -33,17 +32,9 @@ from countyiq.jobs import (
 )
 from countyiq.resources.database import make_database_resource
 from countyiq.resources.storage import make_s3_resource
-from countyiq.resources.source_snapshots import SourceSnapshotsResource
-from countyiq.schedules import all_schedules
-from countyiq.sensors.alerting import (
-    failure_alerter,
-    intelligence_integrity_guard,
-    success_reporter,
-)
 
-# Keep subprocess isolation, but serialize asset steps inside a run. Together
-# with dagster.yaml's one-run queue this prevents independent source assets from
-# multiplying peak RAM on the single 8 GB host.
+# Keep subprocess isolation while bounding each local run's memory use.
+# The local runner separately locks the VPS against concurrent runs/deployments.
 bounded_multiprocess_executor = multiprocess_executor.configured(
     {"max_concurrent": 1},
     name="bounded_multiprocess_executor",
@@ -76,14 +67,12 @@ defs = Definitions(
         plan_review_pilot,
         deterministic_enrichment_refresh,
         intelligence_full_pipeline,
-        local_source_refresh,
     ],
-    schedules=all_schedules,
-    sensors=[success_reporter, failure_alerter, intelligence_integrity_guard],
     resources={
-        "database": make_database_resource(),
-        "s3": make_s3_resource(),
-        "source_snapshots": SourceSnapshotsResource(),
+        # Defer credentials until execution so local job snapshots contain only
+        # environment references, never the borrowed production secrets.
+        "database": make_database_resource(defer_secrets=True),
+        "s3": make_s3_resource(defer_secrets=True),
     },
     executor=bounded_multiprocess_executor,
 )

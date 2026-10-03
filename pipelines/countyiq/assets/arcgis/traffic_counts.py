@@ -2,26 +2,26 @@
 
 Source: PennDOT opendata/roadwaytraffic MapServer
 Records: ~1,818 segments for York County
-Schedule: Monthly (bulk_refresh job) — traffic data updates annually
 """
 
 import json
+from datetime import UTC, datetime
 
 from dagster import (
-    asset,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
+    asset,
 )
 
+from countyiq.lib.arcgis_snapshot import fetch_arcgis_snapshot
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.geometry import paths_to_multilinestring_geojson
 from countyiq.lib.scd import scd2_upsert_geom
+from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
-from countyiq.resources.source_snapshots import SourceSnapshotsResource
-from countyiq.lib.source_rights import authorize_source, require_source_use
 
 VALUE_COLUMNS = [
     "route_number",
@@ -73,7 +73,6 @@ def traffic_counts_arcgis(
     context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
-    source_snapshots: SourceSnapshotsResource,
 ) -> MaterializeResult:
     """Fetch traffic count segments, upsert to staging.traffic_counts."""
     county = get_county_config()
@@ -87,10 +86,13 @@ def traffic_counts_arcgis(
     require_source_use(authorization, "derived_product")
     require_source_use(authorization, "raw_retention")
 
-    all_features = source_snapshots.arcgis("traffic_counts", context)
+    snapshot_started_at = datetime.now(UTC)
+    all_features = fetch_arcgis_snapshot(
+        county.traffic_counts_url,
+        where=f"CTY_CODE='{county.traffic_counts_cty_code}'",
+    )
     context.log.info(f"Total: {len(all_features)} traffic segments")
 
-    source_snapshots.archive_receipt(s3, context)
     s3.archive(
         f"{county.s3_prefix}/arcgis/traffic_counts",
         {"features": all_features},
@@ -117,8 +119,8 @@ def traffic_counts_arcgis(
             value_columns=VALUE_COLUMNS,
             geom_lookup=geometries,
             geom_kind="multilinestring",
-            snapshot_started_at=source_snapshots.acquisition_time(),
-            snapshot_id=source_snapshots.snapshot_identity(),
+            snapshot_started_at=snapshot_started_at,
+            snapshot_id=context.run_id,
         )
     finally:
         cur.close()

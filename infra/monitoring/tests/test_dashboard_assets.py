@@ -15,7 +15,6 @@ FORBIDDEN_TERMS = ("password", "secret", "token", "api_key", "pidn", "run_id")
 PROMTOOL = shutil.which("promtool")
 REQUIRED_COLLECTORS = (
     "containers",
-    "dagster",
     "caddy",
     "postgres",
     "sources",
@@ -43,7 +42,6 @@ class DashboardAssetTests(unittest.TestCase):
         self.assertIn("${METRICS_UID}", serialized)
         self.assertIn("${LOGS_UID}", serialized)
         self.assertEqual('{job="countyiq/containers"}', log_query)
-        self.assertIn("https://dagster.countyiq.net", serialized)
         self.assertIn("https://app.countyiq.net/ops/health", serialized)
         self.assertIn("/alerting/list", serialized)
         self.assertEqual("now-6h", dashboard["time"]["from"])
@@ -100,8 +98,6 @@ class DashboardAssetTests(unittest.TestCase):
             "PostgreSQL connection capacity": "percent",
             "R2 capacity": "percent",
             "Docker storage": "bytes",
-            "Dagster pipeline status counts": "short",
-            "Oldest Dagster pipeline run age": "s",
         }
         for title, unit in expected_units.items():
             self.assertEqual(unit, panels[title]["fieldConfig"]["defaults"]["unit"])
@@ -119,14 +115,6 @@ class DashboardAssetTests(unittest.TestCase):
         )
         self.assertNotIn(
             "countyiq_cost_guard_tripped", panel_expressions["R2 capacity"]
-        )
-        self.assertNotIn(
-            "countyiq_dagster_oldest_run_seconds",
-            panel_expressions["Dagster pipeline status counts"],
-        )
-        self.assertNotIn(
-            "countyiq_dagster_runs",
-            panel_expressions["Oldest Dagster pipeline run age"],
         )
 
         source_panel = panels["Source status"]
@@ -205,7 +193,7 @@ class DashboardAssetTests(unittest.TestCase):
             )
 
         self.assertIn(
-            'collector=~"containers|dagster|caddy|postgres|sources|recovery|openrouter|storage"',
+            'collector=~"containers|caddy|postgres|sources|recovery|openrouter|storage"',
             alerts["collector-failed-or-stale"],
         )
         self.assertIn(
@@ -314,35 +302,6 @@ class DashboardAssetTests(unittest.TestCase):
             "rule_files": [],
             "evaluation_interval": "1m",
             "tests": [
-                {
-                    "interval": "1m",
-                    "input_series": [
-                        {
-                            "series": f'countyiq_dagster_runs{{{root_labels},status="QUEUED"}}',
-                            "values": "1 1 0",
-                        },
-                        {
-                            "series": f'countyiq_dagster_oldest_run_seconds{{{root_labels},status="QUEUED"}}',
-                            "values": "60 1801 0",
-                        },
-                    ],
-                    "promql_expr_test": [
-                        {
-                            "expr": alerts["dagster-queue-delayed"],
-                            "eval_time": evaluation_time,
-                            "exp_samples": [
-                                self.promtool_sample(
-                                    f'{root_labels},status="QUEUED"', expected
-                                )
-                            ],
-                        }
-                        for evaluation_time, expected in (
-                            ("0m", 0),
-                            ("1m", 1),
-                            ("2m", 0),
-                        )
-                    ],
-                },
                 {
                     "interval": "1m",
                     "input_series": [

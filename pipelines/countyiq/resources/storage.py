@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from dagster import ConfigurableResource, get_dagster_logger
+from dagster import ConfigurableResource, EnvVar, get_dagster_logger
 
 
 ArchivePayload = Union[bytes, str, dict, list]
@@ -189,14 +189,21 @@ class S3StorageResource(ConfigurableResource):
             self._handle_failure(log, f"Archive of {key} failed", e)
 
 
-def make_s3_resource() -> S3StorageResource:
+def make_s3_resource(*, defer_secrets: bool = False) -> S3StorageResource:
     strict_env = os.environ.get("COUNTYIQ_ARCHIVE_STRICT", "").strip().lower()
+    access_key = os.environ.get("R2_ACCESS_KEY_ID", "")
+    secret_key = os.environ.get("R2_SECRET_ACCESS_KEY", "")
+    if defer_secrets:
+        if "R2_ACCESS_KEY_ID" in os.environ:
+            access_key = EnvVar("R2_ACCESS_KEY_ID")
+        if "R2_SECRET_ACCESS_KEY" in os.environ:
+            secret_key = EnvVar("R2_SECRET_ACCESS_KEY")
     return S3StorageResource(
         bucket=os.environ.get("S3_RAW_BUCKET", "countyiq-raw"),
         region=os.environ.get("AWS_DEFAULT_REGION", "auto"),
         endpoint_url=os.environ.get("R2_ENDPOINT_URL", ""),
-        access_key_id=os.environ.get("R2_ACCESS_KEY_ID", ""),
-        secret_access_key=os.environ.get("R2_SECRET_ACCESS_KEY", ""),
+        access_key_id=access_key,
+        secret_access_key=secret_key,
         strict=strict_env in {"1", "true", "yes", "on"},
         local_archive_dir=os.environ.get("COUNTYIQ_LOCAL_RAW_ARCHIVE_DIR", ""),
         cost_guard_file=os.environ.get("COUNTYIQ_COST_GUARD_FILE", ""),

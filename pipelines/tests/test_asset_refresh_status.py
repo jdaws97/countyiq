@@ -1,14 +1,13 @@
 """Real Dagster event contracts for source freshness in partially failed jobs."""
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 from dagster import DagsterInstance, MaterializeResult, asset, materialize
 
 from countyiq.lib.asset_refresh_status import collect_asset_refresh_outcomes
-from countyiq.sensors.alerting import _record_outcome
+from countyiq.lib.run_reporting import record_run_outcome
 
 
 def test_successful_source_does_not_inherit_sibling_failure():
@@ -34,13 +33,11 @@ def test_successful_source_does_not_inherit_sibling_failure():
         run = instance.get_run_by_id(result.run_id)
         outcomes = collect_asset_refresh_outcomes(instance, run)
         database = Mock()
-        _record_outcome(
-            SimpleNamespace(instance=instance, dagster_run=run), database, "failure"
-        )
+        record_run_outcome(instance, database, run.run_id)
 
     writes = [call.args[1] for call in database.execute.call_args_list]
-    assert writes[0]["status"] == "failure"
-    assert {item["asset_key"]: item["status"] for item in writes[1:]} == {
+    assert writes[-1]["status"] == "failure"
+    assert {item["asset_key"]: item["status"] for item in writes[:-1]} == {
         "plcb_licenses": "success",
         "tax_claims": "failure",
     }

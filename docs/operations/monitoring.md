@@ -5,51 +5,56 @@ the VPS/R2; the Grafana Cloud stack receives aggregate operational metrics and
 filtered container logs. The operating policy requires the Free plan; the Cloud
 Portal billing plan and post-trial status still need owner verification.
 
+The new local-pipeline release monitors four VPS services with seven
+collectors and 19 alert rules. Pipeline runs execute on the PC and publish
+application health receipts synchronously. Deploy the collector and provision
+the reviewed Grafana catalog before treating those counts as live. Dated
+verification below describes earlier installations, including the retired
+server-side Dagster monitoring.
+
 ## Browser access
 
-- Dagster: `https://dagster.countyiq.net`, through Cloudflare Tunnel and a separate
-  Access application allowing only `jarod.daws@gmail.com` and
-  `jarod.daws@protonmail.com`. The tester
-  allowlist does not grant operator access. Dagster can launch work; the hostname
-  exposes its full operator UI, not a customer-facing dashboard.
 - Grafana: the private stack URL selected at account creation. The provisioner
-  checks that every human stack member uses one of these two addresses; it does not invite
+  checks that every human stack member uses `jarod.daws@gmail.com` or
+  `jarod.daws@protonmail.com`; it does not invite
   people or enable public/anonymous dashboards. Verify Cloud Portal organization
   membership and any automatic role assignments as part of account setup too.
 - Data health: `https://app.countyiq.net/ops/health`.
 
-The Dagster origin stays on `127.0.0.1:3000`. Only cloudflared and the Dagster
-webserver share the additional internal `countyiq-operator` bridge. No public
-host port is added. Access/DNS/Tunnel configuration remains in OpenTofu.
+Pipeline run history and compute logs are local under
+`~/.local/state/countyiq/pipeline/dagster`. The release has no hosted Dagster
+UI, heartbeat, queue, or schedule monitor. Use
+[Local pipeline commands](local-pipelines.md) for execution and receipt recovery.
+Cloudflare Access/DNS/Tunnel configuration remains in OpenTofu.
 
-### Installation status — 2026-09-08
+### Historical installation — 2026-09-08
 
-The host probes are installed and all eight reported success. Dagster's Access
-application, DNS record, and tunnel route are applied. Anonymous UI and GraphQL
-requests redirect to Access; a Firefox check confirmed the login form. Owner
-sign-in still needs an owner verification. Cloud ingestion is live: all eight
+The host probes were installed and all eight reported success. Dagster's Access
+application, DNS record, and tunnel route were applied. Anonymous UI and GraphQL
+requests redirected to Access; a Firefox check confirmed the login form. Owner
+sign-in was still unverified. Cloud ingestion was live: all eight
 collectors were queried successfully, and a harmless synthetic log was found in
 Loki with its email and query parameter redacted. The owner confirmed receipt
 of the Gmail delivery-test notification. The test recovered and its temporary
 rule was removed.
 
-The dashboard at `https://eloquentbread1118.grafana.net/d/countyiq-overview` now
-has readable overview cards, per-service health, a joined source health/freshness
+The dashboard at `https://eloquentbread1118.grafana.net/d/countyiq-overview`
+had readable overview cards, per-service health, a joined source health/freshness
 table, external readiness, and separate capacity charts. Its rendered layout
 was checked in Firefox using a temporary loopback preview; the preview does not
-verify the owner's Grafana login. Native CLI backfill progress is not represented
-by the cards explicitly labeled Dagster.
+verify the owner's Grafana login. The Dagster cards in that version did not
+represent native CLI backfill progress; the new catalog removes those cards.
 
-Production release `124ad880a0e5b4ec2b2458a1a713d37d8fc95d88` includes the
+Production release `124ad880a0e5b4ec2b2458a1a713d37d8fc95d88` included the
 operator network and Caddy metrics setting. The release completed at
 `2026-09-08T15:37:54Z` with schema `075` unchanged; all eight monitoring probes
-reported success after deployment. These settings now persist across container
-recreation through the deployed Compose configuration and Caddy image.
+reported success after deployment. These settings persisted across container
+recreation through that release's Compose configuration and Caddy image.
 The later application release `3fa56ec5403f5b5f0c597de0aad01661b67551fb`
-completed at `2026-09-08T16:10:33Z` and preserves those settings. Monitoring
+completed at `2026-09-08T16:10:33Z` and preserved those settings. Monitoring
 configuration changes after that release did not redeploy the application.
 
-## Repair verification — 2026-10-03
+## Historical repair verification — 2026-10-03
 
 Monitoring code from `85de49c` was installed independently of the application
 images. All 22 live Grafana expressions and evaluation settings matched the
@@ -65,8 +70,8 @@ notification test was induced. The prior rules were saved locally and the
 previous host collector files were archived at
 `/var/backups/countyiq-monitoring-20261003.tar.gz` before installation.
 
-The 23 source warnings are not evidence of a stopped daemon. Production
-heartbeats were current with no heartbeat errors, and schedules were enabled.
+At that inspection, the 23 source warnings were not evidence of a stopped
+daemon: heartbeats were current and schedules were enabled.
 Read-only Dagster inspection found an expired certificate on the county GIS
 host, connection timeouts on the old PennDOT and DEP hosts, and a tax-document
 download timeout. Municipal source health was separately red. Group-level run
@@ -76,7 +81,7 @@ source recovery and more precise freshness accounting remain separate work.
 ## Components and retention
 
 Grafana Alloy 1.19.2 is checksum-pinned. A host systemd service collects CPU,
-memory, filesystems, disk I/O and network counters and tails the six known
+memory, filesystems, disk I/O and network counters and tails the four known
 container log files. The listener is loopback-only on port 12345. The process
 has no Linux capabilities and cannot access the Docker socket or the production
 environment. It runs as root solely to read root-owned Docker log files.
@@ -85,11 +90,11 @@ Short-lived probes use the existing Docker administrative boundary to collect
 selected state without passing the socket to Alloy. SQL executes in read-only
 transactions with an eight-second statement timeout. Existing application
 libraries execute in separate probe processes and return aggregate values;
-they do not change the running API or Dagster processes.
+they do not change the running API or local pipeline processes.
 
 | Cadence   | Probe                                                                       |
 | --------- | --------------------------------------------------------------------------- |
-| 1 minute  | Containers, Dagster heartbeats/queue, Caddy request metrics                 |
+| 1 minute  | Containers and Caddy request metrics                                        |
 | 5 minutes | PostgreSQL, source health, backups/restores, R2 guard, OpenRouter key usage |
 | 1 hour    | Docker image/build-cache/volume storage inventory                           |
 
@@ -97,8 +102,9 @@ OpenRouter reports usage for the configured runtime API key. This is not total
 account billing and does not include other keys, subscription-based Codex work,
 or unrelated services. No model inference is requested by monitoring.
 
-Source health uses the application's existing freshness expectations; paused
-and manual jobs are not automatically treated as missed scheduled work.
+Source health uses the application's source receipts and freshness expectations.
+Manual execution does not remove staleness checks. Policy-paused sources remain
+distinct from failed or stale acquisitions.
 Backup success comes from the scheduled service's journal line after verified
 off-host completion. Manual pre-deploy backups do not conceal a broken daily
 schedule. Restore success comes from the immutable restore-drill receipt.
@@ -212,7 +218,7 @@ not credentials. Reconcile with:
 pipelines/.venv/bin/python infra/monitoring/synthetic.py
 ```
 
-The 22 permanent alert rules include external failure and missing-location
+The release's 19 permanent alert rules include external failure and missing-location
 alerts. Promtool verifies failure, recovery, absent probes, and duplicate
 configuration versions; no production outage was injected.
 
@@ -234,12 +240,13 @@ Before calling the installation complete:
 
 1. Verify the exact Free plan and that human access is limited to the owner's
    two approved email addresses in Grafana and Cloudflare.
-2. Observe all eight probe success gauges and fresh node metrics in Grafana.
+2. Observe all seven probe success gauges and fresh node metrics in Grafana.
 3. Verify a synthetic harmless log arrives with redaction and bounded labels.
 4. Trigger an isolated monitoring test alert and receive its recovery email.
 5. Prove that a missing collector and an external failed HTTP check alert.
-6. Open Dagster in a real browser, complete the owner's Access sign-in, and
-   verify run details. Confirm anonymous requests cannot read the UI or GraphQL.
+6. Run an authorized bounded local pipeline command and compare its final
+   report with application health and the PC's retained run history. Confirm
+   obsolete Dagster panels, rules, and collector output are removed at cutover.
 
 Routine host checks:
 
@@ -277,15 +284,17 @@ authorized the retention policy below.
 
 `countyiq-docker-retention.timer` runs hourly with up to five minutes of jitter.
 The monitoring installer deploys it independently of application releases.
-It acquires `/var/lock/countyiq-deploy.lock`, which is also held by the production
-deployment script, and skips if another deployment or cleanup is running.
+It acquires `/var/lock/countyiq-deploy.lock`, which is also held by production
+deployment and local pipeline sessions, and skips while another operation
+holds the lock.
 
-The policy protects the current and previous release receipts, verifies all
-three application image tags against their recorded image identities, and
+The policy protects the current and previous release receipts, verifies their
+API, web, and migration image tags against recorded image identities, and
 protects images referenced by any container, including stopped containers.
 Missing or mismatched rollback images stop the cleanup before any deletion.
-Only full-commit tags in `countyiq-api`, `countyiq-dagster`, and `countyiq-web`
-are eligible, with a one-hour grace period after image creation. Images are
+Only full-commit tags in `countyiq-api`, `countyiq-migrate`, and `countyiq-web`,
+plus legacy `countyiq-dagster` tags needed for historical receipts, are eligible,
+with a one-hour grace period after image creation. Images are
 removed by exact tag without forced deletion or parent pruning. Unrelated
 images, manual tags, volumes, containers, application state, and backups are
 outside the image cleanup scope.
@@ -298,7 +307,9 @@ been retired. No Docker daemon restart is required.
 
 To keep an additional rollback release, add its full commit SHA to the
 root-managed `/etc/countyiq/retained-releases.txt`, one per line. Its saved
-release receipt and three matching image tags must exist. Comments are allowed.
+release receipt and each image tag named by that receipt must exist. Comments
+are allowed. Older receipts retain their recorded Dagster image identity so
+the runtime transition does not silently discard rollback evidence.
 
 Read-only inspection and service verification:
 
@@ -388,12 +399,12 @@ After deploying the probe, use an instant table query:
 countyiq_source_status_info{instance="countyiq-production",job="countyiq/host"}
 ```
 
-For each affected job, inspect its latest run, failed asset, schedule ticks and
-the success/failure sensor ticks. Compare that with `GET /api/ops/health`
-and `meta.job_run_status`. A healthy daemon alone does not prove schedules
-are enabled or that run outcomes reached the application ledger. Scheduled
-jobs are staggered in time; their cron expressions do not enforce successful
-upstream completion.
+For a new local run, inspect its final JSON report, failed assets, checks, and
+retained local event logs. Compare those with `GET /api/ops/health`,
+`meta.job_run_status`, and the source-refresh receipts. If only reporting
+failed, use the wrapper's `--report-run` mode with the same state directory.
+Source jobs and downstream rebuilds run explicitly; their names do not enforce
+successful completion of separate upstream commands.
 
 Production access was restored during the October 3 repair. All 22 alert rules
 were verified with evaluation health `ok`; the source warning remained active

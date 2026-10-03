@@ -1,5 +1,11 @@
 # Source refresh diagnosis — October 3, 2026
 
+This is a historical diagnosis and recovery record from the former VPS Dagster
+runtime. The next release uses [local pipeline commands](local-pipelines.md)
+with synchronous health reporting. The observations below remain evidence of
+the dated runs, not instructions to restore the old runtime or a claim that
+the replacement is already deployed.
+
 Production inspection found current heartbeats for all six Dagster daemons,
 seven enabled schedules, and functioning run sensors. The 23 source warnings
 were not evidence of a stopped daemon. The September 28 Grafana datasource
@@ -12,31 +18,29 @@ asset completed successfully. The September 20 grouped GIS runs also contained
 successful county assets and failed state assets. Whole-job status incorrectly
 made those successful sources look as old as September 2.
 
-Migration 087 and the run sensors now maintain `meta.asset_refresh_status`.
+Migration 087 introduced `meta.asset_refresh_status`; run sensors populated it
+in the runtime inspected here. The local runner now owns that reporting path.
 Only explicit positive source materialization counts advance successful-refresh
 time. Missing, malformed and zero-count receipts remain unverified; a failed
 attempt preserves the previous successful timestamp. Composite sources require
 all contributing assets. Incremental entity and municipal coverage contracts
 remain separate. The API uses job outcomes only before the ledger is installed.
 
-After deploying migration 087 and the updated images, preview retained receipts
-inside the Dagster environment:
-
-```bash
-python /opt/pipelines/scripts/reconcile_asset_refreshes.py --days 45
-```
-
-Review the bounded receipt counts, then run the same command with `--apply`.
-This only reconciles derived health evidence; it does not rerun acquisition or
-change source records. Replaying is idempotent. Verify `/api/ops/health` and the
-Grafana `countyiq_source_status_info` series afterward. A corrected timestamp
-does not resolve a later failed attempt.
+The former bulk receipt-reconciliation helper is retired. For a finished run
+in the PC's retained Dagster history, use the protected wrapper's
+[`--report-run` procedure](local-pipelines.md#run-history-and-health-receipts).
+It evaluates the retained asset checks as well as source materializations
+before republishing health outcomes. It does not rerun acquisition or change
+source records. Verify `/api/ops/health` and Grafana's
+`countyiq_source_status_info` series afterward. A corrected timestamp does not
+resolve a later failed attempt, and the local reporter cannot infer a run
+that is absent from its local history.
 
 The shared ArcGIS client also rejects malformed HTTP-200 responses, invalid
 counts and empty pages that claim more data. They cannot silently become empty
 or truncated snapshots used by SCD expiry.
 
-## Remaining acquisition issues
+## Acquisition issues observed during diagnosis
 
 - Keep TLS verification enabled. A fresh October 3 probe from the production
   Dagster container received HTTP 200 from county GIS with valid TLS. The
@@ -54,8 +58,8 @@ or truncated snapshots used by SCD expiry.
   other categories. The parser and geometry lookup now preserve these projects.
   Its `CRNT_CNTRCT_AM` stays in the source payload; it is not substituted for
   `PHS_EST_COST_AM`. Validate every selected layer before publishing a snapshot.
-- DEP and the county website also need successful VPS connectivity before a
-  refresh can be claimed. The configured tax listing at
+- At this stage, DEP and the county website also lacked successful VPS
+  connectivity. The configured tax listing at
   `/DocumentCenter/View/1911/Delinquent-Tax-Claim-Listing-PDF` returned the current
   October 2 report locally using the existing CountyIQ request headers. Keep
   that URL. Extraction now uses pdfplumber's one-based physical page numbers,
@@ -80,11 +84,10 @@ website timed out. A packet capture confirmed outgoing PennDOT SYNs without
 replies. The host firewall permits outbound traffic. This narrows the problem
 to the external path or IP access, without establishing which party drops it.
 The [GitHub connectivity run](https://github.com/jdaws97/countyiq/actions/runs/37146785553)
-also received HTTP 200 for all five URLs. Keep the application and database on
-the current VPS. A separate ingestion worker is the next infrastructure change
-to evaluate for the blocked public sources; a full migration is not justified
-by this evidence. No new cloud resources or persistent off-host worker were
-provisioned during this repair.
+also received HTTP 200 for all five URLs. The subsequent selected direction
+keeps the application and database on the VPS and runs source acquisition
+directly on the PC through the protected local pipeline session. No new cloud
+resources or persistent off-host worker were provisioned during this diagnosis.
 
 ## Snapshot correctness and safe holds
 

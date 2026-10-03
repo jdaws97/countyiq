@@ -71,7 +71,7 @@ def test_removed_review_is_outcome_unknown_and_later_unchanged_rows_are_not_chan
         compare_snapshots(before, after)
 
 
-def test_pilot_is_manual_and_outside_every_scheduled_job():
+def test_pilot_has_its_own_explicit_job():
     from countyiq.definitions import defs
     from countyiq.jobs import plan_review_pilot
 
@@ -79,9 +79,8 @@ def test_pilot_is_manual_and_outside_every_scheduled_job():
     assert {
         key.to_user_string() for key in plan_review_pilot.selection.resolve(graph)
     } == {"plan_review_snapshot"}
-    scheduled = {schedule.job_name for schedule in defs.schedules}
     for job in defs.jobs:
-        if job.name in scheduled:
+        if job.name != plan_review_pilot.name:
             assert "plan_review_snapshot" not in {
                 key.to_user_string() for key in job.selection.resolve(graph)
             }

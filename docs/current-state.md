@@ -25,11 +25,18 @@ validation remains open.
 At 21:21 UTC on October 3, production reported 25/27 sources healthy and
 intelligence integrity green. Address-point duplicate identities and incomplete
 municipal coverage remained visible holds. The controlled
-[local PC worker](operations/local-source-worker.md) recovered five source assets
-that the VPS could not reach, and their affected intelligence outputs rebuilt
-successfully. Runs are manual while the PC is online. Source receipts, archive
-requirements, policy checks and SCD2 history remain on the ordinary VPS pipeline.
-Paid Pass 0 and Pass 3 remain disabled.
+PC source-recovery workflow recovered five source assets that the VPS could not
+reach, and their affected intelligence outputs rebuilt successfully. That dated
+verification used the earlier transport and is not a deployment receipt for
+the replacement runtime.
+
+The next release runs all Dagster jobs explicitly on the PC through
+[local pipeline commands](operations/local-pipelines.md). Source requests go
+directly from the PC; source gates, R2 archives, SCD2 checks, and health receipts
+remain enforced. Local SQLite stores run history and logs. The VPS serves the
+application and database without a Dagster daemon or webserver. Check the
+release receipt before assuming this transition is deployed. Production source
+sessions keep Passes 0–4 disabled.
 
 The earlier emerging-intelligence workspace remains available as supporting
 research and saved private work. Historical counts and status below are dated
@@ -41,7 +48,7 @@ CountyIQ is a real-estate intelligence platform for York County, PA. The repo co
 
 - a React frontend centered on site inquiries, with supporting county activity, property screening, maps, municipalities, search, property/organization investigations, private saved work, comparison, and operator health; legacy bookmarks retain their redirects
 - a FastAPI API serving those surfaces under `/api/*`
-- a Dagster pipeline layer that handles both source ingestion and an LLM-backed intelligence workflow
+- a local Dagster pipeline layer for explicit source ingestion and intelligence jobs
 
 ## Target Buyer
 
@@ -107,7 +114,7 @@ tools remain under `pipelines/eval/`.
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Frontend          | React + Vite; the production Compose web image serves the built frontend through Caddy and Cloudflare Tunnel                                                                                                                                                                                                                                                                |
 | API               | FastAPI + Uvicorn                                                                                                                                                                                                                                                                                                                                                           |
-| Pipelines         | Dagster                                                                                                                                                                                                                                                                                                                                                                     |
+| Pipelines         | Local Dagster CLI; manual jobs and asset subsets                                                                                                                                                                                                                                                                                                                            |
 | Database          | PostgreSQL 16 + PostGIS (self-managed)                                                                                                                                                                                                                                                                                                                                      |
 | Object storage    | Cloudflare R2 (via `R2_ENDPOINT_URL` — required, otherwise boto3 targets AWS)                                                                                                                                                                                                                                                                                               |
 | Front door        | Cloudflare                                                                                                                                                                                                                                                                                                                                                                  |
@@ -165,7 +172,7 @@ explicit per-run dollar ceiling plus provider price ceilings; the harness
 reserves the conservative maximum before dispatch and stops if provider cost
 cannot be verified.
 Migration 041 also persists every deterministic validation failure in an
-append-only rejection ledger. The health API and Dagster guard warn when a
+append-only rejection ledger. The health API and monitoring warn when a
 rejection occurred in the last 24 hours, so an invalid output cannot disappear
 into worker logs or be treated as a clean canary.
 
@@ -180,12 +187,12 @@ Relevant env vars: `OPENROUTER_API_KEY`, `COUNTYIQ_PASS{0-4}_MODEL`,
 `COUNTYIQ_SEARCH_RATE_PER_MIN`, `COUNTYIQ_SEARCH_DAILY_LLM_BUDGET`, and the
 default-off `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS` deployment gate.
 
-The production Compose boundary uses an independent read-only API database
+The production Compose boundary uses an independent source-data read-only API database
 role, withholds pipeline/R2/Slack secrets from the API, runs application
 containers as a non-root UID, validates proxy-derived client addresses, and
 keeps public API docs off by default. API and pipeline packages may not import
 one another, only the migration service receives the administrator URL, and the
-release script stops both runtimes before backup and migration. The 2026-08-31
+release script excludes local writer sessions before backup and migration. The 2026-08-31
 repository security review and remaining live-environment gates are in
 `docs/operations/security.md`.
 
@@ -199,7 +206,7 @@ paused, disallowed-method, disallowed-use, unreviewed-origin, or overdue-review
 policies.
 
 - The YCPC project-folder economic-development candidates and CDBG housing
-  layers are paused, removed from scheduled jobs, and expired from current
+  layers are paused, removed from refresh jobs, and expired from current
   scoring inputs pending written reuse confirmation.
 - PLCB, tax claims, sheriff sales, and municipal proceedings are conditional.
   Collection uses allowlisted official methods; proceedings fail closed on
@@ -214,7 +221,7 @@ policies.
   pauses acquisition and derived use while retaining evidence for repair. Every
   configured body must match its policy's municipality, URL, proceeding type,
   acquisition method, and allowed origin before any request is made;
-  listing/document health, scheduled refresh freshness, and latest job failure
+  listing/document health, source refresh freshness, and latest job failure
   state are visible in `/api/ops/health`.
 - Franklintown Borough, Newberry Township, and Washington Township use official
   listing pages whose PDFs are delivered by GoDaddy's `img1.wsimg.com` CDN.
@@ -232,7 +239,7 @@ policies.
   distress routes and frontend pages are default-off. Owner names are public
   record and shown. Municipality aggregates, boolean parcel delinquency, and
   backend scores preserve the useful signal without exposing exact debt.
-- Replacement scheduled inputs are York zoning overlays, business parks,
+- Replacement refresh inputs are York zoning overlays, business parks,
   industrial parks, soils, and local traffic counts. They power a separate
   site-screening score and buyer-facing Radar view. The 2026-08-28 local live
   verification loaded 85 overlays, 160 business-park records, 344

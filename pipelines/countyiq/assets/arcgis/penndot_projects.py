@@ -1,22 +1,23 @@
 """PennDOT transportation projects from PA Projects MapServer -> staging.penndot_projects.
 
 Records: ~20-80 points across 4 layers (Underway, Four Year Plan, Under Development, Under Construction)
-Schedule: Weekly (Sunday 02:00)
 """
 
 import json
+from datetime import UTC, datetime
 
 import requests
 from dagster import (
-    asset,
-    asset_check,
     AssetCheckResult,
     AssetCheckSeverity,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
+    asset,
+    asset_check,
 )
 
+from countyiq.lib.arcgis_snapshot import fetch_arcgis_snapshot, fetch_metadata
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.geometry import point_to_geojson
@@ -25,7 +26,6 @@ from countyiq.lib.scd import scd2_upsert_geom
 from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
-from countyiq.resources.source_snapshots import SourceSnapshotsResource
 
 KEY_COLUMNS = ["project_id"]
 VALUE_COLUMNS = [
@@ -65,7 +65,6 @@ def penndot_projects_arcgis(
     context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
-    source_snapshots: SourceSnapshotsResource,
 ) -> MaterializeResult:
     """Fetch PennDOT projects from multiple MapServer layers, archive to S3, SCD2 upsert with geometry."""
 
@@ -84,9 +83,13 @@ def penndot_projects_arcgis(
         f"layers={county.penndot_projects_layers}"
     )
 
+    snapshot_started_at = datetime.now(UTC)
     all_features = []
     for layer_id in county.penndot_projects_layers:
-        features = source_snapshots.arcgis(f"penndot_projects_{layer_id}", context)
+        features = fetch_arcgis_snapshot(
+            f"{county.penndot_projects_url}/{layer_id}",
+            where=f"COUNTY_NAME='{county.penndot_projects_county_filter}'",
+        )
         context.log.info(f"Layer {layer_id}: {len(features)} features")
         required = expected_layer_fields(layer_id)
         if any(required - set(feature.get("attributes", {})) for feature in features):
@@ -99,7 +102,6 @@ def penndot_projects_arcgis(
         f"Fetched {len(all_features)} total raw features across all layers"
     )
 
-    source_snapshots.archive_receipt(s3, context)
     s3.archive(f"{county.s3_prefix}/penndot/projects", all_features)
 
     records = parse_penndot_projects_features(all_features)
@@ -133,8 +135,8 @@ def penndot_projects_arcgis(
             value_columns=VALUE_COLUMNS,
             geom_lookup=geom_lookup,
             geom_kind="point",
-            snapshot_started_at=source_snapshots.acquisition_time(),
-            snapshot_id=source_snapshots.snapshot_identity(),
+            snapshot_started_at=snapshot_started_at,
+            snapshot_id=context.run_id,
         )
     finally:
         cur.close()
@@ -171,9 +173,9 @@ penndot_projects_record_count_nonzero = make_row_count_check(
 
 @asset_check(asset=penndot_projects_arcgis)
 def penndot_projects_schema_drift(
-    database: DatabaseResource, source_snapshots: SourceSnapshotsResource
+    database: DatabaseResource,
 ) -> AssetCheckResult:
-    """Verify PennDOT Projects MapServer layer 1 still has expected fields."""
+    """Verify every configured PennDOT Projects layer still has expected fields."""
     authorize_source(
         database,
         source_key="penndot_open_data",
@@ -184,7 +186,7 @@ def penndot_projects_schema_drift(
     try:
         missing = {}
         for layer_id in county.penndot_projects_layers:
-            metadata = source_snapshots.metadata(f"penndot_projects_{layer_id}")
+            metadata = fetch_metadata(f"{county.penndot_projects_url}/{layer_id}")
             actual_fields = {field["name"] for field in metadata.get("fields", [])}
             absent = expected_layer_fields(layer_id) - actual_fields
             if absent:

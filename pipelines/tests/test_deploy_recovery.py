@@ -71,6 +71,9 @@ def test_cost_stop_blocks_recovery_start(tmp_path):
         ("probe_failed", False),
         ("host_failed", False),
         ("account_failed", False),
+        ("writer_enabled", True),
+        ("writer_missing", True),
+        ("writer_busy", True),
     ],
 )
 def test_real_deploy_script_handles_partial_stop_and_probe_failures(
@@ -92,11 +95,21 @@ case " $* " in
     [ "$REVIEW_SCENARIO" != probe_failed ] || exit 1
     echo '054 (head)' ;;
   *" stop -t 60 "*)
+    case "$REVIEW_SCENARIO" in
+      writer_*) exit 0 ;;
+    esac
     if [ "$REVIEW_SCENARIO" = stop_failed_latched ]; then
         mkdir -p /tmp/guard
         touch /tmp/guard/tripped
     fi
     exit 1 ;;
+  *" SELECT rolcanlogin "*)
+    case "$REVIEW_SCENARIO" in
+      writer_enabled) echo t ;;
+      writer_missing) ;;
+      *) echo f ;;
+    esac ;;
+  *" SELECT COUNT(*) FROM pg_stat_activity "*) echo 1 ;;
 esac
 exit 0
 """,
@@ -202,6 +215,10 @@ exit 0
         )
         return
     assert " current" in events, result.stderr
-    assert (" start api dagster-webserver dagster-daemon" in events) == restarts, events
+    assert (" start api" in events) == restarts, events
     if scenario == "probe_failed":
         assert " stop -t 60 " not in events
+    if scenario in {"writer_enabled", "writer_missing"}:
+        assert "confirmed NOLOGIN pipeline writer" in result.stderr
+    if scenario == "writer_busy":
+        assert "database session(s) remain" in result.stderr

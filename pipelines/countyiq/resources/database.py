@@ -3,14 +3,14 @@ from contextlib import contextmanager
 
 import psycopg2
 import psycopg2.extras
-from dagster import ConfigurableResource, InitResourceContext
+from dagster import ConfigurableResource, EnvVar, InitResourceContext
 
 
 class DatabaseResource(ConfigurableResource):
     """PostgreSQL connection resource for the countyiq database.
 
-    Reads connection parameters from environment variables (set by Compose in
-    production or DATABASE_* vars for local dev). Reuses a single connection
+    Reads connection parameters from the local runner's DATABASE_* environment.
+    Reuses a single connection
     per resource instance to avoid connection churn.
     """
 
@@ -103,12 +103,15 @@ class DatabaseResource(ConfigurableResource):
             self._conn.close()
 
 
-def make_database_resource() -> DatabaseResource:
+def make_database_resource(*, defer_secrets: bool = False) -> DatabaseResource:
     """Create a DatabaseResource from environment variables."""
+    password = os.environ.get("DATABASE_PASSWORD", "localtest")
+    if defer_secrets and "DATABASE_PASSWORD" in os.environ:
+        password = EnvVar("DATABASE_PASSWORD")
     return DatabaseResource(
         host=os.environ.get("DATABASE_HOST", "localhost"),
         port=int(os.environ.get("DATABASE_PORT", "5432")),
         dbname=os.environ.get("DATABASE_NAME", "countyiq"),
         user=os.environ.get("DATABASE_USER", "dagster_admin"),
-        password=os.environ.get("DATABASE_PASSWORD", "localtest"),
+        password=password,
     )

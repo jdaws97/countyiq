@@ -1,8 +1,8 @@
 # Architecture Overview
 
 CountyIQ is a containerized real-estate intelligence stack with Cloudflare in
-front, a React frontend, a FastAPI API, and Dagster pipelines feeding
-PostgreSQL/PostGIS.
+front, a React frontend, a FastAPI API, and local Dagster jobs feeding
+PostgreSQL/PostGIS on the VPS.
 
 This page describes repository configuration. Deployment status and hostname
 rollout steps live in [Account workspaces](operations/account-workspaces.md#guarded-hostname-rollout).
@@ -20,12 +20,17 @@ Cloudflare
   - Cloudflare R2 for selected raw-source and backup archives
   |
   v
-Ubuntu VPS (Hetzner)
+Ubuntu VPS
   - cloudflared (outbound Tunnel connector)
   - Caddy (marketing/app static files and API proxy)
   - FastAPI
-  - Dagster
   - PostgreSQL 16 + PostGIS
+
+Operator PC
+  - Explicit Dagster CLI jobs and native authoring scripts
+  - Direct source acquisition and governed R2 archives
+  - Local SQLite run history and logs
+  - Temporary SSH connection to the VPS writer role
 ```
 
 ## Request Flow
@@ -41,10 +46,19 @@ Ubuntu VPS (Hetzner)
 
 ## Data Flow
 
-1. Dagster assets ingest county source data into `staging.*`.
+1. The operator runs a named job or asset subset on the PC. Dagster assets
+   acquire sources directly and write county data into `staging.*` through the
+   protected SSH session.
 2. Enrichment assets derive `public.*` outputs such as signals, evidence, briefs, and narratives.
 3. The API reads PostgreSQL/PostGIS and serves parcel, owner, search, radar, and ops endpoints.
 4. The frontend renders those surfaces for map, search, intelligence, and monitoring workflows.
+5. The local runner records job and source outcomes in the application health
+   ledgers before exiting; full run history stays on the PC.
+
+There is no deployed Dagster daemon, scheduler, sensor process, or webserver in
+this release model. See [Local pipeline commands](operations/local-pipelines.md)
+for the executable workflow and state paths. Deployment receipts establish
+whether that model is active on a particular host.
 
 ## Module and Authority Boundaries
 
@@ -73,15 +87,17 @@ pipeline packages are rejected.
 - Pass 3: parcel brief generation
 - Pass 4: county narrative generation
 
-OpenRouter is the only inference backend in the production harness. Model
-fallbacks are alternate OpenRouter routes selected through explicit pass
-configuration.
+Inference can use explicitly enabled OpenRouter passes or supported native
+subscription authoring on the PC. Source refresh sessions force all inference
+passes off. Model configuration and quality gates still apply; a successful
+source refresh does not authorize model work.
 
 ## Deployment Reality
 
 - The Compose project and persistent-volume names are fixed, while application
   images are tagged with the exact reviewed Git SHA.
 - `docker/deploy.sh` is the only production release path. It validates the
-  environment, quiesces API and pipeline writers, verifies an off-host backup,
+  environment, excludes local pipeline sessions with the host deployment lock,
+  quiesces application writers, verifies an off-host backup,
   applies migrations, checks readiness, and writes a release receipt.
 - `infra/cloudflare/` manages Cloudflare DNS, Tunnel, and Access using OpenTofu.

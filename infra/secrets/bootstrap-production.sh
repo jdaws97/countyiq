@@ -104,9 +104,6 @@ while IFS= read -r line || [ -n "$line" ]; do
         DATABASE_API_PASSWORD=*)
             printf 'DATABASE_API_PASSWORD=%s\n' "$api_password"
             ;;
-        DAGSTER_POSTGRES_PASSWORD=*)
-            printf 'DAGSTER_POSTGRES_PASSWORD=%s\n' "$database_password"
-            ;;
         R2_ACCESS_KEY_ID=*)
             printf 'R2_ACCESS_KEY_ID=%s\n' "$raw_access_key"
             ;;
