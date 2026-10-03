@@ -336,3 +336,43 @@ Sources: [Grafana pricing](https://grafana.com/pricing/),
 [Alloy components](https://grafana.com/docs/alloy/latest/reference/components/),
 [Synthetic secrets](https://grafana.com/docs/grafana-cloud/observe-and-act/testing/synthetic-monitoring/create-checks/manage-secrets/),
 [Cloudflare operator access](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/).
+
+### Source-warning investigation — 2026-10-03
+
+The October 2 notification contained 23 source warning instances. Ten belong
+to `arcgis_refresh`, ten to `radar_refresh`, two to `bulk_refresh`, and one
+to municipal proceedings. These counts describe the notification, not a
+current production-health read. A failed grouped job can mark every source
+in that job unhealthy; the email does not establish 23 independent failures.
+
+The September 28 Dagster notification with
+`alertname=DatasourceError` reported an HTTP 500 from the Grafana query
+service. Its copied rule summary described a missing heartbeat, but the error
+does not establish that the Dagster daemon stopped. Inspect the alert name
+and Error annotation before diagnosing the application.
+
+The source probe now exports `countyiq_source_status_info` with bounded
+`reason` and `refresh_job` labels. This preserves the API's distinction
+between a failed run, an unobserved run, stale success, an empty source,
+a source-specific coverage failure, and a query/schema failure. Unknown values
+become `unknown`; raw exception text and run IDs are never metric labels.
+The job label uses a targeted recovery job when that is the latest observed
+run. `none` identifies a source such as policy review without a refresh job.
+The existing health/staleness metrics and alert instance labels are unchanged.
+
+After deploying the probe, use an instant table query:
+
+```promql
+countyiq_source_status_info{instance="countyiq-production",job="countyiq/host"}
+```
+
+For each affected job, inspect its latest run, failed asset, schedule ticks and
+the success/failure sensor ticks. Compare that with `GET /api/ops/health`
+and `meta.job_run_status`. A healthy daemon alone does not prove schedules
+are enabled or that run outcomes reached the application ledger. Scheduled
+jobs are staggered in time; their cron expressions do not enforce successful
+upstream completion.
+
+Production access was unavailable during this repair. No source was marked
+healthy, schedule enabled, backfill launched, or alert silenced as a substitute
+for checking the actual failure.

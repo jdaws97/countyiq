@@ -311,6 +311,13 @@ def collect_sources(metrics: Metrics) -> None:
         metrics.add("source_healthy", item["healthy"], source=source)
         metrics.add("source_stale", item["stale"], source=source)
         metrics.add(
+            "source_status_info",
+            1,
+            source=source,
+            reason=item.get("reason", "unknown"),
+            refresh_job=item.get("refresh_job", "unknown"),
+        )
+        metrics.add(
             "source_last_success_timestamp_seconds", item["last_success"], source=source
         )
         if item["records"] is not None:

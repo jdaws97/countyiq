@@ -10,6 +10,31 @@ import json
 import sys
 from datetime import UTC, datetime, timedelta
 
+SOURCE_REASONS = frozenset(
+    {
+        "healthy",
+        "empty_source",
+        "missing_table",
+        "query_failed",
+        "run_not_observed",
+        "last_run_failed",
+        "stale",
+        "source_unhealthy",
+        "policy_overdue",
+    }
+)
+REFRESH_JOBS = frozenset(
+    {
+        "arcgis_refresh",
+        "radar_refresh",
+        "scraper_refresh",
+        "proceedings_refresh",
+        "bulk_refresh",
+        "pa_dos_refresh",
+        "fema_refresh",
+    }
+)
+
 
 def source_health() -> dict:
     from api.lib import database
@@ -32,10 +57,18 @@ def source_health() -> dict:
         sources = {}
         for name, source in health["sources"].items():
             last_success = source.get("last_success_at")
+            reason = source.get("status_reason")
+            job = source.get("last_run_job") or source.get("refresh_job")
+            if not job:
+                job = "none"
+            elif job not in REFRESH_JOBS:
+                job = "unknown"
             sources[name] = {
                 "healthy": source["status"] == "green",
                 "stale": bool(source.get("stale", False)),
                 "records": source.get("record_count"),
+                "reason": reason if reason in SOURCE_REASONS else "unknown",
+                "refresh_job": job,
                 "last_success": last_success.timestamp() if last_success else 0,
             }
         return {
