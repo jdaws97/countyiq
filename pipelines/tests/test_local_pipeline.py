@@ -14,6 +14,7 @@ from unittest.mock import Mock
 
 import pytest
 from countyiq import run_job
+from countyiq.lib import remote_pipeline
 from countyiq.lib.remote_pipeline import run_command, stop_process_group
 from countyiq.resources.database import make_database_resource
 from countyiq.resources.storage import make_s3_resource
@@ -174,6 +175,7 @@ def test_session_revokes_writer_on_every_exit(tmp_path, monkeypatch, capsys, end
     stop = tmp_path / "tripped"
     monkeypatch.setattr(host, "COST_STOP", stop)
     monkeypatch.setattr(host, "verify_release", lambda reference: None)
+    monkeypatch.setattr(host, "database_address", lambda: "172.18.0.2")
     monkeypatch.setattr(host, "read_environment", lambda path: production_values())
     permission_changes = []
     monkeypatch.setattr(
@@ -223,6 +225,54 @@ def test_different_release_is_rejected(tmp_path, monkeypatch):
     )
     with pytest.raises(ValueError, match="matching the active release"):
         host.verify_release("b" * 40)
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_tunnel_uses_private_container_address_and_rejects_replacement(
+    monkeypatch, changed
+):
+    reference = "a" * 40
+    monkeypatch.setattr(remote_pipeline, "checkout_reference", lambda root: reference)
+    monkeypatch.setattr(remote_pipeline, "free_port", lambda: 54321)
+    monkeypatch.setattr(
+        remote_pipeline.subprocess,
+        "check_output",
+        lambda *args, **kwargs: "172.18.0.2\n",
+    )
+    session = remote_pipeline.PipelineSession(
+        root=ROOT, target="operator@host", identity=Path("/test/key")
+    )
+    forward = session.arguments[session.arguments.index("-L") + 1]
+    assert forward == "127.0.0.1:54321:172.18.0.2:5432"
+    process = Mock()
+    monkeypatch.setattr(
+        remote_pipeline.subprocess, "Popen", lambda *args, **kwargs: process
+    )
+    monkeypatch.setattr(
+        remote_pipeline,
+        "read_message",
+        lambda *args, **kwargs: {
+            "type": "session",
+            "reference": reference,
+            "database_address": "172.18.0.3" if changed else "172.18.0.2",
+            "environment": {"DATABASE_PASSWORD": "writer-secret"},
+        },
+    )
+    heartbeat = Mock()
+    cleanup = Mock()
+    monkeypatch.setattr(session, "heartbeat", heartbeat)
+    monkeypatch.setattr(session, "__exit__", cleanup)
+    if changed:
+        with pytest.raises(RuntimeError, match="did not authorize"):
+            session.__enter__()
+        cleanup.assert_called_once()
+        heartbeat.assert_not_called()
+        assert session.environment == {}
+    else:
+        session.__enter__()
+        assert session.environment["DATABASE_HOST"] == "127.0.0.1"
+        assert session.environment["DATABASE_PORT"] == "54321"
+        heartbeat.assert_called_once()
 
 
 def test_lost_ssh_session_stops_local_work(tmp_path):

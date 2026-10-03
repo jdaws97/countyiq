@@ -75,8 +75,9 @@ Credential boundaries:
 - Cloudflare Access covers the whole app host. The API also verifies customer
   identity; production preflight rejects disabled authentication. Marketing
   cannot proxy API requests.
-- Postgres binds only to host loopback on port 5432; the protected runner creates
-  a temporary SSH tunnel for local pipeline access.
+- Postgres stays on the internal Docker network without a published host port.
+  The runner forwards a temporary PC loopback port to its private container
+  address and verifies that address again under the deployment lock.
 - SSH key auth only.
 - API and migration containers run as UID 10001 with dropped capabilities;
   Postgres is isolated on an internal network and Caddy cannot reach it.
