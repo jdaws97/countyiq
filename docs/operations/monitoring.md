@@ -49,6 +49,30 @@ The later application release `3fa56ec5403f5b5f0c597de0aad01661b67551fb`
 completed at `2026-09-08T16:10:33Z` and preserves those settings. Monitoring
 configuration changes after that release did not redeploy the application.
 
+## Repair verification — 2026-10-03
+
+Monitoring code from `85de49c` was installed independently of the application
+images. All 22 live Grafana expressions and evaluation settings matched the
+reviewed catalog after provisioning. Grafana returned 27 source-status series,
+27 record-count series, and 176,189 parcel records. The collector now reads
+`record_count` from the API and publishes bounded failure-reason and refresh-job
+labels. Host telemetry fires after ten minutes without a successful scrape;
+the R2 guard remains observable when a capacity measurement is missing.
+
+Validation passed 45 monitoring tests, including real Promtool timing and
+recovery cases, plus Alloy configuration validation. No production outage or
+notification test was induced. The prior rules were saved locally and the
+previous host collector files were archived at
+`/var/backups/countyiq-monitoring-20261003.tar.gz` before installation.
+
+The 23 source warnings are not evidence of a stopped daemon. Production
+heartbeats were current with no heartbeat errors, and schedules were enabled.
+Read-only Dagster inspection found an expired certificate on the county GIS
+host, connection timeouts on the old PennDOT and DEP hosts, and a tax-document
+download timeout. Municipal source health was separately red. Group-level run
+freshness also marks successful assets unhealthy when another asset fails;
+source recovery and more precise freshness accounting remain separate work.
+
 ## Components and retention
 
 Grafana Alloy 1.19.2 is checksum-pinned. A host systemd service collects CPU,
