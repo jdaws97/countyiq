@@ -1,5 +1,9 @@
 # Python usage and organization audit
 
+This September 8 inventory is historical. The hosted Dagster runtime and remote
+backfill wrappers discussed below were subsequently retired; use
+[Local pipeline commands](../operations/local-pipelines.md) for current entrypoints.
+
 The repository has sensible top-level buckets, but experiment lifecycle and
 operator discoverability need improvement. File count alone overstates the
 maintenance problem. This is a read-only audit of code usage; no source files
@@ -10,15 +14,15 @@ were moved or deleted.
 At commit `ee50f25`, `git ls-files '*.py'` reports 473 tracked Python files.
 Counts include package initializers and test support files.
 
-| Purpose / location | Files | Interpretation |
-| --- | ---: | --- |
-| `pipelines/countyiq/`, `api/lib/`, `api/routes/`, API entrypoints | 169 | Application namespace; includes some experimental libraries |
-| `pipelines/tests/`, `api/tests/`, `api/unit_tests/` | 176 | Tests and test support |
-| `pipelines/alembic/` | 76 | Migration history and environment; retain for upgrades |
-| `pipelines/eval/` | 27 | Evaluations, fixture tooling, shared evaluation support |
-| `pipelines/scripts/` | 12 | Operator commands |
-| Infrastructure, orchestration, OCR, benchmark tooling | 13 | Supporting tools outside those buckets |
-| **Total tracked** | **473** | These are not 473 independent scripts |
+| Purpose / location                                                |   Files | Interpretation                                              |
+| ----------------------------------------------------------------- | ------: | ----------------------------------------------------------- |
+| `pipelines/countyiq/`, `api/lib/`, `api/routes/`, API entrypoints |     169 | Application namespace; includes some experimental libraries |
+| `pipelines/tests/`, `api/tests/`, `api/unit_tests/`               |     176 | Tests and test support                                      |
+| `pipelines/alembic/`                                              |      76 | Migration history and environment; retain for upgrades      |
+| `pipelines/eval/`                                                 |      27 | Evaluations, fixture tooling, shared evaluation support     |
+| `pipelines/scripts/`                                              |      12 | Operator commands                                           |
+| Infrastructure, orchestration, OCR, benchmark tooling             |      13 | Supporting tools outside those buckets                      |
+| **Total tracked**                                                 | **473** | These are not 473 independent scripts                       |
 
 There are also 304 Python files under ignored `output/`. Many are saved source
 snapshots, frozen experiment inputs, or unaccepted prototypes. For example,
@@ -47,14 +51,14 @@ files in `output/`.
 
 The operator scripts serve identifiable purposes:
 
-| Purpose | Commands in `pipelines/scripts/` |
-| --- | --- |
-| Author and resume historical records | `subscription_backfill.py`, `subscription_backfill_remote.py` |
-| Replay retained receipts after a binding fix | `rebind_subscription_reads.py` |
+| Purpose                                               | Commands in `pipelines/scripts/`                                                                                                              |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Author and resume historical records                  | `subscription_backfill.py`, `subscription_backfill_remote.py`                                                                                 |
+| Replay retained receipts after a binding fix          | `rebind_subscription_reads.py`                                                                                                                |
 | Preflight, authorization, quality evidence, estimates | `verify_intelligence_preflight.py`, `create_intelligence_backfill_authorization.py`, `prepare_quality_receipt.py`, `estimate_llm_backfill.py` |
-| Source and contradiction review | `audit_municipal_sources.py`, `review_proceeding_metadata.py`, `review_intelligence_contradictions.py` |
-| Subscription login | `codex_login.py`, invoked by `docker/codex-login.sh` |
-| Radar calibration | `backtest_radar_weights.py`, retained operational calibration workflow |
+| Source and contradiction review                       | `audit_municipal_sources.py`, `review_proceeding_metadata.py`, `review_intelligence_contradictions.py`                                        |
+| Subscription login                                    | `codex_login.py`, invoked by `docker/codex-login.sh`                                                                                          |
+| Radar calibration                                     | `backtest_radar_weights.py`, retained operational calibration workflow                                                                        |
 
 Documentation references and test imports establish supported use, not the last
 time each command was executed. No standalone tool was established as dead

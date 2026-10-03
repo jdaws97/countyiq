@@ -13,19 +13,22 @@ mode so an approved historical run need not be split into 25-item launches.
 2. Configure database and source credentials.
 3. Configure Cloudflare R2 and set `COUNTYIQ_ARCHIVE_STRICT=true` so a missing
    raw-source archive fails visibly in production.
-4. Confirm the separate Dagster database and persistent archive mount are
-   healthy.
+4. Prepare the private PC state directory and protected SSH session described
+   in [Local pipeline commands](../operations/local-pipelines.md).
 5. Leave model-backed enrichment until deterministic source loads and their
    asset checks have passed.
 
 ## Materialization Order
 
-Use the registered jobs in the Dagster UI:
+Use the registered jobs through the local command wrapper. The production
+wrapper keeps paid Passes 0–4 disabled. The paid-mode contracts below remain
+relevant to development and separately reviewed execution policies; they do
+not enable paid production work through the source runner.
 
 1. `arcgis_refresh` establishes parcels and reference layers.
 2. `radar_refresh`, `scraper_refresh`, `pa_dos_refresh`, `bulk_refresh`, and
-   `fema_refresh` load the remaining source groups. These groups are independent
-   and may run in parallel within source rate and host-memory limits.
+   `fema_refresh` load the remaining source groups. Invoke these independent
+   groups explicitly, one protected session at a time.
 3. Run `deterministic_enrichment_refresh` after the source checks pass. It
    rebuilds municipality joins, deterministic signals, stable owner identity,
    parcel/feed events, and momentum without making a model call.
@@ -33,7 +36,9 @@ Use the registered jobs in the Dagster UI:
 
    ```bash
    cd pipelines
-   .venv/bin/python scripts/estimate_llm_backfill.py \
+   .venv/bin/python scripts/run_pipeline.py \
+     --ssh-target ubuntu@YOUR_HOST --identity-file /absolute/path/to/ssh-key \
+     --script estimate-backfill -- \
      --output /tmp/countyiq-backfill-estimate.json
    ```
 
@@ -54,7 +59,7 @@ Use the registered jobs in the Dagster UI:
    ```bash
    .venv/bin/python scripts/create_intelligence_backfill_authorization.py \
      --pass-number <N> \
-     --output /opt/countyiq/receipts/pass-<N>-authorization.json
+     --output ~/.local/state/countyiq/pipeline/intelligence/pass-<N>-authorization.json
    ```
 
    Set `COUNTYIQ_PASS{N}_BACKFILL_AUTHORIZATION_FILE` to that path before
@@ -62,6 +67,7 @@ Use the registered jobs in the Dagster UI:
    dispatch and settles the provider-reported cost afterward. Reservations
    survive Dagster retries and process restarts, so the approved cumulative
    allowance cannot reset with each asset launch.
+
 5. Run the paid work in this order after approving each budget and inspecting
    its capped pilot:
 
@@ -105,7 +111,7 @@ An initial load is not complete merely because the Dagster run is green:
 - inspect warnings for partial pagination, skipped archives, robots rules, and
   scraper failures;
 - sample parcel, owner, development, and proceeding records through the API;
-- review the first model-backed outputs before enabling their weekly schedule;
+- review the first model-backed outputs before approving larger manual runs;
 - record actual duration, row counts, archive volume, and model spend for the
   next capacity estimate.
 

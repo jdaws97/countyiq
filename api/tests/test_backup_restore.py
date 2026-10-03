@@ -44,6 +44,13 @@ def _database_inventory(database: str) -> dict:
                 "SELECT extname, extversion FROM pg_extension ORDER BY extname"
             )
             result["extensions"] = cursor.fetchall()
+            cursor.execute("""
+                SELECT n.nspname, c.relname, c.relispopulated
+                FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind = 'm' AND n.nspname = 'public'
+                ORDER BY c.relname
+            """)
+            result["materialized_views"] = cursor.fetchall()
             cursor.execute("SELECT count(*) FROM public.properties")
             result["properties_view"] = cursor.fetchone()
             cursor.execute(
@@ -98,6 +105,32 @@ def test_actual_dump_restores_schema_records_and_api_grants(
                 DB_ENV["DATABASE_USER"],
                 "--exit-on-error",
                 "--no-owner",
+                "--section=pre-data",
+                "--section=data",
+                "-d",
+                target,
+                stdin=stream,
+            )
+        command(
+            "psql",
+            "-X",
+            "-U",
+            DB_ENV["DATABASE_USER"],
+            "-d",
+            target,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            "ANALYZE",
+        )
+        with dump.open("rb") as stream:
+            command(
+                "pg_restore",
+                "-U",
+                DB_ENV["DATABASE_USER"],
+                "--exit-on-error",
+                "--no-owner",
+                "--section=post-data",
                 "-d",
                 target,
                 stdin=stream,

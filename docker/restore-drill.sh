@@ -134,8 +134,20 @@ pg_restore --list "$dump_file" >/dev/null
 docker exec countyiq-postgres createdb -U "$DATABASE_USER" "$PRIMARY_DRILL_DATABASE"
 CREATED_DRILL_DATABASE="$PRIMARY_DRILL_DATABASE"
 docker cp "$dump_file" "countyiq-postgres:$CONTAINER_DUMP" >/dev/null
+echo "Restoring schema and table data into $PRIMARY_DRILL_DATABASE"
 docker exec countyiq-postgres pg_restore \
     -U "$DATABASE_USER" --exit-on-error --no-owner \
+    --section=pre-data --section=data \
+    -d "$PRIMARY_DRILL_DATABASE" "$CONTAINER_DUMP"
+# These PostgreSQL 16 dumps do not carry planner statistics. Gather them before
+# post-data restores rebuild materialized views over the loaded tables.
+echo "Analyzing restored tables before rebuilding derived views"
+docker exec countyiq-postgres psql \
+    -X -U "$DATABASE_USER" -d "$PRIMARY_DRILL_DATABASE" \
+    -v ON_ERROR_STOP=1 -c ANALYZE
+echo "Restoring indexes, constraints and materialized views"
+docker exec countyiq-postgres pg_restore \
+    -U "$DATABASE_USER" --exit-on-error --no-owner --section=post-data \
     -d "$PRIMARY_DRILL_DATABASE" "$CONTAINER_DUMP"
 PRIMARY_ROW_COUNT="$(docker exec countyiq-postgres psql \
     -U "$DATABASE_USER" -d "$PRIMARY_DRILL_DATABASE" -v ON_ERROR_STOP=1 \

@@ -101,6 +101,8 @@ esac
         ("download_failed", []),
         ("occupied", []),
         ("restore_failed", ["countyiq_restore_drill"]),
+        ("statistics_failed", ["countyiq_restore_drill"]),
+        ("post_data_failed", ["countyiq_restore_drill"]),
         ("success", ["countyiq_restore_drill"]),
         ("legacy_success", ["countyiq_restore_drill"]),
         ("hash_mismatch", []),
@@ -125,8 +127,16 @@ case " $* " in
         ;;
     *" pg_restore "*)
         [ "$REVIEW_SCENARIO" != restore_failed ] || exit 1
+        if [ "$REVIEW_SCENARIO" = post_data_failed ] \
+            && [[ "$*" == *--section=post-data* ]]; then
+            exit 1
+        fi
         ;;
     *" psql "*)
+        if [ "$REVIEW_SCENARIO" = statistics_failed ] \
+            && [[ "$*" == *ANALYZE* ]]; then
+            exit 1
+        fi
         echo 42
         ;;
 esac
@@ -189,6 +199,15 @@ chmod 644 /case/receipt.env
     ]
     assert drops == expected_drops, logfile.read_text()
     if succeeded:
+        events = logfile.read_text().splitlines()
+        data_restore = next(
+            i for i, event in enumerate(events) if "--section=data" in event
+        )
+        analysis = next(i for i, event in enumerate(events) if "ANALYZE" in event)
+        post_data = next(
+            i for i, event in enumerate(events) if "--section=post-data" in event
+        )
+        assert data_restore < analysis < post_data
         receipt = (tmp_path / "receipt.env").read_text()
         assert "databases=countyiq\n" in receipt
         assert "primary_property_rows=42\n" in receipt
@@ -196,6 +215,8 @@ chmod 644 /case/receipt.env
         assert (tmp_path / "receipt-mode").read_text().strip() == "0:400"
     else:
         assert not (tmp_path / "receipt.env").exists()
+    if scenario == "statistics_failed":
+        assert "--section=post-data" not in logfile.read_text()
     for line in logfile.read_text().splitlines():
         if "rclone" in line:
             assert "dagster-" not in line
