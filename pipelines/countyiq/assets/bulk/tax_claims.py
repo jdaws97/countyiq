@@ -24,14 +24,12 @@ from dagster import (
 
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
-from countyiq.lib.http_retry import get_with_retry
 from countyiq.lib.parsers.tax_claims import parse_tax_claims_text
 from countyiq.lib.scd import scd2_upsert
 from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
-
-REQUEST_TIMEOUT = 120
+from countyiq.resources.source_snapshots import SourceSnapshotsResource
 
 KEY_COLUMNS = ["pidn", "unit_suffix", "tax_year", "authority_name"]
 
@@ -90,6 +88,7 @@ def tax_claims(
     context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
+    source_snapshots: SourceSnapshotsResource,
 ) -> MaterializeResult:
     """Download tax claim PDF, parse all pages, SCD2 upsert."""
     county = get_county_config()
@@ -107,11 +106,11 @@ def tax_claims(
     # intermittent 404s for documents that exist (observed 2026-08-02), so
     # retry transient failures rather than killing the weekly run.
     context.log.info(f"Downloading tax claim PDF from {county.tax_claims_pdf_url}")
-    resp = get_with_retry(county.tax_claims_pdf_url, timeout=REQUEST_TIMEOUT)
-    pdf_bytes = resp.content
+    pdf_bytes = source_snapshots.pdf("tax_claims", context)
     context.log.info(f"Downloaded {len(pdf_bytes)} bytes")
 
     # 2. Archive raw PDF to S3
+    source_snapshots.archive_receipt(s3, context)
     s3.archive(f"{county.s3_prefix}/bulk/tax_claims", pdf_bytes, filename="listing.pdf")
 
     # 3. Save PDF to disk and extract text in small page chunks so pdfplumber
@@ -145,8 +144,7 @@ def tax_claims(
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     if not records:
-        context.log.warning("No tax claim records parsed — skipping upsert")
-        return MaterializeResult(metadata={"record_count": MetadataValue.int(0)})
+        raise RuntimeError("No tax claim records parsed; refusing an empty refresh")
 
     # 4b. Truncation guard
     unique_parcels = len({r["parcel_id_raw"] for r in records})
@@ -156,6 +154,17 @@ def tax_claims(
             f"(expected >= {county.tax_claims_min_records}). "
             f"Possible truncated or changed PDF — aborting."
         )
+
+    report_dates = {record["report_date"] for record in records}
+    latest_report = database.execute(
+        "SELECT MAX(report_date) FROM staging.tax_claims WHERE valid_to IS NULL"
+    )[0][0]
+    if len(report_dates) != 1 or None in report_dates:
+        raise RuntimeError("Tax listing must have exactly one report date")
+    if latest_report and next(iter(report_dates)) < latest_report:
+        raise RuntimeError("Tax listing predates the current imported report")
+    if next(iter(report_dates)) > date.today():
+        raise RuntimeError("Tax listing has a future report date")
 
     # 5. SCD2 upsert
     cur = database.cursor()
@@ -168,6 +177,8 @@ def tax_claims(
             key_columns=KEY_COLUMNS,
             value_columns=VALUE_COLUMNS,
             carry_columns=CARRY_COLUMNS,
+            snapshot_started_at=source_snapshots.acquisition_time(),
+            snapshot_id=source_snapshots.snapshot_identity(),
         )
     finally:
         cur.close()

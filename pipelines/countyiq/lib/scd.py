@@ -11,6 +11,7 @@ ArcGIS-style ``staging.*`` tables.
 """
 
 import json
+from datetime import datetime
 from typing import Iterable, Literal
 
 from dagster import get_dagster_logger
@@ -28,6 +29,44 @@ BATCH_SIZE = 1000
 GeomKind = Literal["multipolygon", "multilinestring", "point"]
 
 
+def _claim_source_snapshot(
+    cursor, dataset_key: str, acquired_at: datetime | None, snapshot_id: str | None
+) -> None:
+    """Serialize snapshot publication and retain its watermark only on commit."""
+    if acquired_at is None:
+        return
+    if acquired_at.tzinfo is None:
+        raise ValueError("Source acquisition time must include a timezone")
+    if not snapshot_id or len(snapshot_id) > 128:
+        raise ValueError(
+            "A bounded snapshot identity is required with its acquisition time"
+        )
+    cursor.execute(
+        """
+        INSERT INTO meta.source_snapshot_watermarks (dataset_key, acquired_at, snapshot_id)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (dataset_key) DO UPDATE SET
+            acquired_at = EXCLUDED.acquired_at,
+            applied_at = clock_timestamp(),
+            snapshot_id = EXCLUDED.snapshot_id
+        WHERE (
+            meta.source_snapshot_watermarks.snapshot_id = EXCLUDED.snapshot_id
+            AND meta.source_snapshot_watermarks.acquired_at = EXCLUDED.acquired_at
+        ) OR (
+            meta.source_snapshot_watermarks.snapshot_id <> EXCLUDED.snapshot_id
+            AND meta.source_snapshot_watermarks.acquired_at < EXCLUDED.acquired_at
+            AND meta.source_snapshot_watermarks.applied_at <= EXCLUDED.acquired_at
+        )
+        RETURNING acquired_at
+        """,
+        (dataset_key, acquired_at, snapshot_id),
+    )
+    if cursor.fetchone() is None:
+        raise RuntimeError(
+            f"A newer source snapshot is already applied to {dataset_key}"
+        )
+
+
 def scd2_upsert(
     cursor,
     schema: str,
@@ -37,6 +76,8 @@ def scd2_upsert(
     value_columns: list[str],
     expire_missing: bool = True,
     carry_columns: list[str] | None = None,
+    snapshot_started_at: datetime | None = None,
+    snapshot_id: str | None = None,
 ):
     """Perform an SCD Type 2 upsert inside an explicit transaction.
 
@@ -49,6 +90,8 @@ def scd2_upsert(
                  "observed on" style bookkeeping (a listing's report date,
                  a last-checked timestamp) so a weekly refresh of identical
                  facts does not rewrite the whole table.
+        snapshot_started_at: Optional acquisition watermark committed with the
+                 loaded rows. Older snapshots fail before changing current rows.
     """
     log = get_dagster_logger()
     fqn = f"{schema}.{table}"
@@ -74,6 +117,8 @@ def scd2_upsert(
             log,
             expire_missing,
             carry_columns,
+            snapshot_started_at,
+            snapshot_id,
         )
         return result
     except Exception:
@@ -94,6 +139,8 @@ def _scd2_upsert_inner(
     log,
     expire_missing,
     carry_columns=(),
+    snapshot_started_at=None,
+    snapshot_id=None,
 ):
     """Inner implementation — streams records into temp table in batches."""
 
@@ -137,6 +184,8 @@ def _scd2_upsert_inner(
         cursor.connection.commit()
         return {"inserted": 0, "expired": 0, "unchanged": 0}
 
+    _claim_source_snapshot(cursor, fqn, snapshot_started_at, snapshot_id)
+
     # Index temp table on key columns for fast expire query
     key_idx_cols = ", ".join(key_columns)
     cursor.execute(f"CREATE INDEX ON {temp_table} ({key_idx_cols})")
@@ -158,7 +207,6 @@ def _scd2_upsert_inner(
 
         if existing_count > 100 and total_staged < existing_count * 0.5:
             cursor.execute(f"DROP TABLE IF EXISTS {temp_table}")
-            cursor.connection.commit()
             msg = (
                 f"DATA LOSS GUARD on {fqn}: incoming {total_staged:,} records "
                 f"vs {existing_count:,} existing ({total_staged / existing_count * 100:.0f}%). "
@@ -237,6 +285,8 @@ def scd2_upsert_geom(
     scope_column: str | None = None,
     scope_value: object = None,
     expire_missing: bool = True,
+    snapshot_started_at: datetime | None = None,
+    snapshot_id: str | None = None,
 ):
     """SCD Type 2 upsert with a PostGIS geometry column.
 
@@ -278,6 +328,8 @@ def scd2_upsert_geom(
         expire_missing: If True (default), records present in the staging
             table but missing from the incoming batch are expired. If False,
             absent records are left alone (incremental loads).
+        snapshot_started_at: Optional acquisition watermark committed with the
+            loaded rows, scoped by table and optional source layer.
 
     Returns:
         ``{"inserted": int, "expired": int, "unchanged": int}``
@@ -344,6 +396,10 @@ def scd2_upsert_geom(
             return {"inserted": 0, "expired": 0, "unchanged": 0}
 
         execute_batch(cursor, insert_sql, rows, page_size=500)
+        dataset_key = fqn
+        if scope_column is not None:
+            dataset_key = f"{fqn}:{scope_column}={scope_value}"
+        _claim_source_snapshot(cursor, dataset_key, snapshot_started_at, snapshot_id)
 
         # Index temp table on key columns for fast expire query
         key_idx_cols = ", ".join(key_columns)
@@ -383,7 +439,6 @@ def scd2_upsert_geom(
 
             if existing_count > 100 and total_staged < existing_count * 0.5:
                 cursor.execute(f"DROP TABLE IF EXISTS {temp_table}")
-                conn.commit()
                 msg = (
                     f"DATA LOSS GUARD on {fqn}: incoming {total_staged:,} records "
                     f"vs {existing_count:,} existing ({total_staged / existing_count * 100:.0f}%). "

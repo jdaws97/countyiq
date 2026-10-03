@@ -104,6 +104,7 @@ if [[ ! "$ARCHIVE_HOST_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
     exit 1
 fi
 install -d -o 10001 -g 10001 -m 700 "$ARCHIVE_HOST_DIR"
+install -d -o 10001 -g 10001 -m 700 /var/lib/countyiq/source-inbox
 
 if [ "$INITIAL_DEPLOY" = true ]; then
     if [ -f "$CURRENT_RELEASE" ]; then

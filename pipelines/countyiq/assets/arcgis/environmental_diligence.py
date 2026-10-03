@@ -5,16 +5,17 @@ regulatory conclusions, or inputs that require an LLM.
 """
 
 import json
+from datetime import datetime
 
 from dagster import AssetExecutionContext, MaterializeResult, MetadataValue, asset
 
-from countyiq.lib.arcgis_client import query_all_features
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.geometry import point_to_geojson
 from countyiq.lib.scd import scd2_upsert_geom
 from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
+from countyiq.resources.source_snapshots import SourceSnapshotsResource
 
 
 def _point(feature: dict) -> str | None:
@@ -92,6 +93,8 @@ def _upsert_layer(
     *,
     records: list[dict],
     layer: str,
+    acquired_at: datetime,
+    snapshot_id: str,
 ) -> dict:
     geometries = {record["source_id"]: record.pop("_geom") for record in records}
     with database.transaction() as cursor:
@@ -116,6 +119,8 @@ def _upsert_layer(
             geom_key="source_id",
             scope_column="source_layer",
             scope_value=layer,
+            snapshot_started_at=acquired_at,
+            snapshot_id=snapshot_id,
         )
 
 
@@ -128,6 +133,7 @@ def pa_dep_environmental_diligence(
     context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
+    source_snapshots: SourceSnapshotsResource,
 ) -> MaterializeResult:
     county = get_county_config()
     if not county.pa_dep_query_bbox:
@@ -145,28 +151,8 @@ def pa_dep_environmental_diligence(
     require_source_use(authorization, "raw_retention")
     require_source_use(authorization, "derived_product")
 
-    county_name = county.name.removesuffix(" County")
-    storage_features = query_all_features(
-        url=county.pa_dep_storage_tanks_url,
-        where=f"FACILITY_COUNTY = '{county_name}'",
-        out_fields="*",
-        out_sr=4326,
-        batch_size=1000,
-    )
-    bbox = ",".join(str(value) for value in county.pa_dep_query_bbox)
-    cleanup_features = query_all_features(
-        url=county.pa_dep_cleanup_sites_url,
-        where="1=1",
-        out_fields="*",
-        out_sr=4326,
-        batch_size=1000,
-        extra_params={
-            "geometry": bbox,
-            "geometryType": "esriGeometryEnvelope",
-            "inSR": 4326,
-            "spatialRel": "esriSpatialRelIntersects",
-        },
-    )
+    storage_features = source_snapshots.arcgis("storage_tanks", context)
+    cleanup_features = source_snapshots.arcgis("cleanup_sites", context)
 
     storage_records = parse_storage_tanks(
         storage_features, county.pa_dep_storage_tanks_url
@@ -188,13 +174,22 @@ def pa_dep_environmental_diligence(
                 f"minimum is {minimums[layer]:,}. Refusing to alter staging data."
             )
 
+    source_snapshots.archive_receipt(s3, context)
     s3.archive(f"{county.s3_prefix}/pa_dep/active_storage_tanks", storage_features)
     s3.archive(f"{county.s3_prefix}/pa_dep/land_recycling_cleanup", cleanup_features)
     storage_stats = _upsert_layer(
-        database, records=storage_records, layer="active_storage_tank"
+        database,
+        records=storage_records,
+        layer="active_storage_tank",
+        acquired_at=source_snapshots.acquisition_time(),
+        snapshot_id=source_snapshots.snapshot_identity(),
     )
     cleanup_stats = _upsert_layer(
-        database, records=cleanup_records, layer="land_recycling_cleanup"
+        database,
+        records=cleanup_records,
+        layer="land_recycling_cleanup",
+        acquired_at=source_snapshots.acquisition_time(),
+        snapshot_id=source_snapshots.snapshot_identity(),
     )
     return MaterializeResult(
         metadata={

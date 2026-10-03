@@ -173,6 +173,7 @@ x-dagster-common: &dagster-common
   volumes:
     - dagster-storage:/opt/dagster/storage
     - ${COUNTYIQ_ARCHIVE_HOST_DIR:-/var/lib/countyiq/archives}:/opt/countyiq/archives
+    - /var/lib/countyiq/source-inbox:/opt/countyiq/source-inbox:ro
     - ${COUNTYIQ_BACKFILL_STATE_DIR:-/var/lib/countyiq/intelligence}:/opt/countyiq/intelligence
     - ${COUNTYIQ_CODEX_AUTH_DIR:-/var/lib/countyiq/codex-auth}:/opt/countyiq/codex-auth
     - /var/lib/countyiq/cost-guard:/run/countyiq-cost-guard:ro

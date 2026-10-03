@@ -18,6 +18,18 @@ from countyiq.lib.county_config import get_county_config
 
 _county = get_county_config()
 
+local_source_refresh = define_asset_job(
+    name="local_source_refresh",
+    selection=AssetSelection.assets(
+        "penndot_roads_arcgis",
+        "penndot_projects_arcgis",
+        "traffic_counts_arcgis",
+        "pa_dep_environmental_diligence",
+        "tax_claims",
+    ),
+    description="Manual import of validated public source snapshots acquired on an operator PC",
+)
+
 plan_review_pilot = define_asset_job(
     name="plan_review_pilot",
     selection=AssetSelection.assets("plan_review_snapshot"),

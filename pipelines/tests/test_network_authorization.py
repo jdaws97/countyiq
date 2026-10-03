@@ -88,7 +88,7 @@ def test_network_function_authorizes_before_request(function):
     source = _decorated_source(function)
     request_offsets = [
         offset
-        for token in ("requests.get(", "get_with_retry(")
+        for token in ("requests.get(", "get_with_retry(", "source_snapshots.metadata(")
         if (offset := source.find(token)) >= 0
     ]
     assert request_offsets, function
