@@ -395,6 +395,7 @@ are enabled or that run outcomes reached the application ledger. Scheduled
 jobs are staggered in time; their cron expressions do not enforce successful
 upstream completion.
 
-Production access was unavailable during this repair. No source was marked
-healthy, schedule enabled, backfill launched, or alert silenced as a substitute
-for checking the actual failure.
+Production access was restored during the October 3 repair. All 22 alert rules
+were verified with evaluation health `ok`; the source warning remained active
+for real acquisition and coverage gaps. County GIS recovery and per-asset
+receipts are recorded in [source-refresh-recovery.md](source-refresh-recovery.md).

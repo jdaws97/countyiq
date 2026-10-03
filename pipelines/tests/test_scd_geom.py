@@ -6,6 +6,7 @@ scoping), and the multi-geometry kinds.
 """
 
 import json
+import os
 
 import psycopg2
 import pytest
@@ -22,13 +23,11 @@ from countyiq.lib.scd import scd2_upsert_geom
 @pytest.fixture
 def db_conn():
     """Connect to local Docker Postgres test database (PostGIS enabled)."""
-    conn = psycopg2.connect(
-        host="localhost",
-        port=5433,
-        dbname="countyiq_test",
-        user="dagster_admin",
-        password="localtest",
+    database_url = os.environ.get(
+        "TEST_DATABASE_URL",
+        "postgresql://dagster_admin:localtest@localhost:5433/countyiq_test",
     )
+    conn = psycopg2.connect(database_url)
     yield conn
     conn.close()
 
@@ -369,6 +368,44 @@ def test_geom_upsert_change_detection_expires_then_inserts(db_conn, polygon_tabl
     cur.execute("SELECT name FROM staging._test_geom_poly WHERE valid_to IS NULL")
     assert cur.fetchone()[0] == "second"
     cur.close()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("expire_missing", [True, False])
+def test_geometry_only_changes_preserve_history_and_replay(
+    db_conn, point_table, expire_missing
+):
+    old_geometry = json.dumps(point_to_geojson(1.0, 2.0))
+    new_geometry = json.dumps(point_to_geojson(3.0, 4.0))
+    geometries = [old_geometry, new_geometry, new_geometry, None, None]
+    expected_changes = [1, 1, 0, 1, 0]
+
+    with db_conn.cursor() as cur:
+        for geometry, changed in zip(geometries, expected_changes, strict=True):
+            stats = scd2_upsert_geom(
+                cursor=cur,
+                schema="staging",
+                table="_test_geom_point",
+                records=[{"id": "P1", "name": "same attributes"}],
+                key_columns=["id"],
+                value_columns=["name"],
+                geom_lookup={"P1": geometry},
+                geom_kind="point",
+                expire_missing=expire_missing,
+            )
+            assert stats["inserted"] == changed
+
+        cur.execute(
+            "SELECT ST_AsGeoJSON(geom), valid_to IS NULL AS current "
+            "FROM staging._test_geom_point ORDER BY valid_from"
+        )
+        history = cur.fetchall()
+
+    assert len(history) == 3
+    assert json.loads(history[0][0])["coordinates"] == [1, 2]
+    assert json.loads(history[1][0])["coordinates"] == [3, 4]
+    assert history[2] == (None, True)
+    assert [current for _, current in history] == [False, False, True]
 
 
 @pytest.mark.integration

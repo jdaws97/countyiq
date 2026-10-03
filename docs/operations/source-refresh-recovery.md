@@ -98,6 +98,13 @@ The parser now preserves separate polygon exteriors; four current features
 contain multiple exterior rings. Counts cannot guarantee an atomic snapshot if
 the publisher edits its source during pagination.
 
+The shared geometry loader now versions geometry-only changes as well as
+attribute changes. Previously, a corrected boundary with unchanged attributes
+could leave the old shape active. Exact geometry bytes are compared, including
+null transitions, and an unchanged replay retains the same version. This can
+also create a version when a publisher reorders equivalent coordinates; it
+avoids running topological comparisons on invalid source geometries.
+
 Address recovery run `b050f6a7-8467-4b50-b7c6-0d6c95ef0908` downloaded 192,075
 features before the transaction rejected duplicate `Site_NGUID`
 `SSAP_6004861 @YCDES.ORG`. The official service returns two distinct objects,

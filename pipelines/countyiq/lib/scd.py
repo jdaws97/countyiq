@@ -352,9 +352,15 @@ def scd2_upsert_geom(
 
         # Build join + diff predicates
         key_join = " AND ".join(f"c.{k} = t.{k}" for k in key_columns)
-        value_diff = " OR ".join(
-            f"c.{v}::text IS DISTINCT FROM t.{v}::text" for v in value_columns
-        )
+        differences = [
+            f"c.{column}::text IS DISTINCT FROM t.{column}::text"
+            for column in value_columns
+        ]
+        # Geometry is source data too: boundary corrections can leave every
+        # attribute unchanged. Compare the stored bytes without topological
+        # operations, which may fail on invalid publisher geometries.
+        differences.append("ST_AsEWKB(c.geom) IS DISTINCT FROM ST_AsEWKB(t.geom)")
+        value_diff = " OR ".join(differences)
 
         # Scope clause used inside the expire/insert queries (table aliased "c")
         scope_clause = f" AND c.{scope_column} = %s" if scope_column else ""
