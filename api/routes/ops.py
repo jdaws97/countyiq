@@ -5,7 +5,6 @@ import os
 import threading
 import time
 from datetime import UTC, datetime, timedelta
-from typing import TypedDict
 
 from api.lib.database import get_cursor
 from api.lib.auth import require_operator
@@ -15,6 +14,11 @@ from api.lib.response_types import (
     SourceStatus,
 )
 from api.lib.settings import county_metadata
+from api.lib.source_refresh import (
+    SOURCE_REFRESH_ASSETS,
+    RefreshRun,
+    source_refresh_run,
+)
 from fastapi import APIRouter, Depends
 from psycopg2 import Error as PsycopgError
 from psycopg2.errors import UndefinedTable
@@ -128,12 +132,29 @@ _SOURCE_CONFIGS: dict[str, tuple[str, str, int]] = {
 }
 
 
-class _JobRunStatus(TypedDict):
-    job_name: str
-    status: str
-    started_at: datetime | None
-    finished_at: datetime
-    last_success_at: datetime | None
+_JobRunStatus = RefreshRun
+
+
+def _get_asset_refresh_statuses(cur) -> dict[str, RefreshRun] | None:
+    try:
+        cur.execute(
+            """
+            SELECT asset_key, job_name, status, finished_at, last_success_at,
+                   NULL::timestamptz AS started_at
+            FROM meta.asset_refresh_status
+            """
+        )
+        return {row["asset_key"]: row for row in cur.fetchall()}
+    except UndefinedTable:
+        cur.connection.rollback()
+        logger.info("Asset-refresh ledger is not migrated yet; using job outcomes")
+        return None
+    except PsycopgError:
+        cur.connection.rollback()
+        logger.warning("Ops health asset-refresh query failed")
+        # A failed read of an installed ledger cannot turn into a successful
+        # grouped run: every mapped source must remain unobserved.
+        return {}
 
 
 def _get_job_run_statuses(cur) -> dict[str, _JobRunStatus]:
@@ -529,14 +550,22 @@ def _compute_health() -> OpsHealthResponse:
     now = datetime.now(UTC)
     with get_cursor() as cur:
         job_runs = _get_job_run_statuses(cur)
+        asset_runs = _get_asset_refresh_statuses(cur)
         for name, (table, job_name, max_age_hours) in _SOURCE_CONFIGS.items():
+            run = job_runs.get(job_name)
+            uses_asset_receipts = (
+                asset_runs is not None and name in SOURCE_REFRESH_ASSETS
+            )
+            if uses_asset_receipts:
+                run = source_refresh_run(name, asset_runs)
             sources[name] = _apply_run_health(
                 _get_source_status(cur, name, table),
                 job_name=job_name,
                 max_age_hours=max_age_hours,
-                run=job_runs.get(job_name),
+                run=run,
                 now=now,
             )
+            sources[name]["freshness_basis"] = "asset" if uses_asset_receipts else "job"
         sources["source_governance"] = _get_source_policy_status(cur, county_key)
         sources["municipal_proceedings"] = _apply_run_health(
             _get_municipality_source_status(cur, county_key),

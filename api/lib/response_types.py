@@ -29,6 +29,7 @@ class SourceStatus(TypedDict):
     status_reason: NotRequired[SourceHealthReason]
     error: NotRequired[Literal["missing_table", "query_failed"]]
     refresh_job: NotRequired[str]
+    freshness_basis: NotRequired[Literal["asset", "job"]]
     expected_refresh_hours: NotRequired[int]
     last_run_status: NotRequired[JobRunHealthStatus]
     last_run_job: NotRequired[str]

@@ -518,6 +518,59 @@ def test_job_run_status_preserves_last_success_after_failure() -> None:
 
 
 @pytest.mark.integration
+def test_asset_refresh_receipts_replay_without_losing_later_failures() -> None:
+    from types import SimpleNamespace
+
+    from countyiq.lib.asset_refresh_status import (
+        AssetRefreshOutcome,
+        record_asset_refresh_outcome,
+    )
+
+    connection = _connect()
+    database = _TransactionalDatabase(connection)
+    run = SimpleNamespace(job_name="schema_test_refresh", run_id="schema-test")
+    asset_key = "schema_test_source"
+    older = datetime(2026, 10, 1, 10, tzinfo=UTC)
+    newer = datetime(2026, 10, 2, 10, tzinfo=UTC)
+    try:
+        failure = AssetRefreshOutcome(
+            asset_key, newer, "failure", failure_reason="step_failed"
+        )
+        success = AssetRefreshOutcome(asset_key, older, "success", record_count=42)
+        for outcome in (failure, success, success, failure):
+            record_asset_refresh_outcome(database, run=run, outcome=outcome)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT status, finished_at, last_success_at, failure_reason
+                FROM meta.asset_refresh_status WHERE asset_key = %s
+                """,
+                (asset_key,),
+            )
+            assert cursor.fetchone() == ("failure", newer, older, "step_failed")
+        recovered = datetime(2026, 10, 3, 10, tzinfo=UTC)
+        record_asset_refresh_outcome(
+            database,
+            run=run,
+            outcome=AssetRefreshOutcome(
+                asset_key, recovered, "success", record_count=43
+            ),
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT status, last_success_at, record_count, failure_reason
+                FROM meta.asset_refresh_status WHERE asset_key = %s
+                """,
+                (asset_key,),
+            )
+            assert cursor.fetchone() == ("success", recovered, 43, None)
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
 def test_source_audit_ledgers_are_append_only() -> None:
     connection = _connect()
     try:

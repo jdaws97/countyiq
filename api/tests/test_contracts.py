@@ -57,6 +57,7 @@ def test_ops_health_exposes_source_policy_review_state(client):
     assert parcels["status"] == "green"
     assert parcels["status_reason"] == "healthy"
     assert parcels["last_run_status"] == "success"
+    assert parcels["freshness_basis"] == "asset"
     assert parcels["stale"] is False
     assert parcels["freshness_due_at"] is not None
 
