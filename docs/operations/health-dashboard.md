@@ -15,7 +15,7 @@ The session exposes an `operator` flag; the page and navigation use it to show
 the dashboard only to operators. The server remains the authorization boundary.
 
 The React route `/ops/health` calls `GET /api/ops/health` and displays current
-row counts, scheduled-refresh freshness, the latest job outcome, source-policy
+row counts, source-refresh freshness, the latest job outcome, source-policy
 review state, and municipal-source health. The API returns entries shaped like:
 
 ```json
@@ -66,8 +66,10 @@ review state, and municipal-source health. The API returns entries shaped like:
 }
 ```
 
-Scheduled weekly sources are healthy for eight days after their latest
-successful job; monthly bulk sources are healthy for 35 days. A source is red
+Sources with a weekly freshness target are healthy for eight days after their
+latest verified refresh; monthly bulk sources are healthy for 35 days. These
+are freshness limits, not automatic schedules: operators run local commands.
+A source is red
 when its table is missing, its count query fails, it has no current rows, no job
 outcome has been observed, its latest owning job failed, or its latest success
 is older than the configured window. An observed success does not make an
@@ -75,12 +77,14 @@ empty source green. Migration 037 starts the job projection empty, so existing
 data correctly remains `run_not_observed` until the corresponding job next
 completes.
 
-The run projection is intentionally job-level. When a grouped refresh fails,
-all source cards owned by that job fail red; Dagster's event log identifies the
-exact failed asset. A newer targeted `proceedings_refresh` run can update the
-municipal card after focused recovery. The application database stores only
-the latest outcome and latest successful completion per job, not a second run
-history.
+Mapped source cards use `meta.asset_refresh_status`, so a successful asset does
+not inherit a sibling's failure in the same job. Only verified nonempty
+materializations advance successful freshness; failed or missing asset checks
+leave the result unverified. The local runner publishes both asset and job
+receipts before exiting. The job projection remains relevant to municipal
+proceedings and to older databases without the asset ledger. A newer targeted
+`proceedings_refresh` run can update the municipal card after focused recovery.
+Full execution history stays in the PC's persistent Dagster state.
 
 The municipal entry also checks every active body's `checked_at` timestamp.
 Paused and blocked/failed/uncertain sources remain visible, and document counts
@@ -89,7 +93,7 @@ cannot inflate coverage. Health never changes rights status or grants
 collection permission.
 
 The manual `staging.pa_open_data` compatibility table has no alpha consumer and
-does not affect product health. The scheduled `staging.corporate_entities`
+does not affect product health. The bounded PA DOS `staging.corporate_entities`
 input and every configured Radar source family do. The compatibility table
 remains a manual retire candidate until external operator compatibility is
 confirmed.
@@ -108,11 +112,7 @@ The result is cached for 60 seconds per Uvicorn worker because navigation also
 consumes it; `COUNTYIQ_OPS_HEALTH_TTL` can change that window.
 
 This remains application health, not infrastructure telemetry. It does not
-report CPU, memory, disk, container state, or step-level Dagster history. The
-Dagster UI is bound to host loopback. Reach it through an SSH tunnel:
-
-```bash
-ssh -L 3000:localhost:3000 countyiq
-```
-
-Then open `http://localhost:3000`.
+report CPU, memory, disk, container state, or step-level Dagster history.
+Use [infrastructure monitoring](monitoring.md) for host telemetry and
+[local pipeline commands](local-pipelines.md) for execution logs and receipt
+replay. There is no VPS Dagster UI.

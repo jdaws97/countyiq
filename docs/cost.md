@@ -1,4 +1,11 @@
-# Cost Breakdown
+# Archived Cost Planning — August 2026
+
+This is the dated planning model from August, not the current deployment bill.
+Its undeployed status, hosting choice, and VPS Dagster sizing assumptions below
+are historical. See [Current state](current-state.md),
+[Infrastructure](infrastructure.md), and [Monitoring](operations/monitoring.md)
+for the deployed architecture and actual usage controls. Pipeline compute now
+runs on the operator PC.
 
 CountyIQ is not deployed. Current serving spend is therefore **$0/month**; the
 figures below are a planning model for the first hosted county, not a description
@@ -21,15 +28,15 @@ rates below).
 
 ## Monthly Cost
 
-| Service | Cost | Notes |
-|---|---|---|
-| Hetzner CX23 + IPv4 | EUR 5.99 (~$6.50) | 2 vCPU x86, 4 GB RAM, 40 GB SSD, 20 TB traffic. IPv4 is now a separate EUR 0.50 line. |
-| Cloudflare Free | $0 | CDN, DNS, Pages (static hosting free/unlimited), WAF |
-| Cloudflare R2 | $0 (current scale) | 10 GB storage, 1M Class A + 10M Class B ops free; $0.015/GB/mo after. Egress always free. |
-| Domain | ~$12/year (~$1/mo) | .com registration |
-| **Infra subtotal** | **~$7.50/mo** | No free-tier expiration. |
-| OpenRouter LLM opex | ~$38–48/mo at the prior projected workload | Mechanical current-price refresh for enabled Passes 0–3; validate with a backfill telemetry sample before budgeting. There is no charge while no provider key or jobs are running. |
-| **Projected hosted total** | **~$46–56/mo** | Infrastructure subtotal plus the unverified workload model. Actual provider telemetry is the customer-pricing oracle. |
+| Service                    | Cost                                       | Notes                                                                                                                                                                              |
+| -------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hetzner CX23 + IPv4        | EUR 5.99 (~$6.50)                          | 2 vCPU x86, 4 GB RAM, 40 GB SSD, 20 TB traffic. IPv4 is now a separate EUR 0.50 line.                                                                                              |
+| Cloudflare Free            | $0                                         | CDN, DNS, Pages (static hosting free/unlimited), WAF                                                                                                                               |
+| Cloudflare R2              | $0 (current scale)                         | 10 GB storage, 1M Class A + 10M Class B ops free; $0.015/GB/mo after. Egress always free.                                                                                          |
+| Domain                     | ~$12/year (~$1/mo)                         | .com registration                                                                                                                                                                  |
+| **Infra subtotal**         | **~$7.50/mo**                              | No free-tier expiration.                                                                                                                                                           |
+| OpenRouter LLM opex        | ~$38–48/mo at the prior projected workload | Mechanical current-price refresh for enabled Passes 0–3; validate with a backfill telemetry sample before budgeting. There is no charge while no provider key or jobs are running. |
+| **Projected hosted total** | **~$46–56/mo**                             | Infrastructure subtotal plus the unverified workload model. Actual provider telemetry is the customer-pricing oracle.                                                              |
 
 ## LLM Opex (the line item the old cost model omitted)
 
@@ -38,15 +45,15 @@ Per-pass models are pinned in `pipelines/countyiq/lib/pass_llm_config.py`
 estimate at current volume (~5K Pass 2 revalidations/week, ~100 meeting
 PDFs/week, ~500 brief refreshes/week):
 
-| Line | Model | Est. monthly |
-|---|---|---|
-| Pass 0 — PDF extraction | gpt-5.6-luna ($0.20/$1.20 per M; $0.02/M cache read) | ~$0.70 |
-| Pass 1 — entity verification | gpt-5.6-luna, effort=high, adaptive N=3 voting | ~$2.8 mechanical estimate after the archived 30.3% call reduction; verify on live clusters |
-| Pass 2 — signal validation | gpt-5.6-luna, effort=low (ds-v4-flash-0731 fallback ≈ $9.15) | ~$30–40 |
-| Pass 3/3b — briefs | gpt-5.6-luna | ~$4 |
-| Pass 4 — county narratives | disabled by default | $0 (about $0.80 if explicitly enabled) |
-| NL search (`/api/search`) | disabled by default; qwen3.5-flash when explicitly enabled | $0 by default; about $0.30 if enabled at projected use |
-| Current one-time backlog | — | $39.41 modeled on the 2026-08-30 live selectors; a one-off catch-up estimate, not a fee or commitment, and a lower bound while proceedings and PA DOS are incomplete |
+| Line                         | Model                                                        | Est. monthly                                                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pass 0 — PDF extraction      | gpt-5.6-luna ($0.20/$1.20 per M; $0.02/M cache read)         | ~$0.70                                                                                                                                                               |
+| Pass 1 — entity verification | gpt-5.6-luna, effort=high, adaptive N=3 voting               | ~$2.8 mechanical estimate after the archived 30.3% call reduction; verify on live clusters                                                                           |
+| Pass 2 — signal validation   | gpt-5.6-luna, effort=low (ds-v4-flash-0731 fallback ≈ $9.15) | ~$30–40                                                                                                                                                              |
+| Pass 3/3b — briefs           | gpt-5.6-luna                                                 | ~$4                                                                                                                                                                  |
+| Pass 4 — county narratives   | disabled by default                                          | $0 (about $0.80 if explicitly enabled)                                                                                                                               |
+| NL search (`/api/search`)    | disabled by default; qwen3.5-flash when explicitly enabled   | $0 by default; about $0.30 if enabled at projected use                                                                                                               |
+| Current one-time backlog     | —                                                            | $39.41 modeled on the 2026-08-30 live selectors; a one-off catch-up estimate, not a fee or commitment, and a lower bound while proceedings and PA DOS are incomplete |
 
 Passes 0–3 use the CountyIQ-evaluated Luna defaults when explicitly enabled.
 No pass is scheduled or enabled by default: an API key alone does not authorize
@@ -163,12 +170,12 @@ the judged sample in `docs/open-items.md`).
 
 ## When to Upgrade
 
-| Trigger | Action | New Cost |
-|---|---|---|
-| Memory > 80% sustained | CX23 → CX33 (4 vCPU, 8 GB, 80 GB) | EUR 8.99/mo w/ IPv4 (~$9.80) |
-| Disk > 80% | Add Hetzner volume | EUR 0.044/GB/mo |
-| R2 > 10 GB | Pay-as-you-go | +$0.15–0.75/mo |
-| 3 counties | CX33 is the initial capacity hypothesis (~45 GB fits 80 GB); keep a separate database/stack identity per county and load-test before committing | ~$11–14/mo infrastructure only |
+| Trigger                | Action                                                                                                                                          | New Cost                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Memory > 80% sustained | CX23 → CX33 (4 vCPU, 8 GB, 80 GB)                                                                                                               | EUR 8.99/mo w/ IPv4 (~$9.80)   |
+| Disk > 80%             | Add Hetzner volume                                                                                                                              | EUR 0.044/GB/mo                |
+| R2 > 10 GB             | Pay-as-you-go                                                                                                                                   | +$0.15–0.75/mo                 |
+| 3 counties             | CX33 is the initial capacity hypothesis (~45 GB fits 80 GB); keep a separate database/stack identity per county and load-test before committing | ~$11–14/mo infrastructure only |
 
 Resize is a ~2-minute console action, no architecture change. Fallback
 provider if Hetzner hikes again: Netcup VPS 1000 G12 (4 vCPU/8 GB/256 GB,
