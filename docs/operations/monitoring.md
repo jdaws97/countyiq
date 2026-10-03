@@ -152,14 +152,12 @@ only the CountyIQ route and preserves unrelated routes. Initial routing is
 email to the operator's Gmail address; a Slack contact point remains optional and requires
 the user's selected destination.
 
-Municipal coverage warnings (`Source unhealthy or stale`,
-`source=municipal_proceedings`) have a dedicated child notification route with
-24-hour group and repeat intervals. This batches coverage changes and limits
-reminders for an ongoing incident to once per day. Other source and outage
-alerts retain their existing five-minute group and four-hour repeat intervals.
-The daily coverage route was applied and read back from Grafana on September 8,
-2026; Grafana normalizes both durations to `1d`. The alert still evaluates and
-remains visible in the dashboard between emails.
+Warnings have a dedicated child notification route grouped by Grafana folder
+and severity, with 24-hour group and repeat intervals. This sends a new warning
+promptly, then batches warning changes and reminders to once per day. Critical
+alerts, including outages and failed backups, retain the five-minute group and
+four-hour repeat intervals. Grafana normalizes the daily durations to `1d`.
+Alerts still evaluate and remain visible in the dashboard between emails.
 
 Grafana currently accepts email contact points only for existing organization
 members. Gmail is the initial registered member. ProtonMail is in the approved

@@ -190,6 +190,75 @@ def test_two_valid_matching_trials_publish_without_paying_for_the_third(monkeypa
     assert result.metadata["voting_early_stops"].value == 1
 
 
+def test_self_abstaining_identity_cannot_supply_the_required_trial_quorum(monkeypatch):
+    conflicting = _partition(merged=True)
+    conflicting["abstentions"] = [
+        {
+            "names": [NAMES[0]],
+            "reason": "Identity within this name is unresolved [Evidence: parcels:P1].",
+        }
+    ]
+    calls, result = _run(
+        monkeypatch,
+        [
+            _response(conflicting, "first"),
+            _response(conflicting, "second"),
+            _response(_partition(merged=False), "third"),
+        ],
+    )
+    assert len(calls["invoke"]) == 3
+    assert calls["inferences"] == []
+    assert calls["graphs"] == []
+    assert result.metadata["trial_validation_rejections"].value == 2
+    assert result.metadata["errors"].value == 1
+
+
+@pytest.mark.parametrize("deciding_assignment", [True, False])
+def test_singleton_assignment_disagreement_requires_a_majority(
+    monkeypatch, deciding_assignment
+):
+    assigned = _partition(merged=False)
+    withheld = deepcopy(assigned)
+    withheld["entities"] = withheld["entities"][:1]
+    withheld["abstentions"] = [
+        {
+            "names": [NAMES[1]],
+            "reason": "Cross-record identity is unresolved [Evidence: parcels:P2].",
+        }
+    ]
+    deciding = assigned if deciding_assignment else withheld
+    calls, result = _run(
+        monkeypatch,
+        [
+            _response(assigned, "first"),
+            _response(withheld, "second"),
+            _response(deciding, "third"),
+        ],
+    )
+    assert len(calls["invoke"]) == 3
+    assert calls["graphs"] == [deciding["entities"]]
+    assert result.metadata["voting_early_stops"].value == 0
+
+
+def test_failed_deciding_trial_cannot_publish_a_minority_singleton(monkeypatch):
+    assigned = _partition(merged=False)
+    withheld = deepcopy(assigned)
+    withheld["entities"] = withheld["entities"][:1]
+    withheld["abstentions"] = [
+        {
+            "names": [NAMES[1]],
+            "reason": "Cross-record identity is unresolved [Evidence: parcels:P2].",
+        }
+    ]
+    failed = HarnessResult(raw_output="", parsed=None, success=False, error="HTTP 503")
+    calls, _ = _run(
+        monkeypatch,
+        [_response(assigned, "first"), _response(withheld, "second"), failed],
+    )
+    assert len(calls["invoke"]) == 3
+    assert calls["graphs"] == [withheld["entities"]]
+
+
 def test_invalid_escalation_cannot_replace_a_valid_primary_abstention(monkeypatch):
     abstained = {
         "entities": [],
@@ -231,8 +300,13 @@ def test_anchored_deterministic_resolution_needs_no_paid_trial_quorum(
     records = deepcopy(RECORDS)
     records["candidate_names"] = ["ALPHA LLC", "ALPHA, L.L.C."]
     records["parcels"] = [records["parcels"][0]]
+    records["parcels"][0]["mail_addr_full"] = "10 MAIN ST, YORK PA 17401"
     records["corporate_entities"] = [
-        {"entity_name": "ALPHA LLC", "entity_number": "123"}
+        {
+            "entity_name": "ALPHA LLC",
+            "entity_number": "123",
+            "office_address": "10 Main St, York, PA, 17401",
+        }
     ]
     calls, result = _run(
         monkeypatch, [], records=records, paid_available=paid_available
@@ -247,6 +321,20 @@ def test_anchored_deterministic_resolution_needs_no_paid_trial_quorum(
 
 def test_disabled_paid_path_does_not_guess_unanchored_identity(monkeypatch):
     calls, result = _run(monkeypatch, [], paid_available=False)
+    assert calls["invoke"] == []
+    assert calls["graphs"] == []
+    assert result.metadata["clusters_deferred_scope"].value == 1
+
+
+def test_disabled_paid_path_does_not_attach_unconnected_parcels_to_a_registration(
+    monkeypatch,
+):
+    records = deepcopy(RECORDS)
+    records["corporate_entities"] = [
+        {"entity_name": "ALPHA LLC", "entity_number": "123"},
+        {"entity_name": "BETA LLC", "entity_number": "456"},
+    ]
+    calls, result = _run(monkeypatch, [], records=records, paid_available=False)
     assert calls["invoke"] == []
     assert calls["graphs"] == []
     assert result.metadata["clusters_deferred_scope"].value == 1

@@ -34,7 +34,7 @@ def test_corporate_lookup_miss_is_not_presented_as_a_registration_record():
                 "entity_name": "REGISTERED LLC",
                 "entity_number": "123",
                 "status": "Active",
-                "office_address": "10 MAIN ST",
+                "office_address": "10 MAIN ST, YORK PA 17401",
             },
         ]
     }
@@ -56,10 +56,23 @@ def test_corporate_lookup_miss_is_not_presented_as_a_registration_record():
 def test_deterministic_tier_accepts_only_anchored_legal_name_variants():
     records = {
         "candidate_names": ["ACME, L.L.C.", "ACME LLC"],
-        "parcels": [{"pidn": "P1", "owner_full": "ACME LLC", "aprtotal": 100}],
+        "parcels": [
+            {
+                "pidn": "P1",
+                "owner_full": "ACME LLC",
+                "aprtotal": 100,
+                "mail_addr_full": "10 MAIN ST, YORK PA 17401-1234",
+            }
+        ],
         "tax_claims": [],
         "plcb_licenses": [],
-        "corporate_entities": [{"entity_name": "ACME LLC", "entity_number": "123"}],
+        "corporate_entities": [
+            {
+                "entity_name": "ACME LLC",
+                "entity_number": "123",
+                "office_address": "10 Main St., York, PA, 17401",
+            }
+        ],
         "proceedings": [],
     }
     parsed = build_deterministic_entity_resolution(
@@ -103,19 +116,27 @@ def test_distinct_registrations_stay_separate_and_keep_only_their_own_records():
     records = {
         "candidate_names": names,
         "parcels": [
-            {"pidn": "P1", "owner_full": "ACME LLC"},
-            {"pidn": "P2", "owner_full": "BETA LLC"},
+            {
+                "pidn": "P1",
+                "owner_full": "ACME LLC",
+                "mail_addr_full": "1 MAIN ST, YORK PA 17401",
+            },
+            {
+                "pidn": "P2",
+                "owner_full": "BETA LLC",
+                "mail_addr_full": "1 MAIN ST, YORK PA 17401",
+            },
         ],
         "corporate_entities": [
             {
                 "entity_name": "ACME LLC",
                 "entity_number": "123",
-                "office_address": "1 MAIN ST",
+                "office_address": "1 MAIN ST, YORK PA 17401",
             },
             {
                 "entity_name": "BETA LLC",
                 "entity_number": "456",
-                "office_address": "1 MAIN ST",
+                "office_address": "1 MAIN ST, YORK PA 17401",
             },
         ],
     }
@@ -127,6 +148,79 @@ def test_distinct_registrations_stay_separate_and_keep_only_their_own_records():
     assert entities["ACME LLC"]["linked_records"]["parcels"] == ["P1"]
     assert entities["BETA LLC"]["linked_records"]["parcels"] == ["P2"]
     assert all(entity["relationships"] == [] for entity in entities.values())
+
+
+@pytest.mark.parametrize(
+    "mailing_address",
+    [
+        None,
+        "10 MAIN ST",
+        "20 OTHER ST, YORK PA 17401",
+        "1 0 MAIN ST, YORK PA 17401",
+        "10 MAIN ST, YORK PA 17403-1234",
+    ],
+)
+def test_registration_does_not_attach_unconnected_same_name_parcels(mailing_address):
+    records = {
+        "parcels": [
+            {"pidn": "P1", "owner_full": "ACME LLC", "mail_addr_full": mailing_address}
+        ],
+        "corporate_entities": [
+            {
+                "entity_name": "ACME LLC",
+                "entity_number": "123",
+                "office_address": "10 MAIN ST, YORK PA 17401",
+            }
+        ],
+    }
+    assert build_deterministic_entity_resolution(records, ["ACME LLC"]) is None
+
+
+def test_registration_requires_every_tax_claim_to_have_an_anchored_parcel():
+    records = {
+        "parcels": [
+            {
+                "pidn": "P1",
+                "owner_full": "ACME LLC",
+                "mail_addr_full": "10 MAIN ST, YORK PA 17401",
+            }
+        ],
+        "tax_claims": [{"pidn": "P1", "owner_name": "ACME LLC"}],
+        "corporate_entities": [
+            {
+                "entity_name": "ACME LLC",
+                "entity_number": "123",
+                "office_address": "10 MAIN ST, YORK PA 17401",
+            }
+        ],
+    }
+    accepted = build_deterministic_entity_resolution(records, ["ACME LLC"])
+    assert accepted is not None
+    assert accepted["entities"][0]["linked_records"]["tax_claims"] == ["P1"]
+    records["tax_claims"].append({"pidn": "UNCONNECTED", "owner_name": "ACME LLC"})
+    assert build_deterministic_entity_resolution(records, ["ACME LLC"]) is None
+
+
+def test_registration_shortcut_does_not_assess_truncated_portfolios():
+    records = {
+        "corporate_entities": [{"entity_name": "ACME LLC", "entity_number": "123"}],
+        "portfolio_summary": {"total_properties": 80},
+    }
+    assert build_deterministic_entity_resolution(records, ["ACME LLC"]) is None
+
+
+@pytest.mark.parametrize(
+    ("source_kind", "name_field"),
+    [("plcb_licenses", "licensee"), ("proceedings", "applicant_name")],
+)
+def test_registration_name_does_not_resolve_license_or_applicant_identity(
+    source_kind, name_field
+):
+    records = {
+        "corporate_entities": [{"entity_name": "ACME LLC", "entity_number": "123"}],
+        source_kind: [{name_field: "ACME LLC"}],
+    }
+    assert build_deterministic_entity_resolution(records, ["ACME LLC"]) is None
 
 
 @pytest.mark.parametrize("second_number", [None, "123"])

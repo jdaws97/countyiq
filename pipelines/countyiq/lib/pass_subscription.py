@@ -10,6 +10,7 @@ from pathlib import Path
 
 from countyiq.lib.intelligence_integrity import content_hash
 from countyiq.lib.pass_llm_config import (
+    PassCallLimitReached,
     PassHarnessUnavailable,
     PassSubscriptionPaused,
     resolve_pass_model,
@@ -114,7 +115,7 @@ class SubscriptionPassRunner:
             with self.account_lock():
                 if not (self.directory / f"{fingerprint}.json").exists():
                     if self.calls >= self.max_calls:
-                        raise PassSubscriptionPaused("Codex per-run call limit reached")
+                        raise PassCallLimitReached("Codex per-run call limit reached")
                     self.calls += 1
                 result = author(config, prompt)
         except (SubscriptionUnavailable, OSError) as error:

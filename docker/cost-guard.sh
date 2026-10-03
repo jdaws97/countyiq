@@ -11,6 +11,7 @@ source "$SCRIPT_DIR/lib/operations.sh"
 ACTION="enforce"
 RESERVE_BYTES=0
 TRIP_REASON="manual"
+LOCK_WAIT_SECONDS=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --enforce|--check|--status|--reset)
@@ -26,6 +27,10 @@ while [ "$#" -gt 0 ]; do
             RESERVE_BYTES="${2:-}"
             shift 2
             ;;
+        --lock-wait-seconds)
+            LOCK_WAIT_SECONDS="${2:-}"
+            shift 2
+            ;;
         *)
             echo "Unknown cost-guard argument: $1" >&2
             exit 2
@@ -39,6 +44,10 @@ if [ "$EUID" -ne 0 ]; then
 fi
 if ! [[ "$RESERVE_BYTES" =~ ^[0-9]+$ ]]; then
     echo "--reserve-bytes must be a non-negative integer" >&2
+    exit 2
+fi
+if ! [[ "$LOCK_WAIT_SECONDS" =~ ^(0|[1-9][0-9]{0,2})$ ]]; then
+    echo "--lock-wait-seconds must be an integer between 0 and 999" >&2
     exit 2
 fi
 if ! [[ "$TRIP_REASON" =~ ^[a-z][a-z0-9_-]{0,63}$ ]]; then
@@ -66,8 +75,8 @@ load_hard_limit
 # They need traversal permission to observe the trip sentinel, never write access.
 install -d -o root -g root -m 755 "$GUARD_DIR"
 exec 7>/var/lock/countyiq-cost-guard.lock
-if ! flock -n 7; then
-    echo "Another CountyIQ cost-guard check is already running" >&2
+if ! flock -w "$LOCK_WAIT_SECONDS" 7; then
+    echo "Another CountyIQ cost-guard check is still running after ${LOCK_WAIT_SECONDS}s" >&2
     exit 1
 fi
 

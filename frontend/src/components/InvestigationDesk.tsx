@@ -190,6 +190,7 @@ export function InvestigationDetail({
   onTriage,
   showContext = true,
   showFollow = true,
+  showHeading = true,
 }: {
   event: IntelligenceEvent
   headingRef?: React.Ref<HTMLHeadingElement>
@@ -197,6 +198,7 @@ export function InvestigationDetail({
   onTriage?: (status: TriageStatus | null) => void
   showContext?: boolean
   showFollow?: boolean
+  showHeading?: boolean
 }) {
   const [tab, setTab] = useState<'overview' | 'sources'>('overview')
   const [sourceIndex, setSourceIndex] = useState(0)
@@ -219,9 +221,11 @@ export function InvestigationDetail({
         <span>{event.municipality}</span>
         {showFollow && <FollowActivity event={event} />}
       </div>
-      <h2 ref={headingRef} tabIndex={-1}>
-        {event.title}
-      </h2>
+      {showHeading && (
+        <h2 ref={headingRef} tabIndex={-1}>
+          {event.title}
+        </h2>
+      )}
       <p className="investigation-byline">
         {event.matter ? 'Latest source dated' : 'Record dated'}{' '}
         {formatShortDate(event.event_date) ?? 'date unverified'}

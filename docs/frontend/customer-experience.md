@@ -24,6 +24,15 @@ Customers can also enter through search or the map. Those paths must converge on
 the same property, organization and investigation surfaces. A ranking is an entry
 point for research, not the central explanation of why a property matters.
 
+The September 8 customer review replaces the duplicated intelligence/opportunity
+journey with **My work criteria → Relevant cases → One case with evidence and
+commercial relevance → Pursue / Follow / Dismiss → My work and updated cases**.
+Activity, interpretation and commercial relevance are layers of the same
+investigation. Opportunities is a selective entry point into those cases; an
+early hypothesis does not automatically earn an opportunity card. See
+[Emerging intelligence](../products/emerging-intelligence.md) for the bounded
+source scope and the distinction between evidence strength and action readiness.
+
 ## Page and interaction contracts
 
 | Surface        | Customer question                                 | Required composition                                                                                                                                                                                                  |
@@ -81,6 +90,65 @@ Municipal coverage distinguishes collected records from reviewed records and
 shows collection/review dates when known. These counts describe collected
 documents, not completeness of all municipal activity.
 
+### Emerging intelligence and opportunities
+
+The shared Explore navigation has one Emerging intelligence entry. Opportunities
+is a view inside that area, not a second sidebar destination; its existing URL
+remains valid for direct links. My work is the private return destination.
+Do not substitute the legacy top navigation for `WorkspaceShell`. Both pages
+share the same current case and evidence components. Profile filters are readable
+customer choices, persist privately, appear in the URL and filter on the server
+before paging. My work criteria includes audience, services, municipalities,
+project types, changes of interest and preferred action stage. Unknown project
+types do not match a selected type. For you excludes dismissed cases; All cases
+retains them for discovery and recovery. Overview uses the same profile criteria.
+
+Case lists show compact, current summaries. Opening a case loads its complete
+interpretation and shared source viewer; list cards do not preload document
+excerpts or inline source dialogs. Preserve the summary's qualifications and
+provide a clear **Open case and evidence** action. This keeps the investigation
+journey usable as the reviewed collection grows.
+
+Lists use continuation pages, with filters applied before selecting candidates.
+Each page checks only its selected evidence scopes. A page can contain fewer
+cases when an earlier assessment needs updated evidence; an empty page with a
+continuation must still offer **Next**. Do not show a purported exact current
+county-wide total from this bounded read. Changing criteria restarts paging;
+returning from a case preserves the list position.
+
+Opportunities requires a specific commercial need, a timing reason and an
+evidenced qualification route, plus customer fit, next action, blockers and
+disqualifiers. An opportunity can be early and conditional; an advertised bid or
+listed property is not universally required. Generic record-checking and research
+remain inside the intelligence case. Legacy research actions never populate
+Opportunities. A case can have no opportunities or multiple distinct scopes,
+including several for the same audience. Queue cards group possibilities under
+their case instead of repeating that case for each audience.
+
+The case puts For your work and Pursue / Follow / Dismiss beside the interpretation.
+Pursue is a private customer decision and cannot promote evidence strength or
+opportunity readiness. Follow retains the case for later review. Dismiss removes
+it from personalized discovery while retaining its note and a recovery path.
+My work (`/my-work`) groups active, pursuing, following, dismissed and needs-review
+cases. It rechecks current case versions on return/window focus or explicit refresh;
+changed or unavailable active cases need review. Only current evidence-derived
+copy is shown, alongside the customer's retained note. Review acknowledgement is
+explicit. This is an in-app return workflow, not background email/push delivery
+or automatic source acquisition/reassessment.
+
+Case pages separate supporting facts, contrary evidence, alternative explanations,
+unknowns and next checks. Every generated field that can contain a citation uses
+the shared source viewer. Display assessment date separately from the latest
+record date; neither asserts complete coverage through that date. Label nearby
+parcels as adjoining context rather than project membership.
+
+Overview lists private saved case statuses/notes using current source-derived
+titles. If a case is withdrawn or its source changes, retain the customer's note
+and show that the case needs reassessment. Do not retain stale evidence copy in
+the saved-work record. Guest export/import and signed-in synchronization include
+the intelligence profile and work, with the existing account isolation and
+version-conflict behavior.
+
 ### Property screening
 
 Radar exposes minimum/maximum acreage and recorded active-plan status. Ordinary
@@ -107,6 +175,13 @@ An explanation must not replace structured conditions or milestones. Preserve
 those facts from the underlying proceeding and their original citation indexes.
 A future date or stated milestone does not establish that an action occurred.
 Where a next check is unavailable, omit it rather than manufacture advice.
+
+Direct municipal matter case links work from both Activity and Research. A
+single accepted matter uses the same complete investigation detail and source
+viewer as Activity, including its outcome, conditions and individual history.
+Research readiness remains visible. Legacy project chronology is reserved for
+projects assembled from separate events; it must not replace a matter account
+with an empty or contradictory summary.
 
 ### Property investigation
 

@@ -15,6 +15,7 @@ Two stages:
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 
@@ -22,6 +23,32 @@ from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.entity_types import is_organization_name
 from countyiq.lib.pass_schemas import PASS1_ENTITY_VERIFICATION_SCHEMA
 from countyiq.lib.prompt_prefix import schema_block
+
+
+def project_entity_relationships(entities: list[dict]) -> list[dict]:
+    """Bind graph edges only to identities accepted in this partition.
+
+    A cited observation about an unresolved candidate is still retained in the
+    immutable inference. Publishing it as an owner edge would lose that source
+    qualification and could link a different owner with the same printed name.
+    """
+    canonical_by_name = {}
+    for entity in entities:
+        canonical = entity["canonical_name"]
+        for name in [canonical, *entity.get("member_names", [])]:
+            canonical_by_name[name] = canonical
+
+    projected = []
+    for entity in entities:
+        relationships = []
+        for relationship in entity.get("relationships", []):
+            target = canonical_by_name.get(relationship.get("related_entity"))
+            if target is None or target == entity["canonical_name"]:
+                continue
+            relationships.append({**relationship, "related_entity": target})
+        projected.append({**entity, "relationships": relationships})
+    return projected
+
 
 # =============================================================================
 # SQL CONSTANTS
@@ -256,7 +283,7 @@ def stable_cluster_key(cluster_names: list[str]) -> str:
     return f"entity_cluster:{digest}"
 
 
-DETERMINISTIC_VARIANT_VERSION = "exact-pa-dos-legal-partition-v2"
+DETERMINISTIC_VARIANT_VERSION = "exact-pa-dos-corroborated-partition-v3"
 
 
 def _legal_name_key(name: str) -> str:
@@ -280,6 +307,56 @@ def _registered_entity_type(legal_key: str) -> str | None:
     return None
 
 
+def _exact_address_key(value) -> str:
+    """Match printed address tokens and the five-digit ZIP, without geocoding."""
+    value = str(value or "").upper().replace(",", " ").replace(".", "")
+    value = re.sub(r"\s+", " ", value).strip()
+    value = re.sub(r"\b([A-Z]{2} \d{5})-\d{4}$", r"\1", value)
+    if not re.search(r"\S+\s+\S+\s+[A-Z]{2}\s+\d{5}$", value):
+        return ""
+    return value
+
+
+def _registration_record_refs(records, members, corporate_rows) -> list[str] | None:
+    """Require every non-registration record to connect to a registration.
+
+    This intentionally narrow shortcut leaves address abbreviations, changed
+    addresses, licenses and proceeding roles to the source reviewer. An exact
+    legal name does not attach an otherwise unconnected parcel to a registry row.
+    """
+    if records.get("portfolio_summary") or records.get("portfolio_summaries"):
+        return None
+    for kind, fields in (
+        ("plcb_licenses", ("licensee", "premises_owner")),
+        ("proceedings", ("applicant_name",)),
+    ):
+        for row in records.get(kind, []):
+            if any(row.get(field) in members for field in fields):
+                return None
+    offices = {
+        address
+        for row in corporate_rows
+        if (address := _exact_address_key(row.get("office_address")))
+    }
+    parcels = [
+        row for row in records.get("parcels", []) if row.get("owner_full") in members
+    ]
+    if any(
+        _exact_address_key(row.get("mail_addr_full")) not in offices for row in parcels
+    ):
+        return None
+    parcel_ids = {str(row["pidn"]) for row in parcels}
+    claims = [
+        row for row in records.get("tax_claims", []) if row.get("owner_name") in members
+    ]
+    if any(str(row.get("pidn")) not in parcel_ids for row in claims):
+        return None
+    return sorted(
+        {f"parcels:{pidn}" for pidn in parcel_ids}
+        | {f"tax_claims:{row['pidn']}" for row in claims}
+    )
+
+
 def build_deterministic_entity_resolution(
     records: dict,
     cluster_names: list[str],
@@ -290,11 +367,13 @@ def build_deterministic_entity_resolution(
     similarities, and conflicting PA DOS entity numbers. Punctuation/case
     variants of an anchored name may merge. Different names with different
     registration numbers stay separate even when they share an office address.
-    Every unanchored or ambiguous cluster remains unresolved by this tier.
+    Every non-registration record must also connect through a matching complete
+    mailing/office address or an already connected parcel identifier. Every
+    unanchored or ambiguous cluster remains unresolved by this tier.
     """
 
     names = sorted({name.strip() for name in cluster_names if name and name.strip()})
-    if len(names) < 2:
+    if not names:
         return None
     names_by_key: dict[str, list[str]] = {}
     for name in names:
@@ -340,6 +419,9 @@ def build_deterministic_entity_resolution(
         )
         if not anchored_names:
             return None
+        record_refs = _registration_record_refs(records, members, matching_corporate)
+        if record_refs is None:
+            return None
         canonical_name = anchored_names[0]
         linked_records = {}
         for source, (identifier_field, name_fields) in record_fields.items():
@@ -359,6 +441,15 @@ def build_deterministic_entity_resolution(
             f"{entity_number}; only case, spacing and punctuation are normalized "
             f"{candidate_refs} {corporate_ref}."
         )
+        if record_refs:
+            source_refs = " ".join(f"[Evidence: {ref}]" for ref in record_refs)
+            reasoning += (
+                " Parcel mailing addresses match a registration office address "
+                "using the printed street/locality and five-digit ZIP, ignoring "
+                "case, commas, periods and repeated spaces; any tax claims "
+                "use those same parcel identifiers "
+                f"{source_refs} {corporate_ref}."
+            )
         entities.append(
             {
                 "canonical_name": canonical_name,
@@ -480,6 +571,27 @@ reason must cite one or more printed refs inline as
 [Evidence: group:identifier]; end each factual sentence with its marker.
 
 RULES FOR NAMES, RELATIONSHIPS, AND CITATIONS:
+- A candidate name can refer to more than one real-world owner. The exact same
+  printed name alone does not establish identity across separate records. To
+  combine them, cite additional evidence connecting those records, such as the
+  same parcel identifier, a matching full mailing address, an unambiguous
+  registration identifier, or an explicit source statement linking the owners.
+  Apply this requirement even when an entity has only one member_names entry.
+  One owner-of-record on one parcel can be retained without inventing a personal
+  identifier; this does not establish that every other record with that name
+  belongs to the same person or organization.
+  A corporate registration number connects the corporate rows that print it.
+  It does not connect a same-name parcel, tax, or license record that lacks it.
+  Independently substantiate each record's connection to that registration;
+  an address match on one parcel cannot cover other parcels with unconnected
+  addresses merely because their owner names match a registered name variant.
+- If identity remains unresolved within one candidate name, put that name in
+  a single-name abstention and omit it from entities. The output contract cannot
+  split one candidate name into multiple entities. Do not assign the ambiguous
+  records to an entity, even with reduced confidence, while saying their identity
+  is unresolved in reasoning or in a broader multi-name abstention. An unresolved
+  match between different candidate names may still leave separately supported
+  owner-of-record groups; do not confuse that with uncertainty within one name.
 - rejected_matches name_a/name_b, abstention names, and relationship
   related_entity must be names printed under CANDIDATE NAMES. A prior owner,
   seller, buyer, or any other name that appears only inside a record is not a
@@ -737,6 +849,18 @@ def _format_proceedings(procs: list[dict]) -> str:
 # =============================================================================
 
 
+def _portfolio_summary_lines(summary: dict) -> list[str]:
+    return [
+        f"- Total parcels: {summary['total_parcels']} (showing {summary['parcels_shown']} above)",
+        f"- Total assessed value: ${summary['total_assessed_value']:,.0f}",
+        f"- Total tax claims: {summary['total_tax_claims']} (showing {summary['tax_claims_shown']} above)",
+        f"- Total tax owed: ${summary['total_tax_owed']:,.2f}",
+        f"- Owner name variants: {summary['owners']}",
+        f"- Property classes: {summary['classes']}",
+        f"- Municipalities: {summary['municipalities']}",
+    ]
+
+
 def build_entity_cluster_prompt(records: dict) -> str:
     """Format cluster records into the entity verification template.
 
@@ -794,15 +918,41 @@ def build_entity_cluster_prompt(records: dict) -> str:
     if summary:
         summary_lines = [
             "PORTFOLIO SUMMARY (records truncated — full statistics below):",
-            f"- Total parcels: {summary['total_parcels']} (showing {summary['parcels_shown']} above)",
-            f"- Total assessed value: ${summary['total_assessed_value']:,.0f}",
-            f"- Total tax claims: {summary['total_tax_claims']} (showing {summary['tax_claims_shown']} above)",
-            f"- Total tax owed: ${summary['total_tax_owed']:,.2f}",
-            f"- Owner name variants: {summary['owners']}",
-            f"- Property classes: {summary['classes']}",
-            f"- Municipalities: {summary['municipalities']}",
+            *_portfolio_summary_lines(summary),
         ]
         sections.append("\n".join(summary_lines))
+
+    for item in records.get("portfolio_summaries", []):
+        sections.append(
+            "\n".join(
+                [
+                    (
+                        f"PORTFOLIO SUMMARY FOR candidate:{item['candidate_name']} "
+                        "(records truncated — full statistics below):"
+                    ),
+                    *_portfolio_summary_lines(item["summary"]),
+                ]
+            )
+        )
+
+    identity_inventories = list(records.get("identity_inventories", []))
+    if records.get("identity_inventory"):
+        identity_inventories.append(
+            {
+                "candidate_name": candidate_names[0],
+                "inventory": records["identity_inventory"],
+            }
+        )
+    for item in identity_inventories:
+        sections.append(
+            "COMPLETE IDENTITY INDEX FOR "
+            f"candidate:{item['candidate_name']}:\n"
+            "The index includes records omitted from the detail above. Different "
+            "mailing addresses or unexplained PIDNs can indicate unresolved "
+            "identity within one recorded name. Index-only identifiers are for "
+            "comparison; linked_records must cite identifiers in the detail sections.\n"
+            + json.dumps(item["inventory"], sort_keys=True, default=str)
+        )
 
     combined_sections = "\n\n".join(sections) if sections else "(no records)"
 
@@ -902,7 +1052,11 @@ _MAX_TAX_CLAIMS_DETAIL = 30
 # only when a strict majority of trials grouped that pair. Merges without
 # majority support are demoted to abstentions ("disagreement → abstain"),
 # never resolved by guessing.
+# A self-pair records whether the candidate was assigned to an entity at all.
+# This distinguishes a supported singleton from a within-name abstention.
 # =============================================================================
+
+PARTITION_VOTING_VERSION = "pair-and-membership-majority-v2"
 
 
 def _entity_member_names(entity: dict, cluster_names: list[str]) -> set[str]:
@@ -930,7 +1084,7 @@ def _entity_member_names(entity: dict, cluster_names: list[str]) -> set[str]:
 def _trial_pair_verdicts(
     parsed: dict, cluster_names: list[str]
 ) -> dict[tuple[str, str], bool]:
-    """Map each cluster-name pair to this trial's same-entity verdict."""
+    """Map pairs to merge verdicts and self-pairs to identity assignments."""
     groups = [
         _entity_member_names(e, cluster_names)
         for e in parsed.get("entities", [])
@@ -939,6 +1093,7 @@ def _trial_pair_verdicts(
     same: dict[tuple[str, str], bool] = {}
     ordered = sorted(cluster_names)
     for i, a in enumerate(ordered):
+        same[(a, a)] = any(a in group for group in groups)
         for b in ordered[i + 1 :]:
             same[(a, b)] = any(a in g and b in g for g in groups)
     return same
@@ -949,12 +1104,12 @@ def entity_trial_majority_decided(
     cluster_names: list[str],
     target_trials: int,
 ) -> bool:
-    """Return whether future trials can no longer change any pair verdict.
+    """Return whether further trials can change any merge or assignment verdict.
 
     For the default target of three trials, two identical pair partitions are
-    already a strict majority. Skipping the third call in that case preserves
-    the exact merge/no-merge decision while saving one inference call. If any
-    pair disagrees, the deciding trial still runs.
+    already a strict majority when they also agree on which candidates have
+    supported identities. A singleton versus abstention disagreement requires
+    the deciding trial even when all cross-name merge verdicts agree.
     """
     if target_trials <= 1:
         return bool(trials_parsed)
@@ -981,12 +1136,12 @@ def merge_entity_trial_partitions(
     *,
     target_trials: int | None = None,
 ) -> dict:
-    """Aggregate N parsed Pass 1 runs by majority pair voting.
+    """Aggregate validated runs by majority merge and identity-assignment votes.
 
     The representative trial (highest agreement with the majority pair
     verdicts) supplies the entity payloads; any of its entities that
-    contain a pair WITHOUT strict-majority support is demoted to an
-    abstention. No merge beyond what a trial itself proposed is created.
+    contain a merge or identity assignment WITHOUT strict-majority support is
+    demoted to an abstention. No entity beyond a trial's proposal is created.
 
     Only source-validated trials may be supplied. Production passes the
     configured trial count so failed calls cannot lower the merge threshold.
@@ -1046,7 +1201,7 @@ def merge_entity_trial_partitions(
         unsupported = [
             (a, b)
             for i, a in enumerate(members)
-            for b in members[i + 1 :]
+            for b in members[i:]
             if not majority.get((a, b), False)
         ]
         if unsupported:
@@ -1054,8 +1209,9 @@ def merge_entity_trial_partitions(
                 {
                     "names": members,
                     "reason": (
-                        f"cross-trial disagreement: {len(unsupported)} pair(s) in this "
-                        f"grouping lacked majority support across {target} configured "
+                        f"cross-trial disagreement: {len(unsupported)} merge or "
+                        f"identity-assignment verdict(s) lacked majority support "
+                        f"across {target} configured "
                         f"trials ({n} validated) "
                         "[Evidence: trial:voting]"
                     ),
@@ -1085,7 +1241,9 @@ def merge_entity_trial_partitions(
 # =============================================================================
 
 
-def gather_cluster_records(cursor, names: list[str]) -> dict:
+def gather_cluster_records(
+    cursor, names: list[str], *, stable_source_snapshot: bool = False
+) -> dict:
     """Gather all records for a list of candidate entity names.
 
     Executes SQL queries against parcels, tax_claims, plcb_licenses,
@@ -1099,6 +1257,8 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
     Args:
         cursor: psycopg2 cursor (RealDictCursor or similar).
         names: List of entity name strings to query for.
+        stable_source_snapshot: Canonicalize rows before choosing detail records
+            and fingerprint the complete queried inventory for bounded dossiers.
 
     Returns:
         Dict with keys: parcels, tax_claims, plcb_licenses,
@@ -1125,6 +1285,17 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
     cursor.execute(CLUSTER_RECORDS_QUERY_PROCEEDINGS, params)
     proceedings = [dict(row) for row in cursor.fetchall()] if cursor.description else []
 
+    inventory = {
+        "parcels": all_parcels,
+        "tax_claims": all_tax,
+        "plcb_licenses": plcb_licenses,
+        "corporate_entities": corporate_entities,
+        "proceedings": proceedings,
+    }
+    if stable_source_snapshot:
+        for rows in inventory.values():
+            rows.sort(key=lambda row: json.dumps(row, sort_keys=True, default=str))
+
     result = {
         "candidate_names": sorted(names),
         "parcels": all_parcels[:_MAX_PARCELS_DETAIL],
@@ -1133,6 +1304,27 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
         "corporate_entities": corporate_entities,
         "proceedings": proceedings,
     }
+    if stable_source_snapshot:
+        # Facts omitted from the displayed detail still affect source freshness.
+        # The source manifest retains this fingerprint alongside the actual dossier.
+        result["source_inventory_hash"] = hashlib.sha256(
+            json.dumps(inventory, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        if (
+            len(all_parcels) > _MAX_PARCELS_DETAIL
+            or len(all_tax) > _MAX_TAX_CLAIMS_DETAIL
+        ):
+            mailing_groups = {}
+            for row in all_parcels:
+                address = str(row.get("mail_addr_full") or "").strip()
+                mailing_groups.setdefault(address, set()).add(str(row["pidn"]))
+            result["identity_inventory"] = {
+                "parcels_by_mailing_address": [
+                    {"mailing_address": address or None, "pidns": sorted(pidns)}
+                    for address, pidns in sorted(mailing_groups.items())
+                ],
+                "tax_claim_pidns": sorted({str(row["pidn"]) for row in all_tax}),
+            }
 
     # For large entities, add a portfolio summary so the LLM knows the
     # full scale even though the detail is truncated.
@@ -1142,16 +1334,18 @@ def gather_cluster_records(cursor, names: list[str]) -> dict:
         owner_counts = {}
         class_counts = {}
         muni_counts = {}
-        for p in all_parcels:
-            owner_counts[p.get("owner_full", "?")] = (
-                owner_counts.get(p.get("owner_full", "?"), 0) + 1
-            )
-            class_counts[p.get("class", "?")] = (
-                class_counts.get(p.get("class", "?"), 0) + 1
-            )
-            muni_counts[p.get("municipality", "?")] = (
-                muni_counts.get(p.get("municipality", "?"), 0) + 1
-            )
+        for parcel in all_parcels:
+            for field, counts in (
+                ("owner_full", owner_counts),
+                ("class", class_counts),
+                ("municipality", muni_counts),
+            ):
+                label = parcel.get(field)
+                if label is None:
+                    # SQL NULL and an absent value are the same unknown bucket.
+                    # Mixed None/string keys cannot be sorted for source hashing.
+                    label = "?"
+                counts[label] = counts.get(label, 0) + 1
 
         result["portfolio_summary"] = {
             "total_parcels": len(all_parcels),

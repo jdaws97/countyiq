@@ -8,7 +8,7 @@ import ts from 'typescript'
 
 // Compile the actual browser modules using the project's existing compiler.
 const directory = mkdtempSync(join(tmpdir(), 'countyiq-workspace-'))
-for (const name of ['browserStorage', 'watchlist', 'investigationState']) {
+for (const name of ['browserStorage', 'watchlist', 'intelligenceState', 'investigationState']) {
   const source = readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8')
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
@@ -21,6 +21,7 @@ for (const name of ['browserStorage', 'watchlist', 'investigationState']) {
 const state = await import(pathToFileURL(join(directory, 'investigationState.mjs')))
 const storage = await import(pathToFileURL(join(directory, 'browserStorage.mjs')))
 const watches = await import(pathToFileURL(join(directory, 'watchlist.mjs')))
+const intelligence = await import(pathToFileURL(join(directory, 'intelligenceState.mjs')))
 after(() => rmSync(directory, { recursive: true, force: true }))
 let values
 let alerts
@@ -45,6 +46,21 @@ const workspace = () => ({
   comparison: [],
   triage: {},
 })
+const intelligenceProfile = {
+  audience: 'service_business',
+  municipalities: ['York Township'],
+  services: ['engineering'],
+  families: ['construction_timing'],
+}
+const intelligenceWork = [
+  {
+    case_key: `emerging-${'a'.repeat(64)}`,
+    status: 'qualifying',
+    note: 'Review the land development plan.',
+    last_seen_revision: '1',
+    updated_at: '2026-09-08T12:00:00Z',
+  },
+]
 
 test('malformed stored JSON shapes cannot crash investigation pages', () => {
   for (const value of ['null', '{}', '42', '"text"']) {
@@ -80,6 +96,48 @@ test('older exports without municipalities remain portable', () => {
   state.replaceWorkspace(workspace())
   assert.deepEqual(watches.getWatchlist(), ['123'])
   assert.deepEqual(watches.getMunicipalityWatchlist(), [])
+})
+
+test('workspace roundtrip restores intelligence profile and work', () => {
+  const portable = {
+    ...workspace(),
+    intelligenceProfile,
+    intelligenceWork,
+  }
+  const parsed = state.parseWorkspace(JSON.stringify(portable))
+
+  state.replaceWorkspace(parsed)
+
+  assert.deepEqual(intelligence.getIntelligenceProfile(), intelligenceProfile)
+  assert.deepEqual(intelligence.getIntelligenceWork(), intelligenceWork)
+})
+
+test('malformed intelligence work is rejected without replacing browser state', () => {
+  values.set('countyiq_watchlist_v1', '["existing"]')
+  values.set('countyiq_intelligence_profile_v1', JSON.stringify(intelligenceProfile))
+  values.set('countyiq_intelligence_work_v1', JSON.stringify(intelligenceWork))
+  const original = new Map(values)
+
+  assert.throws(() =>
+    state.replaceWorkspace({
+      ...workspace(),
+      intelligenceWork: [{ case_key: `emerging-${'a'.repeat(64)}`, status: 'not-a-status' }],
+    }),
+  )
+
+  assert.deepEqual(values, original)
+  assert.deepEqual(intelligence.getIntelligenceProfile(), intelligenceProfile)
+  assert.deepEqual(intelligence.getIntelligenceWork(), intelligenceWork)
+})
+
+test('older workspace files preserve existing intelligence state', () => {
+  values.set('countyiq_intelligence_profile_v1', JSON.stringify(intelligenceProfile))
+  values.set('countyiq_intelligence_work_v1', JSON.stringify(intelligenceWork))
+
+  state.replaceWorkspace(workspace())
+
+  assert.deepEqual(intelligence.getIntelligenceProfile(), intelligenceProfile)
+  assert.deepEqual(intelligence.getIntelligenceWork(), intelligenceWork)
 })
 
 test('saved searches accept only local Feed and Radar destinations', () => {

@@ -12,6 +12,55 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("wait_seconds,expected_status", [(5, 0), (0, 1)])
+def test_cost_guard_waits_for_overlapping_check(
+    tmp_path, wait_seconds, expected_status
+):
+    image = yaml.safe_load((ROOT / "pipelines/docker-compose.yml").read_text())[
+        "services"
+    ]["postgres-test"]["image"]
+    command = r"""export COUNTYIQ_COST_GUARD_DIR=/tmp/guard
+(
+    flock 8
+    touch /tmp/lock-held
+    sleep 1
+) 8>/var/lock/countyiq-cost-guard.lock &
+holder=$!
+while [ ! -e /tmp/lock-held ]; do sleep 0.01; done
+bash /repo/docker/cost-guard.sh --status --lock-wait-seconds "$1"
+result=$?
+wait "$holder"
+exit "$result"
+"""
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            f"{ROOT}:/repo:ro",
+            "--entrypoint",
+            "bash",
+            image,
+            "-c",
+            command,
+            "lock-test",
+            str(wait_seconds),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == expected_status, result.stderr
+    if expected_status:
+        assert "still running" in result.stderr
+    else:
+        assert "has not completed a usage check yet" in result.stdout
+
+
+@pytest.mark.integration
 @pytest.mark.parametrize("scenario", ["success", "docker_failed", "timer_failed"])
 def test_cost_guard_latches_stop_and_reports_failures(tmp_path, scenario):
     bindir = tmp_path / "bin"

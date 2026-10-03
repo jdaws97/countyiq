@@ -32,6 +32,16 @@ def test_dagster_storage_paths_are_explicit_per_environment():
     )
 
 
+def test_dagster_temp_directory_uses_persistent_storage_volume():
+    compose = yaml.safe_load((REPO_ROOT / "docker/docker-compose.yml").read_text())
+    dagster_common = compose["x-dagster-common"]
+    temp_directory = dagster_common["environment"]["TMPDIR"]
+
+    assert temp_directory == "/opt/dagster/storage"
+    assert f"dagster-storage:{temp_directory}" in dagster_common["volumes"]
+    assert compose["volumes"]["dagster-storage"]["name"] == "countyiq-dagster-storage"
+
+
 def test_every_registered_job_uses_one_step_executor():
     from countyiq.definitions import defs
 

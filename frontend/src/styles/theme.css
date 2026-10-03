@@ -1422,7 +1422,33 @@ textarea {
   }
 }
 
+.map-zoom-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 60px;
+  z-index: 1;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+}
+.map-zoom-controls button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 22px;
+  cursor: pointer;
+}
+.map-zoom-controls button + button {
+  border-top: 1px solid var(--border);
+}
 @media (max-width: 640px) {
+  .map-zoom-controls {
+    bottom: 160px;
+  }
   .page-shell-main {
     padding: 24px 16px 48px;
   }

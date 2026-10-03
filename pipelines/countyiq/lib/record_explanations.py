@@ -316,16 +316,20 @@ def _validate_date(
         parsed = date.fromisoformat(value)
         month = parsed.strftime("%B")
         short_month = parsed.strftime("%b")
+        month_names = [month, short_month]
+        if parsed.month == 9:
+            month_names.append("Sept")
+        month_pattern = "|".join(month_names)
         normalized_quote = _normalized(quote)
         normalized = normalized_quote.lower()
         named = re.search(
-            rf"\b(?:{month}|{short_month})\.?\s*0?{parsed.day}(?:st|nd|rd|th)?\b",
+            rf"\b(?:{month_pattern})\.?\s*0?{parsed.day}(?:st|nd|rd|th)?\b",
             normalized,
             flags=re.IGNORECASE,
         )
         # PDF text can join a preceding word to a capitalized month, as in "theMay27".
         joined_named = re.search(
-            rf"(?<=[a-z])(?:{month}|{short_month})0?{parsed.day}(?:st|nd|rd|th)?\b",
+            rf"(?<=[a-z])(?:{month_pattern})0?{parsed.day}(?:st|nd|rd|th)?\b",
             normalized_quote,
         )
         spanish_month = (
@@ -380,6 +384,14 @@ def _validate_date(
     ):
         raise ValueError("Date time is not stated in its supporting quote")
     qualification = _normalized(quote).lower()
+    # A hearing can be scheduled while its subject is still a proposal. Remove
+    # only that subject modifier; a separate proposed hearing/date stays proposed.
+    qualification = re.sub(
+        r"\b(hearing on (?:a |the )?)proposed "
+        r"(?=(?:zoning )?(?:amendment|ordinance)\b)",
+        r"\1",
+        qualification,
+    )
     if re.search(
         r"\b(?:recommended|proposed|recomendad[oa]s?|propuest[oa]s?)\b", qualification
     ):

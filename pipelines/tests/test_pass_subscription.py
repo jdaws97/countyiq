@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 from countyiq.lib.llm_harness import HarnessConfig
 from countyiq.lib.pass_llm_config import (
+    PassCallLimitReached,
     PassHarnessUnavailable,
     PassSubscriptionPaused,
     resolve_pass_harness,
@@ -101,7 +102,7 @@ def test_call_cap_allows_cached_resume_but_never_paid_fallback(
     runner = SubscriptionPassRunner(0)
     assert runner(configuration(), "first source").success
     assert runner(configuration(), "first source").success
-    with pytest.raises(PassSubscriptionPaused, match="call limit"):
+    with pytest.raises(PassCallLimitReached, match="call limit"):
         runner(configuration(), "second source")
     with pytest.raises(PassSubscriptionPaused, match="API model"):
         runner(HarnessConfig(model_path="openai/paid-model"), "source")

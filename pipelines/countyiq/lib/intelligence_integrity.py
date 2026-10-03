@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import unicodedata
 from collections.abc import Iterable
@@ -554,6 +555,15 @@ def validate_entity_membership(
             else:
                 accounted_for.add(name)
         if isinstance(abstention, dict):
+            names = {
+                name for name in abstention.get("names", []) if isinstance(name, str)
+            }
+            if len(names) == 1 and names & claimed_by.keys():
+                name = next(iter(names))
+                errors.append(
+                    f"candidate name {name!r} has an entity assignment and an "
+                    "unresolved identity within that same name"
+                )
             validate_cited_text(abstention.get("reason"), "abstention reason")
 
     missing = cluster_set - accounted_for
@@ -601,6 +611,7 @@ def validate_pass2_evidence_refs(
     errors: list[str] = []
     allowed = allowed_signal_refs(signals, context_signals)
     expected = {signal["signal_key"] for signal in signals}
+    signals_by_key = {signal["signal_key"]: signal for signal in signals}
     seen: set[str] = set()
     for validation in validations:
         key = validation.get("signal_key")
@@ -612,6 +623,19 @@ def validate_pass2_evidence_refs(
         seen.add(key)
         status = validation.get("validation_status")
         significance = validation.get("adjusted_significance")
+        unlinked_plan = key == "active_subdivision" and not _plan_point_matches_parcel(
+            signals_by_key[key]
+        )
+        overstated_plan = status in {"confirmed", "upgraded"} or significance in {
+            "medium",
+            "high",
+        }
+        if unlinked_plan and overstated_plan:
+            errors.append(
+                "active_subdivision lacks a consistent point_on_parcel match; "
+                "use downgraded with low/none significance, or stale/irrelevant "
+                "with none"
+            )
         if status in {"stale", "irrelevant"} and significance != "none":
             errors.append(
                 f"{key} status {status!r} requires adjusted_significance 'none'"
@@ -664,6 +688,27 @@ def validate_pass2_evidence_refs(
                 f"{sorted(markers - allowed_keys)}"
             )
     return errors
+
+
+def _plan_point_matches_parcel(signal: dict) -> bool:
+    """Require the mapped point match; a candidate radius is not parcel linkage."""
+    evidence = signal.get("evidence")
+    if not isinstance(evidence, dict):
+        return False
+    if evidence.get("plan_location") != "point_on_parcel":
+        return False
+    distance = signal.get("distance_m")
+    if distance is None:
+        # The explicit spatial classification is evidence even when the
+        # optional distance is absent. A supplied conflicting distance is not.
+        return True
+    if isinstance(distance, bool):
+        return False
+    try:
+        numeric_distance = float(distance)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(numeric_distance) and numeric_distance == 0
 
 
 def pass2_semantic_decision(validations: Iterable[dict]) -> list[dict]:

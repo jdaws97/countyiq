@@ -49,7 +49,8 @@ def provision_account(cur, identity: Identity):
 def account_workspace(cur, request, *, lock=False):
     identity = require_identity(request)
     cur.execute(
-        """SELECT i.user_id,w.workspace_id,w.version,w.saved_searches,w.comparison,w.recent_investigations,m.role
+        """SELECT i.user_id,w.workspace_id,w.version,w.saved_searches,w.comparison,w.recent_investigations,
+        w.intelligence_profile,w.intelligence_work,m.role
         FROM public.app_identities i
         JOIN public.workspace_members m USING(user_id)
         JOIN public.watchspaces w USING(workspace_id)

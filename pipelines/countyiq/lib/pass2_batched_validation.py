@@ -21,8 +21,6 @@ from collections import Counter as _Counter
 from countyiq.lib.county_config import county_prompt_context
 from countyiq.lib.intelligence_common import (
     CORPORATE_FOR_NAMES_QUERY,
-    compute_input_hash,
-    strip_volatile_evidence,
     ENTITY_GRAPH_QUERY,
     NEIGHBORS_QUERY,
     PARCEL_QUERY,
@@ -30,6 +28,7 @@ from countyiq.lib.intelligence_common import (
     PROCEEDINGS_FOR_ENTITY_QUERY,
     PROCEEDINGS_FOR_PARCEL_QUERY,
     TAX_CLAIMS_QUERY,
+    compute_input_hash,
     format_corporate_context,
     format_entity_context,
     format_neighbors_context,
@@ -38,6 +37,7 @@ from countyiq.lib.intelligence_common import (
     format_proceedings_context,
     format_tax_claims_context,
     resolved_owner_names,
+    strip_volatile_evidence,
 )
 from countyiq.lib.pass2_signal_validation import (
     SIGNAL_QUESTIONS,
@@ -45,7 +45,10 @@ from countyiq.lib.pass2_signal_validation import (
 )
 from countyiq.lib.pass_schemas import PASS2_BATCHED_VALIDATION_SCHEMA
 from countyiq.lib.prompt_prefix import CITATION_FORMAT_BLOCK, schema_block
-from countyiq.lib.signal_policy import CONTEXT_ONLY_SIGNALS, INTERPRETIVE_SIGNAL_KEYS
+from countyiq.lib.signal_policy import (
+    CONTEXT_ONLY_SIGNALS,  # noqa: F401 — public re-export
+    INTERPRETIVE_SIGNAL_KEYS,
+)
 
 # ---------------------------------------------------------------------------
 # Signal type classification — which sections of context each signal needs
@@ -262,6 +265,20 @@ Rules:
    plan may legitimately report zero lots and zero dwelling units when
    pt_land_dev=YES. Downgrade active_subdivision only when the evidence does
    not establish a subdivision/land-development proposal for this parcel.
+   The active_subdivision label is a candidate screen, not proof of linkage.
+   A consistent plan_location=point_on_parcel establishes the mapped point
+   match, not the full plan boundary, owner participation, approval, or building
+   start. A supplied distance_m must be zero for that classification; a positive,
+   negative, or invalid distance conflicts with it. A missing distance does not
+   contradict an explicit point_on_parcel classification.
+   within_30m_of_parcel, nearby, missing/unknown location, and conflicting
+   location metadata do NOT establish this parcel's proposal, even at a printed
+   distance of zero or one meter. Use downgraded with low/none significance
+   (or stale/irrelevant with none when warranted). Do not confirm/upgrade or
+   assign medium/high significance based on proximity, similar owner/plan names,
+   contiguous ownership, or a recent sale. Do not describe an unlinked proposal
+   as this parcel's development lead in cross_signal_insight; state that the
+   parcel link needs verification. A prose caveat cannot override these decisions.
 3. Calibrate significance to decision relevance, not merely whether a record
    exists. A one- or two-lot/unit proposal is normally medium or low; three or
    more may be high. A zero-unit land-development proposal can be valid but is

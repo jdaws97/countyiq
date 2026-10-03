@@ -1,6 +1,8 @@
 from datetime import date
+
 import pytest
-from api.lib.project_status import summarize_project, exact_date
+
+from api.lib.project_status import exact_date, summarize_project
 
 
 def event(key, day, decision=None, **details):
@@ -230,3 +232,94 @@ def test_same_day_conflicting_decisions_are_not_hidden_by_withdrawal():
     assert summarize_project(records, today=date(2026, 3, 1))["status"].startswith(
         "Conflicting"
     )
+
+
+def matter_event():
+    return {
+        "event_key": "matter:plan",
+        "event_date": "2026-08-11",
+        "what_happened": "A later agenda requests an extension. [Evidence:source:R2P1]",
+        "matter": {
+            "outcome": "conditional",
+            "outcome_summary": "The plan was conditionally approved. [Evidence:source:R1P1]",
+            "conditions": ["Submit a drainage plan. [Evidence:source:R1P1]"],
+            "history": [
+                {"meeting_date": "2026-05-12", "record_status": "decision"},
+                {"meeting_date": "2026-08-11", "record_status": "proposed"},
+            ],
+        },
+        "sources": [
+            {
+                "evidence_id": "agenda",
+                "citation_key": "evidence:source:R2P1",
+                "details": {"meeting_date": "2026-08-11", "record_status": "proposed"},
+            },
+            {
+                "evidence_id": "minutes",
+                "citation_key": "evidence:source:R1P1",
+                "details": {"meeting_date": "2026-05-12"},
+            },
+        ],
+    }
+
+
+def test_matter_summary_preserves_prior_decision_and_its_condition_receipt():
+    record = matter_event()
+    result = summarize_project([record], today=date(2026, 9, 1))
+    assert result["status"] == "Conditional approval recorded"
+    assert result["as_of"] == "2026-08-11"
+    assert result["latest_change"] == record["what_happened"]
+    assert result["decisions"][0]["record_date"] == "2026-05-12"
+    assert result["decisions"][0]["evidence_id"] == "minutes"
+    assert result["conditions"][0]["evidence_id"] == "minutes"
+    assert result["conditions"][0]["text"] == "Submit a drainage plan."
+    assert result["conditions"][0]["status"].startswith("Satisfaction not established")
+    assert "[Evidence:source:R1P1]" in record["matter"]["conditions"][0]
+
+
+def test_matter_with_agenda_only_does_not_acquire_a_decision():
+    record = matter_event()
+    record["matter"].update(
+        outcome="not_established", outcome_summary=None, conditions=[]
+    )
+    result = summarize_project([record], today=date(2026, 9, 1))
+    assert result["status"] == "Outcome not established by the supplied records"
+    assert result["decisions"] == []
+
+
+def test_matter_outcome_spanning_records_has_no_invented_single_decision_date():
+    record = matter_event()
+    record["matter"]["outcome_summary"] = (
+        "The plan was conditionally approved; a later agenda requests an extension. "
+        "[Evidence:source:R1P1] [Evidence:source:R2P1]"
+    )
+    result = summarize_project([record], today=date(2026, 9, 1))
+    decision = result["decisions"][0]
+    assert result["status"] == "Conditional approval recorded"
+    assert decision["record_date"] is None
+    assert [item["record_date"] for item in decision["supporting_records"]] == [
+        "2026-05-12",
+        "2026-08-11",
+    ]
+
+
+def test_mixed_matter_outcome_retains_its_authored_scope():
+    record = matter_event()
+    record["matter"].update(
+        outcome="mixed",
+        outcome_summary="The grading revision was denied; the traffic study was required. [Evidence:source:R1P1]",
+    )
+    result = summarize_project([record], today=date(2026, 9, 1))
+    assert result["status"] == "Multiple recorded outcomes — review their scope"
+    assert result["decisions"][0]["matter"] == (
+        "The grading revision was denied; the traffic study was required."
+    )
+
+
+@pytest.mark.parametrize("source_date", [None, "2027-05-12"])
+def test_matter_decision_requires_a_dated_past_receipt(source_date):
+    record = matter_event()
+    record["sources"][1]["details"]["meeting_date"] = source_date
+    result = summarize_project([record], today=date(2026, 9, 1))
+    assert result["status"] == "Recorded outcome needs source-date verification"
+    assert result["decisions"] == []

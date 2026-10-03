@@ -36,6 +36,7 @@ const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
     items: [
       { to: '/', label: 'Overview', icon: 'home', end: true },
       { to: '/feed', label: 'Activity', icon: 'activity' },
+      { to: '/intelligence', label: 'Emerging intelligence', icon: 'activity' },
       { to: '/map', label: 'Map', icon: 'map' },
     ],
   },
@@ -50,6 +51,7 @@ const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
   {
     label: 'My workspace',
     items: [
+      { to: '/my-work', label: 'My work', icon: 'building' },
       { to: '/watch', label: 'Following', icon: 'watch' },
       { to: '/compare', label: 'Compare', icon: 'compare' },
     ],
@@ -65,11 +67,20 @@ function getInitialTheme(): string {
 }
 
 function contextLabel(pathname: string): string {
+  if (/^\/my-work/.test(pathname)) {
+    return 'My workspace / My work'
+  }
   if (/^\/$|^\/app$/.test(pathname)) {
     return 'Workspace / Overview'
   }
   if (/^\/feed/.test(pathname)) {
     return 'Explore / Activity'
+  }
+  if (/^\/intelligence/.test(pathname)) {
+    return 'Explore / Emerging intelligence'
+  }
+  if (/^\/opportunities/.test(pathname)) {
+    return 'Explore / Opportunities'
   }
   if (/^\/map/.test(pathname)) {
     return 'Explore / Map'
