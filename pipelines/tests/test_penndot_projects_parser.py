@@ -79,6 +79,30 @@ def test_parse_projects_overflow_data():
     assert "PROJ_ID" not in rec["data"]
 
 
+def test_under_construction_ids_and_geometry_survive_without_relabeling_contract_amount():
+    from countyiq.assets.arcgis.penndot_projects import _build_geom_lookup
+
+    features = [
+        {
+            "attributes": {
+                "PROJECT_ID": 456,
+                "PROJECT_CLASS": "Highway",
+                "PROJECT_TITLE": "Construction project",
+                "PROJ_STATUS_DESC": "Construction",
+                "COUNTY_NAME": "YORK",
+                "CRNT_CNTRCT_AM": 9000000,
+            },
+            "geometry": {"x": -76.7, "y": 39.9},
+        }
+    ]
+    record = parse_penndot_projects_features(features)[0]
+    assert record["project_id"] == "456"
+    assert record["project_type"] == "Highway"
+    assert record["cost"] is None
+    assert record["data"]["CRNT_CNTRCT_AM"] == 9000000
+    assert "456" in _build_geom_lookup(features)
+
+
 def test_parse_date_formats():
     assert _parse_date("03/17/2025").month == 3
     assert _parse_date("20250317").month == 3

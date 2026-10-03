@@ -114,12 +114,18 @@ def test_property_report_contract_includes_intelligence_layers(client):
     assert payload["tax_delinquency"]["total_owed"] is None
     assert payload["tax_delinquency"]["records"] == []
 
-    assert payload["flood_zone"] == {
+    assert {
+        key: payload["flood_zone"][key]
+        for key in ("in_flood_zone", "zone", "sfha", "overlap_pct")
+    } == {
         "in_flood_zone": True,
         "zone": "AE",
         "sfha": True,
         "overlap_pct": 100.0,
     }
+    assert payload["flood_zone"]["status"] == "overlap"
+    assert payload["flood_zone"]["mapped_coverage_pct"] == 100.0
+    assert payload["flood_zone"]["evidence"]["effective_at"] is None
     assert payload["soil_profile"] == {
         "mapped_coverage_pct": 0,
         "units": [],

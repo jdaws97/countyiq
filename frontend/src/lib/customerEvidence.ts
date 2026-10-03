@@ -47,6 +47,7 @@ const FACT_FIELDS: Array<[string[], string, FactFormat]> = [
   [['distance_m'], 'Distance from property', 'distance'],
   [['mapped_coverage_pct', 'coverage_pct'], 'Mapped coverage', 'percent'],
   [['parcel_overlap_pct'], 'Property in mapped flood area', 'percent'],
+  [['last_successful_run_at'], 'Last successful source run', 'date'],
   [['very_limited_septic_coverage_pct'], 'Soils rated very limited for septic', 'percent'],
   [['footprint_count'], 'Mapped building footprints', 'text'],
   [['zone', 'flood_zone'], 'Mapped flood zone', 'text'],
@@ -67,6 +68,26 @@ function scalar(value: unknown): string | null {
 export function sourceFacts(item: EvidenceItem): SourceFact[] {
   const details = item.details ?? {}
   const facts: SourceFact[] = []
+  if (item.source_kind === 'official_flood_layer') {
+    const statusLabels: Record<string, string> = {
+      overlap: 'Mapped SFHA overlap',
+      no_overlap: 'No SFHA overlap in loaded mapping',
+      unknown: 'Flood screening unknown',
+    }
+    const status = scalar(details.screening_status)
+    if (status && statusLabels[status]) {
+      facts.push({ label: 'Flood screening', value: statusLabels[status] })
+    }
+    const freshness = scalar(details.freshness)
+    if (freshness === 'current' || freshness === 'stale' || freshness === 'unknown') {
+      const freshnessLabels = {
+        current: 'Within the source refresh interval',
+        stale: 'Loaded mapping is stale',
+        unknown: 'Mapping freshness is unknown',
+      }
+      facts.push({ label: 'Mapping freshness', value: freshnessLabels[freshness] })
+    }
+  }
   if (item.source_kind === 'official_zoning_layer' || item.citation_key?.endsWith(':zoning')) {
     const district = scalar(details.name)
     const code = scalar(details.code)

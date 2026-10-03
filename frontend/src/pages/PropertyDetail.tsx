@@ -18,6 +18,7 @@ import Section from '../components/Section'
 import { Button, ButtonLink, Freshness } from '../components/ui'
 import { sourceLinkLabel } from '../lib/evidence'
 import { formatCurrency, formatLabel, formatShortDate } from '../lib/format'
+import { presentFloodScreening } from '../lib/floodScreening'
 import { isCompared, toggleComparison } from '../lib/investigationState'
 import { useFetchJson } from '../lib/useFetchJson'
 import { isWatched, toggleWatch } from '../lib/watchlist'
@@ -160,6 +161,7 @@ export default function PropertyDetail() {
   const watchedState = isWatched(p.pidn)
   const tax = report.tax_delinquency
   const flood = report.flood_zone
+  const floodScreen = presentFloodScreening(flood)
   const structures = report.structures
   const brief = report.parcel_brief
   const briefAction = brief?.recommendation ? BRIEF_ACTIONS[brief.recommendation] : null
@@ -207,8 +209,14 @@ export default function PropertyDetail() {
             {report.zoning?.code && (
               <Badge color="var(--accent-ink)">Zoned {report.zoning.code}</Badge>
             )}
-            {flood.in_flood_zone && (
-              <Badge color="var(--accent-cyan)">Flood Zone {flood.zone}</Badge>
+            {floodScreen.status !== 'no_overlap' && (
+              <Badge
+                color={
+                  floodScreen.status === 'overlap' ? 'var(--accent-cyan)' : 'var(--text-muted)'
+                }
+              >
+                {floodScreen.label}
+              </Badge>
             )}
             {structures.likely_vacant && <Badge color="var(--accent-gold)">Vacancy screen</Badge>}
             <Freshness value={evidenceFreshness} label="Records updated" />
@@ -221,6 +229,12 @@ export default function PropertyDetail() {
       <div className="property-toolbar">
         <BackButton onClick={() => navigate(-1)} marginBottom={0} />
         <div className="property-actions" data-print-hidden>
+          <Link
+            className="ciq-button ciq-button-primary"
+            to={`/sites?pidn=${encodeURIComponent(p.pidn)}`}
+          >
+            Start site inquiry
+          </Link>
           <Button
             tone="quiet"
             onClick={() => {
@@ -724,23 +738,21 @@ export default function PropertyDetail() {
 
           {/* Flood Risk */}
           <Section title="Flood Risk">
-            {flood.in_flood_zone ? (
-              <div>
-                <Badge color="var(--accent-cyan)">
-                  Mapped high-risk flood area · Zone {flood.zone}
-                </Badge>
-                <span style={{ fontSize: 14, color: 'var(--text-secondary)', marginLeft: 12 }}>
-                  {flood.overlap_pct != null
-                    ? `${flood.overlap_pct.toFixed(1)}% of parcel area overlaps.`
-                    : 'Parcel overlap detected.'}{' '}
-                  Insurance and elevation requirements depend on the structure, loan, and official
-                  determination.
-                </span>
-              </div>
-            ) : (
-              <Badge color="var(--accent-green)">
-                No overlap with the mapped high-risk flood area
+            <div>
+              <Badge
+                color={
+                  floodScreen.status === 'overlap' ? 'var(--accent-cyan)' : 'var(--text-muted)'
+                }
+              >
+                {floodScreen.label}
               </Badge>
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                {floodScreen.detail} This screening does not exclude all flood risk. Insurance and
+                elevation requirements depend on the structure, loan, and official determination.
+              </p>
+            </div>
+            {flood.evidence && (
+              <EvidencePanel items={[flood.evidence]} title="View flood screening source" />
             )}
           </Section>
 

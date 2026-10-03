@@ -16,8 +16,9 @@ direction. Its primary journey is **My site inquiries → identify property →
 describe intended use → review evidence and municipal history → retain or
 resolve questions → save/export → return when inputs change**.
 
-This direction is planned, not an implemented or commercially validated
-replacement for the journeys documented below. Preserve the shared shell,
+The October 3 branch implements this direction at `/sites`, now the default
+app landing page. County overview remains at `/overview`, and existing saved
+intelligence work remains available. Commercial validation is still open. Preserve the shared shell,
 source viewer, current source-policy checks, private workspace state and existing
 saved work while implementing it. Property screening must distinguish missing,
 partial and stale data from a supported absence of a mapped constraint. The

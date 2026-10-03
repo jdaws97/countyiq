@@ -12,17 +12,20 @@ remain gated. The model defaults below are configuration, not quality approval.
 The selected next direction is [site-intake research for York County civil and
 land-planning firms](products/site-intake.md): a client-supplied property and
 proposed use become a cited research handoff with explicit unresolved questions.
-This deliberately reopens the earlier investor-only audience below. Customer
-demand and pricing remain unvalidated; implementation and live acceptance are
-unfinished.
+This reopens the earlier investor-only audience below. The inquiry workflow,
+private persistence, cited export and conservative flood-screening contract are
+implemented on the October 3 branch. Commercial validation remains open.
 
-The current remote product baseline is `codex/emerging-intelligence-pilot`,
-35 commits ahead of `main`. Its release record documents production through
-September 9; the live deployed commit has not been re-read in this assessment.
-October 2 Grafana email reports 23 source warnings. See
-[the repair PR](https://github.com/jdaws97/countyiq/pull/36) for tested code changes
-and remaining runtime verification. The historical counts and status below are
-dated records, not current production measurements.
+Production inspection confirmed running Dagster daemons, enabled schedules and
+23 unhealthy source indicators. Grouped job outcomes were incorrectly masking
+successful sibling datasets. Monitoring repairs were deployed and verified;
+source-ledger and product rollout status belong in the release receipt. See
+[source refresh recovery](operations/source-refresh-recovery.md). A fresh probe
+on October 3 found county GIS TLS working again; PennDOT, DEP and the county
+website still timed out from the VPS while answering locally.
+
+The current product baseline is `codex/emerging-intelligence-pilot`, ahead of
+`main`. Historical counts and status below are dated records.
 
 ## What CountyIQ Is Right Now
 
@@ -91,30 +94,30 @@ tools remain under `pipelines/eval/`.
 
 ## Current Runtime Assumptions
 
-| Area | Current state |
-|---|---|
-| Frontend | React + Vite; the production Compose web image serves the built frontend through Caddy and Cloudflare Tunnel |
-| API | FastAPI + Uvicorn |
-| Pipelines | Dagster |
-| Database | PostgreSQL 16 + PostGIS (self-managed) |
-| Object storage | Cloudflare R2 (via `R2_ENDPOINT_URL` — required, otherwise boto3 targets AWS) |
-| Front door | Cloudflare |
-| Inference backend | OpenRouter |
-| Deployment | Private application live at app.countyiq.net on the configured VPS behind Cloudflare Access and Tunnel. Exact-commit releases, R2 backup/restore verification and the backup timer are operational. Live customer sign-in and cross-session workspace checks remain outstanding. Current release and evidence: [launch record](operations/production-launch-2026-09-05.md). |
+| Area              | Current state                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend          | React + Vite; the production Compose web image serves the built frontend through Caddy and Cloudflare Tunnel                                                                                                                                                                                                                                                                |
+| API               | FastAPI + Uvicorn                                                                                                                                                                                                                                                                                                                                                           |
+| Pipelines         | Dagster                                                                                                                                                                                                                                                                                                                                                                     |
+| Database          | PostgreSQL 16 + PostGIS (self-managed)                                                                                                                                                                                                                                                                                                                                      |
+| Object storage    | Cloudflare R2 (via `R2_ENDPOINT_URL` — required, otherwise boto3 targets AWS)                                                                                                                                                                                                                                                                                               |
+| Front door        | Cloudflare                                                                                                                                                                                                                                                                                                                                                                  |
+| Inference backend | OpenRouter                                                                                                                                                                                                                                                                                                                                                                  |
+| Deployment        | Private application live at app.countyiq.net on the configured VPS behind Cloudflare Access and Tunnel. Exact-commit releases, R2 backup/restore verification and the backup timer are operational. Live customer sign-in and cross-session workspace checks remain outstanding. Current release and evidence: [launch record](operations/production-launch-2026-09-05.md). |
 
 ## Current Model Lineup
 
 Per-pass defaults live in `pipelines/countyiq/lib/pass_llm_config.py`
 (`_PASS_MODEL_DEFAULTS`) with eval citations inline. Summary (2026-08-30):
 
-| Pass | Default |
-|---|---|
-| Pass 0 (PDF extraction) | `openai/gpt-5.6-luna` (native PDF input) |
-| Pass 1 (entity verification) | `openai/gpt-5.6-luna` (high reasoning, adaptive N=3 voting) |
-| Pass 2 (signal validation) | `openai/gpt-5.6-luna` (low reasoning) |
-| Pass 3/3b (briefs) | `openai/gpt-5.6-luna` |
-| Pass 4 (narratives) | Disabled by default; Luna remains the opt-in provisional model pending wider data and a required product surface |
-| NL search | Disabled by default; `qwen/qwen3.5-flash-02-23` is the opt-in intent parser |
+| Pass                         | Default                                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Pass 0 (PDF extraction)      | `openai/gpt-5.6-luna` (native PDF input)                                                                         |
+| Pass 1 (entity verification) | `openai/gpt-5.6-luna` (high reasoning, adaptive N=3 voting)                                                      |
+| Pass 2 (signal validation)   | `openai/gpt-5.6-luna` (low reasoning)                                                                            |
+| Pass 3/3b (briefs)           | `openai/gpt-5.6-luna`                                                                                            |
+| Pass 4 (narratives)          | Disabled by default; Luna remains the opt-in provisional model pending wider data and a required product surface |
+| NL search                    | Disabled by default; `qwen/qwen3.5-flash-02-23` is the opt-in intent parser                                      |
 
 Precedence: `COUNTYIQ_PASS{N}_MODEL` env > code default > `COUNTYIQ_OPENROUTER_MODEL`.
 `z-ai/glm-5.3-flash` FP8 led the initial ten-case Pass 2 comparison but did not

@@ -17,9 +17,13 @@ const ParcelCompare = lazy(() => import('./pages/ParcelCompare'))
 const MunicipalityList = lazy(() => import('./pages/MunicipalityList'))
 const MunicipalityDetail = lazy(() => import('./pages/MunicipalityDetail'))
 const EmergingIntelligence = lazy(() => import('./pages/EmergingIntelligence'))
+const SiteInquiries = lazy(() => import('./pages/SiteInquiries'))
 
 const children = [
-  { index: true, element: <WorkspaceHome /> },
+  { index: true, element: <SiteInquiries /> },
+  { path: 'sites', element: <SiteInquiries /> },
+  { path: 'sites/:id', element: <SiteInquiries /> },
+  { path: 'overview', element: <WorkspaceHome /> },
   { path: 'organizations', element: <Organizations /> },
   { path: 'app', element: <WorkspaceHome /> },
   { path: 'map', element: <MapView /> },

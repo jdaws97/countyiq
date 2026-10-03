@@ -10,12 +10,11 @@ from api.lib.development_radar import (
     sanitize_signals_for_public,
 )
 from api.lib.evidence import (
-    NFHL_FLOOD_HAZARD_LAYER,
     arcgis_record_url,
     evidence_item,
     signal_evidence_items,
-    with_arcgis_layer,
 )
+from api.lib.flood_screening import parcel_flood_screening
 from api.lib.inference_provenance import (
     BRIEF_SIGNAL_VERSIONS_CURRENT_SQL,
     CROSS_SIGNAL_SUMMARY_CURRENT_SQL,
@@ -31,6 +30,7 @@ from api.lib.response_types import (
 )
 from api.lib.serialization import serialize_temporal_fields
 from api.lib.settings import county_metadata, open_data_source_key
+from api.lib.site_intake import intake_packet
 from api.lib.source_explanations import fetch_property_explanation
 from api.lib.source_policy import require_source_use, source_use_allowed
 
@@ -515,6 +515,20 @@ def parcel_summary(pidn: str) -> ParcelSummaryResponse:
     }
 
 
+@router.get("/{pidn}/intake")
+def parcel_intake(pidn: str) -> dict:
+    report = _parcel_report(pidn, include_soils=True)
+    with get_cursor(snapshot=True) as cur:
+        for source in (
+            open_data_source_key(),
+            "fema_nfhl",
+            "tax_claims",
+            "public_proceedings",
+        ):
+            require_source_use(cur, source, "derived_product", conceal=False)
+        return intake_packet(cur, report)
+
+
 @router.get("/{pidn}")
 def parcel_detail(pidn: str) -> PropertyReportResponse:
     """Full property report card for a single parcel."""
@@ -527,6 +541,7 @@ def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
         require_source_use(cur, parcel_source, "derived_product", conceal=False)
         require_source_use(cur, "tax_claims", "derived_product", conceal=False)
         require_source_use(cur, "public_proceedings", "derived_product", conceal=False)
+        require_source_use(cur, "fema_nfhl", "derived_product", conceal=False)
         cur.execute(
             """
             SELECT pidn, owner_full, own_name1, own_name2, prev_owner,
@@ -581,48 +596,7 @@ def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
         )
         tax_signal = cur.fetchone() or {"has_tax_delinquency": False}
 
-        cur.execute(
-            """
-            WITH parcel AS (
-                SELECT geom, ST_Area(ST_Transform(ST_MakeValid(geom), 32617)) AS area_m2
-                FROM staging.parcels
-                WHERE pidn = %(pidn)s AND valid_to IS NULL
-            ), flood_overlaps AS (
-                SELECT
-                    f.fld_zone,
-                    f.zone_subty,
-                    f.sfha_tf,
-                    f.fld_ar_id,
-                    f.source_url,
-                    f.valid_from,
-                    ST_Intersection(ST_MakeValid(f.geom), ST_MakeValid(p.geom)) AS overlap_geom,
-                    p.area_m2
-                FROM staging.flood_zones f
-                CROSS JOIN parcel p
-                WHERE f.valid_to IS NULL
-                  AND f.geom IS NOT NULL
-                  AND f.sfha_tf = 'T'
-                  AND f.geom && p.geom
-                  AND ST_Intersects(f.geom, p.geom)
-            )
-            SELECT
-                (ARRAY_AGG(fld_zone ORDER BY ST_Area(overlap_geom) DESC))[1] AS fld_zone,
-                (ARRAY_AGG(zone_subty ORDER BY ST_Area(overlap_geom) DESC))[1] AS zone_subty,
-                'T' AS sfha_tf,
-                ARRAY_AGG(DISTINCT fld_ar_id) AS fld_ar_ids,
-                ARRAY_AGG(DISTINCT fld_zone) FILTER (WHERE fld_zone IS NOT NULL) AS flood_zones,
-                MIN(source_url) AS source_url,
-                MAX(valid_from) AS valid_from,
-                ROUND((
-                    100 * ST_Area(ST_Transform(ST_UnaryUnion(ST_Collect(overlap_geom)), 32617))
-                    / NULLIF(MIN(area_m2), 0)
-                )::numeric, 1) AS overlap_pct
-            FROM flood_overlaps
-            HAVING COUNT(*) > 0
-        """,
-            {"pidn": pidn},
-        )
-        flood = cur.fetchone()
+        flood = parcel_flood_screening(cur, pidn)
 
         soil_rows = []
         if include_soils:
@@ -971,7 +945,7 @@ def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
                 )
                 if p.get(key) is not None
             },
-            effective_at=parcel_record_effective_at,
+            effective_at=None,
             observed_at=parcel_record_effective_at,
             method="CountyIQ displays the current versioned county parcel record without LLM interpretation.",
             caveat="Assessment and deed fields are informational county records; confirm legal title with the recorder or a title professional.",
@@ -1022,7 +996,7 @@ def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
                     for unit in soil["units"]
                 ],
             },
-            effective_at=max(soil_dates) if soil_dates else None,
+            effective_at=None,
             observed_at=max(soil_dates) if soil_dates else None,
             method="CountyIQ intersects current soil polygons with the parcel, groups matching map units and attributes, and unions their geometry before calculating coverage. Source IDs retain every contributing polygon.",
             caveat="Mapped soils are generalized screening data; site design, wastewater suitability, drainage, and foundations require parcel-specific professional review.",
@@ -1041,37 +1015,14 @@ def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
                 url=tax_signal.get("source_url"),
                 document_url=tax_signal.get("source_url"),
                 details={"delinquency_signal": True},
-                effective_at=tax_signal.get("record_effective_at"),
+                effective_at=None,
                 observed_at=tax_signal.get("record_effective_at"),
                 method="CountyIQ checks whether the PIDN appears with a positive balance in the current governed listing.",
                 caveat="The public product suppresses exact claim rows and balances; confirm the current amount with the Tax Claim Bureau.",
             )
         )
-    if flood:
-        flood_ids = [value for value in (flood.get("fld_ar_ids") or []) if value]
-        report_evidence.append(
-            evidence_item(
-                scope=f"parcel:{pidn}",
-                citation_key=f"flood:{flood_ids[0] if flood_ids else pidn}",
-                label="FEMA National Flood Hazard Layer",
-                source_kind="official_flood_layer",
-                source_record_id=",".join(map(str, flood_ids)) or pidn,
-                url=with_arcgis_layer(flood.get("source_url"), NFHL_FLOOD_HAZARD_LAYER),
-                record_query=("FLD_AR_ID", flood_ids),
-                details={
-                    "zones": flood.get("flood_zones") or [flood.get("fld_zone")],
-                    "zone_subtype": flood.get("zone_subty"),
-                    "special_flood_hazard_area": True,
-                    "parcel_overlap_pct": float(flood["overlap_pct"])
-                    if flood.get("overlap_pct") is not None
-                    else None,
-                },
-                effective_at=flood.get("valid_from"),
-                observed_at=flood.get("valid_from"),
-                method="CountyIQ deterministically intersects the parcel geometry with the current FEMA flood layer.",
-                caveat="This screening result is not a flood determination; consult the effective FEMA map and a qualified professional.",
-            )
-        )
+    if flood["evidence"]:
+        report_evidence.append(flood["evidence"])
     if structure_rows:
         structure_dates = [
             row.get("valid_from") for row in structure_rows if row.get("valid_from")
@@ -1104,7 +1055,7 @@ def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
                         row.get("building_type") or "Unknown" for row in structure_rows
                     ],
                 },
-                effective_at=max(structure_dates) if structure_dates else None,
+                effective_at=None,
                 observed_at=max(structure_dates) if structure_dates else None,
                 method="CountyIQ deterministically intersects county building footprints with the parcel geometry.",
                 caveat="A missing footprint can reflect vacant land, recent construction, or source-data lag.",
@@ -1153,14 +1104,7 @@ def _parcel_report(pidn: str, *, include_soils: bool) -> PropertyReportResponse:
             "total_owed": None,
             "records": [],
         },
-        "flood_zone": {
-            "in_flood_zone": flood is not None,
-            "zone": flood["fld_zone"] if flood else None,
-            "sfha": flood["sfha_tf"] == "T" if flood else False,
-            "overlap_pct": float(flood["overlap_pct"])
-            if flood and flood.get("overlap_pct") is not None
-            else None,
-        },
+        "flood_zone": flood,
         "soil_profile": soil,
         "structures": {
             "count": structure_count,

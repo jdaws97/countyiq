@@ -34,7 +34,8 @@ const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
   {
     label: 'Explore',
     items: [
-      { to: '/', label: 'Overview', icon: 'home', end: true },
+      { to: '/sites', label: 'Site inquiries', icon: 'home' },
+      { to: '/overview', label: 'County overview', icon: 'activity' },
       { to: '/feed', label: 'Activity', icon: 'activity' },
       { to: '/intelligence', label: 'Emerging intelligence', icon: 'activity' },
       { to: '/map', label: 'Map', icon: 'map' },

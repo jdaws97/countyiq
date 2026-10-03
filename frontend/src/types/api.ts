@@ -231,6 +231,14 @@ export interface FloodZoneInfo {
   zone: string | null
   sfha: boolean
   overlap_pct: number | null
+  status?: 'overlap' | 'no_overlap' | 'unknown'
+  mapped_coverage_pct?: number | null
+  reason?: string | null
+  evidence?: EvidenceItem | null
+  freshness?: {
+    status: 'current' | 'stale' | 'unknown'
+    last_successful_run_at: string | null
+  }
 }
 
 export interface SoilUnit {

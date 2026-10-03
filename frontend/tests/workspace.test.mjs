@@ -8,7 +8,13 @@ import ts from 'typescript'
 
 // Compile the actual browser modules using the project's existing compiler.
 const directory = mkdtempSync(join(tmpdir(), 'countyiq-workspace-'))
-for (const name of ['browserStorage', 'watchlist', 'intelligenceState', 'investigationState']) {
+for (const name of [
+  'browserStorage',
+  'watchlist',
+  'intelligenceState',
+  'siteInquiries',
+  'investigationState',
+]) {
   const source = readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8')
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
@@ -22,6 +28,7 @@ const state = await import(pathToFileURL(join(directory, 'investigationState.mjs
 const storage = await import(pathToFileURL(join(directory, 'browserStorage.mjs')))
 const watches = await import(pathToFileURL(join(directory, 'watchlist.mjs')))
 const intelligence = await import(pathToFileURL(join(directory, 'intelligenceState.mjs')))
+const inquiries = await import(pathToFileURL(join(directory, 'siteInquiries.mjs')))
 after(() => rmSync(directory, { recursive: true, force: true }))
 let values
 let alerts
@@ -61,6 +68,46 @@ const intelligenceWork = [
     updated_at: '2026-09-08T12:00:00Z',
   },
 ]
+
+const siteInquiry = {
+  id: '00000000-0000-4000-8000-000000000001',
+  pidn: '123',
+  label: 'Workshop inquiry',
+  proposed_use: 'Workshop',
+  note: 'Private client notes',
+  questions: 'Confirm sewer service',
+  status: 'researching',
+  reviewed_revision: 'a'.repeat(64),
+  updated_at: '2026-10-03T12:00:00Z',
+}
+
+test('site inquiries survive export/import without crossing account boundaries', () => {
+  inquiries.saveSiteInquiry(siteInquiry)
+  storage.setWorkspaceAccount('account-a')
+  assert.deepEqual(inquiries.getSiteInquiries(), [])
+  state.replaceWorkspace({ ...workspace(), siteInquiries: [siteInquiry] })
+  assert.equal(inquiries.getSiteInquiries()[0].note, siteInquiry.note)
+  storage.setWorkspaceAccount('account-b')
+  assert.deepEqual(inquiries.getSiteInquiries(), [])
+  storage.setWorkspaceAccount(null)
+  assert.equal(inquiries.getSiteInquiries()[0].questions, siteInquiry.questions)
+})
+
+test('failed inquiry saves and malformed imports preserve the existing private work', () => {
+  inquiries.saveSiteInquiry(siteInquiry)
+  const original = new Map(values)
+  localStorage.setItem = () => {
+    throw new Error('quota exceeded')
+  }
+  assert.throws(() => inquiries.saveSiteInquiry({ ...siteInquiry, note: 'Changed' }))
+  assert.deepEqual(values, original)
+  assert.throws(() =>
+    state.parseWorkspace(
+      JSON.stringify({ ...workspace(), siteInquiries: [siteInquiry, siteInquiry] }),
+    ),
+  )
+  assert.deepEqual(values, original)
+})
 
 test('malformed stored JSON shapes cannot crash investigation pages', () => {
   for (const value of ['null', '{}', '42', '"text"']) {

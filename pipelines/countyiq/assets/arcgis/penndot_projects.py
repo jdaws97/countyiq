@@ -43,14 +43,17 @@ VALUE_COLUMNS = [
 ]
 
 EXPECTED_FIELDS = {
-    "PROJ_ID",
     "PROJECT_TITLE",
     "IMPROVEMENT_CODE_DESC",
     "PROJ_STATUS_DESC",
-    "PROJ_CLASS",
-    "PHS_EST_COST_AM",
     "COUNTY_NAME",
 }
+
+
+def expected_layer_fields(layer_id: int) -> set[str]:
+    if layer_id == 5:
+        return EXPECTED_FIELDS | {"PROJECT_ID", "PROJECT_CLASS", "CRNT_CNTRCT_AM"}
+    return EXPECTED_FIELDS | {"PROJ_ID", "PROJ_CLASS", "PHS_EST_COST_AM"}
 
 
 @asset(
@@ -91,6 +94,11 @@ def penndot_projects_arcgis(
             batch_size=2000,
         )
         context.log.info(f"Layer {layer_id}: {len(features)} features")
+        required = expected_layer_fields(layer_id)
+        if any(required - set(feature.get("attributes", {})) for feature in features):
+            raise RuntimeError(
+                f"PennDOT project layer {layer_id} changed its field schema; refusing a partial snapshot"
+            )
         all_features.extend(features)
 
     context.log.info(
@@ -148,7 +156,7 @@ def _build_geom_lookup(raw_features: list[dict]) -> dict:
     lookup: dict = {}
     for feat in raw_features:
         attrs = feat.get("attributes", {})
-        proj_id = attrs.get("PROJ_ID")
+        proj_id = attrs.get("PROJ_ID", attrs.get("PROJECT_ID"))
         geom = feat.get("geometry") or {}
         if proj_id is None:
             continue
@@ -174,10 +182,16 @@ def penndot_projects_schema_drift(database: DatabaseResource) -> AssetCheckResul
     )
     county = get_county_config()
     try:
-        resp = requests.get(f"{county.penndot_projects_url}/1?f=json", timeout=30)
-        resp.raise_for_status()
-        actual_fields = {f["name"] for f in resp.json().get("fields", [])}
-        missing = EXPECTED_FIELDS - actual_fields
+        missing = {}
+        for layer_id in county.penndot_projects_layers:
+            resp = requests.get(
+                f"{county.penndot_projects_url}/{layer_id}?f=json", timeout=30
+            )
+            resp.raise_for_status()
+            actual_fields = {field["name"] for field in resp.json().get("fields", [])}
+            absent = expected_layer_fields(layer_id) - actual_fields
+            if absent:
+                missing[layer_id] = sorted(absent)
         return AssetCheckResult(
             passed=len(missing) == 0,
             severity=AssetCheckSeverity.WARN,

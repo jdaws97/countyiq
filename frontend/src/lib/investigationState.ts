@@ -2,6 +2,8 @@ import type { RadarViewMode } from '../types/api'
 import { commitBrowserStorage, workspaceStorageKey } from './browserStorage'
 import { watchlistStorageEntries } from './watchlist'
 import type { IntelligenceProfile, IntelligenceWorkItem } from '../types/emerging'
+import type { SiteInquiry } from '../types/siteIntake'
+import { getSiteInquiries, isSiteInquiries, siteInquiryStorageEntries } from './siteInquiries'
 import {
   getIntelligenceProfile,
   getIntelligenceWork,
@@ -218,6 +220,7 @@ export interface PortableWorkspace {
   triage: Record<string, TriageStatus>
   intelligenceProfile?: IntelligenceProfile
   intelligenceWork?: IntelligenceWorkItem[]
+  siteInquiries?: SiteInquiry[]
 }
 
 /** Validate the entire portable format before any browser state changes. */
@@ -233,6 +236,7 @@ export function parseWorkspace(text: string): PortableWorkspace {
     w.version !== 1 ||
     (w.intelligenceProfile !== undefined && !isIntelligenceProfile(w.intelligenceProfile)) ||
     (w.intelligenceWork !== undefined && !isIntelligenceWork(w.intelligenceWork)) ||
+    (w.siteInquiries !== undefined && !isSiteInquiries(w.siteInquiries)) ||
     !strings(w.parcels) ||
     !Array.isArray(w.projects) ||
     !w.projects.every(
@@ -267,6 +271,7 @@ export function replaceWorkspace(workspace: PortableWorkspace): void {
   const valid = parseWorkspace(JSON.stringify(workspace))
   commitBrowserStorage({
     ...watchlistStorageEntries(valid),
+    ...siteInquiryStorageEntries(valid.siteInquiries ?? getSiteInquiries()),
     ...intelligenceStorageEntries(
       valid.intelligenceProfile ?? getIntelligenceProfile(),
       valid.intelligenceWork ?? getIntelligenceWork(),

@@ -136,6 +136,7 @@ export default function Watchlist() {
       triage: getEventTriage(),
       intelligenceProfile: getIntelligenceProfile(),
       intelligenceWork: getIntelligenceWork(),
+      siteInquiries: getSiteInquiries(),
     }
     downloadText(
       `countyiq-workspace-${new Date().toISOString().slice(0, 10)}.json`,
@@ -531,3 +532,4 @@ function WatchChip({ to, label, onRemove }: { to: string; label: string; onRemov
 function uniqueEvents(events: IntelligenceEvent[]): IntelligenceEvent[] {
   return Array.from(new Map(events.map((event) => [event.event_key, event])).values())
 }
+import { getSiteInquiries } from '../lib/siteInquiries'

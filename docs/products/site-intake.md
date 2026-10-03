@@ -90,13 +90,13 @@ journeys, not fallback success screens.
 
 Prioritize sources that can change an intake decision:
 
-| Source | Role in the packet | Required truth boundary |
-| --- | --- | --- |
-| County parcels, addresses and municipal boundaries | Confirm the site and reviewing jurisdiction | PIDN remains canonical; an address match can need review |
-| Zoning map and the actual municipal zoning/SALDO text | Locate mapped zoning and the rules to verify | A center-point zoning match does not establish the whole parcel or permitted use |
-| FEMA, soils, conservation and agricultural layers | Identify mapped constraints for further investigation | Missing, partial or stale coverage cannot become a cleared constraint |
-| Site-linked municipal applications, agendas, minutes and decisions | Explain the relevant procedural history | Discussion, recommendation, proposed motion and final action remain distinct |
-| Project-specific utility and access records | Support a question or documented commitment | Proximity does not establish service, capacity, legal access or availability |
+| Source                                                             | Role in the packet                                    | Required truth boundary                                                          |
+| ------------------------------------------------------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
+| County parcels, addresses and municipal boundaries                 | Confirm the site and reviewing jurisdiction           | PIDN remains canonical; an address match can need review                         |
+| Zoning map and the actual municipal zoning/SALDO text              | Locate mapped zoning and the rules to verify          | A center-point zoning match does not establish the whole parcel or permitted use |
+| FEMA, soils, conservation and agricultural layers                  | Identify mapped constraints for further investigation | Missing, partial or stale coverage cannot become a cleared constraint            |
+| Site-linked municipal applications, agendas, minutes and decisions | Explain the relevant procedural history               | Discussion, recommendation, proposed motion and final action remain distinct     |
+| Project-specific utility and access records                        | Support a question or documented commitment           | Proximity does not establish service, capacity, legal access or availability     |
 
 The [YCPC mandated-review page](https://ycpc.org/323/Mandated-Reviews) explains
 that county review and municipal decision-making are different roles, with
@@ -167,24 +167,29 @@ These thresholds are product decisions, not measured results. No interviews,
 outreach, paid pilots or customer savings have been established by this work.
 Do not describe the niche as commercially validated until that evidence exists.
 
-## Current implementation boundary
+## Implementation and acceptance — October 3
 
-The October 3 assessment found the documented deployed implementation on
-`codex/emerging-intelligence-pilot`, 35 commits ahead of `main`.
-The newer branch includes customer case work, additional migrations, YCCD
-review-source work and a MapLibre update that `main` lacks. The release
-document's last recorded production commit is
-`498bcae53b7a4ae5f6ae14cadf038f923f694e59` at schema 085; the remote branch
-also contains later work. Neither statement verifies today's deployed commit.
+The site-inquiry branch implements property identification, intended use, private
+notes and questions, review state, current source receipts and text handoff
+export. Account snapshots retain existing conflict detection and now include
+inquiries; older clients preserve the new field. Guest export/import includes it.
+Source evidence is resolved live rather than copied into private saved work.
+Export rechecks policy and the evidence revision before downloading.
 
-[The operational repair PR](https://github.com/jdaws97/countyiq/pull/36) targets
-that newer branch. The October 2 alert email reports 23 source warnings. Live
-job history and the current local checkout remain uninspected because this
-chat's WSL process connection cannot launch commands.
+Flood screening now distinguishes positive SFHA overlap, complete explicitly
+classified non-SFHA coverage, and unknown coverage. Zone D, missing mapping,
+partial coverage, boundary-only contact and rounding do not establish a negative
+result. Acquisition freshness and map-effective dates remain separate. Property,
+map, comparison, source viewer and CSV consume this distinction.
 
-The existing property presentation can describe a missing FEMA match as no
-mapped overlap without proving source coverage. Correct that distinction,
-verify freshness and reconcile the local working tree before building the
-new intake journey. Product UI, source expansion, inquiry persistence and the
-full end-to-end acceptance remain unfinished. This document sets their
-direction; it does not claim they have shipped.
+Local acceptance passed 242 real PostgreSQL/PostGIS API tests, 70 frontend tests,
+TypeScript, ESLint and the production build. A real browser verified parcel
+search, save/reload, review and export, with no horizontal overflow at 390 pixels.
+The municipal history preserves literal source passages and record kinds rather
+than generating new conclusions or invoking paid models on read.
+
+Production acceptance is recorded separately after release. Customer demand,
+pricing and measured time savings remain unvalidated. The existing data cannot
+establish utility capacity, permitted use or complete municipal history. New
+ordinance and utility sources still need verified source rights and bounded
+acquisition before they can become product evidence.

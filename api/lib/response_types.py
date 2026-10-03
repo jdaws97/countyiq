@@ -129,6 +129,11 @@ class FloodZonePayload(TypedDict):
     zone: str | None
     sfha: bool
     overlap_pct: float | None
+    status: str
+    mapped_coverage_pct: float | None
+    reason: str | None
+    evidence: dict | None
+    freshness: dict
 
 
 class StructureBuilding(TypedDict):

@@ -5,6 +5,7 @@ import PageShell from '../components/PageShell'
 import ReportActions from '../components/ReportActions'
 import { Button, ButtonLink, EmptyState, PageHeader, StatusMessage } from '../components/ui'
 import { formatCurrency, formatShortDate } from '../lib/format'
+import { floodScreeningSummary, presentFloodScreening } from '../lib/floodScreening'
 import { comparisonEditingUrl, comparisonUrl, comparisonUrlSelection } from '../lib/comparisonUrl'
 import {
   clearComparison,
@@ -119,7 +120,7 @@ export default function ParcelCompare() {
         'Last sale date',
         'Last sale price',
         'Tax delinquency signal',
-        'Flood zone',
+        'Flood screening',
         'Structures',
         'Evidence receipts',
       ],
@@ -137,7 +138,7 @@ export default function ParcelCompare() {
         p.saledt,
         p.price,
         report.tax_delinquency.is_delinquent,
-        report.flood_zone.in_flood_zone ? (report.flood_zone.zone ?? 'yes') : 'no',
+        floodScreeningSummary(report.flood_zone),
         report.structures.count,
         report.evidence.length,
       ])
@@ -263,11 +264,7 @@ export default function ParcelCompare() {
           <ComparisonRow
             label="Flood screening"
             reports={activeReports}
-            render={(report) =>
-              report.flood_zone.in_flood_zone
-                ? `Zone ${report.flood_zone.zone || '—'}`
-                : 'Not in mapped flood zone'
-            }
+            render={(report) => floodScreeningSummary(report.flood_zone)}
           />
           <ComparisonRow
             label="Current zoning"
@@ -309,8 +306,9 @@ function activeComparisonUrl(pidns: string[]): boolean {
 
 function siteConstraints(report: PropertyReport): string {
   const constraints: string[] = []
-  if (report.flood_zone.in_flood_zone) {
-    constraints.push(`Mapped flood zone ${report.flood_zone.zone || 'present'}`)
+  const floodScreen = presentFloodScreening(report.flood_zone)
+  if (floodScreen.status !== 'no_overlap' || report.flood_zone.freshness?.status !== 'current') {
+    constraints.push(floodScreen.summary)
   }
   constraints.push(...report.soil_profile.considerations.slice(0, 2))
   if (constraints.length === 0) {

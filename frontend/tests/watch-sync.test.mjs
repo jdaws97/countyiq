@@ -53,6 +53,7 @@ async function harness(t, values = new Map()) {
     'watchlist',
     'investigationState',
     'intelligenceState',
+    'siteInquiries',
     'watchSync',
   ]) {
     const source = readFileSync(new URL('../src/lib/' + name + '.ts', import.meta.url), 'utf8')

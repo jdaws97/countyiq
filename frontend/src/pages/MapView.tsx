@@ -11,6 +11,7 @@ import LayerToggle, { type LayerConfig } from '../components/LayerToggle'
 import WorkspaceShell from '../components/WorkspaceShell'
 import { ButtonLink } from '../components/ui'
 import { formatCurrency, formatCurrencyCompact, formatShortDate } from '../lib/format'
+import { floodLayerSfhaLabel, floodScreeningSummary } from '../lib/floodScreening'
 import { appendRadarCriteria, planStatusFor } from '../lib/radarFilters'
 import EvidencePanel from '../components/EvidencePanel'
 import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
@@ -1476,11 +1477,7 @@ function PropertyPanel({
               ? 'No delinquency found in loaded records.'
               : 'Detailed tax records are unavailable.'}
         </li>
-        <li>
-          {flood.in_flood_zone
-            ? `Mapped FEMA flood hazard overlap${flood.zone ? ` · Zone ${flood.zone}` : ''}.`
-            : 'No mapped FEMA flood hazard overlap.'}
-        </li>
+        <li>{floodScreeningSummary(flood)}</li>
         <li>
           {structures.likely_vacant
             ? 'Vacancy screen: no mapped building footprint. Verify current use.'
@@ -1760,7 +1757,7 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.zone_subty}</div>
         )}
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-          SFHA: {p.sfha_tf === 'T' ? 'Yes' : 'No'}
+          SFHA: {floodLayerSfhaLabel(p)}
         </div>
       </div>
     )

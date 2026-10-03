@@ -1,0 +1,17 @@
+name: Public source connectivity diagnostic
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - pipelines/scripts/check_source_connectivity.py
+      - .github/workflows/source-connectivity.yml
+permissions:
+  contents: read
+jobs:
+  public-source-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Test public sources from a separate hosting network
+        run: python3 pipelines/scripts/check_source_connectivity.py
