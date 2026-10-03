@@ -3,22 +3,7 @@ import { startWatchSync, watchSyncState, syncWatches } from '../lib/watchSync'
 import { recordInvestigation } from '../lib/investigationState'
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom'
 import SourceViewerProvider from './SourceViewer'
-
-const ROUTE_TITLES: Array<[RegExp, string]> = [
-  [/^\/$/, 'Your Workspace — CountyIQ'],
-  [/^\/app$/, 'Your Workspace — CountyIQ'],
-  [/^\/organizations/, 'Organizations — CountyIQ'],
-  [/^\/feed/, 'Activity workspace — CountyIQ'],
-  [/^\/radar/, 'Property screening — CountyIQ'],
-  [/^\/municipalities/, 'Municipalities — CountyIQ'],
-  [/^\/map/, 'Property Map — CountyIQ'],
-  [/^\/watch/, 'Watched Intelligence — CountyIQ'],
-  [/^\/compare/, 'Parcel Comparison — CountyIQ'],
-  [/^\/property\//, 'Property Report — CountyIQ'],
-  [/^\/(owner|entity)\//, 'Entity Case File — CountyIQ'],
-  [/^\/project\//, 'Project Case File — CountyIQ'],
-  [/^\/search/, 'Search — CountyIQ'],
-]
+import { workspacePage } from '../lib/workspaceNavigation'
 
 export default function RouteFrame() {
   const location = useLocation()
@@ -31,8 +16,8 @@ export default function RouteFrame() {
   useEffect(startWatchSync, [])
 
   useEffect(() => {
-    document.title =
-      ROUTE_TITLES.find(([pattern]) => pattern.test(location.pathname))?.[1] ?? 'CountyIQ'
+    const { title } = workspacePage(location.pathname)
+    document.title = title === 'CountyIQ' ? title : `${title} — CountyIQ`
   }, [location.pathname])
 
   useEffect(() => {

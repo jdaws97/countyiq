@@ -24,6 +24,16 @@ from dagster import (
     asset,
 )
 
+from countyiq.lib.entity_context_plan import (
+    EntityContextLimit,
+    EntitySourceChanged,
+    gather_context_plan,
+)
+from countyiq.lib.entity_context_review import (
+    RECONCILIATION_VERSION,
+    EntityReviewInvalid,
+    review_context_plan,
+)
 from countyiq.lib.error_budget import check_error_budget
 from countyiq.lib.intelligence_autoresolve import auto_resolve_contradiction
 from countyiq.lib.intelligence_common import (
@@ -45,6 +55,7 @@ from countyiq.lib.pass1_entity_verification import (
     ENTITY_CANDIDATE_PAIRS_READY_QUERY,
     ENTITY_REGISTRATION_ROWS_QUERY,
     ENTITY_VERIFICATION_SYSTEM_PROMPT,
+    PARTITION_VOTING_VERSION,
     PROMPT_VERSION,
     build_deterministic_entity_resolution,
     build_entity_cluster_prompt,
@@ -53,12 +64,14 @@ from countyiq.lib.pass1_entity_verification import (
     merge_entity_trial_partitions,
     parse_entity_verification_output,
     priority_entity_names,
+    project_entity_relationships,
     resolve_pass1_scope,
     select_pass1_clusters,
     select_pass1_work,
     stable_cluster_key,
 )
 from countyiq.lib.pass_llm_config import (
+    PassCallLimitReached,
     PassHarnessUnavailable,
     PassItemBudget,
     PassSpendLimitExceeded,
@@ -68,10 +81,8 @@ from countyiq.lib.pass_llm_config import (
 from countyiq.lib.pass_schemas import PASS1_ENTITY_VERIFICATION_SCHEMA
 from countyiq.resources.database import DatabaseResource
 
-# A connected candidate component is an input unit, not an identity decision.
-# Do not split oversized components: that would change the candidate graph.
-# Defer them before dispatch so an incomplete prompt can neither spend money nor
-# replace the existing entity projection.
+# Bounded contexts are temporary reviews. Only a reconciled, current partition
+# of the complete original parent can replace the existing entity projection.
 MAX_CANDIDATE_NAMES_PER_CONTEXT = 40
 MAX_DYNAMIC_PROMPT_CHARACTERS = 64_000
 
@@ -273,40 +284,67 @@ def entity_verification(
     errors = 0
     clusters_deferred_context = 0
     spend_limit_reached = False
+    subscription_call_limit_reached = False
+    bounded_progress = {"unit": 0, "reconciliation": 0}
+
+    def record_bounded_progress(phase, key):
+        bounded_progress[phase] += 1
+        log.info("Completed bounded %s review %s", phase, key)
 
     for i, cluster_names in enumerate(clusters, 1):
         input_hash: str | None = None
         cluster_key = stable_cluster_key(cluster_names)
         try:
+            context_reason = None
             if len(cluster_names) > MAX_CANDIDATE_NAMES_PER_CONTEXT:
-                message = (
-                    "deferred: context exceeds reviewed limits: "
+                context_reason = (
                     f"candidate_names={len(cluster_names)} "
                     f"limit={MAX_CANDIDATE_NAMES_PER_CONTEXT}"
                 )
-                _update_pass_status(database, cluster_key, 1, "error", "", message)
-                log.warning("Cluster %s %s", cluster_key, message)
-                errors += 1
-                clusters_deferred_context += 1
-                continue
-
-            # Gather records for this cluster using the public dict_cursor
-            with database.dict_cursor() as cur:
-                records = gather_cluster_records(cur, cluster_names)
-
-            # Build before the reusable-hash skip so a previously accepted
-            # projection cannot bypass a newly reviewed context bound.
-            prompt = build_entity_cluster_prompt(records)
-            if len(prompt) > MAX_DYNAMIC_PROMPT_CHARACTERS:
-                message = (
-                    "deferred: context exceeds reviewed limits: "
-                    f"dynamic_prompt_characters={len(prompt)} "
-                    f"limit={MAX_DYNAMIC_PROMPT_CHARACTERS}"
+            else:
+                with database.dict_cursor() as cur:
+                    records = gather_cluster_records(cur, cluster_names)
+                # Check bounds before reuse; a previous result cannot exempt a
+                # changed input from the reviewed context limits.
+                prompt = build_entity_cluster_prompt(records)
+                if records.get("portfolio_summary"):
+                    context_reason = (
+                        "truncated_source_inventory requires complete per-name dossiers"
+                    )
+                elif len(prompt) > MAX_DYNAMIC_PROMPT_CHARACTERS:
+                    context_reason = (
+                        f"dynamic_prompt_characters={len(prompt)} "
+                        f"limit={MAX_DYNAMIC_PROMPT_CHARACTERS}"
+                    )
+            if context_reason:
+                if config is None or not config.model_path.startswith(
+                    "codex/subscription:"
+                ):
+                    raise EntityContextLimit(context_reason)
+                if escalation_config is not None:
+                    raise EntityReviewInvalid(
+                        "Bounded contexts require the reviewed single-model lineup"
+                    )
+                outcome = _verify_bounded_cluster(
+                    database,
+                    cluster_names,
+                    config,
+                    invoke_with_retry,
+                    prior_hashes,
+                    item_budget,
+                    log,
+                    n_trials=n_trials,
+                    adaptive=adaptive_voting,
+                    progress=record_bounded_progress,
                 )
-                _update_pass_status(database, cluster_key, 1, "error", "", message)
-                log.warning("Cluster %s %s", cluster_key, message)
-                errors += 1
-                clusters_deferred_context += 1
+                if outcome["status"] == "item_limit":
+                    break
+                if outcome["status"] == "skipped":
+                    skipped += 1
+                else:
+                    clusters_processed += 1
+                    entities_created += outcome["entities"]
+                    abstentions_total += outcome["abstentions"]
                 continue
 
             deterministic_resolution = build_deterministic_entity_resolution(
@@ -322,7 +360,7 @@ def entity_verification(
                 DETERMINISTIC_VARIANT_VERSION
                 if deterministic_resolution is not None
                 else (
-                    f"{config.model_path}|trials={n_trials}|"
+                    f"{config.model_path}|voting={PARTITION_VOTING_VERSION}|trials={n_trials}|"
                     f"escalation={escalation_config.model_path if escalation_config else ''}"
                 )
             )
@@ -673,6 +711,20 @@ def entity_verification(
                     f"({clusters_processed} processed, {skipped} skipped, {errors} errors)"
                 )
 
+        except PassCallLimitReached as exc:
+            subscription_call_limit_reached = True
+            log.info(
+                "Pass 1 call cap reached; retained receipts permit resumption: %s", exc
+            )
+            break
+        except EntityContextLimit as exc:
+            message = f"deferred: context exceeds reviewed limits: {exc}"
+            _update_pass_status(
+                database, cluster_key, 1, "error", input_hash or "", message
+            )
+            log.warning("Cluster %s %s", cluster_key, message)
+            errors += 1
+            clusters_deferred_context += 1
         except PassSpendLimitExceeded as exc:
             spend_limit_reached = True
             log.info(
@@ -738,6 +790,16 @@ def entity_verification(
             ),
             "items_claimed": MetadataValue.int(item_budget.claimed),
             "spend_limit_reached": MetadataValue.bool(spend_limit_reached),
+            "subscription_call_limit_reached": MetadataValue.bool(
+                subscription_call_limit_reached
+            ),
+            "subscription_new_calls": MetadataValue.int(
+                getattr(invoke_with_retry, "calls", 0)
+            ),
+            "bounded_units_completed": MetadataValue.int(bounded_progress["unit"]),
+            "bounded_reconciliations_completed": MetadataValue.int(
+                bounded_progress["reconciliation"]
+            ),
             "clusters_processed": MetadataValue.int(clusters_processed),
             "clusters_skipped": MetadataValue.int(skipped),
             "entities_created": MetadataValue.int(entities_created),
@@ -753,6 +815,103 @@ def entity_verification(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _verify_bounded_cluster(
+    database,
+    names,
+    config,
+    invoke,
+    prior_hashes,
+    item_budget,
+    log,
+    *,
+    n_trials,
+    adaptive,
+    progress,
+):
+    """Publish once, after every unit and conflicting overlap has been reviewed."""
+    with database.read_snapshot() as cursor:
+        plan = gather_context_plan(
+            cursor,
+            names,
+            max_names=MAX_CANDIDATE_NAMES_PER_CONTEXT,
+            max_characters=MAX_DYNAMIC_PROMPT_CHARACTERS,
+        )
+    source_hash = compute_input_hash(plan.source)
+    execution_identity = (
+        f"{config.model_path}|voting={PARTITION_VOTING_VERSION}|"
+        f"trials={n_trials}|adaptive={adaptive}|"
+        f"{RECONCILIATION_VERSION}|plan={compute_input_hash(plan.manifest)}"
+    )
+    input_hash = inference_input_hash(
+        source_hash, requested_model=execution_identity, prompt_version=PROMPT_VERSION
+    )
+    if prior_hashes.get(plan.parent_key) == input_hash:
+        return {"status": "skipped"}
+    if not item_budget.claim(log, label="changed entity clusters"):
+        return {"status": "item_limit"}
+    parsed = review_context_plan(
+        plan,
+        config,
+        invoke,
+        target_trials=n_trials,
+        adaptive=adaptive,
+        progress=progress,
+    )
+    # Network calls can span several resumptions. Never publish against an old
+    # source inventory or a candidate parent that has subsequently split/joined.
+    with database.read_snapshot() as cursor:
+        current = gather_context_plan(
+            cursor,
+            names,
+            max_names=MAX_CANDIDATE_NAMES_PER_CONTEXT,
+            max_characters=MAX_DYNAMIC_PROMPT_CHARACTERS,
+        )
+    if compute_input_hash(current.source) != source_hash:
+        raise EntitySourceChanged("Source evidence changed during bounded review")
+    evidence_refs = sorted(
+        {f"candidate:{name}" for name in names}
+        | {
+            f"{kind}:{identifier}"
+            for entity in parsed["entities"]
+            for kind, identifiers in entity["linked_records"].items()
+            for identifier in identifiers
+        }
+        | {"trial:voting"}
+    )
+    gate = record_inference_decision(
+        database,
+        subject_key=plan.parent_key,
+        pass_number=1,
+        output_kind="entity_verification",
+        decision_key="partition",
+        source_hash=source_hash,
+        input_hash=input_hash,
+        requested_model=config.model_path,
+        served_model=config.model_path,
+        provider="codex_subscription",
+        prompt_version=PROMPT_VERSION,
+        payload=parsed,
+        semantic_decision=entity_semantic_decision(parsed),
+        evidence_refs=evidence_refs,
+    )
+    if not gate.accepted:
+        auto = auto_resolve_contradiction(database, gate.contradiction_id, log)
+        if auto.resolved:
+            return {"status": "resolved", "entities": 0, "abstentions": 0}
+        raise EntityReviewInvalid(
+            f"quarantined as contradiction {gate.contradiction_id}: {gate.reason}"
+        )
+    created = _replace_cluster_entities(
+        database, parsed["entities"], names, inference_id=gate.inference_id
+    )
+    _update_pass_status(database, plan.parent_key, 1, "complete", input_hash)
+    return {
+        "status": "accepted",
+        "entities": created,
+        "abstentions": len(parsed["abstentions"]),
+    }
 
 
 def _merge_unique_strings(*groups) -> list[str]:
@@ -830,7 +989,7 @@ def _replace_cluster_entities(
         )
 
         inserted = 0
-        for entity in entities:
+        for entity in project_entity_relationships(entities):
             linked_records = entity.get("linked_records", {})
             cur.execute(
                 """

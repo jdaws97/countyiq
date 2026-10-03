@@ -29,6 +29,7 @@ class SourceStatus(TypedDict):
     status_reason: NotRequired[SourceHealthReason]
     error: NotRequired[Literal["missing_table", "query_failed"]]
     refresh_job: NotRequired[str]
+    freshness_basis: NotRequired[Literal["asset", "job"]]
     expected_refresh_hours: NotRequired[int]
     last_run_status: NotRequired[JobRunHealthStatus]
     last_run_job: NotRequired[str]
@@ -128,6 +129,11 @@ class FloodZonePayload(TypedDict):
     zone: str | None
     sfha: bool
     overlap_pct: float | None
+    status: str
+    mapped_coverage_pct: float | None
+    reason: str | None
+    evidence: dict | None
+    freshness: dict
 
 
 class StructureBuilding(TypedDict):

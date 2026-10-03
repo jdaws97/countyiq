@@ -19,15 +19,16 @@ no vector-tile pipeline exists (see `docs/frontend/architecture.md`).
 The FastAPI OpenAPI schema is the executable authority. The current route
 surface is:
 
-| Area | Routes |
-|---|---|
-| Health and summary | `/api/health`, `/api/ready`, `/api/ops/health`, `/api/stats` |
-| Parcels | `/api/parcels/bbox`, `/api/parcels/near`, `/api/parcels/summary`, `/api/parcels/{pidn}/summary`, `/api/parcels/{pidn}` |
-| Owners | `/api/owners/top`, `/api/owners/{owner_id}` |
-| Municipalities and layers | `/api/municipalities`, `/api/municipalities/{name}`, `/api/layers/{layer_name}` |
-| Conditional distress | `/api/delinquent/parcels`, `/api/delinquent/top-owners`, `/api/scores/distressed`, `/api/scores/assemblage` (not mounted by default) |
-| Development intelligence | `/api/feed`, `/api/radar/development`, `/api/radar/development/bbox`, `/api/radar/movers`, `/api/radar/municipalities`, `/api/radar/opportunity`, `/api/radar/site-readiness` |
-| Search | `/api/search` |
+| Area                      | Routes                                                                                                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Health and summary        | `/api/health`, `/api/ready`, `/api/ops/health`, `/api/stats`                                                                                                                  |
+| Parcels                   | `/api/parcels/bbox`, `/api/parcels/near`, `/api/parcels/summary`, `/api/parcels/{pidn}/summary`, `/api/parcels/{pidn}`                                                        |
+| Owners                    | `/api/owners/top`, `/api/owners/{owner_id}`                                                                                                                                   |
+| Municipalities and layers | `/api/municipalities`, `/api/municipalities/{name}`, `/api/layers/{layer_name}`                                                                                               |
+| Conditional distress      | `/api/delinquent/parcels`, `/api/delinquent/top-owners`, `/api/scores/distressed`, `/api/scores/assemblage` (not mounted by default)                                          |
+| Development intelligence  | `/api/feed`, `/api/radar/development`, `/api/radar/development/bbox`, `/api/radar/movers`, `/api/radar/municipalities`, `/api/radar/opportunity`, `/api/radar/site-readiness` |
+| Emerging cases            | `/api/intelligence`, `/api/intelligence/{case_key}`                                                                                                                           |
+| Search                    | `/api/search`                                                                                                                                                                 |
 
 Radar scores are **score version 7**: every score is a deterministic function
 of `public.development_signals`, and Pass 2 output is carried only as a
@@ -76,6 +77,31 @@ determination.
 All routes are read-only. Conditional distress routes are mounted only when
 `COUNTYIQ_ENABLE_RESTRICTED_DISTRESS=true`; the safe default is 404. Adding a public alias for an existing route requires
 a real compatibility consumer; aliases are not kept speculatively.
+
+## Emerging case pages
+
+`GET /api/intelligence` returns `cases` containing summaries, `has_more`,
+`next_cursor`, and page-scoped `coverage`. Its default `limit` is 20 and its
+maximum is 100. Send the returned cursor with the same filters to continue;
+nonzero legacy offsets and malformed or mismatched cursors return 422. The
+cursor uses assessment time and case key, so later pages do not pay an
+increasing offset cost. Filter changes start from the first page.
+
+The indexed candidate lookup applies family, municipality, property, project
+type, text, saved-case exclusions, and commercial filters before its limit.
+Audience, service, and readiness must match the same possibility. Only the
+selected candidates undergo canonical source equality checks, in one consistent
+database snapshot. Withdrawn, superseded, or stale cases cannot be served merely
+because they have an index entry. An entirely stale candidate page may be empty
+while still returning a continuation. `checked_scopes` and
+`awaiting_refresh_in_page` describe that page, not the full county. There is no
+exact all-case `total` in this response.
+
+Summaries omit evidence payloads, source excerpts, and citation markers.
+`GET /api/intelligence/{case_key}` validates only that case's scope, then returns
+the complete case and its shared evidence receipts. Both paths are read-only
+and reuse bounded caches only while the transactional source revision and policy
+date match. Requests never run a model or write a currentness projection.
 
 ## Source-Use Boundary
 
@@ -243,7 +269,6 @@ refreshes API-role grants. Pipeline integration tests can then use DATABASE_PORT
 and DATABASE_NAME=countyiq_test. Preserve those environment settings when stopping
 the isolated Compose project. The default test port remains 5433.
 
-
 ### Account sessions and discovery
 
 GET /api/session reports verified sign-in state without provisioning. POST /api/session creates the provider-independent account and personal workspace after signed Cloudflare Access verification. Private /api/watchspaces requests resolve membership from that verified identity and require X-CountyIQ-User to match the account; writes additionally require X-CountyIQ-Workspace: 1 and an allowed Origin. Anonymous access-code creation is retired. Session and workspace responses are no-store.
@@ -251,7 +276,6 @@ GET /api/session reports verified sign-in state without provisioning. POST /api/
 GET /api/directory/organizations supports literal name/alias search with pagination, limited to business/government groupings. GET /api/directory/projects searches source-governed development events and groups them into case links. It does not manufacture cases from raw, unaccepted extraction input.
 
 See [account runtime configuration](../operations/account-workspaces.md).
-
 
 Property and owner profile assembly uses a short read-only, repeatable-read
 database snapshot. Their policy checks, cached-brief dependency checks and

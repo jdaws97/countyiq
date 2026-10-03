@@ -95,6 +95,11 @@ class CountyConfig:
     tax_claims_pdf_url: str = ""  # DocumentCenter PDF URL
     tax_claims_min_records: int = 5000  # Truncation guard (unique parcels)
 
+    # Manual conservation-district review pilot; no automatic project links.
+    plan_review_listing_url: str = ""
+    plan_review_source_key: str = ""
+    plan_review_crawl_delay_seconds: float = 5.0
+
     # Zip codes (GIS layer)
     arcgis_zipcodes_url: str = ""  # FeatureServer URL for zip code polygons
 
@@ -181,6 +186,8 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             "jackson-township.org",
         ),
         open_data_source_key="york_open_data",
+        plan_review_listing_url="https://www.yorkccd.org/erosion-and-sediment-control/pending-plan-review-list",
+        plan_review_source_key="yccd_plan_reviews",
         plcb_filter="York County",
         plcb_min_records=500,
         arcgis_parcels_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Parcels/FeatureServer/0",
@@ -206,10 +213,10 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
             ),  # Registered Businesses in PA Current by County
         ),
         soda_min_records=10000,
-        penndot_roads_url="https://gis.penndot.gov/arcgis/rest/services/opendata/roadwaysegments/MapServer/0",
+        penndot_roads_url="https://gis.penndot.pa.gov/gis/rest/services/opendata/roadwaysegments/MapServer/0",
         penndot_roads_cty_code="67",
         penndot_roads_min_records=1000,
-        penndot_projects_url="https://gis.penndot.gov/arcgis/rest/services/paprojects/paprojects/MapServer",
+        penndot_projects_url="https://gis.penndot.pa.gov/gis/rest/services/paprojects/paprojects/MapServer",
         penndot_projects_layers=(1, 2, 4, 5),
         penndot_projects_county_filter="YORK",
         penndot_projects_min_records=5,
@@ -223,7 +230,7 @@ COUNTY_CONFIGS: dict[str, CountyConfig] = {
         tax_claims_pdf_url="https://yorkcountypa.gov/DocumentCenter/View/1911/Delinquent-Tax-Claim-Listing-PDF",
         tax_claims_min_records=5000,
         arcgis_zipcodes_url="https://arcweb1.ycpc.org/server/rest/services/OPEN_DATA/Zipcodes/FeatureServer/0",
-        traffic_counts_url="https://gis.penndot.gov/arcgis/rest/services/opendata/roadwaytraffic/MapServer/0",
+        traffic_counts_url="https://gis.penndot.pa.gov/gis/rest/services/opendata/roadwaytraffic/MapServer/0",
         traffic_counts_cty_code="67",
         traffic_counts_min_records=1000,
         sheriff_sales_url="https://attorneyportal.yorkcountypa.gov/sheriff.salelisting/",

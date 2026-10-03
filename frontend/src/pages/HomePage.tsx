@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { siteUrls } from '../lib/siteUrls'
 
-const VIEWS = ['Activity', 'Parcel map', 'Connections'] as const
+const VIEWS = ['Site inquiry', 'Parcel map', 'Research handoff'] as const
 type PreviewView = (typeof VIEWS)[number]
 
 function Brand() {
@@ -67,12 +67,12 @@ function ParcelMap() {
 }
 
 function ProductPreview() {
-  const [view, setView] = useState<PreviewView>('Activity')
+  const [view, setView] = useState<PreviewView>('Site inquiry')
   return (
     <div className="m-preview">
       <div className="m-preview-bar">
         <span className="m-preview-brand">
-          CIQ <span>Your intelligence workspace</span>
+          CIQ <span>Your site research workspace</span>
         </span>
         <span className="m-preview-dot" aria-hidden="true" />
       </div>
@@ -89,18 +89,18 @@ function ProductPreview() {
         ))}
       </div>
       <div className="m-preview-body" aria-live="polite">
-        {view === 'Activity' && (
+        {view === 'Site inquiry' && (
           <>
             <div className="m-preview-heading">
               <div>
-                <span className="m-kicker">THE LOCAL PICTURE</span>
-                <h3>Connect the dots.</h3>
+                <span className="m-kicker">START WITH THE CLIENT’S SITE</span>
+                <h3>Prepare the first conversation.</h3>
               </div>
               <span className="m-small-tag">Source linked</span>
             </div>
             <div className="m-mini-map">
               <ParcelMap />
-              <span className="m-map-label">A property. A plan. The bigger picture.</span>
+              <span className="m-map-label">Confirm the parcel and municipality.</span>
             </div>
             <div className="m-event">
               <span className="m-event-icon" aria-hidden="true">
@@ -108,9 +108,10 @@ function ProductPreview() {
               </span>
               <div>
                 <span className="m-kicker">MUNICIPAL PROCEEDINGS</span>
-                <h4>A subdivision is scheduled for review.</h4>
+                <h4>What does the record establish?</h4>
                 <p>
-                  Open the agenda, check the proposed site, and watch for the recorded decision.
+                  Check the original passage, its date and the stated action. Keep unanswered
+                  questions visible.
                 </p>
               </div>
             </div>
@@ -119,7 +120,7 @@ function ProductPreview() {
               <i aria-hidden="true">→</i>
               <span>Linked parcel</span>
               <i aria-hidden="true">→</i>
-              <span>Your watchlist</span>
+              <span>Your site inquiry</span>
             </div>
           </>
         )}
@@ -139,28 +140,28 @@ function ProductPreview() {
             </p>
           </>
         )}
-        {view === 'Connections' && (
+        {view === 'Research handoff' && (
           <>
             <div className="m-preview-heading">
               <div>
-                <span className="m-kicker">FOLLOW THE RELATIONSHIPS</span>
-                <h3>Put ownership in context.</h3>
+                <span className="m-kicker">RESEARCH SOMEONE ELSE CAN CHECK</span>
+                <h3>Carry the questions forward.</h3>
               </div>
             </div>
             <div className="m-connections">
               <div className="m-connection-source">
-                Organization<span>A single place to investigate</span>
+                Client inquiry<span>A candidate site and proposed use</span>
               </div>
               <div className="m-connection-line" />
               <div className="m-connection-children">
-                <span>Property portfolio</span>
-                <span>Linked projects</span>
-                <span>Source records</span>
+                <span>Cited findings</span>
+                <span>Coverage gaps</span>
+                <span>Open questions</span>
               </div>
             </div>
             <p className="m-preview-caption">
-              Move from an organization to its properties and related activity, with evidence close
-              at hand.
+              Save private notes and export a research handoff with original links, source dates and
+              unresolved questions.
             </p>
           </>
         )}
@@ -197,17 +198,17 @@ export default function HomePage() {
         <section className="m-hero m-wrap">
           <div className="m-hero-copy">
             <div className="m-eyebrow">
-              <span /> PROPERTY INTELLIGENCE · YORK COUNTY, PA
+              <span /> SITE INTAKE RESEARCH · YORK COUNTY, PA
             </div>
             <h1>
-              Follow local development.
+              A client brings a site.
               <br />
-              <em>See the evidence.</em>
+              <em>Know what to ask next.</em>
             </h1>
             <p>
-              For investors and developers working in York County. Review development proposals,
-              investigate properties and recorded owners, and follow changes in the places you care
-              about.
+              For civil engineering and land-planning teams in York County. Confirm the parcel,
+              review mapped constraints and municipal records, and prepare a cited research handoff
+              for the first municipal conversation.
             </p>
             <div className="m-actions">
               <a className="m-button" href="#workflow">
@@ -256,42 +257,42 @@ export default function HomePage() {
               <em>the beginning.</em>
             </h2>
             <p>
-              Start with a property or municipality. Find the recorded activity, check the source,
-              and decide what deserves a closer look.
+              Start with the client’s candidate property and intended use. Keep what the records
+              establish separate from the questions that need a professional or municipal answer.
             </p>
           </div>
           <div className="m-features">
             <article>
               <span className="m-feature-number">01</span>
               <div>
-                <h3>Review local development activity.</h3>
+                <h3>Confirm the site and its context.</h3>
                 <p>
-                  Bring municipal decisions, applications, and property activity into a single
-                  intelligence feed. Open the original evidence when something catches your eye.
+                  Identify the parcel and municipality. Review mapped zoning, flood coverage and
+                  soils, with source freshness and missing coverage visible.
                 </p>
-                <span>Intelligence feed · Development radar</span>
+                <span>Parcel identity · Mapped constraints · Source coverage</span>
               </div>
             </article>
             <article>
               <span className="m-feature-number">02</span>
               <div>
-                <h3>Investigate a property and its owner.</h3>
+                <h3>Trace the municipal record.</h3>
                 <p>
-                  Move from a property to its recorded owner, other holdings, nearby parcels, and
-                  source records. Check the evidence behind each connection.
+                  Read site-linked passages in their original documents. Distinguish proposed
+                  business from recorded action, and see where collection or review is incomplete.
                 </p>
-                <span>Property maps · Organization profiles · Case files</span>
+                <span>Original passages · Meeting dates · Municipal context</span>
               </div>
             </article>
             <article>
               <span className="m-feature-number">03</span>
               <div>
-                <h3>Return to the changes you follow.</h3>
+                <h3>Hand off the research and questions.</h3>
                 <p>
-                  Save properties, projects, and municipalities to your watches. Review new matching
-                  activity in your workspace as source records are refreshed.
+                  Save the proposed use, private notes and open questions. Export the research with
+                  citations, and recheck the evidence when its revision changes.
                 </p>
-                <span>Watchlists · Saved searches · Your workspace</span>
+                <span>Private inquiries · Review state · Research export</span>
               </div>
             </article>
           </div>
@@ -314,10 +315,11 @@ export default function HomePage() {
             </div>
             <div className="m-steps">
               <article>
-                <span>01 / DISCOVER</span>
-                <h3>Find a signal.</h3>
+                <span>01 / IDENTIFY</span>
+                <h3>Bring a candidate site.</h3>
                 <p>
-                  Start with recent activity, a development signal, or a property you already know.
+                  Find the client’s parcel and describe the intended use. Confirm the identity
+                  before proceeding.
                 </p>
               </article>
               <article>
@@ -328,9 +330,12 @@ export default function HomePage() {
                 </p>
               </article>
               <article>
-                <span>03 / FOLLOW</span>
-                <h3>Make it your focus.</h3>
-                <p>Add it to your watches and pick up the investigation from your workspace.</p>
+                <span>03 / HAND OFF</span>
+                <h3>Keep the questions visible.</h3>
+                <p>
+                  Save your review and export the source trail, private notes and required
+                  follow-up.
+                </p>
               </article>
             </div>
           </div>
@@ -351,8 +356,9 @@ export default function HomePage() {
               <em>One place to start.</em>
             </h2>
             <p>
-              We’re starting with York County, Pennsylvania, and refining CountyIQ with invited
-              testers. Available records and coverage vary by source and municipality.
+              Private alpha for York County, Pennsylvania. Available records and coverage vary by
+              source and municipality. The research supports proposal scoping; it does not determine
+              permitted use, buildability, utility capacity or approval.
             </p>
             <a className="m-text-link" href={app}>
               Already invited? Open your workspace <span aria-hidden="true">↗</span>
@@ -380,7 +386,7 @@ export default function HomePage() {
         <a href="/" aria-label="CountyIQ home">
           <Brand />
         </a>
-        <p>Property &amp; development intelligence.</p>
+        <p>Site research for the first municipal conversation.</p>
         <span>York County, Pennsylvania</span>
         <a href={app}>Sign in ↗</a>
       </footer>

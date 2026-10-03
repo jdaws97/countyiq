@@ -15,12 +15,15 @@ from countyiq.jobs import (
     county_narratives_refresh,
     deterministic_enrichment_refresh,
     enrichment_refresh,
+    emerging_intelligence_refresh,
     entity_verification_refresh,
     fema_refresh,
     intelligence_data_refresh,
     intelligence_full_pipeline,
+    local_source_refresh,
     owner_briefs_refresh,
     pa_dos_refresh,
+    plan_review_pilot,
     proceedings_extraction_refresh,
     proceedings_refresh,
     radar_refresh,
@@ -30,6 +33,7 @@ from countyiq.jobs import (
 )
 from countyiq.resources.database import make_database_resource
 from countyiq.resources.storage import make_s3_resource
+from countyiq.resources.source_snapshots import SourceSnapshotsResource
 from countyiq.schedules import all_schedules
 from countyiq.sensors.alerting import (
     failure_alerter,
@@ -68,14 +72,18 @@ defs = Definitions(
         record_intelligence_refresh,
         owner_briefs_refresh,
         county_narratives_refresh,
+        emerging_intelligence_refresh,
+        plan_review_pilot,
         deterministic_enrichment_refresh,
         intelligence_full_pipeline,
+        local_source_refresh,
     ],
     schedules=all_schedules,
     sensors=[success_reporter, failure_alerter, intelligence_integrity_guard],
     resources={
         "database": make_database_resource(),
         "s3": make_s3_resource(),
+        "source_snapshots": SourceSnapshotsResource(),
     },
     executor=bounded_multiprocess_executor,
 )

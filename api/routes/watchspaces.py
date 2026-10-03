@@ -18,6 +18,7 @@ from api.lib.accounts import account_workspace
 from api.lib.auth import require_identity, require_workspace_write
 from api.lib.database import get_cursor
 from api.lib.rate_limit import PerClientRateLimiter, client_ip
+from api.lib.site_intake import SiteInquiry
 from api.routes.feed import fetch_feed
 
 router = APIRouter()
@@ -92,6 +93,40 @@ class RecentInvestigation(BaseModel):
         return self
 
 
+class IntelligenceProfile(BaseModel):
+    audience: Literal["all", "investor", "service_business"] = "all"
+    municipalities: list[Annotated[str, Field(max_length=100)]] = Field(
+        default_factory=list, max_length=80
+    )
+    services: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list, max_length=20
+    )
+    families: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list, max_length=6
+    )
+    project_types: list[
+        Literal[
+            "industrial",
+            "logistics",
+            "housing",
+            "mixed_use",
+            "commercial",
+            "infrastructure",
+        ]
+    ] = Field(default_factory=list, max_length=6)
+    preferred_readiness: list[
+        Literal["research", "qualify", "act", "wait", "closed"]
+    ] = Field(default_factory=list, max_length=5)
+
+
+class IntelligenceWorkItem(BaseModel):
+    case_key: str = Field(pattern=r"^emerging-[a-f0-9]{64}$")
+    status: Literal["saved", "qualifying", "waiting", "acted", "rejected"]
+    note: str = Field(max_length=4000)
+    last_seen_revision: str = Field(pattern=r"^[0-9]{1,20}$")
+    updated_at: datetime
+
+
 class WatchSnapshot(BaseModel):
     version: int = Field(ge=0)
     items: list[WatchItem] = Field(max_length=200)
@@ -100,6 +135,11 @@ class WatchSnapshot(BaseModel):
     recent_investigations: list[RecentInvestigation] = Field(
         default_factory=list, max_length=20
     )
+    intelligence_profile: IntelligenceProfile | None = None
+    intelligence_work: list[IntelligenceWorkItem] | None = Field(
+        default=None, max_length=100
+    )
+    site_inquiries: list[SiteInquiry] | None = Field(default=None, max_length=50)
 
     @model_validator(mode="after")
     def unique_bounded_items(self):
@@ -108,6 +148,12 @@ class WatchSnapshot(BaseModel):
         ):
             raise ValueError("Invalid comparison parcel")
         keys = [(item.kind, item.subject_key) for item in self.items]
+        work_keys = [item.case_key for item in self.intelligence_work or []]
+        inquiry_keys = [item.id for item in self.site_inquiries or []]
+        if len(inquiry_keys) != len(set(inquiry_keys)):
+            raise ValueError("Duplicate site inquiry")
+        if len(work_keys) != len(set(work_keys)):
+            raise ValueError("Duplicate intelligence case")
         if len(keys) != len(set(keys)):
             raise ValueError("Duplicate watch")
         if any(
@@ -161,6 +207,9 @@ def current(request: Request):
             "saved_searches": row["saved_searches"],
             "comparison": row["comparison"],
             "recent_investigations": row["recent_investigations"],
+            "intelligence_profile": row["intelligence_profile"],
+            "intelligence_work": row["intelligence_work"],
+            "site_inquiries": row["site_inquiries"],
         }
 
 
@@ -187,9 +236,30 @@ def save(snapshot: WatchSnapshot, request: Request):
             )
         from psycopg2.extras import Json
 
+        intelligence_profile = (
+            {
+                **row["intelligence_profile"],
+                **snapshot.intelligence_profile.model_dump(
+                    mode="json", exclude_unset=True
+                ),
+            }
+            if snapshot.intelligence_profile is not None
+            else row["intelligence_profile"]
+        )
+        intelligence_work = (
+            [item.model_dump(mode="json") for item in snapshot.intelligence_work]
+            if snapshot.intelligence_work is not None
+            else row["intelligence_work"]
+        )
+        site_inquiries = (
+            [item.model_dump(mode="json") for item in snapshot.site_inquiries]
+            if snapshot.site_inquiries is not None
+            else row["site_inquiries"]
+        )
         cur.execute(
             """UPDATE public.watchspaces SET version=version+1,updated_at=NOW(),
-            saved_searches=%s,comparison=%s,recent_investigations=%s WHERE workspace_id=%s""",
+            saved_searches=%s,comparison=%s,recent_investigations=%s,
+            intelligence_profile=%s,intelligence_work=%s,site_inquiries=%s WHERE workspace_id=%s""",
             (
                 Json(
                     [item.model_dump(mode="json") for item in snapshot.saved_searches]
@@ -201,10 +271,19 @@ def save(snapshot: WatchSnapshot, request: Request):
                         for item in snapshot.recent_investigations
                     ]
                 ),
+                Json(intelligence_profile),
+                Json(intelligence_work),
+                Json(site_inquiries),
                 row["workspace_id"],
             ),
         )
-    return {**snapshot.model_dump(mode="json"), "version": snapshot.version + 1}
+    return {
+        **snapshot.model_dump(mode="json"),
+        "version": snapshot.version + 1,
+        "intelligence_profile": intelligence_profile,
+        "intelligence_work": intelligence_work,
+        "site_inquiries": site_inquiries,
+    }
 
 
 @router.delete("/current", status_code=204)
@@ -222,7 +301,8 @@ def delete(request: Request):
         )
         cur.execute(
             """UPDATE public.watchspaces SET version=version+1,saved_searches='[]',comparison='{}',
-            recent_investigations='[]',updated_at=NOW() WHERE workspace_id=%s""",
+            recent_investigations='[]',intelligence_profile='{}',intelligence_work='[]',site_inquiries='[]',
+            updated_at=NOW() WHERE workspace_id=%s""",
             (row["workspace_id"],),
         )
 

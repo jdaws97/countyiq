@@ -113,3 +113,42 @@ def test_fetch_page_4xx_raises_immediately():
         with pytest.raises(requests.exceptions.HTTPError):
             arcgis_client._fetch_page("http://x", "1=1", "*", 4326, 1000, 0, True)
     assert get.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{"error": {"code": 500}}, {}, [], {"count": -1}, {"count": "4"}, {"count": True}],
+)
+def test_invalid_count_cannot_become_an_empty_county_snapshot(payload):
+    with mock.patch.object(arcgis_client.requests, "get", return_value=_resp(payload)):
+        with pytest.raises(RuntimeError):
+            list(arcgis_client.iterate_feature_pages_parallel("https://example.test"))
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        [],
+        {"features": None},
+        {"features": [None]},
+        {"features": [], "exceededTransferLimit": True},
+    ],
+)
+def test_malformed_sequential_page_cannot_look_like_completed_snapshot(payload):
+    first_page = {
+        "features": [{"attributes": {"id": 1}}],
+        "exceededTransferLimit": True,
+    }
+    with mock.patch.object(
+        arcgis_client.requests, "get", side_effect=[_resp(first_page), _resp(payload)]
+    ):
+        with pytest.raises(RuntimeError):
+            arcgis_client.query_all_features("https://example.test", delay=0)
+
+
+def test_valid_empty_terminal_page_remains_supported():
+    with mock.patch.object(
+        arcgis_client.requests, "get", return_value=_resp({"features": []})
+    ):
+        assert arcgis_client.query_all_features("https://example.test", delay=0) == []

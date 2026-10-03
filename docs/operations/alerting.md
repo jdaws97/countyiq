@@ -26,6 +26,9 @@ apply a global Dagster retry policy, so notifications must not claim that all
 retries were exhausted. Individual HTTP ingestion helpers perform their own
 bounded retries where implemented.
 
-Container, disk, memory, PostgreSQL, and backup-failure alerting are not
-implemented by this repository. Use provider monitoring or add a supervised
-host check explicitly rather than relying on the old aspirational examples.
+Grafana handles host telemetry, containers, disk, memory, PostgreSQL, backups,
+source freshness, and external readiness through the committed monitoring
+collector and 22-rule catalog. See [Monitoring](monitoring.md) for deployment,
+notification routing, runbooks, and validation. Dagster run notifications and
+Grafana alerts cover different failure paths; a running daemon alone does not
+establish that sources or customer intelligence are current.

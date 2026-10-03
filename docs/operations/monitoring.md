@@ -49,6 +49,30 @@ The later application release `3fa56ec5403f5b5f0c597de0aad01661b67551fb`
 completed at `2026-09-08T16:10:33Z` and preserves those settings. Monitoring
 configuration changes after that release did not redeploy the application.
 
+## Repair verification — 2026-10-03
+
+Monitoring code from `85de49c` was installed independently of the application
+images. All 22 live Grafana expressions and evaluation settings matched the
+reviewed catalog after provisioning. Grafana returned 27 source-status series,
+27 record-count series, and 176,189 parcel records. The collector now reads
+`record_count` from the API and publishes bounded failure-reason and refresh-job
+labels. Host telemetry fires after ten minutes without a successful scrape;
+the R2 guard remains observable when a capacity measurement is missing.
+
+Validation passed 45 monitoring tests, including real Promtool timing and
+recovery cases, plus Alloy configuration validation. No production outage or
+notification test was induced. The prior rules were saved locally and the
+previous host collector files were archived at
+`/var/backups/countyiq-monitoring-20261003.tar.gz` before installation.
+
+The 23 source warnings are not evidence of a stopped daemon. Production
+heartbeats were current with no heartbeat errors, and schedules were enabled.
+Read-only Dagster inspection found an expired certificate on the county GIS
+host, connection timeouts on the old PennDOT and DEP hosts, and a tax-document
+download timeout. Municipal source health was separately red. Group-level run
+freshness also marks successful assets unhealthy when another asset fails;
+source recovery and more precise freshness accounting remain separate work.
+
 ## Components and retention
 
 Grafana Alloy 1.19.2 is checksum-pinned. A host systemd service collects CPU,
@@ -152,14 +176,12 @@ only the CountyIQ route and preserves unrelated routes. Initial routing is
 email to the operator's Gmail address; a Slack contact point remains optional and requires
 the user's selected destination.
 
-Municipal coverage warnings (`Source unhealthy or stale`,
-`source=municipal_proceedings`) have a dedicated child notification route with
-24-hour group and repeat intervals. This batches coverage changes and limits
-reminders for an ongoing incident to once per day. Other source and outage
-alerts retain their existing five-minute group and four-hour repeat intervals.
-The daily coverage route was applied and read back from Grafana on September 8,
-2026; Grafana normalizes both durations to `1d`. The alert still evaluates and
-remains visible in the dashboard between emails.
+Warnings have a dedicated child notification route grouped by Grafana folder
+and severity, with 24-hour group and repeat intervals. This sends a new warning
+promptly, then batches warning changes and reminders to once per day. Critical
+alerts, including outages and failed backups, retain the five-minute group and
+four-hour repeat intervals. Grafana normalizes the daily durations to `1d`.
+Alerts still evaluate and remain visible in the dashboard between emails.
 
 Grafana currently accepts email contact points only for existing organization
 members. Gmail is the initial registered member. ProtonMail is in the approved
@@ -302,6 +324,26 @@ cache. All six containers remained running, and current/previous release image
 identities were verified again after cleanup. The R2 query returned 7.91 GB of
 20 GB configured capacity (39.5%).
 
+### Alert behavior repairs — October 3, 2026
+
+These source changes require provisioning and a collector deployment before they
+change production behavior. A code review or CI result is not a live recovery
+receipt.
+
+- Host telemetry uses one ten-minute window with no additional pending delay.
+  Failed scrapes and missing ingestion share one alert identity. With no prior
+  telemetry at all, the rule alerts immediately; a successful scrape clears it.
+- R2 capacity pressure and the tripped guard flag are evaluated independently.
+  A missing capacity receipt cannot hide a tripped guard. Collector and guard
+  freshness alerts continue to own missing telemetry.
+- Source record totals use the API's `record_count` field. Explicit zero remains
+  zero, while an unknown count is omitted.
+
+Regression coverage includes incomplete recovery receipts, the API-to-metric
+record-count contract, independent R2 conditions, and actual alert firing times
+through failed scrapes, missing ingestion, and recovery. The host timing test
+retains the catalog's pending period rather than overriding it.
+
 ## Validation
 
 ```bash
@@ -316,3 +358,44 @@ Sources: [Grafana pricing](https://grafana.com/pricing/),
 [Alloy components](https://grafana.com/docs/alloy/latest/reference/components/),
 [Synthetic secrets](https://grafana.com/docs/grafana-cloud/observe-and-act/testing/synthetic-monitoring/create-checks/manage-secrets/),
 [Cloudflare operator access](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/).
+
+### Source-warning investigation — 2026-10-03
+
+The October 2 notification contained 23 source warning instances. Ten belong
+to `arcgis_refresh`, ten to `radar_refresh`, two to `bulk_refresh`, and one
+to municipal proceedings. These counts describe the notification, not a
+current production-health read. A failed grouped job can mark every source
+in that job unhealthy; the email does not establish 23 independent failures.
+
+The September 28 Dagster notification with
+`alertname=DatasourceError` reported an HTTP 500 from the Grafana query
+service. Its copied rule summary described a missing heartbeat, but the error
+does not establish that the Dagster daemon stopped. Inspect the alert name
+and Error annotation before diagnosing the application.
+
+The source probe now exports `countyiq_source_status_info` with bounded
+`reason` and `refresh_job` labels. This preserves the API's distinction
+between a failed run, an unobserved run, stale success, an empty source,
+a source-specific coverage failure, and a query/schema failure. Unknown values
+become `unknown`; raw exception text and run IDs are never metric labels.
+The job label uses a targeted recovery job when that is the latest observed
+run. `none` identifies a source such as policy review without a refresh job.
+The existing health/staleness metrics and alert instance labels are unchanged.
+
+After deploying the probe, use an instant table query:
+
+```promql
+countyiq_source_status_info{instance="countyiq-production",job="countyiq/host"}
+```
+
+For each affected job, inspect its latest run, failed asset, schedule ticks and
+the success/failure sensor ticks. Compare that with `GET /api/ops/health`
+and `meta.job_run_status`. A healthy daemon alone does not prove schedules
+are enabled or that run outcomes reached the application ledger. Scheduled
+jobs are staggered in time; their cron expressions do not enforce successful
+upstream completion.
+
+Production access was restored during the October 3 repair. All 22 alert rules
+were verified with evaluation health `ok`; the source warning remained active
+for real acquisition and coverage gaps. County GIS recovery and per-asset
+receipts are recorded in [source-refresh-recovery.md](source-refresh-recovery.md).

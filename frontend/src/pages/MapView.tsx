@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { Map, NavigationControl } from 'react-map-gl/maplibre'
+import { Map } from 'react-map-gl/maplibre'
+import { setWorkerUrl } from 'maplibre-gl'
+import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { DeckGL } from '@deck.gl/react'
 import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import type { PickingInfo, MapViewState } from '@deck.gl/core'
@@ -9,6 +11,7 @@ import LayerToggle, { type LayerConfig } from '../components/LayerToggle'
 import WorkspaceShell from '../components/WorkspaceShell'
 import { ButtonLink } from '../components/ui'
 import { formatCurrency, formatCurrencyCompact, formatShortDate } from '../lib/format'
+import { floodLayerSfhaLabel, floodScreeningSummary } from '../lib/floodScreening'
 import { appendRadarCriteria, planStatusFor } from '../lib/radarFilters'
 import EvidencePanel from '../components/EvidencePanel'
 import { getPropertyClassLabel, getSchoolDistrictLabel } from '../lib/propertyLabels'
@@ -24,6 +27,9 @@ import type {
   RadarBboxResponse,
   ZoningProperties,
 } from '../types/api'
+
+// MapLibre 6 uses a separate module worker; let Vite publish its bundled URL.
+setWorkerUrl(mapWorkerUrl)
 
 type RadarBasis = 'opportunity' | 'momentum' | 'readiness'
 type ParcelFilter = 'all' | 'delinquent' | 'vacant' | 'vacant_delinquent' | 'radar'
@@ -1226,10 +1232,29 @@ export default function MapView() {
           <Map
             mapStyle={darkMap ? BASEMAPS.dark : BASEMAPS.light}
             style={{ width: '100%', height: '100%' }}
-          >
-            <NavigationControl position="bottom-right" showCompass={false} />
-          </Map>
+          />
         </DeckGL>
+
+        <div className="map-zoom-controls" role="group" aria-label="Map zoom">
+          {[1, -1].map((step) => (
+            <button
+              key={step}
+              type="button"
+              aria-label={step > 0 ? 'Zoom in' : 'Zoom out'}
+              onClick={() =>
+                onViewStateChange({
+                  viewState: {
+                    ...viewState,
+                    zoom: Math.max(0, Math.min(22, viewState.zoom + step)),
+                  },
+                  interactionState: { isZooming: true },
+                })
+              }
+            >
+              {step > 0 ? '+' : '−'}
+            </button>
+          ))}
+        </div>
 
         {hoverInfo?.object && hoverInfo.x != null && hoverInfo.y != null && (
           <div
@@ -1452,11 +1477,7 @@ function PropertyPanel({
               ? 'No delinquency found in loaded records.'
               : 'Detailed tax records are unavailable.'}
         </li>
-        <li>
-          {flood.in_flood_zone
-            ? `Mapped FEMA flood hazard overlap${flood.zone ? ` · Zone ${flood.zone}` : ''}.`
-            : 'No mapped FEMA flood hazard overlap.'}
-        </li>
+        <li>{floodScreeningSummary(flood)}</li>
         <li>
           {structures.likely_vacant
             ? 'Vacancy screen: no mapped building footprint. Verify current use.'
@@ -1736,7 +1757,7 @@ function MapTooltip({ properties }: { properties: TooltipProperties }) {
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.zone_subty}</div>
         )}
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-          SFHA: {p.sfha_tf === 'T' ? 'Yes' : 'No'}
+          SFHA: {floodLayerSfhaLabel(p)}
         </div>
       </div>
     )

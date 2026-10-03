@@ -134,16 +134,39 @@ def test_parse_arcgis_json_format():
     assert r["fld_zone"] == "AE"
     assert r["static_bfe"] == 300.0
     assert r["depth"] is None  # sentinel converted
-    assert r["geojson"]["type"] == "Polygon"
+    assert r["geojson"]["type"] == "MultiPolygon"
     assert r["geojson"]["coordinates"] == [
         [
-            [-76.38, 39.73],
-            [-76.37, 39.73],
-            [-76.37, 39.74],
-            [-76.38, 39.74],
-            [-76.38, 39.73],
+            [
+                [-76.38, 39.73],
+                [-76.37, 39.73],
+                [-76.37, 39.74],
+                [-76.38, 39.74],
+                [-76.38, 39.73],
+            ]
         ]
     ]
+
+
+def test_arcgis_preserves_separate_islands_and_interior_holes():
+    first_exterior = [[0, 0], [0, 4], [4, 4], [4, 0], [0, 0]]
+    interior_hole = [[1, 1], [2, 1], [2, 2], [1, 2], [1, 1]]
+    second_exterior = [[6, 0], [6, 4], [10, 4], [10, 0], [6, 0]]
+    data = {
+        "features": [
+            {
+                "attributes": {"FLD_AR_ID": "42133C_multipart"},
+                "geometry": {"rings": [first_exterior, interior_hole, second_exterior]},
+            }
+        ]
+    }
+
+    record = parse_fema_geojson(data)[0]
+
+    assert record["geojson"] == {
+        "type": "MultiPolygon",
+        "coordinates": [[first_exterior, interior_hole], [second_exterior]],
+    }
 
 
 def test_parse_arcgis_json_no_geometry():

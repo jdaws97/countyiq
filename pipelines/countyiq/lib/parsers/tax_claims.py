@@ -77,7 +77,7 @@ _TEXT_WITH_AUTH = re.compile(
 # Lines to skip (totals, headers, blanks)
 _SKIP = re.compile(
     r"^\s*\*+TOTAL:|^TOTAL FOR DISTRICT|^TOTAL PARCEL|"
-    r"^YORK COUNTY|^PARCEL ID|^OWNER NAME|^---+|"
+    r"^YORK COUNTY, PA\s*$|^PARCEL ID|^OWNER NAME|^---+|"
     r"^\s*$|^GRAND TOTAL|^PARID CNT|^\s+PRIM\s|"
     r"^MAR\s|^[A-Z][a-z]{2}\s+\d|^07:|^\s+PAGE:"
 )

@@ -9,6 +9,22 @@ customer journey and durable documentation so subsequent agents would not restor
 the previous layout. This records that direction; it is not evidence of customer
 interviews or commercial validation.
 
+## October 3 site-intake direction
+
+[Site-intake research](../products/site-intake.md) is the selected next product
+direction. Its primary journey is **My site inquiries → identify property →
+describe intended use → review evidence and municipal history → retain or
+resolve questions → save/export → return when inputs change**.
+
+The October 3 branch implements this direction at `/sites`, now the default
+app landing page. County overview remains at `/overview`, and existing saved
+intelligence work remains available. Commercial validation is still open. Preserve the shared shell,
+source viewer, current source-policy checks, private workspace state and existing
+saved work while implementing it. Property screening must distinguish missing,
+partial and stale data from a supported absence of a mapped constraint. The
+site, proposed use, findings and questions should lead the eventual handoff;
+broad opportunity rankings become supporting research.
+
 ## Customer and outcome
 
 CountyIQ helps a small developer or acquisition team investigate a place: notice
@@ -23,6 +39,15 @@ municipality → Follow → Return through Following or recent work.**
 Customers can also enter through search or the map. Those paths must converge on
 the same property, organization and investigation surfaces. A ranking is an entry
 point for research, not the central explanation of why a property matters.
+
+The September 8 customer review replaces the duplicated intelligence/opportunity
+journey with **My work criteria → Relevant cases → One case with evidence and
+commercial relevance → Pursue / Follow / Dismiss → My work and updated cases**.
+Activity, interpretation and commercial relevance are layers of the same
+investigation. Opportunities is a selective entry point into those cases; an
+early hypothesis does not automatically earn an opportunity card. See
+[Emerging intelligence](../products/emerging-intelligence.md) for the bounded
+source scope and the distinction between evidence strength and action readiness.
 
 ## Page and interaction contracts
 
@@ -41,7 +66,7 @@ point for research, not the central explanation of why a property matters.
 
 `WorkspaceShell` owns grouped persistent navigation, global search, account state
 and theme. Desktop uses a restrained deep-teal sidebar and a small utility bar.
-Phones use a keyboard-accessible drawer. Use `PageShell` for normal pages and the
+Phones and narrow tablets use a keyboard-accessible drawer. Use `PageShell` for normal pages and the
 shared map mode for the map. Do not reintroduce an independent top navigation or a
 second navigation scheme for individual customer pages.
 
@@ -81,6 +106,65 @@ Municipal coverage distinguishes collected records from reviewed records and
 shows collection/review dates when known. These counts describe collected
 documents, not completeness of all municipal activity.
 
+### Emerging intelligence and opportunities
+
+The shared Explore navigation has one Emerging intelligence entry. Opportunities
+is a view inside that area, not a second sidebar destination; its existing URL
+remains valid for direct links. My work is the private return destination.
+Do not substitute the legacy top navigation for `WorkspaceShell`. Both pages
+share the same current case and evidence components. Profile filters are readable
+customer choices, persist privately, appear in the URL and filter on the server
+before paging. My work criteria includes audience, services, municipalities,
+project types, changes of interest and preferred action stage. Unknown project
+types do not match a selected type. For you excludes dismissed cases; All cases
+retains them for discovery and recovery. Overview uses the same profile criteria.
+
+Case lists show compact, current summaries. Opening a case loads its complete
+interpretation and shared source viewer; list cards do not preload document
+excerpts or inline source dialogs. Preserve the summary's qualifications and
+provide a clear **Open case and evidence** action. This keeps the investigation
+journey usable as the reviewed collection grows.
+
+Lists use continuation pages, with filters applied before selecting candidates.
+Each page checks only its selected evidence scopes. A page can contain fewer
+cases when an earlier assessment needs updated evidence; an empty page with a
+continuation must still offer **Next**. Do not show a purported exact current
+county-wide total from this bounded read. Changing criteria restarts paging;
+returning from a case preserves the list position.
+
+Opportunities requires a specific commercial need, a timing reason and an
+evidenced qualification route, plus customer fit, next action, blockers and
+disqualifiers. An opportunity can be early and conditional; an advertised bid or
+listed property is not universally required. Generic record-checking and research
+remain inside the intelligence case. Legacy research actions never populate
+Opportunities. A case can have no opportunities or multiple distinct scopes,
+including several for the same audience. Queue cards group possibilities under
+their case instead of repeating that case for each audience.
+
+The case puts For your work and Pursue / Follow / Dismiss beside the interpretation.
+Pursue is a private customer decision and cannot promote evidence strength or
+opportunity readiness. Follow retains the case for later review. Dismiss removes
+it from personalized discovery while retaining its note and a recovery path.
+My work (`/my-work`) groups active, pursuing, following, dismissed and needs-review
+cases. It rechecks current case versions on return/window focus or explicit refresh;
+changed or unavailable active cases need review. Only current evidence-derived
+copy is shown, alongside the customer's retained note. Review acknowledgement is
+explicit. This is an in-app return workflow, not background email/push delivery
+or automatic source acquisition/reassessment.
+
+Case pages separate supporting facts, contrary evidence, alternative explanations,
+unknowns and next checks. Every generated field that can contain a citation uses
+the shared source viewer. Display assessment date separately from the latest
+record date; neither asserts complete coverage through that date. Label nearby
+parcels as adjoining context rather than project membership.
+
+Overview lists private saved case statuses/notes using current source-derived
+titles. If a case is withdrawn or its source changes, retain the customer's note
+and show that the case needs reassessment. Do not retain stale evidence copy in
+the saved-work record. Guest export/import and signed-in synchronization include
+the intelligence profile and work, with the existing account isolation and
+version-conflict behavior.
+
 ### Property screening
 
 Radar exposes minimum/maximum acreage and recorded active-plan status. Ordinary
@@ -107,6 +191,13 @@ An explanation must not replace structured conditions or milestones. Preserve
 those facts from the underlying proceeding and their original citation indexes.
 A future date or stated milestone does not establish that an action occurred.
 Where a next check is unavailable, omit it rather than manufacture advice.
+
+Direct municipal matter case links work from both Activity and Research. A
+single accepted matter uses the same complete investigation detail and source
+viewer as Activity, including its outcome, conditions and individual history.
+Research readiness remains visible. Legacy project chronology is reserved for
+projects assembled from separate events; it must not replace a matter account
+with an empty or contradictory summary.
 
 ### Property investigation
 
@@ -239,3 +330,48 @@ See [frontend architecture](architecture.md) for implementation boundaries,
 [the workflow audit](../research/customer-workflow-ux-audit-2026-09-07.md) for the
 original evidence, and [the redesign verification](../research/customer-workspace-redesign-2026-09-07.md)
 for this iteration's actual checks and screenshots.
+
+### October 3 inquiry refinement
+
+Site research now leads the sidebar: inquiries, map, properties and municipalities.
+County-wide activity and the existing intelligence workspace remain together in an
+expandable navigation group. The inquiry editor has a visible save state and a
+section index for the proposal, evidence, municipal trail and handoff questions.
+Navigating away from an edited inquiry requires saving, staying, or explicitly
+discarding the changes. A newer saved version blocks a stale draft from overwriting
+it; the draft remains available to copy and reconcile.
+
+Five stable question topics retain the reviewer's progress and response separately
+from public evidence. Answered and inapplicable topics require an explanation.
+Older free-text questions and notes remain readable and portable. Marking evidence
+reviewed requires a proposed use; it acknowledges a particular evidence revision,
+not a land-use determination. Changed source evidence requires a new review.
+
+The printable handoff and text download share one presenter. Both include the
+client brief, parcel identity, mapped evidence, reviewer responses, municipal
+passages, source links, acquisition dates and scope limitations. Preparing or
+exporting the handoff rechecks the current API evidence and saved inquiry version.
+The print layout hides navigation and controls, retains full source text and uses
+browser print-to-PDF. Commercial workflow validation remains outstanding.
+
+### Productization and daily return
+
+The site-inquiry landing page leads with saved work. Inquiry-name/parcel search
+and saved-stage filters stay in the URL, so returning from an inquiry retains
+the selection. Cards summarize the private brief; the editor retains the whole
+text. Their stage is the user's saved workflow choice, and current evidence is
+checked on opening. New inquiry has its own `/sites/new` property finder with
+results explicitly labeled by the submitted query. Older `/sites?pidn=…` links
+remain usable.
+
+The editor places the client brief beside the actual parcel context. Desktop
+save controls remain below the shared utility bar; phones have ordinary Save
+and Preview controls at the end as well as the beginning. Saving unfinished work
+is separate from acknowledging a source revision. Public-evidence failures must
+leave all private question responses editable and savable for existing inquiries,
+while review acknowledgement and handoff export require current evidence.
+
+One navigation definition supplies sidebar groups, active aliases, context labels
+and page titles. My work remains in the private workspace group. The shared shell
+includes a skip link, and its phone drawer traps focus through visible links,
+controls and the expandable county-intelligence group.

@@ -4,6 +4,8 @@ import { siteUrls } from '../lib/siteUrls'
 import { PageHeader, StatusMessage, EmptyState, ButtonLink } from '../components/ui'
 import ServerWatches from '../components/ServerWatches'
 import WorkspaceOverview from '../components/WorkspaceOverview'
+import IntelligencePreview from '../components/IntelligencePreview'
+import IntelligenceSavedWork from '../components/IntelligenceSavedWork'
 import { watchSyncState, refreshAccount } from '../lib/watchSync'
 import {
   getWatchlist,
@@ -113,6 +115,8 @@ export default function WorkspaceHome() {
   return (
     <PageShell wide className="overview-page">
       <WorkspaceOverview watches={watches} />
+      <IntelligencePreview />
+      <IntelligenceSavedWork />
       {state.account?.authenticated && <ServerWatches />}
       {!state.account?.authenticated && (
         <p className="workspace-local-note">

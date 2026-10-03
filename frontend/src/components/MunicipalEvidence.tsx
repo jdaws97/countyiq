@@ -81,7 +81,8 @@ function municipalCardSources(card: MunicipalEvidenceCard): EvidenceItem[] {
       }
     })
   }
-  return card.passages.map((passage, index) => ({
+  const passages = card.passages.length ? card.passages : [{ text: null, page: null }]
+  return passages.map((passage, index) => ({
     evidence_id: `${card.id}-passage-${index}`,
     citation_key: `source:${index + 1}`,
     label: `${card.body_name} · ${formatShortDate(card.meeting_date)}`,
@@ -176,9 +177,16 @@ function MunicipalEvidenceContent({
               ) : (
                 <>
                   <h3>{card.title}</h3>
-                  <blockquote className="municipal-evidence-preview">
-                    {card.passages[0]?.text}
-                  </blockquote>
+                  {card.passages.length ? (
+                    <blockquote className="municipal-evidence-preview">
+                      {card.passages[0].text}
+                    </blockquote>
+                  ) : (
+                    <p className="municipal-evidence-status">
+                      A reviewed English excerpt is not available. Open the source document to
+                      inspect this record.
+                    </p>
+                  )}
                   {card.proceeding_type === 'agenda' && (
                     <p className="municipal-evidence-status">
                       Agenda item · outcome not established

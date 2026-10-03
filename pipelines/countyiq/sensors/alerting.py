@@ -25,6 +25,10 @@ from dagster import (
 )
 
 from countyiq.lib.job_run_status import RunOutcome, record_job_run_status
+from countyiq.lib.asset_refresh_status import (
+    collect_asset_refresh_outcomes,
+    record_asset_refresh_outcome,
+)
 from countyiq.lib.slack import send_slack_message
 from countyiq.resources.database import DatabaseResource
 
@@ -152,6 +156,14 @@ def _record_outcome(
         # The application database may be the reason a run failed. Preserve the
         # pre-existing Slack alert path and let health remain conservatively red.
         logger.exception("Could not persist run outcome for %s", run.run_id)
+    try:
+        outcomes = collect_asset_refresh_outcomes(context.instance, run)
+        for outcome in outcomes:
+            record_asset_refresh_outcome(database, run=run, outcome=outcome)
+    except Exception:
+        # Missing or stale receipts remain unhealthy; a ledger failure must not
+        # interfere with the existing job notification path.
+        logger.exception("Could not persist source asset outcomes for %s", run.run_id)
     return started_at, finished_at
 
 

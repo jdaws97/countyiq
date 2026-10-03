@@ -219,7 +219,7 @@ class DashboardAssetTests(unittest.TestCase):
         self.assertIn("scalar(up", alerts["collector-failed-or-stale"])
         self.assertIn('collector="storage"', alerts["docker-storage-stale"])
         self.assertIn(
-            "max_over_time(countyiq_container_oom_killed",
+            "increase(countyiq_container_oom_kills_total",
             alerts["container-restart-or-oom"],
         )
         self.assertIn("ignoring(bucket)", alerts["r2-capacity-or-guard"])
@@ -346,6 +346,66 @@ class DashboardAssetTests(unittest.TestCase):
                 {
                     "interval": "1m",
                     "input_series": [
+                        {
+                            "series": f"countyiq_container_restarts_total{{{service_labels}}}",
+                            "values": "0 0",
+                        },
+                        {
+                            "series": f"countyiq_container_oom_kills_total{{{service_labels}}}",
+                            "values": "0 1",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": alerts["container-restart-or-oom"],
+                            "eval_time": "1m",
+                            "exp_samples": [self.promtool_sample(service_labels, 1)],
+                        }
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f"countyiq_container_restarts_total{{{service_labels}}}",
+                            "values": "0x62",
+                        },
+                        {
+                            "series": f"countyiq_container_oom_kills_total{{{service_labels}}}",
+                            "values": "0 1 1x60",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": alerts["container-restart-or-oom"],
+                            "eval_time": "61m",
+                            "exp_samples": [self.promtool_sample(service_labels, 0)],
+                        }
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f"countyiq_container_restarts_total{{{service_labels}}}",
+                            "values": "0 0",
+                        },
+                        {
+                            "series": f"countyiq_container_oom_kills_total{{{service_labels}}}",
+                            "values": "3 0",
+                        },
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": alerts["container-restart-or-oom"],
+                            "eval_time": "1m",
+                            "exp_samples": [self.promtool_sample(service_labels, 0)],
+                        }
+                    ],
+                },
+                {
+                    "interval": "1m",
+                    "input_series": [
                         {"series": f"up{{{root_labels}}}", "values": "1"},
                         *failed_collector_inputs,
                     ],
@@ -457,7 +517,7 @@ class DashboardAssetTests(unittest.TestCase):
                         {
                             "expr": alerts["r2-capacity-or-guard"],
                             "eval_time": "0m",
-                            "exp_samples": [self.promtool_sample(root_labels, 1)],
+                            "exp_samples": [self.promtool_sample("", 1)],
                         }
                     ],
                 },
@@ -492,7 +552,7 @@ class DashboardAssetTests(unittest.TestCase):
                         {
                             "expr": host_expression,
                             "eval_time": "10m",
-                            "exp_samples": [self.promtool_sample(root_labels, 1)],
+                            "exp_samples": [self.promtool_sample("", 1)],
                         }
                     ],
                 },
@@ -784,6 +844,142 @@ class DashboardAssetTests(unittest.TestCase):
             test_path = Path(temporary_directory) / "external-test.json"
             test_path.write_text(
                 json.dumps({"rule_files": [], "tests": tests}), encoding="utf-8"
+            )
+            self.run_promtool("test", "rules", str(test_path))
+
+    @unittest.skipUnless(
+        os.environ.get("PROMTOOL") or PROMTOOL,
+        "promtool is unavailable; set PROMTOOL to run PromQL behavior tests",
+    )
+    def test_r2_guard_and_capacity_alert_independently(self):
+        alerts = {alert["uid"]: alert for alert in self.load_json("alerts.json")}
+        expression = alerts["r2-capacity-or-guard"]["expr"]
+        cases = (
+            (None, 100, 1, 1),
+            (25, None, 1, 1),
+            (None, None, 1, 1),
+            (90, 100, None, 1),
+            (25, 100, 1, 1),
+            (90, 100, 0, 1),
+            (25, 100, 0, 0),
+            (25, 100, None, 0),
+            (None, None, 0, 0),
+            (None, None, None, 0),
+        )
+        tests = []
+        for used_bytes, limit_bytes, guard_tripped, expected in cases:
+            inputs = []
+            for metric, labels, value in (
+                ("countyiq_r2_bytes", f'{HOST_SELECTOR},bucket="total"', used_bytes),
+                ("countyiq_r2_limit_bytes", HOST_SELECTOR, limit_bytes),
+                ("countyiq_cost_guard_tripped", HOST_SELECTOR, guard_tripped),
+            ):
+                if value is not None:
+                    inputs.append(
+                        {"series": f"{metric}{{{labels}}}", "values": str(value)}
+                    )
+            tests.append(
+                {
+                    "interval": "1m",
+                    "input_series": inputs,
+                    "promql_expr_test": [
+                        {
+                            "expr": expression,
+                            "eval_time": "0m",
+                            "exp_samples": [self.promtool_sample("", expected)],
+                        }
+                    ],
+                }
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            test_path = Path(directory) / "r2-independent-conditions.json"
+            test_path.write_text(
+                json.dumps({"rule_files": [], "tests": tests}), encoding="utf-8"
+            )
+            self.run_promtool("test", "rules", str(test_path))
+
+    @unittest.skipUnless(
+        os.environ.get("PROMTOOL") or PROMTOOL,
+        "promtool is unavailable; set PROMTOOL to run PromQL behavior tests",
+    )
+    def test_host_outage_timing_and_identity_survive_missing_scrapes(self):
+        alert = next(
+            rule
+            for rule in self.load_json("alerts.json")
+            if rule["uid"] == "host-telemetry-missing"
+        )
+        histories = (
+            ["1"] + ["_"] * 19 + ["1"],
+            ["1"] + ["0"] * 19 + ["1"],
+            ["1"] + ["0"] * 5 + ["stale"] + ["_"] * 13 + ["1"],
+        )
+        checkpoints = (("9m", 0), ("10m", 1), ("19m", 1), ("20m", 0))
+        tests = []
+        for history in histories:
+            tests.append(
+                {
+                    "interval": "1m",
+                    "input_series": [
+                        {
+                            "series": f"up{{{HOST_SELECTOR}}}",
+                            "values": " ".join(history),
+                        }
+                    ],
+                    "promql_expr_test": [
+                        {
+                            "expr": alert["expr"],
+                            "eval_time": at,
+                            "exp_samples": [self.promtool_sample("", expected)],
+                        }
+                        for at, expected in checkpoints
+                    ],
+                    "alert_rule_test": [
+                        {
+                            "alertname": "HostTelemetryMissing",
+                            "eval_time": at,
+                            "exp_alerts": [{"exp_labels": {}, "exp_annotations": {}}]
+                            if expected
+                            else [],
+                        }
+                        for at, expected in checkpoints
+                    ],
+                }
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            rules_path = Path(directory) / "host-rules.json"
+            rules_path.write_text(
+                json.dumps(
+                    {
+                        "groups": [
+                            {
+                                "name": "host-outage",
+                                "interval": "1m",
+                                "rules": [
+                                    {
+                                        "alert": "HostTelemetryMissing",
+                                        # Grafana's C threshold fires only above zero.
+                                        "expr": f"({alert['expr']}) > 0",
+                                        "for": alert["for"],
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            test_path = Path(directory) / "host-outage.json"
+            test_path.write_text(
+                json.dumps(
+                    {
+                        "rule_files": [str(rules_path)],
+                        "evaluation_interval": "1m",
+                        "tests": tests,
+                    }
+                ),
+                encoding="utf-8",
             )
             self.run_promtool("test", "rules", str(test_path))
 

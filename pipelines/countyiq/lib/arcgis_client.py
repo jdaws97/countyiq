@@ -19,6 +19,26 @@ DEFAULT_BATCH_SIZE = 2000
 REQUEST_TIMEOUT = 60
 
 
+def _response_object(response: requests.Response) -> dict:
+    data = response.json()
+    if not isinstance(data, dict):
+        raise RuntimeError("ArcGIS response must be an object")
+    if "error" in data:
+        raise RuntimeError(f"ArcGIS API error: {data['error']}")
+    return data
+
+
+def _response_features(data: dict) -> list[dict]:
+    features = data.get("features")
+    if not isinstance(features, list) or any(
+        not isinstance(feature, dict) for feature in features
+    ):
+        raise RuntimeError("ArcGIS response must contain a feature list")
+    if not features and data.get("exceededTransferLimit"):
+        raise RuntimeError("ArcGIS returned an empty page with more records pending")
+    return features
+
+
 def iterate_feature_pages(
     url: str,
     where: str = "1=1",
@@ -53,12 +73,8 @@ def iterate_feature_pages(
 
         resp = requests.get(f"{url}/query", params=params, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
-        data = resp.json()
-
-        if "error" in data:
-            raise RuntimeError(f"ArcGIS API error: {data['error']}")
-
-        features = data.get("features", [])
+        data = _response_object(resp)
+        features = _response_features(data)
         total += len(features)
         log.info(f"Fetched {len(features)} features (offset={offset}, total={total})")
         yield features
@@ -117,7 +133,10 @@ def _get_feature_count(url: str, where: str = "1=1") -> int:
     params = {"where": where, "returnCountOnly": "true", "f": "json"}
     resp = requests.get(f"{url}/query", params=params, timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
-    return resp.json().get("count", 0)
+    count = _response_object(resp).get("count")
+    if type(count) is not int or count < 0:
+        raise RuntimeError("ArcGIS response must contain a nonnegative integer count")
+    return count
 
 
 def _fetch_page(
@@ -149,12 +168,7 @@ def _fetch_page(
         try:
             resp = requests.get(f"{url}/query", params=params, timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
-            data = resp.json()
-            if "error" in data:
-                raise RuntimeError(
-                    f"ArcGIS API error at offset {offset}: {data['error']}"
-                )
-            return data.get("features", [])
+            return _response_features(_response_object(resp))
         except (
             requests.exceptions.Timeout,
             requests.exceptions.ConnectionError,

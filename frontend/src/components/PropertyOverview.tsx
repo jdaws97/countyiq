@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { formatCurrency, formatShortDate } from '../lib/format'
+import { floodScreeningSummary } from '../lib/floodScreening'
 import { useSourceViewer } from '../lib/useSourceViewer'
 import type { PropertyReport } from '../types/api'
 import './PropertyOverview.css'
@@ -22,9 +23,9 @@ export default function PropertyOverview({ report }: { report: PropertyReport })
     (item) => item.source_kind === 'official_zoning_layer',
   )
   const soilEvidence = report.evidence.filter((item) => item.source_kind === 'official_soil_layer')
-  const floodEvidence = report.evidence.filter(
-    (item) => item.source_kind === 'official_flood_layer',
-  )
+  const floodEvidence = report.flood_zone.evidence
+    ? [report.flood_zone.evidence]
+    : report.evidence.filter((item) => item.source_kind === 'official_flood_layer')
 
   return (
     <section
@@ -70,12 +71,11 @@ export default function PropertyOverview({ report }: { report: PropertyReport })
         <article>
           <h3>Flood & soils</h3>
           <p>
-            {report.flood_zone.in_flood_zone
-              ? `Mapped high-risk flood area overlaps this property${report.flood_zone.overlap_pct == null ? '.' : ` (${report.flood_zone.overlap_pct.toFixed(1)}%).`}`
-              : 'No overlap with the mapped high-risk flood area. This does not exclude all flood risk.'}
+            {floodScreeningSummary(report.flood_zone)} This screening does not exclude all flood
+            risk.
           </p>
           <p>{soilNote}</p>
-          {soilEvidence.length > 0 && (
+          {(soilEvidence.length > 0 || floodEvidence.length > 0) && (
             <button
               className="source-catalog-button"
               onClick={() => openSource([...soilEvidence, ...floodEvidence])}

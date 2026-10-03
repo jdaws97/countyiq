@@ -17,7 +17,6 @@ from dagster import (
     MetadataValue,
 )
 
-from countyiq.lib.arcgis_client import query_all_features
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
 from countyiq.lib.geometry import paths_to_multilinestring_geojson
@@ -26,6 +25,7 @@ from countyiq.lib.scd import scd2_upsert_geom
 from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
+from countyiq.resources.source_snapshots import SourceSnapshotsResource
 
 KEY_COLUMNS = ["road_id"]
 VALUE_COLUMNS = [
@@ -57,6 +57,7 @@ def penndot_roads_arcgis(
     context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
+    source_snapshots: SourceSnapshotsResource,
 ) -> MaterializeResult:
     """Fetch PennDOT road segments, archive to S3, SCD2 upsert with geometry."""
 
@@ -74,15 +75,10 @@ def penndot_roads_arcgis(
         f"Querying PennDOT roads for {county.name}: {county.penndot_roads_url}"
     )
 
-    raw_features = query_all_features(
-        url=county.penndot_roads_url,
-        where=f"CTY_CODE='{county.penndot_roads_cty_code}'",
-        out_fields="*",
-        out_sr=4326,
-        batch_size=2000,
-    )
+    raw_features = source_snapshots.arcgis("penndot_roads", context)
     context.log.info(f"Fetched {len(raw_features)} raw features")
 
+    source_snapshots.archive_receipt(s3, context)
     s3.archive(f"{county.s3_prefix}/penndot/roads", raw_features)
 
     records = parse_penndot_roads_features(raw_features)
@@ -91,8 +87,7 @@ def penndot_roads_arcgis(
     context.log.info(f"Parsed {len(records)} PennDOT road records")
 
     if not records:
-        context.log.warning("No records parsed -- skipping upsert")
-        return MaterializeResult(metadata={"record_count": MetadataValue.int(0)})
+        raise RuntimeError("No PennDOT road records parsed; refusing an empty refresh")
 
     if len(records) < county.penndot_roads_min_records:
         raise RuntimeError(
@@ -113,6 +108,8 @@ def penndot_roads_arcgis(
             value_columns=VALUE_COLUMNS,
             geom_lookup=geom_lookup,
             geom_kind="multilinestring",
+            snapshot_started_at=source_snapshots.acquisition_time(),
+            snapshot_id=source_snapshots.snapshot_identity(),
         )
     finally:
         cur.close()
@@ -149,7 +146,9 @@ penndot_roads_record_count_nonzero = make_row_count_check(
 
 
 @asset_check(asset=penndot_roads_arcgis)
-def penndot_roads_schema_drift(database: DatabaseResource) -> AssetCheckResult:
+def penndot_roads_schema_drift(
+    database: DatabaseResource, source_snapshots: SourceSnapshotsResource
+) -> AssetCheckResult:
     """Verify PennDOT MapServer still has expected fields."""
     authorize_source(
         database,
@@ -157,11 +156,9 @@ def penndot_roads_schema_drift(database: DatabaseResource) -> AssetCheckResult:
         acquisition_method="arcgis_rest",
         asset_key="penndot_roads_schema_drift",
     )
-    county = get_county_config()
     try:
-        resp = requests.get(f"{county.penndot_roads_url}?f=json", timeout=30)
-        resp.raise_for_status()
-        actual_fields = {f["name"] for f in resp.json().get("fields", [])}
+        metadata = source_snapshots.metadata("penndot_roads")
+        actual_fields = {field["name"] for field in metadata.get("fields", [])}
         missing = EXPECTED_FIELDS - actual_fields
         return AssetCheckResult(
             passed=len(missing) == 0,

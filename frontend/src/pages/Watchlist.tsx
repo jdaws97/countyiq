@@ -9,6 +9,7 @@ import PageShell from '../components/PageShell'
 import Section from '../components/Section'
 import { Button, ButtonLink, EmptyState, PageHeader, StatusMessage } from '../components/ui'
 import { formatCurrencyCompact } from '../lib/format'
+import { getIntelligenceProfile, getIntelligenceWork } from '../lib/intelligenceState'
 import {
   downloadText,
   getComparison,
@@ -133,6 +134,9 @@ export default function Watchlist() {
       savedSearches: getSavedSearches(),
       comparison: getComparison(),
       triage: getEventTriage(),
+      intelligenceProfile: getIntelligenceProfile(),
+      intelligenceWork: getIntelligenceWork(),
+      siteInquiries: getSiteInquiries(),
     }
     downloadText(
       `countyiq-workspace-${new Date().toISOString().slice(0, 10)}.json`,
@@ -528,3 +532,4 @@ function WatchChip({ to, label, onRemove }: { to: string; label: string; onRemov
 function uniqueEvents(events: IntelligenceEvent[]): IntelligenceEvent[] {
   return Array.from(new Map(events.map((event) => [event.event_key, event])).values())
 }
+import { getSiteInquiries } from '../lib/siteInquiries'

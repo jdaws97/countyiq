@@ -131,6 +131,7 @@ def _reset_tables(cur) -> None:
             staging.proceeding_extractions,
             staging.public_proceedings,
             meta.job_run_status,
+            meta.asset_refresh_status,
             meta.intelligence_passes,
             public.intelligence_events,
             public.owner_briefs,
@@ -870,6 +871,17 @@ def _seed_contract_data(cur) -> None:
         VALUES (
             'arcgis_refresh', 'api-contract-arcgis', 'success',
             NOW() - INTERVAL '1 minute', NOW(), NOW()
+        )
+        """
+    )
+    cur.execute(
+        """
+        INSERT INTO meta.asset_refresh_status (
+            asset_key, job_name, run_id, status, finished_at,
+            last_success_at, record_count
+        ) VALUES (
+            'parcels_arcgis', 'arcgis_refresh', 'api-contract-arcgis',
+            'success', NOW(), NOW(), 3
         )
         """
     )

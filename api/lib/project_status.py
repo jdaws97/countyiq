@@ -5,8 +5,8 @@ never turn an agenda into a recorded decision, and never choose between same-day
 conflicting decisions. Raw source wording and evidence identifiers survive.
 """
 
-from datetime import date, datetime
 import re
+from datetime import date, datetime
 
 _DECISIONS = {
     "approved": "Approval recorded",
@@ -14,6 +14,17 @@ _DECISIONS = {
     "tabled": "Tabled",
     "continued": "Continued",
 }
+
+_MATTER_OUTCOMES = {
+    "approved": "Approval recorded",
+    "conditional": "Conditional approval recorded",
+    "denied": "Denial recorded",
+    "withdrawn": "Withdrawal recorded",
+    "continued": "Continuance recorded",
+    "mixed": "Multiple recorded outcomes — review their scope",
+    "not_established": "Outcome not established by the supplied records",
+}
+_CITATION = re.compile(r"\[Evidence:source:([^\]]+)\]")
 
 
 def exact_date(text):
@@ -37,6 +48,8 @@ def exact_date(text):
 
 def summarize_project(events, *, incomplete=False, today=None):
     today = today or date.today()
+    if len(events) == 1 and events[0].get("matter"):
+        return _summarize_matter(events[0], incomplete=incomplete, today=today)
     # Compare normalized dates, not source spellings (e.g. "Jan 2 2026").
     events = [
         {**event, "event_date": exact_date(event.get("event_date"))} for event in events
@@ -196,4 +209,88 @@ def summarize_project(events, *, incomplete=False, today=None):
         "history_incomplete": incomplete
         or any(not exact_date(e.get("event_date")) for e in events),
         "caveat": "Status describes linked records, not construction permission. Conditions remain unverified until a source explicitly resolves them; later silence does not satisfy them.",
+    }
+
+
+def _summarize_matter(event, *, incomplete, today):
+    """Use the accepted complete account instead of legacy extraction fields."""
+    account = event["matter"]
+    sources = {
+        source.get("citation_key", "").removeprefix("evidence:source:"): source
+        for source in event.get("sources", [])
+    }
+
+    def receipt(text):
+        supporting_records = []
+        for source_id in _CITATION.findall(text or ""):
+            source = sources.get(source_id)
+            if source:
+                supporting_records.append(
+                    {
+                        "event_key": event["event_key"],
+                        "evidence_id": source["evidence_id"],
+                        "record_date": exact_date(
+                            (source.get("details") or {}).get("meeting_date")
+                        ),
+                    }
+                )
+        if not supporting_records:
+            return None
+        dates = {record["record_date"] for record in supporting_records}
+        return {
+            **supporting_records[0],
+            # A multi-record account can describe a rejection, revised approval
+            # and later monitoring. Citation order cannot date the whole outcome.
+            "record_date": dates.pop() if len(dates) == 1 else None,
+            "supporting_records": supporting_records,
+        }
+
+    outcome = account["outcome"]
+    outcome_receipt = receipt(account.get("outcome_summary"))
+    dated_outcome = outcome_receipt and all(
+        record["record_date"] and record["record_date"] <= today.isoformat()
+        for record in outcome_receipt["supporting_records"]
+    )
+    status = _MATTER_OUTCOMES[outcome]
+    decisions = []
+    if outcome != "not_established":
+        if dated_outcome:
+            decisions.append(
+                {
+                    **outcome_receipt,
+                    "decision": outcome,
+                    "body": None,
+                    "matter": _CITATION.sub("", account["outcome_summary"]).strip(),
+                    "scope": None,
+                }
+            )
+        else:
+            status = "Recorded outcome needs source-date verification"
+    conditions = []
+    for condition in account.get("conditions", []):
+        source_receipt = receipt(condition)
+        if source_receipt:
+            conditions.append(
+                {
+                    **source_receipt,
+                    "text": _CITATION.sub("", condition).strip(),
+                    "status": "Satisfaction not established by this account",
+                }
+            )
+    history_dates = [
+        exact_date(entry.get("meeting_date")) for entry in account.get("history", [])
+    ]
+    past_dates = [
+        value for value in history_dates if value and value <= today.isoformat()
+    ]
+    return {
+        "status": status,
+        "as_of": max(past_dates, default=None),
+        "latest_event_key": event["event_key"],
+        "latest_change": event.get("what_happened"),
+        "decisions": decisions,
+        "conditions": conditions,
+        "milestones": [],
+        "history_incomplete": incomplete or not history_dates or None in history_dates,
+        "caveat": "Status describes the accepted account and its stated scope. Conditions remain unverified until a source explicitly resolves them.",
     }

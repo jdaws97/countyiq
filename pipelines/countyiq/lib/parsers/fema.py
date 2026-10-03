@@ -4,6 +4,8 @@ Supports both ArcGIS JSON (f=json, used in production — more reliable)
 and GeoJSON (f=geojson) formats from the FEMA MapServer.
 """
 
+from countyiq.lib.geometry import rings_to_multipolygon_geojson
+
 FEMA_SENTINEL = -9999
 
 # Feature attribute → staging column name
@@ -25,11 +27,8 @@ SENTINEL_FIELDS = {"STATIC_BFE", "DEPTH"}
 
 
 def _rings_to_geojson(geometry: dict) -> dict | None:
-    """Convert ArcGIS JSON rings geometry to GeoJSON Polygon."""
-    rings = geometry.get("rings")
-    if not rings:
-        return None
-    return {"type": "Polygon", "coordinates": rings}
+    """Preserve separate exterior rings and holes in ArcGIS flood polygons."""
+    return rings_to_multipolygon_geojson(geometry.get("rings"))
 
 
 def _extract_props_and_geom(feature: dict) -> tuple[dict, dict | None]:

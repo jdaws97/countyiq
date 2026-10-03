@@ -18,6 +18,15 @@ import {
   type RecentInvestigation,
 } from './investigationState'
 import type { IntelligenceEvent } from '../types/api'
+import type { IntelligenceProfile, IntelligenceWorkItem } from '../types/emerging'
+import type { SiteInquiry } from '../types/siteIntake'
+import { getSiteInquiries, siteInquiryStorageEntries } from './siteInquiries'
+import {
+  DEFAULT_INTELLIGENCE_PROFILE,
+  getIntelligenceProfile,
+  getIntelligenceWork,
+  intelligenceStorageEntries,
+} from './intelligenceState'
 
 export type AccountSession = {
   authenticated: boolean
@@ -40,6 +49,9 @@ type Snapshot = {
   saved_searches: SavedSearch[]
   comparison: string[]
   recent_investigations: RecentInvestigation[]
+  intelligence_profile?: IntelligenceProfile
+  intelligence_work?: IntelligenceWorkItem[]
+  site_inquiries?: SiteInquiry[]
 }
 export type WatchInbox = {
   notifications: { id: number; event: IntelligenceEvent }[]
@@ -177,6 +189,11 @@ function apply(snapshot: Snapshot) {
       snapshot.comparison,
       snapshot.recent_investigations,
     ),
+    ...intelligenceStorageEntries(
+      snapshot.intelligence_profile ?? DEFAULT_INTELLIGENCE_PROFILE,
+      snapshot.intelligence_work ?? [],
+    ),
+    ...siteInquiryStorageEntries(snapshot.site_inquiries ?? []),
     [metadataKey()]: JSON.stringify({ version: snapshot.version, dirty: false }),
   })
   hydrated = true
@@ -264,6 +281,9 @@ export async function syncWatches() {
           saved_searches: getSavedSearches(),
           comparison: getComparison(),
           recent_investigations: getRecentInvestigations(),
+          intelligence_profile: getIntelligenceProfile(),
+          intelligence_work: getIntelligenceWork(),
+          site_inquiries: getSiteInquiries(),
         })
       : await request<Snapshot>('/watchspaces/current')
     if (generation !== startGeneration) {

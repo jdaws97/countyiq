@@ -425,10 +425,11 @@ function OperatorHealth() {
                       color: 'var(--text-muted)',
                     }}
                   >
-                    latest job {formatSourceName(source.last_run_job ?? source.refresh_job)} ·{' '}
+                    {source.freshness_basis === 'asset' ? 'source refresh in' : 'latest job'}{' '}
+                    {formatSourceName(source.last_run_job ?? source.refresh_job)} ·{' '}
                     {source.last_run_status ?? 'unknown'}
                     <br />
-                    last run {formatTimestamp(source.last_run_at)}
+                    last attempt {formatTimestamp(source.last_run_at)}
                     <br />
                     last success {formatTimestamp(source.last_success_at)}
                     <br />

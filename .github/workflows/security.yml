@@ -1,8 +1,8 @@
 name: Security
 
 on:
+  workflow_dispatch:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
   schedule:
@@ -12,8 +12,54 @@ permissions:
   contents: read
 
 jobs:
+  capabilities:
+    name: Report hosted scanner availability
+    runs-on: ubuntu-latest
+    # Reviewed repository configuration, not automatic capability detection.
+    # October 3: this private repository lacks both hosted features. Change
+    # each declaration to enabled when its GitHub feature becomes available.
+    env:
+      CODEQL_STATE: unavailable
+      DEPENDENCY_REVIEW_STATE: unavailable
+    outputs:
+      codeql: ${{ steps.availability.outputs.codeql }}
+      dependency_review: ${{ steps.availability.outputs.dependency_review }}
+    steps:
+      - name: Validate declarations and report coverage
+        id: availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          for setting in CODEQL_STATE DEPENDENCY_REVIEW_STATE; do
+            case "${!setting}" in
+              enabled|unavailable)
+                ;;
+              *)
+                echo "::error::Declare $setting as enabled or unavailable."
+                exit 1
+                ;;
+            esac
+          done
+          echo "codeql=$CODEQL_STATE" >> "$GITHUB_OUTPUT"
+          echo "dependency_review=$DEPENDENCY_REVIEW_STATE" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Hosted security scanners"
+            echo "CodeQL: $CODEQL_STATE"
+            echo "Dependency review: $DEPENDENCY_REVIEW_STATE"
+            echo
+            echo "Unavailable scanners are skipped because this private repository lacks their GitHub features. This does not establish a clean scan."
+            echo "CI separately enforces Gitleaks, pip-audit, npm audit and high-severity Python Bandit checks. These do not provide equivalent CodeQL coverage."
+            echo "The weekly and manual Security runs also execute that complete CI workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  scheduled-validation:
+    name: Run baseline checks on the security schedule
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/ci.yml
+
   dependency-review:
-    if: github.event_name == 'pull_request'
+    needs: capabilities
+    if: github.event_name == 'pull_request' && needs.capabilities.outputs.dependency_review == 'enabled'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -25,6 +71,8 @@ jobs:
           fail-on-severity: high
 
   codeql:
+    needs: capabilities
+    if: needs.capabilities.outputs.codeql == 'enabled'
     runs-on: ubuntu-latest
     permissions:
       contents: read

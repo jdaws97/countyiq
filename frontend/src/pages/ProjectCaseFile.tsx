@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import Badge from '../components/Badge'
 import IntelligenceEventCard from '../components/IntelligenceEventCard'
+import { InvestigationDetail } from '../components/InvestigationDesk'
 import NearbyParcels from '../components/NearbyParcels'
 import PageShell from '../components/PageShell'
 import ReportActions from '../components/ReportActions'
@@ -34,6 +35,7 @@ export default function ProjectCaseFile() {
   const url = key ? `/api/cases/projects/${encodeURIComponent(key)}` : null
   const { data, error, loading } = useFetchJson<ProjectCaseResponse>(url)
   const events = useMemo(() => data?.events ?? [], [data])
+  const matterEvent = events.length === 1 && events[0].matter ? events[0] : null
   const project = events.find((event) => event.project)?.project ?? { key, name: key }
   const watched = Boolean(key) && isProjectWatched(key)
 
@@ -208,7 +210,16 @@ export default function ProjectCaseFile() {
         </Section>
       )}
 
-      {data?.summary && events.length > 0 && (
+      {matterEvent && (
+        <InvestigationDetail
+          event={matterEvent}
+          showContext={false}
+          showFollow={false}
+          showHeading={false}
+        />
+      )}
+
+      {!matterEvent && data?.summary && events.length > 0 && (
         <Section title="Current recorded status">
           <h2>{data.summary.status}</h2>
           {data.summary.as_of && <p>Latest dated activity: {data.summary.as_of}</p>}
@@ -366,7 +377,7 @@ export default function ProjectCaseFile() {
         <NearbyParcels projectKey={key} title="Parcels near this project" />
       )}
 
-      {events.length > 0 && (
+      {!matterEvent && events.length > 0 && (
         <Section title={`Evidence timeline (${events.length})`}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {events.map((event) => (

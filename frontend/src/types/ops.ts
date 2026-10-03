@@ -17,6 +17,7 @@ export interface SourceStatus {
   record_count: number
   status_reason?: SourceHealthReason
   refresh_job?: string
+  freshness_basis?: 'asset' | 'job'
   expected_refresh_hours?: number
   last_run_status?: JobRunHealthStatus
   last_run_job?: string

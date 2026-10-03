@@ -7,10 +7,16 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 
 import { signOut, watchSyncState } from '../lib/watchSync'
 import { useCountyMeta } from '../lib/useCountyMeta'
+import {
+  navigationItemActive,
+  WORKSPACE_NAVIGATION,
+  workspacePage,
+  type WorkspaceIcon,
+} from '../lib/workspaceNavigation'
 import './WorkspaceShell.css'
 
 type WorkspaceShellProps = {
@@ -20,42 +26,6 @@ type WorkspaceShellProps = {
   wide?: boolean
 }
 
-type NavigationItem = {
-  icon: IconName
-  label: string
-  to: string
-  end?: boolean
-}
-
-type IconName =
-  'activity' | 'building' | 'compare' | 'home' | 'map' | 'pin' | 'properties' | 'watch'
-
-const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
-  {
-    label: 'Explore',
-    items: [
-      { to: '/', label: 'Overview', icon: 'home', end: true },
-      { to: '/feed', label: 'Activity', icon: 'activity' },
-      { to: '/map', label: 'Map', icon: 'map' },
-    ],
-  },
-  {
-    label: 'Research',
-    items: [
-      { to: '/radar', label: 'Properties', icon: 'properties' },
-      { to: '/organizations', label: 'Organizations', icon: 'building' },
-      { to: '/municipalities', label: 'Municipalities', icon: 'pin' },
-    ],
-  },
-  {
-    label: 'My workspace',
-    items: [
-      { to: '/watch', label: 'Following', icon: 'watch' },
-      { to: '/compare', label: 'Compare', icon: 'compare' },
-    ],
-  },
-]
-
 function getInitialTheme(): string {
   try {
     return localStorage.getItem('countyiq_theme') || 'light'
@@ -64,48 +34,8 @@ function getInitialTheme(): string {
   }
 }
 
-function contextLabel(pathname: string): string {
-  if (/^\/$|^\/app$/.test(pathname)) {
-    return 'Workspace / Overview'
-  }
-  if (/^\/feed/.test(pathname)) {
-    return 'Explore / Activity'
-  }
-  if (/^\/map/.test(pathname)) {
-    return 'Explore / Map'
-  }
-  if (/^\/radar/.test(pathname)) {
-    return 'Research / Properties'
-  }
-  if (/^\/organizations/.test(pathname)) {
-    return 'Research / Organizations'
-  }
-  if (/^\/municipalities/.test(pathname)) {
-    return 'Research / Municipalities'
-  }
-  if (/^\/watch/.test(pathname)) {
-    return 'My workspace / Following'
-  }
-  if (/^\/compare/.test(pathname)) {
-    return 'My workspace / Compare'
-  }
-  if (/^\/property/.test(pathname)) {
-    return 'Research / Property report'
-  }
-  if (/^\/(owner|entity)/.test(pathname)) {
-    return 'Research / Organization profile'
-  }
-  if (/^\/project/.test(pathname)) {
-    return 'Explore / Project case file'
-  }
-  if (/^\/search/.test(pathname)) {
-    return 'Search'
-  }
-  return 'CountyIQ'
-}
-
-function Icon({ name }: { name: IconName }) {
-  const paths: Record<IconName, ReactNode> = {
+function Icon({ name }: { name: WorkspaceIcon }) {
+  const paths: Record<WorkspaceIcon, ReactNode> = {
     home: <path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9Z M9 21v-6h6v6" />,
     activity: <path d="M3 12h4l2.2-6 4.1 12 2.2-6H21" />,
     map: <path d="m9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Z M9 3v15 M15 6v15" />,
@@ -164,6 +94,7 @@ function SearchForm({ compact = false }: { compact?: boolean }) {
       <input
         id={inputId}
         value={query}
+        maxLength={160}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search places & records"
         title="Search an address, owner, project or public plan number"
@@ -174,29 +105,44 @@ function SearchForm({ compact = false }: { compact?: boolean }) {
 }
 
 function Navigation({ onNavigate, operator }: { onNavigate?: () => void; operator?: boolean }) {
+  const location = useLocation()
   return (
     <nav aria-label="Workspace navigation" className="workspace-shell-navigation">
-      {NAVIGATION_GROUPS.map((group) => (
-        <section className="workspace-shell-nav-group" key={group.label}>
-          <h2>{group.label}</h2>
+      {WORKSPACE_NAVIGATION.map((group) => {
+        const links = (
           <div>
             {group.items.map((item) => (
-              <NavLink
-                className={({ isActive }) =>
-                  `workspace-shell-nav-link${isActive ? ' workspace-shell-nav-link-active' : ''}`
-                }
-                end={item.end}
+              <Link
+                className={`workspace-shell-nav-link${navigationItemActive(location.pathname, item) ? ' workspace-shell-nav-link-active' : ''}`}
+                aria-current={navigationItemActive(location.pathname, item) ? 'page' : undefined}
                 key={item.to}
                 onClick={onNavigate}
                 to={item.to}
               >
                 <Icon name={item.icon} />
                 <span>{item.label}</span>
-              </NavLink>
+              </Link>
             ))}
           </div>
-        </section>
-      ))}
+        )
+        return group.collapsed ? (
+          <details
+            className="workspace-shell-nav-group workspace-shell-secondary-nav"
+            key={group.label}
+            open={
+              group.items.some((item) => navigationItemActive(location.pathname, item)) || undefined
+            }
+          >
+            <summary>{group.label}</summary>
+            {links}
+          </details>
+        ) : (
+          <section className="workspace-shell-nav-group" key={group.label}>
+            <h2>{group.label}</h2>
+            {links}
+          </section>
+        )
+      })}
       {operator && (
         <section className="workspace-shell-nav-group">
           <h2>Operations</h2>
@@ -288,8 +234,7 @@ export default function WorkspaceShell({
     if (!drawerOpen) {
       return
     }
-    const firstLink = drawerRef.current?.querySelector<HTMLAnchorElement>('a')
-    firstLink?.focus()
+    drawerRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
   }, [drawerOpen])
 
   useEffect(() => {
@@ -307,6 +252,18 @@ export default function WorkspaceShell({
       document.documentElement.style.overflow = rootOverflow
     }
   }, [drawerOpen])
+
+  useEffect(() => {
+    // Match the compact navigation breakpoint in WorkspaceShell.css.
+    const desktop = window.matchMedia('(min-width: 1001px)')
+    const closeOnDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setDrawerLocationKey(null)
+      }
+    }
+    desktop.addEventListener('change', closeOnDesktop)
+    return () => desktop.removeEventListener('change', closeOnDesktop)
+  }, [])
 
   const closeDrawer = () => {
     setDrawerLocationKey(null)
@@ -326,8 +283,11 @@ export default function WorkspaceShell({
       return
     }
 
-    const focusable = drawerRef.current?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled])',
+    const candidates = drawerRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), summary',
+    )
+    const focusable = Array.from(candidates ?? []).filter(
+      (item) => item.getClientRects().length > 0,
     )
     if (!focusable?.length) {
       return
@@ -350,12 +310,15 @@ export default function WorkspaceShell({
 
   return (
     <div className="page-shell workspace-shell">
+      <a className="workspace-skip-link" href="#workspace-content">
+        Skip to content
+      </a>
       <aside className="workspace-shell-sidebar">
         <NavLink className="workspace-shell-brand" to="/">
           <span className="workspace-shell-brand-mark">CIQ</span>
           <span>
             <strong>CountyIQ</strong>
-            <small>County intelligence</small>
+            <small>Site research</small>
           </span>
         </NavLink>
         <Navigation operator={account?.authenticated && account.operator} />
@@ -375,13 +338,18 @@ export default function WorkspaceShell({
             <span aria-hidden="true">☰</span>
             Menu
           </button>
-          <p>{contextLabel(location.pathname)}</p>
+          <p>{workspacePage(location.pathname).context}</p>
           <SearchForm />
           <span className="workspace-shell-utility-account">
             {account?.authenticated ? (account.user?.email ?? 'Signed in') : 'Browser workspace'}
           </span>
         </header>
-        <main className={mainClassName} style={wide ? undefined : { maxWidth }}>
+        <main
+          id="workspace-content"
+          tabIndex={-1}
+          className={mainClassName}
+          style={wide ? undefined : { maxWidth }}
+        >
           {children}
         </main>
       </div>

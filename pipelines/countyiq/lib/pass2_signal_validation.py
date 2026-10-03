@@ -24,7 +24,7 @@ SIGNAL_QUESTIONS: dict[str, list[str]] = {
     "active_subdivision": [
         "Is the plan date within the last 3 years, or is this data stale?",
         "Is the scale significant — how many lots/units and total acreage?",
-        "Is the distance (signal's distance_m) close enough to be relevant to this parcel?",
+        "Does plan_location establish a point_on_parcel match consistent with the supplied distance, or only proximity/unresolved linkage?",
         "Does the plan type (subdivision vs land development) match the parcel's context?",
     ],
     "tax_distress": [

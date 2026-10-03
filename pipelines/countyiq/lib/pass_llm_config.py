@@ -38,6 +38,12 @@ class PassSubscriptionPaused(PassSpendLimitExceeded):
     stop_reason = "subscription_paused"
 
 
+class PassCallLimitReached(PassSubscriptionPaused):
+    """The configured run cap was reached; immutable receipts permit resumption."""
+
+    stop_reason = "subscription_call_limit"
+
+
 class SpendReservation(float):
     """Float-compatible reservation carrying its durable-ledger identifier."""
 

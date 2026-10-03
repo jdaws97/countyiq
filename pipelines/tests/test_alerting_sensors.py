@@ -12,6 +12,9 @@ def test_record_outcome_reads_timestamps_from_run_record() -> None:
     run_record = SimpleNamespace(start_time=1_777_555_200.0, end_time=1_777_555_260.0)
     instance = Mock()
     instance.get_run_record_by_id.return_value = run_record
+    instance.get_records_for_run.return_value = SimpleNamespace(
+        records=[], has_more=False
+    )
     context = SimpleNamespace(dagster_run=run, instance=instance)
     database = Mock()
 
@@ -35,6 +38,9 @@ def test_record_outcome_is_best_effort_when_application_database_is_down() -> No
     run = SimpleNamespace(job_name="scraper_refresh", run_id="failed-run")
     instance = Mock()
     instance.get_run_record_by_id.return_value = None
+    instance.get_records_for_run.return_value = SimpleNamespace(
+        records=[], has_more=False
+    )
     context = SimpleNamespace(dagster_run=run, instance=instance)
     database = Mock()
     database.execute.side_effect = RuntimeError("database unavailable")

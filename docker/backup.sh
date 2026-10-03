@@ -53,7 +53,12 @@ countyiq_validate_r2_backup_environment
 
 # Refuse new off-host writes after a manual or automatic cost stop. This check
 # also measures both R2 buckets and trips the whole stack if usage is unreadable.
-"$SCRIPT_DIR/cost-guard.sh" --check
+# A periodic usage check may overlap any upload. Wait briefly for its lock;
+# still abort before writing if capacity cannot be checked within that bound.
+check_backup_capacity() {
+    "$SCRIPT_DIR/cost-guard.sh" --check --lock-wait-seconds 120 "$@"
+}
+check_backup_capacity
 
 countyiq_lock_backup_operations
 
@@ -150,7 +155,7 @@ for database_name in "$PRIMARY_DATABASE" "$DAGSTER_DATABASE"; do
     # Reserve the entire dump before its first remote write so a single backup
     # cannot carry the account through the configured storage safety margin.
     checksum_bytes="$(stat -c '%s' "$checksum_file")"
-    "$SCRIPT_DIR/cost-guard.sh" --check \
+    check_backup_capacity \
         --reserve-bytes "$(( dump_bytes + checksum_bytes ))"
 
     rclone copyto --immutable "$dump_file" "${REMOTE_POSTGRES_PATH}/${dump_name}"
@@ -168,7 +173,7 @@ done
 manifest_name="$(basename "$MANIFEST_FILE")"
 remote_manifest_copy="$DUMP_DIR/remote-$manifest_name"
 manifest_bytes="$(stat -c '%s' "$MANIFEST_FILE")"
-"$SCRIPT_DIR/cost-guard.sh" --check --reserve-bytes "$manifest_bytes"
+check_backup_capacity --reserve-bytes "$manifest_bytes"
 rclone copyto --immutable "$MANIFEST_FILE" "${REMOTE_MANIFEST_PATH}/${manifest_name}"
 rclone copyto "${REMOTE_MANIFEST_PATH}/${manifest_name}" "$remote_manifest_copy"
 cmp --silent "$MANIFEST_FILE" "$remote_manifest_copy"

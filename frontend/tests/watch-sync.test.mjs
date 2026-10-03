@@ -13,6 +13,21 @@ const snapshot = {
   comparison: [],
   recent_investigations: [],
 }
+const profile = {
+  audience: 'service_business',
+  municipalities: ['York Township'],
+  services: ['engineering'],
+  families: ['construction_timing'],
+}
+const work = [
+  {
+    case_key: `emerging-${'a'.repeat(64)}`,
+    status: 'qualifying',
+    note: 'Confirm the permit decision.',
+    last_seen_revision: '1',
+    updated_at: '2026-09-08T12:00:00Z',
+  },
+]
 const inbox = { notifications: [], has_more: false, next_before_id: null, summary: '' }
 const session = (id) => ({
   authenticated: true,
@@ -33,7 +48,14 @@ const deferred = () => {
 async function harness(t, values = new Map()) {
   const directory = mkdtempSync(join(tmpdir(), 'countyiq-sync-'))
   t.after(() => rmSync(directory, { recursive: true, force: true }))
-  for (const name of ['browserStorage', 'watchlist', 'investigationState', 'watchSync']) {
+  for (const name of [
+    'browserStorage',
+    'watchlist',
+    'investigationState',
+    'intelligenceState',
+    'siteInquiries',
+    'watchSync',
+  ]) {
     const source = readFileSync(new URL('../src/lib/' + name + '.ts', import.meta.url), 'utf8')
     const { outputText } = ts.transpileModule(source, {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
@@ -57,7 +79,9 @@ async function harness(t, values = new Map()) {
   globalThis.document = { visibilityState: 'visible' }
   const sync = await import(pathToFileURL(join(directory, 'watchSync.mjs')))
   const watches = await import(pathToFileURL(join(directory, 'watchlist.mjs')))
-  return { sync, watches, values }
+  const intelligence = await import(pathToFileURL(join(directory, 'intelligenceState.mjs')))
+  const browser = await import(pathToFileURL(join(directory, 'browserStorage.mjs')))
+  return { sync, watches, intelligence, browser, values }
 }
 function changedUntil(predicate) {
   return new Promise((resolve) => {
@@ -210,6 +234,89 @@ test('failed refresh after deletion cannot automatically restore the cleared wor
   assert.deepEqual(calls, ['DELETE', 'GET'])
   assert.equal(sync.watchSyncState().conflict, true)
   assert.equal(JSON.parse(values.get('countyiq_account_sync:account-a')).requiresReview, true)
+})
+
+test('intelligence profile and work hydrate per account, sync edits, and isolate after logout', async (t) => {
+  const { sync, intelligence, browser, values } = await harness(t)
+  let account = 'account-a'
+  const snapshots = {
+    'account-a': { ...snapshot, intelligence_profile: profile, intelligence_work: work },
+    'account-b': {
+      ...snapshot,
+      version: 4,
+      intelligence_profile: {
+        audience: 'investor',
+        municipalities: ['Hanover Borough'],
+        services: [],
+        families: ['use_transition'],
+      },
+      intelligence_work: [
+        {
+          case_key: `emerging-${'b'.repeat(64)}`,
+          status: 'waiting',
+          note: 'Wait for hearing minutes.',
+          last_seen_revision: '2',
+          updated_at: '2026-09-08T13:00:00Z',
+        },
+      ],
+    },
+  }
+  let saved = null
+  const put = deferred()
+  globalThis.fetch = async (path, options = {}) => {
+    if (path === '/api/session') return json(session(account))
+    if (path.includes('notifications')) return json(inbox)
+    if (options.method === 'PUT') {
+      saved = JSON.parse(options.body)
+      put.resolve()
+      return json({ ...snapshots[account], version: 5 })
+    }
+    return json(snapshots[account])
+  }
+
+  await sync.refreshAccount()
+  assert.deepEqual(intelligence.getIntelligenceProfile(), profile)
+  assert.deepEqual(intelligence.getIntelligenceWork(), work)
+  assert.equal(
+    values.get('countyiq_account:account-a:countyiq_intelligence_work_v1'),
+    JSON.stringify(work),
+  )
+
+  const stop = sync.startWatchSync()
+  t.after(stop)
+  await new Promise((resolve) => setImmediate(resolve))
+  const editedProfile = { ...profile, services: ['electrical'] }
+  const editedWork = [{ ...work[0], note: 'Engineering scope confirmed.' }]
+  browser.commitBrowserStorage(intelligence.intelligenceStorageEntries(editedProfile, editedWork))
+  window.dispatchEvent(new Event('countyiq-investigation-changed'))
+  await put.promise
+  assert.deepEqual(saved.intelligence_profile, editedProfile)
+  assert.deepEqual(saved.intelligence_work, editedWork)
+  await new Promise((resolve) => setImmediate(resolve))
+
+  account = 'account-b'
+  await sync.refreshAccount()
+  assert.equal(intelligence.getIntelligenceWork()[0].case_key, `emerging-${'b'.repeat(64)}`)
+  assert.equal(intelligence.getIntelligenceProfile().audience, 'investor')
+
+  sync.signOut()
+  assert.deepEqual(intelligence.getIntelligenceProfile(), intelligence.DEFAULT_INTELLIGENCE_PROFILE)
+  assert.deepEqual(intelligence.getIntelligenceWork(), [])
+})
+
+test('legacy server snapshots hydrate safe intelligence defaults', async (t) => {
+  const { sync, intelligence } = await harness(t)
+  globalThis.fetch = async (path) =>
+    path === '/api/session'
+      ? json(session('account-a'))
+      : path.includes('notifications')
+        ? json(inbox)
+        : json(snapshot)
+
+  await sync.refreshAccount()
+
+  assert.deepEqual(intelligence.getIntelligenceProfile(), intelligence.DEFAULT_INTELLIGENCE_PROFILE)
+  assert.deepEqual(intelligence.getIntelligenceWork(), [])
 })
 
 const latestInbox = {

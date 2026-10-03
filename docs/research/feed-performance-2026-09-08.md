@@ -141,8 +141,10 @@ correction attempt produced 30 accepted accounts covering all 67 histories and
 partitions and every accepted account. The final accounts separate the withdrawn
 AutoZone plan from the wellhead denial and appeal, preserve distinct earlier and
 later development proposals, and retain uncertain agenda items without inventing
-approval. Twelve accounts are ready for discovery, eleven need detail, and seven
-mixed or incomplete excerpts remain marked for source review. Production source,
+approval. Twelve accounts are marked ready, of which eight qualify for Activity
+by category; eleven need detail, and seven mixed or incomplete excerpts remain
+marked for source review. Activity and Research together serve all 30 accounts,
+with all 67 histories and 179 complete source passages verified. Production source,
 accepted response and alias assignments match the reviewed artifacts exactly.
 Native quality receipts were rebound to the deployed release and both bounded
 maintenance passes were restored.
@@ -159,3 +161,25 @@ date, parcel association and inference identity matched its accepted record;
 there were zero differences in those checks. Fifty focused tests and eleven real
 Postgres freshness and identity tests passed. This is a publication-query
 adjustment, not a change to source eligibility, account authorship or validation.
+
+Direct project links from Research exposed an Activity-only case query. Stable
+matter links now look in Research when the Activity result is empty. The case
+page uses the shared complete investigation account, including conditions,
+history and source documents. Its API summary reads the accepted matter outcome
+and preserves all supporting receipts; an outcome spanning different record
+dates receives no invented single decision date. Legacy project summaries retain
+their existing behavior.
+
+All 22 Research case responses from the 67-record canary returned the expected
+account through the edited handler against production data. Local Chromium
+replayed those captured responses and verified Research-to-case navigation,
+source selection, six history entries and all sixteen exact excerpts/original
+links in a conditional grading case. Desktop and 390-pixel mobile layouts were
+visually reviewed. Ancillary map responses were stubbed for this browser replay;
+this is not an authenticated production browser walkthrough.
+
+The native runner now accepts an explicit author timeout and records timeout
+diagnostics and stop details. The earlier full run stopped with the generic
+`subscription_unavailable` reason after 125 new bundles; its old diagnostics do
+not establish the underlying cause. This observability change does not change
+prompts or enable a paid fallback.

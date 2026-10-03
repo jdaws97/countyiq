@@ -64,7 +64,9 @@ def parse_penndot_projects_features(raw_features: list[dict]) -> list[dict]:
     records = []
     for feat in raw_features:
         attrs = feat.get("attributes", {})
-        proj_id = attrs.get("PROJ_ID")
+        # Under Construction Points uses PROJECT_ID; other selected categories
+        # use PROJ_ID. Both are the publisher's project identifier, not OBJECTID.
+        proj_id = attrs.get("PROJ_ID", attrs.get("PROJECT_ID"))
         if proj_id is None:
             continue
 
@@ -80,6 +82,8 @@ def parse_penndot_projects_features(raw_features: list[dict]) -> list[dict]:
             if src == "PROJ_ID":
                 continue  # already handled
             val = attrs.get(src)
+            if src == "PROJ_CLASS" and src not in attrs:
+                val = attrs.get("PROJECT_CLASS")
             if val is None or val == "":
                 record[dest] = None
             elif dest == "cost":
