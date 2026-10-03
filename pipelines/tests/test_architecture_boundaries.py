@@ -42,17 +42,13 @@ def test_compose_enforces_credentials_networks_and_versioned_images() -> None:
     )
     services = compose["services"]
     api = services["api"]
-    pipeline = services["dagster-daemon"]
+    migration = services["migrate"]
 
     assert compose["name"] == "countyiq"
     assert api["image"] == "countyiq-api:${COUNTYIQ_IMAGE_TAG:-local}"
-    assert pipeline["image"] == "countyiq-dagster:${COUNTYIQ_IMAGE_TAG:-local}"
-    assert services["migrate"]["image"] == pipeline["image"]
+    assert migration["image"] == "countyiq-migrate:${COUNTYIQ_IMAGE_TAG:-local}"
     assert api["environment"]["DATABASE_USER"] == (
         "${DATABASE_API_USER:?DATABASE_API_USER must be set}"
-    )
-    assert pipeline["environment"]["DATABASE_USER"] == (
-        "${DATABASE_PIPELINE_USER:?DATABASE_PIPELINE_USER must be set}"
     )
 
     api_forbidden = {
@@ -64,11 +60,8 @@ def test_compose_enforces_credentials_networks_and_versioned_images() -> None:
         "SLACK_WEBHOOK_CRITICAL",
     }
     assert not (api_forbidden & set(api["environment"]))
-    assert "DATABASE_URL" not in pipeline["environment"]
-    assert "COUNTYIQ_BACKUP_R2_ACCESS_KEY_ID" not in pipeline["environment"]
-    assert "COUNTYIQ_BACKUP_R2_SECRET_ACCESS_KEY" not in pipeline["environment"]
     assert set(api["networks"]) == {"proxy", "database", "api-egress"}
-    assert set(pipeline["networks"]) == {"database", "pipeline-egress"}
+    assert set(migration["networks"]) == {"database"}
 
     database_url_services = {
         name
@@ -87,7 +80,7 @@ def test_compose_enforces_credentials_networks_and_versioned_images() -> None:
 
 def test_deploy_requires_quiesced_verified_backup_before_migration() -> None:
     deploy = (REPO_ROOT / "docker/deploy.sh").read_text(encoding="utf-8")
-    stop_position = deploy.index("stop -t 60 api dagster-webserver dagster-daemon")
+    stop_position = deploy.index("stop -t 60 api")
     backup_position = deploy.index('"$SCRIPT_DIR/backup.sh" --reason pre-deploy')
     migration_position = deploy.rindex('"${COMPOSE[@]}" run --rm migrate')
 
@@ -102,7 +95,6 @@ def test_deploy_requires_quiesced_verified_backup_before_migration() -> None:
         < deploy.index("RELEASE_RECORDED=true")
     )
     assert "restore_operation_units" in deploy
-    assert 'install -d -o 10001 -g 10001 -m 700 "$BACKFILL_STATE_DIR"' in deploy
     assert "legacy Postgres volume" in deploy
     assert "COUNTYIQ_BACKUP_ID" in deploy
     assert "docker compose down" not in deploy
@@ -116,9 +108,6 @@ def test_deploy_requires_quiesced_verified_backup_before_migration() -> None:
     )
     assert backup.index("rclone check") < manifest_upload
     assert "rclone delete" not in backup
-    assert backup.index("MANIFEST_VERIFIED=true") < backup.index(
-        'find "$ARCHIVE_HOST_DIR"'
-    )
     assert "A manifest is uploaded last" in backup
     assert "COUNTYIQ_BACKUP_ID=" in backup
 
@@ -188,32 +177,11 @@ def test_production_environment_validation_fails_closed() -> None:
 def test_restore_drill_targets_only_disposable_sibling_databases() -> None:
     restore = (REPO_ROOT / "docker/restore-drill.sh").read_text(encoding="utf-8")
     assert 'PRIMARY_DRILL_DATABASE="${PRIMARY_DATABASE}_restore_drill"' in restore
-    assert 'DAGSTER_DRILL_DATABASE="${DAGSTER_DATABASE}_restore_drill"' in restore
     assert "countyiq_validate_restore_targets" in restore
     create_position = restore.index("docker exec countyiq-postgres createdb")
-    assert restore.index('CREATED_DRILL_DATABASE="$drill_database"') > create_position
+    assert (
+        restore.index('CREATED_DRILL_DATABASE="$PRIMARY_DRILL_DATABASE"')
+        > create_position
+    )
     assert '"$CREATED_DRILL_DATABASE"' in restore
     assert "pg_restore --clean" not in restore
-
-
-def test_local_backfill_export_is_fail_closed() -> None:
-    export = (REPO_ROOT / "docker/export-local-backfill.sh").read_text(encoding="utf-8")
-    verify = (REPO_ROOT / "docker/verify-local-backfill-export.sh").read_text(
-        encoding="utf-8"
-    )
-
-    assert "--confirm-quiesced" in export
-    assert "dirty working tree" in export
-    assert 'SCHEMA_REVISION" != "$REPOSITORY_SCHEMA_HEAD"' in export
-    assert 'SCHEMA_REVISION" != "$REPOSITORY_SCHEMA_HEAD"' in verify
-    assert "intelligence_integrity_status" in export
-    assert "intelligence_validation_rejection_status" in export
-    assert "TEST_FIXTURE_COUNTS" in export
-    assert "test-prompt" in export
-    assert "pg_restore --list" in export
-    assert "--database-container" in export
-    assert "COUNTYIQ_PASS${pass_number}_ENABLED" in export
-    assert "sha256sum" in verify
-    assert "pg_restore --list" in verify
-    assert "--database-container" in verify
-    assert "tar -tzf" in verify

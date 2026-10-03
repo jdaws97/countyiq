@@ -51,7 +51,7 @@ allowing storage above the 10 GB free allowance. A trip never
 automatically resumes services.
 
 The 7-day value is based on a 2026-09-04 measurement, not a generic estimate:
-the current CountyIQ and Dagster custom-format dumps total about 222 MB, while
+the historical CountyIQ and Dagster custom-format dumps totaled about 222 MB, while
 the one-time raw archive corpus is about 2.744 GB. Keeping one locked raw copy
 plus seven daily dumps projects to about 4.30 GB; the first day is about 2.97
 GB. A new bulk backfill therefore requires a fresh measurement; the

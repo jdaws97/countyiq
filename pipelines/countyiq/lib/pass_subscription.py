@@ -86,7 +86,7 @@ class SubscriptionPassRunner:
                 self.author(resolve_pass_model(self.pass_number)).check_login()
         except (SubscriptionUnavailable, OSError) as error:
             raise PassSubscriptionPaused(
-                "Codex subscription login is unavailable; run docker/codex-login.sh"
+                "Codex subscription login is unavailable; run codex login on this PC"
             ) from error
 
     def start_item(self):

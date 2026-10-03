@@ -3,33 +3,34 @@
 Source: York County Tax Claim Bureau PDF
 URL: /DocumentCenter/View/1911/Delinquent-Tax-Claim-Listing-PDF
 Records: ~9,000 delinquent parcels (~37K authority-year rows)
-Schedule: Weekly (Sunday, bulk_refresh job via group_name="bulk")
 """
 
 import gc
 import os
 import tempfile
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pdfplumber
 from dagster import (
-    asset,
-    asset_check,
     AssetCheckResult,
     AssetCheckSeverity,
     AssetExecutionContext,
     MaterializeResult,
     MetadataValue,
+    asset,
+    asset_check,
 )
 
 from countyiq.lib.checks import make_row_count_check
 from countyiq.lib.county_config import get_county_config
+from countyiq.lib.http_retry import get_with_retry
 from countyiq.lib.parsers.tax_claims import parse_tax_claims_text
 from countyiq.lib.scd import scd2_upsert
 from countyiq.lib.source_rights import authorize_source, require_source_use
 from countyiq.resources.database import DatabaseResource
 from countyiq.resources.storage import S3StorageResource
-from countyiq.resources.source_snapshots import SourceSnapshotsResource
+
+REQUEST_TIMEOUT = 120
 
 KEY_COLUMNS = ["pidn", "unit_suffix", "tax_year", "authority_name"]
 
@@ -88,7 +89,6 @@ def tax_claims(
     context: AssetExecutionContext,
     database: DatabaseResource,
     s3: S3StorageResource,
-    source_snapshots: SourceSnapshotsResource,
 ) -> MaterializeResult:
     """Download tax claim PDF, parse all pages, SCD2 upsert."""
     county = get_county_config()
@@ -106,11 +106,13 @@ def tax_claims(
     # intermittent 404s for documents that exist (observed 2026-08-02), so
     # retry transient failures rather than killing the weekly run.
     context.log.info(f"Downloading tax claim PDF from {county.tax_claims_pdf_url}")
-    pdf_bytes = source_snapshots.pdf("tax_claims", context)
+    snapshot_started_at = datetime.now(UTC)
+    pdf_bytes = get_with_retry(
+        county.tax_claims_pdf_url, timeout=REQUEST_TIMEOUT
+    ).content
     context.log.info(f"Downloaded {len(pdf_bytes)} bytes")
 
     # 2. Archive raw PDF to S3
-    source_snapshots.archive_receipt(s3, context)
     s3.archive(f"{county.s3_prefix}/bulk/tax_claims", pdf_bytes, filename="listing.pdf")
 
     # 3. Save PDF to disk and extract text in small page chunks so pdfplumber
@@ -177,8 +179,8 @@ def tax_claims(
             key_columns=KEY_COLUMNS,
             value_columns=VALUE_COLUMNS,
             carry_columns=CARRY_COLUMNS,
-            snapshot_started_at=source_snapshots.acquisition_time(),
-            snapshot_id=source_snapshots.snapshot_identity(),
+            snapshot_started_at=snapshot_started_at,
+            snapshot_id=context.run_id,
         )
     finally:
         cur.close()

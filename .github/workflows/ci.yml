@@ -41,8 +41,8 @@ jobs:
 
       - name: Apply Python formatting and verify clean source
         run: |
-          uv run --project pipelines ruff format api pipelines infra/monitoring
-          git diff --exit-code -- api pipelines infra/monitoring
+          uv run --project pipelines ruff format api pipelines docker infra/monitoring
+          git diff --exit-code -- api pipelines docker infra/monitoring
 
       - name: Validate monitoring collector and alert behavior
         run: bash infra/monitoring/check.sh
@@ -133,7 +133,6 @@ jobs:
 
       - name: Provision the pipeline maintenance role
         run: |
-          docker exec countyiq-pipeline-contracts createdb -U dagster_admin dagster
           docker exec -i \
             -e DATABASE_PIPELINE_USER=countyiq_pipeline_test \
             -e DATABASE_PIPELINE_PASSWORD=test-pipeline-role-password-000000000000000000000 \
@@ -234,6 +233,12 @@ jobs:
             COUNTYIQ_DEPLOY_REF="$(git rev-parse HEAD)" \
             COUNTYIQ_ENV_FILE="$PWD/.env" \
             docker/deploy.sh --check
+
+      - name: Build and validate the migration image
+        run: |
+          docker build -f docker/Migrations.Dockerfile -t countyiq-migrate:ci .
+          docker run --rm --network none countyiq-migrate:ci alembic heads
+          docker run --rm --network none countyiq-migrate:ci python -c 'import importlib.util; assert importlib.util.find_spec("dagster") is None'
 
       - name: Build web image and validate Caddy configuration
         run: |

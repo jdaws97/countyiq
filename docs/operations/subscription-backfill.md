@@ -13,25 +13,13 @@ usage depends on document arrivals and changes to complete matter bundles.
 
 Native mode is implemented in the maintained `proceeding_extraction`,
 `municipal_matter_explanations`, and `property_record_explanations` assets and
-keeps LLM jobs manual; no new schedule is enabled. The native login is private and
-persistent on the VPS: `CODEX_HOME` must point to the mounted auth directory,
-owned by container UID/GID 10001. `docker/codex-login.sh` runs device
-authentication inside the Dagster webserver as that user; the login helper
-serializes login, status, logout, and model calls with the same file lock. Set
-`COUNTYIQ_CODEX_AUTH_DIR` on the host to choose the mounted directory (the
-container path is `/opt/countyiq/codex-auth`). Keep it private and never place
-credentials in `.env` or Git.
+keeps LLM jobs manual. All pipeline and native authoring execution now belongs
+on the operator PC. Use the PC's signed-in Codex CLI and keep its authentication
+private. The new release does not install an account login or run Codex inside
+a VPS container. Production source-refresh sessions force inference passes off;
+the native authoring workflow below uses the wrapper's explicit script modes.
 
-First enable Codex device code authorization in ChatGPT's Settings → Security
-(managed workspaces use the workspace permissions). Then run
-`sudo docker/codex-login.sh login` from the deployed checkout and complete
-the displayed OpenAI device flow in your browser. Use
-`sudo docker/codex-login.sh status` to verify the session. This creates a
-separate VPS session; do not copy desktop credentials. The official CLI manages
-refresh, and occasional reauthentication may be required. See OpenAI's
-[private automation authentication guidance](https://learn.chatgpt.com/docs/auth/ci-cd-auth).
-
-The operator can also use a signed-in Codex CLI to produce actual Pass 0 source
+The operator can use a signed-in Codex CLI to produce actual Pass 0 source
 selections and Pass 3 explanations. This local workflow consumes the ChatGPT
 subscription's Codex allowance. It makes no OpenRouter or separately billed
 OpenAI API calls, does not redeem reset credits, and stops if the subscription
@@ -47,18 +35,22 @@ validation, and contradiction gate decide what can be retained.
 
 ## Local batch
 
-From `pipelines/`, with the intended database connection environment:
+For a development database, run from `pipelines/` with explicit local
+`DATABASE_*` settings. The common wrapper supplies durable local state:
 
 ```bash
-DATABASE_PORT=5433 .venv/bin/python scripts/subscription_backfill.py read \
+DATABASE_PORT=5433 .venv/bin/python scripts/run_pipeline.py \
+  --local --script subscription-backfill -- read \
   --directory ../output/subscription-backfill \
   --limit 16 --batch-size 8
 
-DATABASE_PORT=5433 .venv/bin/python scripts/subscription_backfill.py municipal \
+DATABASE_PORT=5433 .venv/bin/python scripts/run_pipeline.py \
+  --local --script subscription-backfill -- municipal \
   --directory ../output/subscription-backfill \
   --limit 32 --batch-size 8
 
-DATABASE_PORT=5433 .venv/bin/python scripts/subscription_backfill.py property \
+DATABASE_PORT=5433 .venv/bin/python scripts/run_pipeline.py \
+  --local --script subscription-backfill -- property \
   --directory ../output/subscription-backfill \
   --limit 16 --batch-size 8
 ```
@@ -67,7 +59,8 @@ For customer activity, author complete municipal matter accounts after the
 source selections and verified evidence links are current (schema 075):
 
 ```bash
-DATABASE_PORT=5433 .venv/bin/python scripts/subscription_backfill.py matter \
+DATABASE_PORT=5433 .venv/bin/python scripts/run_pipeline.py \
+  --local --script subscription-backfill -- matter \
   --directory ../output/subscription-matters \
   --limit 16 --batch-size 2 --workers 1
 ```
@@ -150,15 +143,20 @@ on unchanged work.
 ## Existing production database
 
 Deploy the reviewed commit first. The remote wrapper refuses a dirty local
-checkout or a commit that differs from the deployed Dagster image. It obtains
-the existing pipeline database credentials into process memory, opens a
-temporary loopback SSH tunnel to the private database container, and runs the
-same local authoring script. It closes the tunnel when the batch ends.
+checkout or a commit that differs from the active release. It obtains
+allowlisted pipeline settings and writer credentials into process memory,
+opens a temporary loopback SSH tunnel, and runs the same local authoring script.
+The VPS session holds the deployment lock and enables writer `LOGIN` only
+during the command. Cleanup closes the tunnel, restores `NOLOGIN`, terminates
+writer connections, and releases the lock. See
+[Local pipeline commands](local-pipelines.md) for the shared state and session
+contract.
 
 ```bash
-.venv/bin/python scripts/subscription_backfill_remote.py \
+.venv/bin/python scripts/run_pipeline.py \
   --ssh-target ubuntu@YOUR_HOST \
-  --identity-file /absolute/path/to/ssh-key -- \
+  --identity-file /absolute/path/to/ssh-key \
+  --script subscription-backfill -- \
   read --directory /absolute/path/to/subscription-artifacts --limit 16
 ```
 
@@ -168,7 +166,10 @@ never restore the local application database over an existing production
 database to transfer these outputs.
 
 After reads, rebuild `municipal_evidence_linking`, then finish municipal and
-property explanations and the ordinary deterministic serving projections.
+property explanations and the ordinary deterministic serving projections using
+`run_pipeline.py --job deterministic_enrichment_refresh` with the same SSH
+options. Native scripts retain their own authoring receipts; the Dagster job
+publishes the corresponding run and source-health outcomes synchronously.
 Verify full unfiltered coverage and resolve every in-scope error, stale source,
 or contradiction before customer access. Keep the app private during backfill.
 The record-product scope does not silently authorize a separate county-wide
@@ -178,15 +179,14 @@ legacy owner-alias or signal-voting backfill, nor any paid API expansion.
 
 `docker/install-operation-units.sh` renders backup and storage-guard units for
 the exact release checkout. `docker/deploy.sh` installs them after readiness,
-restores the prior units on a failed release promotion, and prepares the durable
-backfill state and archive directories as container UID/GID 10001. LLM archives
-use `${COUNTYIQ_ARCHIVE_HOST_DIR:-/var/lib/countyiq/archives}`, independent of the
-checkout. The previously active September 7 release's archive
-directory and the legacy archive directory were both empty when this path was
-introduced; no existing transcripts needed migration. The standard image includes
-maintained scripts and evaluation fixtures. Scan OCR uses the separately locked
-operator runtime described in `pipelines/ocr/README.md`; missing preparation
-remains pending rather than becoming an empty read.
+and restores the prior units on a failed release promotion. The daily backup
+contains the primary application database. The PC's run history, model archives,
+backfill state, and explicitly selected authoring artifacts require separate
+preservation. The local wrapper defaults to
+`~/.local/state/countyiq/pipeline`; there is no pipeline container archive mount
+in the new release. Scan OCR uses the separately locked operator runtime
+described in `pipelines/ocr/README.md`; missing preparation remains pending
+rather than becoming an empty read.
 
 ## Compare subscription models for Passes 1 and 2
 
@@ -240,7 +240,8 @@ fails instead of generating a replacement. Refined selection units are currently
 unsupported; their different prompt is rejected for separate review.
 
 ```bash
-DATABASE_PORT=5433 .venv/bin/python scripts/rebind_subscription_reads.py \
+DATABASE_PORT=5433 .venv/bin/python scripts/run_pipeline.py \
+  --local --script rebind-subscription -- \
   --ids 161 713 --directory ../output/subscription-backfill \
   --report ../output/source-binding-review.json
 ```
@@ -251,10 +252,10 @@ Unchanged cards are skipped. Changed cards remain quarantined for contradiction
 review; this command never resolves them or labels its mechanical work as human
 adjudication. Exit status 2 reports errors or unresolved proposals.
 
-For production, add `--rebind` before the remote wrapper's `--` separator and
-pass the same receipt-replay arguments after it. The wrapper still requires a
-clean checkout matching the deployed image and keeps database credentials in
-process memory.
+For production, replace `--local` with the SSH connection options and use
+`--script rebind-subscription --` before the same receipt-replay arguments.
+The wrapper requires a clean checkout matching the active release and keeps
+database credentials in process memory.
 
 ## Review an existing matter partition
 

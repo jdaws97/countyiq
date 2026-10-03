@@ -1,34 +1,28 @@
-# Run Notifications
+# Run outcomes and alerts
 
-CountyIQ registers three Dagster sensors:
+In the local-pipeline release, `scripts/run_pipeline.py` executes explicit
+Dagster jobs on the PC. `countyiq.run_job` waits for completion and writes job
+and per-asset source outcomes to the application health ledgers before
+returning a JSON report. Failed asset checks fail that report. Full events and
+compute logs remain under the PC's `DAGSTER_HOME`.
 
-- `success_reporter` posts a job name and duration to the pipeline webhook.
-- `failure_alerter` posts the failed job and a truncated failure message to the
-  critical webhook.
-- `intelligence_integrity_guard` checks the aggregate integrity view every five
-  minutes. It posts new contradictions to the warning webhook, stale queues or
-  projection/provenance failures to the critical webhook, and one recovery
-  message when health returns to green. A model output rejected by a
-  deterministic gate in the last 24 hours is also a warning. A persisted
-  sensor cursor suppresses unchanged repeats.
+There are no registered Dagster success, failure, or integrity sensors and no
+pipeline webhook notification process. A nonzero command result requires
+inspection of the retained local run. If receipt publication alone failed,
+the wrapper's `--report-run` mode republishes a finished run from the same
+state directory without another acquisition. See
+[Local pipeline commands](local-pipelines.md).
 
-They read `SLACK_WEBHOOK_PIPELINE` and `SLACK_WEBHOOK_CRITICAL` from the
-runtime environment. If a webhook is absent, the notification is logged and
-skipped; the pipeline result is unchanged. Integrity warning messages use
-`SLACK_WEBHOOK_WARNING`.
+Grafana retains host, container, PostgreSQL, backup, source freshness,
+intelligence-integrity, cost-guard, and external-readiness alerts. The new
+catalog has 19 rules and seven collectors; it requires collector deployment
+and Grafana provisioning before those changes are live. Host backup and
+cost-guard notifications remain separate operational paths. See
+[Monitoring](monitoring.md) for routing, installation, and acceptance checks.
 
-The helper is environment-only. It does not call AWS SSM, require an AWS
-runtime, or invent a Slack workspace/channel name. Webhook URLs are secrets and
-must remain in the production `.env`, never in git.
-
-The failure sensor reports a failed Dagster run. CountyIQ does not currently
-apply a global Dagster retry policy, so notifications must not claim that all
-retries were exhausted. Individual HTTP ingestion helpers perform their own
-bounded retries where implemented.
-
-Grafana handles host telemetry, containers, disk, memory, PostgreSQL, backups,
-source freshness, and external readiness through the committed monitoring
-collector and 22-rule catalog. See [Monitoring](monitoring.md) for deployment,
-notification routing, runbooks, and validation. Dagster run notifications and
-Grafana alerts cover different failure paths; a running daemon alone does not
-establish that sources or customer intelligence are current.
+Source freshness remains meaningful when runs are manual. A successful host
+probe does not establish current source coverage, and an unrelated successful
+asset cannot clear a failed source. Inspect application health alongside the
+job report before closing an alert. Individual HTTP clients retain their
+bounded retries; a failed job does not imply an unlimited or global retry
+policy.

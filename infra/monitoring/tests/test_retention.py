@@ -20,9 +20,10 @@ PREVIOUS = "b" * 40
 RETIRED = "c" * 40
 
 
-def receipt(reference, previous="none"):
+def receipt(reference, previous="none", *, legacy=False):
     result = {"deploy_ref": reference, "previous_ref": previous}
-    for index, field in enumerate(retention.REPOSITORIES.values()):
+    fields = ("api_image", "web_image", "dagster_image" if legacy else "migrate_image")
+    for index, field in enumerate(fields):
         result[field] = "sha256:" + reference[0] * 63 + str(index)
     return result
 
@@ -31,6 +32,7 @@ def release_images(record):
     return [
         retention.Image(record[field], OLD, (f"{repository}:{record['deploy_ref']}",))
         for repository, field in retention.REPOSITORIES.items()
+        if field in record
     ]
 
 
@@ -41,7 +43,7 @@ def write_receipt(path, record):
 class RetentionTests(unittest.TestCase):
     def setUp(self):
         self.current = receipt(CURRENT, PREVIOUS)
-        self.previous = receipt(PREVIOUS)
+        self.previous = receipt(PREVIOUS, legacy=True)
         self.receipts = [self.current, self.previous]
         self.images = release_images(self.current) + release_images(self.previous)
         self.used = {self.current["api_image"]}
@@ -68,8 +70,39 @@ class RetentionTests(unittest.TestCase):
         )
         planned = retention.removal_plan(self.images, self.receipts, self.used, NOW)
         self.assertEqual(
-            planned, [f"countyiq-dagster:{RETIRED}", f"countyiq-web:{RETIRED}"]
+            planned, [f"countyiq-migrate:{RETIRED}", f"countyiq-web:{RETIRED}"]
         )
+
+    def test_keeps_legacy_rollback_images_and_retires_unused_dagster_tags(self):
+        images = self.images + release_images(receipt(RETIRED, legacy=True))
+        self.assertEqual(
+            retention.removal_plan(images, self.receipts, self.used, NOW),
+            [
+                f"countyiq-api:{RETIRED}",
+                f"countyiq-dagster:{RETIRED}",
+                f"countyiq-web:{RETIRED}",
+            ],
+        )
+
+    def test_missing_or_invalid_receipt_images_fail_closed(self):
+        invalid_receipts = []
+        for field in ("api_image", "web_image", "migrate_image"):
+            missing = self.current.copy()
+            del missing[field]
+            invalid_receipts.append(missing)
+            invalid_receipts.append({**self.current, field: "invalid"})
+        invalid_receipts.append({**self.current, "dagster_image": "invalid"})
+        legacy_missing = self.previous.copy()
+        del legacy_missing["dagster_image"]
+        invalid_receipts.append(legacy_missing)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "current.env"
+            for record in invalid_receipts:
+                with self.subTest(record=record):
+                    write_receipt(path, record)
+                    with self.assertRaises(ValueError):
+                        retention.read_receipt(path)
 
     def test_keeps_other_tags_pointing_to_a_protected_image_identity(self):
         current = self.images[0]
@@ -153,7 +186,8 @@ class RetentionTests(unittest.TestCase):
             commands,
             [
                 ("docker", "image", "rm", "--no-prune", f"{repository}:{RETIRED}")
-                for repository in sorted(retention.REPOSITORIES)
+                for repository, field in sorted(retention.REPOSITORIES.items())
+                if field in self.current
             ]
             + [
                 (

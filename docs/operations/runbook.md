@@ -5,6 +5,12 @@ the current release receipt and host state before operating it. Host, user and
 SSH key are recorded in infra/ansible/inventory/production.yml; examples below
 assume an SSH alias named countyiq points to that inventory entry.
 
+The new release has four persistent services: PostgreSQL, API, Caddy, and
+cloudflared. Dagster jobs run explicitly on the PC; this document does not
+establish that an existing host has completed the transition. Use
+[Local pipeline commands](local-pipelines.md) for production refreshes and
+receipt recovery.
+
 ## Operator shell
 
 Connect with the configured key, then enter a root shell. The production
@@ -27,7 +33,7 @@ or enable shell tracing around credentials.
 ## Routine checks
 
     ciq ps
-    ciq logs --tail=100 api dagster-webserver dagster-daemon
+    ciq logs --tail=100 api caddy cloudflared
     systemctl status countyiq-cost-guard.timer countyiq-backup.timer
     /opt/countyiq/docker/cost-guard.sh --status
     docker stats --no-stream
@@ -35,10 +41,13 @@ or enable shell tracing around credentials.
     docker system df
     free -m
 
-Inspect failed Dagster runs and source freshness. A running daemon alone does
-not prove that county ingestion or intelligence coverage is current.
+Inspect source freshness and the synchronous job/source receipts in the health
+API. For failed jobs, inspect the executing PC's Dagster history beneath
+`~/.local/state/countyiq/pipeline/dagster`. The VPS has no pipeline daemon to
+restart.
 
-Postgres is reachable inside Compose; it has no published host TCP port:
+Postgres is reachable inside Compose and on host loopback port 5432. Production
+pipeline access uses the protected SSH wrapper:
 
     ciq exec -T postgres psql -U dagster_admin -d countyiq \
       -c "SELECT pg_size_pretty(pg_database_size('countyiq'));"
@@ -80,7 +89,8 @@ building images or changing services.
 
 Use --initial only before the first recorded release. Ordinary releases
 require a recent successful restore-drill receipt and authenticated public
-readiness configuration. The script builds commit-tagged images, stops writers,
+readiness configuration. The script builds commit-tagged API, web, and migration
+images, acquires the host lock shared with local pipeline sessions, stops writers,
 verifies the backup, migrates, checks readiness, and promotes the release
 receipt and protected image tag. A failure after migration starts leaves
 application services stopped for reviewed recovery.
@@ -98,19 +108,21 @@ receipt. Check the cost guard first; a failed check must stop the procedure.
 
     /opt/countyiq/docker/check-host.sh
     /opt/countyiq/docker/cost-guard.sh --check
-    ciq restart dagster-webserver dagster-daemon
+    ciq restart api caddy cloudflared
 
-Verify container health and the relevant Dagster run state after a restart.
+Verify container health and public readiness after a restart. Run or resume
+pipeline work explicitly from the PC after the service incident is resolved.
 
 ## Emergency stop
 
-Latch a manual stop so scheduled work cannot silently resume:
+Latch a manual stop to stop services and reject protected pipeline sessions:
 
     /opt/countyiq/docker/cost-guard.sh --trip manual
 
 Check the command exit status, container state and timers. A failed stop
 operation still records the latch but needs operator follow-up. In-flight work
-may be interrupted. Keep named volumes intact.
+may be interrupted; the local writer session checks the latch on its heartbeat
+and revokes writer access during cleanup. Keep named volumes intact.
 
 After resolving the incident, review the stop reason and measured usage.
 The cost-guard reset command rechecks usage; it does not restart services or
@@ -130,9 +142,10 @@ exclusive incident ownership before changing services.
     docker image inspect "countyiq-api:$LAST_GOOD"
     COUNTYIQ_IMAGE_TAG="$LAST_GOOD" ciq up -d --no-deps --wait api
 
-For Dagster, inspect the corresponding countyiq-dagster image and update both
-dagster-webserver and dagster-daemon together. For the frontend, inspect the
-countyiq-web image and update the caddy service. Recheck API/frontend contracts
+For the frontend, inspect the countyiq-web image and update the caddy service.
+There is no pipeline service image to restart. Local pipeline sessions require
+the checkout and deployed API to match the recorded release, so a mixed-image
+incident state must be reconciled before resuming them. Recheck API/frontend contracts
 when mixing service versions. Record the affected services and image IDs in the
 incident record; these commands do not promote a new release receipt or rewrite
 the persisted default image tag. Do not perform later routine restarts until

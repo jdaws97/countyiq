@@ -1,37 +1,4 @@
-code_servers:
-  local_startup_timeout: 180
-
-storage:
-  postgres:
-    postgres_db:
-      hostname:
-        env: DATABASE_HOST
-      username:
-        env: DATABASE_USER
-      password:
-        env: DATABASE_PASSWORD
-      db_name: dagster
-      port:
-        env: DATABASE_PORT
-
-local_artifact_storage:
-  module: dagster.core.storage.root
-  class: LocalArtifactStorage
-  config:
-    base_dir:
-      env: DAGSTER_LOCAL_ARTIFACT_STORAGE_DIR
-
-compute_logs:
-  module: dagster.core.storage.local_compute_log_manager
-  class: LocalComputeLogManager
-  config:
-    base_dir:
-      env: DAGSTER_COMPUTE_LOGS_DIR
-
-# One VPS must never launch overlapping scheduled/manual runs. The daemon keeps
-# later runs queued without allocating their compute processes.
-run_queue:
-  max_concurrent_runs: 1
-
+# Run history, materializations and compute logs live beneath the PC's
+# DAGSTER_HOME. Dagster defaults to local SQLite storage. No daemon is needed.
 telemetry:
   enabled: false

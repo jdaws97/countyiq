@@ -43,30 +43,37 @@ No general historical-row purge job currently exists.
 ## Model Request and Response Archives
 
 The LLM harness stores prompts, raw responses, model metadata, and keys under
-`COUNTYIQ_ARCHIVE_DIR`. Production mounts `/opt/countyiq/archives`, and the
-backup script copies that tree to the `countyiq-backups/intelligence-archives`
-R2 prefix. These files can contain owner names, parcel context, and source text.
+`COUNTYIQ_ARCHIVE_DIR`. The local runner sets this to
+`~/.local/state/countyiq/pipeline/archives` by default. These files can contain
+owner names, parcel context, and source text. Native authoring also retains
+request/response artifacts in its explicitly selected `--directory`.
 
 `COUNTYIQ_LLM_ARCHIVE_RETENTION_DAYS` defaults to 90. The harness prunes only
 its recognized `<label>/<UTC date>/<hash>_<timestamp>.json` files, at most once
-per process day, and leaves unrelated files untouched. The daily backup script
-applies the same limit to the persistent host tree and the dedicated R2 prefix,
-so copying an archive does not turn it into indefinite history. Setting the
+per process day, and leaves unrelated files untouched. This is local harness
+retention; it does not automatically prune or back up native authoring artifact
+directories. Setting the
 value to `0` disables expiry and is reserved for an explicitly approved legal
 hold or incident investigation; it should not be the normal production value.
 
-The production Compose file bind-mounts `../archives` at
-`/opt/countyiq/archives` for both Dagster services. Restrict that host path and
-R2 prefix to pipeline operators, do not commit archives, and do not treat these
-raw transcripts as a customer-facing export or permanent evidence ledger.
+The VPS has no pipeline archive mount in the new runtime. Restrict local
+archives and authoring directories to pipeline operators and preserve required
+receipts separately. Do not commit archives or treat raw transcripts as a
+customer-facing export or permanent evidence ledger.
 
 ## Backups and Logs
 
-`docker/backup.sh` creates daily custom-format dumps of both `countyiq` and
-`dagster`, uploads them to R2, removes database dumps older than 30 days, and
-enforces the configured LLM-archive retention locally and in R2. Backup restore
-is currently a manual check.
+`docker/backup.sh` creates daily custom-format dumps of the primary `countyiq`
+database. It validates the dump, verifies the R2 copy against its SHA-256, and
+publishes a completion manifest last. Bucket-lock and lifecycle rules own
+remote protection and expiry; the backup command does not delete remote dumps.
+Restore drills remain explicit operations and provide receipts used by release
+preflight.
 
-Docker log retention and R2 lifecycle policy are not configured by this repo,
-so no fixed seven-day or forever claim is made for them. Operators must inspect
-the host's Docker logging configuration and Cloudflare lifecycle rules.
+Local Dagster run/event history and compute logs live beneath
+`~/.local/state/countyiq/pipeline/dagster`. They and local model artifacts are
+outside the VPS database backup. No automatic local Dagster history purge is
+configured; operators must preserve and manage that state separately.
+
+Compose rotates container JSON logs at 10 MiB with five files per service.
+R2 lifecycle policy remains an account setting that operators must verify.

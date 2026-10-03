@@ -21,7 +21,8 @@ EXTRA_RELEASES = Path("/etc/countyiq/retained-releases.txt")
 DEPLOY_LOCK = Path("/var/lock/countyiq-deploy.lock")
 REPOSITORIES = {
     "countyiq-api": "api_image",
-    "countyiq-dagster": "dagster_image",
+    "countyiq-migrate": "migrate_image",
+    "countyiq-dagster": "dagster_image",  # Historical releases remain rollback points.
     "countyiq-web": "web_image",
 }
 COMMIT = re.compile(r"[0-9a-f]{40}")
@@ -39,12 +40,29 @@ class Image:
 
 def command(*arguments: str, timeout: int = 60) -> str:
     result = subprocess.run(
-        list(arguments), capture_output=True, text=True, timeout=timeout
+        list(arguments), capture_output=True, text=True, timeout=timeout, check=False
     )
     if result.returncode:
         # Docker inspection is deliberately limited to non-secret metadata.
         raise RuntimeError(f"{arguments[0]} {arguments[1]} failed")
     return result.stdout
+
+
+def receipt_repositories(receipt: dict[str, str]) -> dict[str, str]:
+    """Validate images recorded by either current or historical release receipts."""
+    if not all(field in receipt for field in ("api_image", "web_image")):
+        raise ValueError("Release receipt has no application image identities")
+    if not any(field in receipt for field in ("migrate_image", "dagster_image")):
+        raise ValueError("Release receipt has no migration image identity")
+    repositories = {
+        repository: field
+        for repository, field in REPOSITORIES.items()
+        if field in receipt
+    }
+    for field in repositories.values():
+        if not IMAGE_ID.fullmatch(receipt[field]):
+            raise ValueError("Release receipt has no valid image identity")
+    return repositories
 
 
 def read_receipt(path: Path) -> dict[str, str]:
@@ -58,9 +76,7 @@ def read_receipt(path: Path) -> dict[str, str]:
         fields[key] = value
     if not COMMIT.fullmatch(fields.get("deploy_ref", "")):
         raise ValueError("Release receipt has no valid commit")
-    for field in REPOSITORIES.values():
-        if not IMAGE_ID.fullmatch(fields.get(field, "")):
-            raise ValueError("Release receipt has no valid image identity")
+    receipt_repositories(fields)
     return fields
 
 
@@ -107,9 +123,7 @@ def image_inventory() -> list[Image]:
     images = []
     for line in output.splitlines():
         item = json.loads(line)
-        created = datetime.datetime.fromisoformat(
-            item["created"].replace("Z", "+00:00")
-        )
+        created = datetime.datetime.fromisoformat(item["created"])
         if created.tzinfo is None or not IMAGE_ID.fullmatch(item["id"]):
             raise ValueError("Docker image metadata is incomplete")
         images.append(Image(item["id"], created, tuple(item["tags"] or [])))
@@ -141,7 +155,7 @@ def removal_plan(
     by_tag = {tag: image for image in images for tag in image.tags}
     protected = set(used_images)
     for receipt in receipts:
-        for repository, field in REPOSITORIES.items():
+        for repository, field in receipt_repositories(receipt).items():
             tag = f"{repository}:{receipt['deploy_ref']}"
             image = by_tag.get(tag)
             if image is None or image.identity != receipt[field]:

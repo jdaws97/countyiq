@@ -2,7 +2,7 @@
 
 Alembic migrations are the schema authority. The ordered scripts under
 `pipelines/init-db/` enable PostgreSQL extensions, create the `staging` and
-`meta` schemas, and create the separate Dagster database; they do not own
+`meta` schemas and database roles; they do not own
 application tables.
 
 Migration `001_initial_schema_mvp_sources.py` created three speculative
@@ -16,8 +16,8 @@ No asset, sensor, API route, or frontend page ever read or wrote them, so
 migration `030_remove_unused_meta_tables.py` removes them. Its upgrade refuses
 to drop any table containing unexpected deployed rows. Revision 037 later adds
 the narrowly scoped `job_run_status` projection that has an explicit writer
-and reader; full Dagster run history remains in the separate `dagster`
-database. See `docs/operations/health-dashboard.md` for the actual health
+and reader; full Dagster run history now remains in SQLite under the PC's
+`DAGSTER_HOME`. See `docs/operations/health-dashboard.md` for the actual health
 contract.
 
 Current operational governance and audit state is deliberately stored in `meta`:
@@ -58,25 +58,27 @@ resolution path. Runtime code may
 update health and append decisions, but it must not invent policy rows, expand
 origins, or update audit history.
 
-## Database Separation
+## Runtime state separation
 
-The production Postgres container initializes two databases:
+The primary `countyiq` PostgreSQL database holds application schemas and data.
+Dagster run history, events, and compute logs live locally beneath
+`~/.local/state/countyiq/pipeline/dagster` by default.
 
-- `countyiq`: application schemas and data
-- `dagster`: Dagster run, event-log, and schedule storage
-
-The API never queries the `dagster` database. Existing run-status sensors
-project the minimum latest-job state into `meta.job_run_status`; operators use
-the loopback-bound Dagster webserver or container logs for step-level and
-historical detail.
+The local runner synchronously projects completed outcomes into
+`meta.job_run_status` and source-refresh ledgers. The API reads those compact
+tables, while operators use the PC's run/event history for step-level detail.
+No running sensor or server-side Dagster database is required. Historical
+Dagster state retained during a host transition is outside the active schema
+and daily primary-database backup model.
 
 ## Initialization
 
-From `docker/`, after the Postgres container is healthy:
+Production migrations run through `docker/deploy.sh` using the one-shot
+`migrate` image. For a reviewed operator inspection, use the protected Compose
+environment from the [runbook](../operations/runbook.md):
 
 ```bash
-docker compose exec dagster-daemon \
-  alembic -c /opt/countyiq/pipelines/alembic.ini upgrade head
+ciq run --rm migrate alembic -c /opt/pipelines/alembic.ini current
 ```
 
 For clean test-database instructions, use `docs/operations/testing.md`.

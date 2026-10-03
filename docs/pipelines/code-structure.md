@@ -6,31 +6,33 @@ sit beside it.
 
 ## Layout
 
-| Path | Responsibility |
-|---|---|
-| `countyiq/assets/` | Dagster assets and asset checks, grouped by source type |
-| `countyiq/lib/` | Parsers, clients, SCD2 helpers, LLM passes, and shared domain logic |
-| `countyiq/resources/` | PostgreSQL and R2 resource construction |
-| `countyiq/jobs/` | Asset selections for manually runnable jobs |
-| `countyiq/schedules/` | Cron schedules for those jobs |
-| `countyiq/sensors/` | Run-status alerting and the application health projection |
-| `countyiq/definitions.py` | Registers assets, checks, jobs, schedules, sensors, and resources |
-| `alembic/versions/` | Ordered database migrations |
-| `tests/` | Unit, contract, parser, wiring, and database-backed tests |
-| `eval/` | Manual model-comparison runner and report tool |
-| `scripts/` | Small manual tools that do not belong to the Dagster graph, including `backtest_radar_weights.py` (calibrates opportunity weights against historical plan filings; no model calls) |
+| Path                              | Responsibility                                                                                                                                                                     |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `countyiq/assets/`                | Dagster assets and asset checks, grouped by source type                                                                                                                            |
+| `countyiq/lib/`                   | Parsers, clients, SCD2 helpers, LLM passes, and shared domain logic                                                                                                                |
+| `countyiq/resources/`             | PostgreSQL and R2 resource construction                                                                                                                                            |
+| `countyiq/jobs/`                  | Asset selections for manually runnable jobs                                                                                                                                        |
+| `countyiq/definitions.py`         | Registers assets, checks, explicit jobs, and resources                                                                                                                             |
+| `countyiq/run_job.py`             | Executes a local job and synchronously publishes health receipts                                                                                                                   |
+| `countyiq/lib/run_reporting.py`   | Projects completed runs and asset checks into application health                                                                                                                   |
+| `countyiq/lib/remote_pipeline.py` | Keeps the production SSH tunnel and writer lease alive                                                                                                                             |
+| `alembic/versions/`               | Ordered database migrations                                                                                                                                                        |
+| `tests/`                          | Unit, contract, parser, wiring, and database-backed tests                                                                                                                          |
+| `eval/`                           | Manual model-comparison runner and report tool                                                                                                                                     |
+| `scripts/`                        | The `run_pipeline.py` entry point and bounded manual tools, including `backtest_radar_weights.py` (calibrates opportunity weights against historical plan filings; no model calls) |
 
 Asset groups currently include `arcgis`, `radar`, `bulk`, `scrapers`,
 `enrichment`, `paused_sources`, and `manual_sources`. The latter two
-are intentionally outside scheduled production jobs. Parsers belong under `countyiq/lib/parsers/`; source-specific
+are intentionally outside ordinary refresh jobs. Parsers belong under `countyiq/lib/parsers/`; source-specific
 configuration belongs in `countyiq/lib/county_config.py`.
 
 ## Registration
 
 `countyiq/definitions.py` loads assets and asset checks from the package, then
-registers explicit jobs, schedules, sensors, and resources. A new asset is
+registers explicit jobs and resources. A new asset is
 discoverable when it is imported by its package and loaded through that module
-tree. A new job or schedule must also be added to the corresponding registry.
+tree. A new job must also be added to the registry. There are no registered
+schedules or sensors; the operator invokes jobs or asset subsets locally.
 
 Dagster resource parameters on assets must be type-annotated. Otherwise Dagster
 interprets them as asset dependencies.
@@ -39,10 +41,10 @@ interprets them as asset dependencies.
 
 - PIDN is the parcel key.
 - County-specific URLs, filters, and thresholds come from `county_config.py`.
-- Scheduled source jobs select only assets whose county capability is
-  configured, and optional job schedules are registered only when at least one
-  matching capability exists. A new county manifest can omit optional sources
-  without creating empty or predictably failing network runs.
+- Source jobs select only assets whose county capability is configured. The
+  local runner rejects an empty job and a subset outside its selected job.
+  A new county manifest can omit optional sources without creating
+  predictably failing network runs.
 - Raw payloads are archived to R2 before parsing.
 - Staging tables use SCD Type 2 (`valid_from`, `valid_to`).
 - `public.properties` is a view.
@@ -73,8 +75,10 @@ interprets them as asset dependencies.
 cd pipelines
 uv sync --locked --extra dev
 .venv/bin/python -m pytest tests/ -q -m "not integration"
-.venv/bin/dagster dev -m countyiq.definitions
+.venv/bin/python scripts/run_pipeline.py --local --job deterministic_enrichment_refresh
 ```
 
 Use the local Docker Postgres instructions in `AGENTS.md` for database-backed
-tests and migrations.
+tests and migrations. The command uses explicit development `DATABASE_*`
+settings. For production, use the protected SSH session documented in
+[Local pipeline commands](../operations/local-pipelines.md).

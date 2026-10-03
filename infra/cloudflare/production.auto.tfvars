@@ -2,7 +2,6 @@ cloudflare_account_id = "a37fbb717276b94bcec2a5eb2be0a8d2"
 cloudflare_zone_id    = "62bd19e18a62734396b24497c095d9e6"
 domain                = "countyiq.net"
 access_auth_domain    = "countyiq.cloudflareaccess.com"
-operator_emails       = ["jarod.daws@gmail.com", "jarod.daws@protonmail.com"]
 
 access_allowed_emails = [
   "jarod.daws@protonmail.com",

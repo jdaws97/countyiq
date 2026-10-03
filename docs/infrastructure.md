@@ -7,28 +7,35 @@ provider and sizing decisions.
 
 ## Runtime Topology
 
-| Layer | Repository configuration |
-|---|---|
-| Front door | Cloudflare TLS/WAF, Access for app testers, and Tunnel |
-| Frontend | Separate marketing and app HTML entries served by Caddy on the VPS |
-| API | FastAPI behind Caddy on the VPS |
-| Pipelines | Dagster on the VPS |
-| Database | PostgreSQL 16 + PostGIS on the VPS |
-| Raw archive store | Cloudflare R2 |
-| LLM backend | OpenRouter |
+| Layer             | Repository configuration                                                      |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Front door        | Cloudflare TLS/WAF, Access for app testers, and Tunnel                        |
+| Frontend          | Separate marketing and app HTML entries served by Caddy on the VPS            |
+| API               | FastAPI behind Caddy on the VPS                                               |
+| Pipelines         | Explicit local Dagster CLI jobs on the operator PC                            |
+| Database          | PostgreSQL 16 + PostGIS on the VPS                                            |
+| Raw archive store | Cloudflare R2                                                                 |
+| LLM backend       | Explicitly enabled OpenRouter or supported native subscription work on the PC |
 
 ## Container Services
 
-The production Compose stack in `docker/docker-compose.yml` is the current deployment reference:
+The release configuration in `docker/docker-compose.yml` has four persistent
+services and a one-shot migration tool. The release receipt is authoritative
+about whether this configuration is deployed.
 
-| Service | Purpose |
-|---|---|
-| `postgres` | application database + PostGIS |
-| `api` | FastAPI/Uvicorn |
-| `dagster-webserver` | Dagster UI and GraphQL API |
-| `dagster-daemon` | Schedule/sensor evaluation and run execution |
-| `caddy` | frontend files and API proxy on private port 8080 |
-| `cloudflared` | outbound Tunnel connector; public TLS terminates at Cloudflare |
+| Service       | Purpose                                                            |
+| ------------- | ------------------------------------------------------------------ |
+| `postgres`    | application database + PostGIS                                     |
+| `api`         | FastAPI/Uvicorn                                                    |
+| `caddy`       | frontend files and API proxy on private port 8080                  |
+| `cloudflared` | outbound Tunnel connector; public TLS terminates at Cloudflare     |
+| `migrate`     | one-shot Alembic image, run only during reviewed schema operations |
+
+The PC stores SQLite run history and logs beneath
+`~/.local/state/countyiq/pipeline/dagster`. There are no deployed Dagster
+schedules, sensors, daemon, or webserver. Jobs and asset subsets are invoked
+through [the local runner](operations/local-pipelines.md), which writes health
+receipts synchronously before returning.
 
 ## Required Environment
 
@@ -50,11 +57,14 @@ Credential boundaries:
   pipeline/R2/Slack credentials. `03-api-role.sh` creates and refreshes its
   source-data read grants and scoped account/workspace write grants after
   migrations.
-- Scheduled Dagster containers receive an allowlist of pipeline settings—not
-  the complete environment file—and use a non-superuser writer created by
-  `02-runtime-role.sh`. Only the short-lived `migrate` service and host backup
-  job use the database administrator credential.
-- Dagster's R2 credential is scoped to raw archives. The separate host-only
+- A protected SSH session lends an allowlist of pipeline settings and the
+  non-superuser writer credential to the PC in memory. It requires a clean
+  checkout matching the deployed commit, holds the host deployment lock, and
+  enables writer `LOGIN` only for the session. Cleanup restores `NOLOGIN` and
+  terminates writer connections. Production source sessions disable every
+  inference pass. Only the short-lived `migrate` service and host administrative
+  operations use the database administrator credential.
+- The pipeline's R2 credential is scoped to raw archives. The separate host-only
   backup credential is scoped to the private database-backup bucket and is
   never injected into an application container.
 
@@ -65,11 +75,12 @@ Credential boundaries:
 - Cloudflare Access covers the whole app host. The API also verifies customer
   identity; production preflight rejects disabled authentication. Marketing
   cannot proxy API requests.
-- Postgres and Dagster stay private; use SSH tunnels for operator access.
+- Postgres binds only to host loopback on port 5432; the protected runner creates
+  a temporary SSH tunnel for local pipeline access.
 - SSH key auth only.
-- API and pipeline containers run as UID 10001 with dropped capabilities;
+- API and migration containers run as UID 10001 with dropped capabilities;
   Postgres is isolated on an internal network and Caddy cannot reach it.
-- API, pipeline, and Tunnel internet egress use separate bridge networks.
+- API and Tunnel internet egress use separate bridge networks.
   Caddy joins only the internal proxy and edge networks.
 - External runtime images and Dockerfile bases are pinned by digest; Dependabot
   proposes reviewed digest updates rather than silently changing a deployment.
@@ -83,9 +94,15 @@ Credential boundaries:
 
 ## Backups And Archives
 
-- PostgreSQL backups: unique custom-format `pg_dump` sets in private R2 storage
+- PostgreSQL backups: daily custom-format `pg_dump` sets of the primary
+  `countyiq` database in private R2 storage
 - raw pipeline archives: Cloudflare R2
-- LLM output archives: `COUNTYIQ_ARCHIVE_DIR`
+- LLM output archives: local `~/.local/state/countyiq/pipeline/archives` by default
+
+The VPS backup does not include the PC's SQLite run history, logs, or authoring
+artifacts. Operators must preserve those local directories separately. An older
+Dagster database or volume retained during cutover is historical state, not a
+dependency of the new runtime.
 
 The archives are operational artifacts, not core repo content. They should not be committed to git.
 Each database dump is validated locally, uploaded with a SHA-256 sidecar,
@@ -97,8 +114,7 @@ deployments require a recent receipt from `docker/restore-drill.sh`.
 
 ## Delivery
 
-Operator monitoring and private Dagster browser access are configured in
-`infra/monitoring/` and `infra/cloudflare/`. See
+Operator monitoring is configured in `infra/monitoring/`. See
 [Monitoring](operations/monitoring.md) for installation, account connection,
 zero-cost limits, and the live acceptance checks.
 
@@ -109,7 +125,8 @@ It does not publish images or deploy either runtime.
 
 VPS release initiation remains manual, but execution is scripted and
 fail-closed. The operator checks out an exact reviewed SHA and runs
-`docker/deploy.sh`; the script builds SHA-tagged images locally, stops writers,
+`docker/deploy.sh`; the script builds SHA-tagged images on the VPS, acquires the
+same host lock as local pipeline sessions, stops application writers,
 requires a remotely verified pre-deploy backup, applies Alembic, refreshes
 runtime grants, checks readiness, persists the active image tag, and writes an
 immutable release receipt.

@@ -1,6 +1,5 @@
 locals {
-  app_domain     = "app.${var.domain}"
-  dagster_domain = "dagster.${var.domain}"
+  app_domain = "app.${var.domain}"
 }
 
 resource "cloudflare_zero_trust_organization" "countyiq" {
@@ -35,7 +34,6 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "production" {
   # Install the gate before a hostname can reach even the old origin.
   depends_on = [
     cloudflare_zero_trust_access_application.product,
-    cloudflare_zero_trust_access_application.dagster,
   ]
 
   account_id = var.cloudflare_account_id
@@ -58,46 +56,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "production" {
         }
       },
       {
-        hostname = local.dagster_domain
-        service  = "http://dagster-webserver:3000"
-      },
-      {
         service = "http_status:404"
       }
     ]
   }
-}
-
-# Pipeline controls are operator-only; customer/tester access never grants this.
-resource "cloudflare_zero_trust_access_application" "dagster" {
-  account_id                = var.cloudflare_account_id
-  name                      = "CountyIQ Dagster operator"
-  domain                    = local.dagster_domain
-  type                      = "self_hosted"
-  session_duration          = "8h"
-  app_launcher_visible      = true
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.email_otp.id]
-  auto_redirect_to_identity = true
-
-  policies = [{
-    name       = "CountyIQ owner only"
-    decision   = "allow"
-    precedence = 1
-    include = [for email in sort(tolist(var.operator_emails)) : {
-      email = { email = email }
-    }]
-  }]
-}
-
-resource "cloudflare_dns_record" "dagster" {
-  depends_on = [cloudflare_zero_trust_access_application.dagster]
-
-  zone_id = var.cloudflare_zone_id
-  name    = local.dagster_domain
-  type    = "CNAME"
-  content = "${cloudflare_zero_trust_tunnel_cloudflared.production.id}.cfargotunnel.com"
-  ttl     = 1
-  proxied = true
 }
 
 resource "cloudflare_dns_record" "application" {

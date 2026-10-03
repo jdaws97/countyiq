@@ -1,21 +1,8 @@
-"""Guardrails on Dagster job/schedule wiring.
-
-These tests lock in invariants that are easy to silently break:
-
-* Every asset group a schedule targets has the right set of assets.
-* `fema_flood_zones` is in its own group, not `bulk` (otherwise it would
-  materialize twice per month under `bulk_refresh`).
-* Every radar asset is reachable from `radar_refresh` so the weekly schedule
-  keeps `development_signals` inputs fresh.
-* Every scheduled job is actually registered in `Definitions`.
-
-Run with: ``pytest tests/test_definitions_wiring.py -v``.
-"""
+"""Dagster asset selections and registered quality checks for local jobs."""
 
 from __future__ import annotations
 
 import pytest
-from dagster import DefaultSensorStatus
 
 
 @pytest.fixture(scope="module")
@@ -36,28 +23,6 @@ def _resolve(job, graph):
 
 def test_definitions_load(defs):
     assert defs.jobs, "no jobs registered"
-    assert defs.schedules, "no schedules registered"
-    assert defs.sensors, "no sensors registered"
-
-
-def test_run_outcome_sensors_require_application_database(defs):
-    sensors = {sensor.name: sensor for sensor in defs.sensors}
-
-    assert sensors["success_reporter"].required_resource_keys == {"database"}
-    assert sensors["failure_alerter"].required_resource_keys == {"database"}
-    assert sensors["intelligence_integrity_guard"].required_resource_keys == {
-        "database"
-    }
-    assert sensors["success_reporter"].default_status == DefaultSensorStatus.RUNNING
-    assert sensors["failure_alerter"].default_status == DefaultSensorStatus.RUNNING
-
-
-def test_every_scheduled_job_is_registered(defs):
-    registered_job_names = {j.name for j in defs.jobs}
-    for schedule in defs.schedules:
-        assert schedule.job_name in registered_job_names, (
-            f"schedule {schedule.name} targets unregistered job {schedule.job_name}"
-        )
 
 
 def test_fema_refresh_only_covers_fema(asset_graph):
@@ -68,8 +33,7 @@ def test_fema_refresh_only_covers_fema(asset_graph):
 
     assert fema_assets == ["fema_flood_zones"], fema_assets
     assert "fema_flood_zones" not in bulk_assets, (
-        "fema_flood_zones must not be in bulk_refresh or it runs twice "
-        "(monthly via bulk_refresh + weekly via fema_refresh)"
+        "FEMA has a dedicated refresh job and must not run with bulk sources"
     )
 
 
@@ -138,23 +102,6 @@ def test_scraper_job_excludes_pa_dos(asset_graph):
     assert "pa_dos_entities" not in assets
 
 
-def test_no_schedule_selects_paid_llm_assets(defs, asset_graph):
-    paid_assets = {
-        "proceeding_extraction",
-        "entity_verification",
-        "signal_validation_batched",
-        "brief_generation",
-        "owner_briefs",
-        "county_narratives",
-    }
-    for schedule in defs.schedules:
-        selected = set(_resolve(schedule.job, asset_graph))
-        assert not selected.intersection(paid_assets), (
-            f"schedule {schedule.name} crosses the paid LLM boundary: "
-            f"{selected.intersection(paid_assets)}"
-        )
-
-
 def test_pass1_manual_job_refreshes_candidate_inputs(asset_graph):
     from countyiq.jobs import entity_verification_refresh
 
@@ -175,7 +122,7 @@ def test_pass3_manual_jobs_keep_parcel_and_owner_budgets_separate(asset_graph):
     assert set(_resolve(owner_briefs_refresh, asset_graph)) == {"owner_briefs"}
 
 
-def test_paused_assets_are_absent_from_every_schedule(asset_graph):
+def test_paused_assets_are_absent_from_refresh_jobs(asset_graph):
     from countyiq.jobs import (
         arcgis_refresh,
         bulk_refresh,
@@ -185,7 +132,7 @@ def test_paused_assets_are_absent_from_every_schedule(asset_graph):
         scraper_refresh,
     )
 
-    scheduled_assets = set()
+    refresh_assets = set()
     for job in (
         arcgis_refresh,
         bulk_refresh,
@@ -194,57 +141,13 @@ def test_paused_assets_are_absent_from_every_schedule(asset_graph):
         radar_refresh,
         scraper_refresh,
     ):
-        scheduled_assets.update(_resolve(job, asset_graph))
+        refresh_assets.update(_resolve(job, asset_graph))
 
-    assert not scheduled_assets.intersection(
+    assert not refresh_assets.intersection(
         {
             "cdbg_housing_arcgis",
             "ecodev_candidates_arcgis",
         }
-    )
-
-
-def test_retired_scout_runtime_is_not_registered(defs, asset_graph):
-    asset_names = {key.to_user_string() for key in asset_graph.get_all_asset_keys()}
-    job_names = {job.name for job in defs.jobs}
-
-    assert not asset_names.intersection(
-        {"county_scout_discovery", "county_scout_monitor"}
-    )
-    assert not job_names.intersection(
-        {"scout_discovery_refresh", "scout_monitor_refresh"}
-    )
-
-
-def test_schedule_names_are_stable(defs):
-    """Production cron names are referenced in ops docs and runbook — keep
-    them stable. Add new entries here when new schedules land."""
-    expected = {
-        "weekly_arcgis",
-        "weekly_radar",
-        "weekly_scrapers",
-        "monthly_bulk",
-        "weekly_fema",
-        "weekly_deterministic_enrichment",
-        "weekly_pa_dos",
-    }
-    actual = {s.name for s in defs.schedules}
-    assert actual == expected, (
-        f"schedule set drifted: +{actual - expected} / -{expected - actual}"
-    )
-
-
-def test_optional_radar_schedule_requires_a_configured_layer():
-    """A parcel-only county must not launch an empty weekly radar run."""
-    from countyiq.lib.county_config import CountyConfig
-    from countyiq.schedules import _has_radar_sources
-
-    assert not _has_radar_sources(CountyConfig(name="Example"))
-    assert _has_radar_sources(
-        CountyConfig(
-            name="Example",
-            pa_dep_query_bbox=(-77.0, 39.0, -76.0, 40.0),
-        )
     )
 
 

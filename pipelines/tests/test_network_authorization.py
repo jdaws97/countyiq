@@ -2,6 +2,8 @@
 
 import inspect
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from countyiq.assets.arcgis import (
@@ -10,6 +12,7 @@ from countyiq.assets.arcgis import (
     cdbg_housing,
     conservation_easements,
     ecodev_candidates,
+    environmental_diligence,
     future_landuse,
     growth_areas,
     municipalities,
@@ -34,6 +37,7 @@ GOVERNED_INGESTION_FUNCTIONS = [
     cdbg_housing.cdbg_housing_arcgis,
     conservation_easements.conservation_easements_arcgis,
     ecodev_candidates.ecodev_candidates_arcgis,
+    environmental_diligence.pa_dep_environmental_diligence,
     future_landuse.future_landuse_arcgis,
     growth_areas.growth_areas_arcgis,
     municipalities.municipalities_arcgis,
@@ -88,7 +92,7 @@ def test_network_function_authorizes_before_request(function):
     source = _decorated_source(function)
     request_offsets = [
         offset
-        for token in ("requests.get(", "get_with_retry(", "source_snapshots.metadata(")
+        for token in ("requests.get(", "get_with_retry(", "fetch_metadata(")
         if (offset := source.find(token)) >= 0
     ]
     assert request_offsets, function
@@ -125,3 +129,49 @@ def test_sheriff_listing_fetch_is_robots_gated():
 
     assert source.find("authorize_source(") < source.find("get_with_robots(")
     assert "get_with_retry(" not in source
+
+
+@pytest.mark.parametrize(
+    "module,asset_name,fetch_name",
+    [
+        (penndot_roads, "penndot_roads_arcgis", "fetch_arcgis_snapshot"),
+        (penndot_projects, "penndot_projects_arcgis", "fetch_arcgis_snapshot"),
+        (traffic_counts, "traffic_counts_arcgis", "fetch_arcgis_snapshot"),
+        (
+            environmental_diligence,
+            "pa_dep_environmental_diligence",
+            "fetch_arcgis_snapshot",
+        ),
+        (tax_claims, "tax_claims", "get_with_retry"),
+    ],
+)
+@pytest.mark.parametrize(
+    "denied_permission", ["acquisition", "derived_product", "raw_retention"]
+)
+def test_direct_source_permissions_block_network_and_writes(
+    monkeypatch, module, asset_name, fetch_name, denied_permission
+):
+    authorization = Mock()
+    authorize = Mock(return_value=authorization)
+    if denied_permission == "acquisition":
+        authorize.side_effect = RuntimeError("policy paused")
+    monkeypatch.setattr(module, "authorize_source", authorize)
+
+    def require_permission(actual_authorization, permission):
+        assert actual_authorization is authorization
+        if permission == denied_permission:
+            raise RuntimeError("policy paused")
+
+    monkeypatch.setattr(module, "require_source_use", require_permission)
+    fetch = Mock()
+    monkeypatch.setattr(module, fetch_name, fetch)
+    database = Mock()
+    archive = Mock()
+    asset_function = getattr(module, asset_name).node_def.compute_fn.decorated_fn
+
+    with pytest.raises(RuntimeError, match="policy paused"):
+        asset_function(SimpleNamespace(run_id="test-run"), database, archive)
+
+    fetch.assert_not_called()
+    assert not database.mock_calls
+    assert not archive.mock_calls

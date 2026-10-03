@@ -1,66 +1,68 @@
-# Dagster Runtime
+# Dagster runtime
 
-## Production Processes
+This release executes Dagster on the operator PC through
+`pipelines/scripts/run_pipeline.py`. The VPS hosts the application and primary
+database; its Compose graph has no Dagster service. A release receipt, not this
+document, establishes whether an existing host has completed the transition.
 
-The Compose stack runs `dagster-webserver` and `dagster-daemon` as separately
-supervised containers from the same CountyIQ pipeline image. If schedule or
-sensor evaluation dies, the daemon container fails independently instead of
-being hidden behind a healthy webserver process.
+## Execution and configuration
 
-Both processes load `countyiq.definitions` directly. This is intentionally a
-single-code-location deployment for one VPS; a separate gRPC code-server tier
-would add operational surface without isolating another team or machine.
+`countyiq/definitions.py` loads assets, checks, jobs, and resources. Jobs are
+explicit selections in `countyiq/jobs/__init__.py`; county configuration omits
+unsupported source capabilities. There are no registered schedules or sensors.
+The command chooses a named job and, optionally, assets belonging to that job.
 
-## Single-VPS Resource Envelope
+`countyiq.run_job` uses Dagster's reconstructable job API and waits for
+completion. The default multiprocess executor limits independent asset steps
+to one at a time. Bounded I/O concurrency inside an asset remains available.
+The wrapper also excludes overlapping commands sharing its local state
+directory, while production sessions share the VPS deployment lock.
 
-The production instance queues at most one Dagster run, and CountyIQ's default
-multiprocess executor launches at most one asset step inside that run. Internal
-I/O concurrency remains available inside an asset (for example, the parcel
-loader keeps four ArcGIS pages in flight), but independent assets cannot stack
-their peak memory on the 8 GB VPS.
+See [Local pipeline commands](../operations/local-pipelines.md) for setup,
+production and development invocations, asset subsets, and native script modes.
 
-Compose also applies cgroup limits: 3 GB for the daemon plus its launched run
-and step processes, 2 GB for PostgreSQL, 768 MB each for the API and Dagster
-webserver, and 256 MB for Caddy. These are containment limits, not capacity
-proof. An OOM-killed pipeline should fail without taking the serving API or
-database with it, and the host still needs memory/disk monitoring.
+## Durable local state
 
-The York parcel fetch benchmark on 2026-08-31 found that retaining every
-ArcGIS page used about 1.27 GiB before database loading. The production asset
-now consumes a four-page bounded iterator; its fetch-only Python benchmark used
-about 160 MiB. Benchmark details and the Rust comparison live in
-`benchmarks/arcgis-ingestion/README.md`.
+The default state root is `~/.local/state/countyiq/pipeline`; `--state-dir`
+changes it. The wrapper creates private directories and sets:
 
-## Durable State
+- `DAGSTER_HOME` to `<state>/dagster`, using Dagster's local SQLite storage for
+  run/event history and its local compute logs;
+- `COUNTYIQ_ARCHIVE_DIR` to `<state>/archives`;
+- `COUNTYIQ_BACKFILL_STATE_DIR` to `<state>/intelligence`;
+- `COUNTYIQ_SUBSCRIPTION_STATE_DIR` to `<state>/subscription`; and
+- `TMPDIR` to `<state>/tmp`.
 
-- Dagster run, event, and schedule storage uses the `dagster` database in the
-  production PostgreSQL/PostGIS container.
-- Local artifacts and compute logs use the shared `dagster-storage` volume at
-  `/opt/dagster/storage`.
-- Source and model archives use the host-backed `/opt/countyiq/archives` mount
-  and are copied off-host by `docker/backup.sh`.
-- Both the `countyiq` and `dagster` databases are included in daily backups.
+`pipelines/dagster.yaml` disables telemetry. The wrapper copies that file into
+the local Dagster home and rejects conflicting existing contents. It does not
+configure PostgreSQL Dagster storage or a queued daemon launcher.
 
-SQLite is not part of the production path. Local test-created Dagster homes
-are generated artifacts and are ignored by git.
+Source archives still go to the governed R2 bucket. Local run state and model
+artifacts need separate operator preservation; VPS backups contain only the
+primary application database. Any old server-side Dagster state retained at
+cutover is historical evidence, not an active storage backend.
 
-## Registered Schedules
+## Health reporting
 
-All schedules use `America/New_York` explicitly. The source jobs are staggered
-before the Sunday deterministic enrichment run; manual pass-specific jobs
-remain available in the Dagster UI but have no schedules.
+The job runner waits for completion and writes `meta.job_run_status` and
+per-asset source outcomes synchronously through `lib/run_reporting.py`.
+Failed asset checks cause a failed report even if Dagster finished the job.
+Full events stay local; the API reads only the compact application ledgers.
 
-| Schedule | Cadence |
-|---|---|
-| `weekly_arcgis` | Sunday 02:00 |
-| `weekly_radar` | Sunday 02:30 |
-| `weekly_scrapers` | Sunday 03:00 |
-| `weekly_pa_dos` | Sunday 03:30 |
-| `weekly_fema` | Sunday 04:00 |
-| `weekly_deterministic_enrichment` | Sunday 08:00 |
-| `monthly_bulk` | First day of month 05:00 |
+A report failure exits nonzero. Keep the local Dagster history and retry
+`run_pipeline.py --report-run <run-id>` using the same state directory and
+the appropriate connection options. This republishes a finished run's health
+receipts without rerunning source acquisition.
 
-The schedule list in `countyiq/schedules/__init__.py` is authoritative. A new
-source asset joins an existing job only when that job selects its group. Paid
-LLM assets must remain outside every schedule. A new group or cadence requires
-a registered job, schedule, wiring test, and this table to be updated together.
+## Production connection
+
+The SSH wrapper requires a clean checkout matching the active release. The VPS
+helper holds `/var/lock/countyiq-deploy.lock`, checks the cost-stop latch,
+lends allowlisted settings in memory, and enables the separate writer role
+only for that session. Heartbeats maintain the lease. Cleanup restores
+`NOLOGIN` and terminates writer connections before releasing the lock.
+
+Production sessions disable inference Passes 0–4. Source and deterministic
+jobs therefore retain the existing no-inference boundary. Native subscription
+authoring uses the wrapper's named `--script` modes and its separate validation
+and artifact workflow.

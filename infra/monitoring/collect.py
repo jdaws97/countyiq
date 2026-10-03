@@ -22,8 +22,6 @@ from pathlib import Path
 SERVICES = (
     "postgres",
     "api",
-    "dagster-webserver",
-    "dagster-daemon",
     "caddy",
     "cloudflared",
 )
@@ -45,7 +43,7 @@ SELECT json_build_object(
             'temp_bytes', temp_bytes
         ))
         FROM pg_stat_database
-        WHERE datname IN ('countyiq', 'dagster')
+        WHERE datname = 'countyiq'
     ),
     'connection_limit', current_setting('max_connections')::integer,
     'connections', (SELECT count(*) FROM pg_stat_activity),
@@ -310,35 +308,25 @@ def collect_postgres(metrics: Metrics) -> None:
     metrics.add("postgres_total_connections", result["connections"])
 
 
-def container_probe(service: str, probe: str) -> dict:
-    interpreter = (
-        "/app/.venv/bin/python"
-        if service == "api"
-        else "/opt/pipelines/.venv/bin/python"
-    )
+def container_probe(probe: str) -> dict:
     output = command(
-        ["docker", "exec", "-i", f"countyiq-{service}", interpreter, "-", probe],
+        [
+            "docker",
+            "exec",
+            "-i",
+            "countyiq-api",
+            "/app/.venv/bin/python",
+            "-",
+            probe,
+        ],
         input_text=PROBE_FILE.read_text(),
         timeout=75,
     )
     return json.loads(output)
 
 
-def collect_dagster(metrics: Metrics) -> None:
-    result = container_probe("dagster-webserver", "dagster")
-    for daemon, heartbeat in result["daemons"].items():
-        metrics.add(
-            "dagster_heartbeat_timestamp_seconds", heartbeat["timestamp"], daemon=daemon
-        )
-        metrics.add("dagster_heartbeat_errors", heartbeat["errors"], daemon=daemon)
-    for status, runs in result["runs"].items():
-        metrics.add("dagster_runs", runs["count"], status=status)
-        metrics.add("dagster_oldest_run_seconds", runs["oldest_seconds"], status=status)
-    metrics.add("dagster_failures_24h", result["failures_24h"])
-
-
 def collect_sources(metrics: Metrics) -> None:
-    result = container_probe("api", "sources")
+    result = container_probe("sources")
     for source, item in result["sources"].items():
         metrics.add("source_healthy", item["healthy"], source=source)
         metrics.add("source_stale", item["stale"], source=source)
@@ -443,13 +431,12 @@ COLLECTORS = {
     "storage": collect_storage,
     "caddy": collect_caddy,
     "postgres": collect_postgres,
-    "dagster": collect_dagster,
     "sources": collect_sources,
     "recovery": collect_recovery,
     "openrouter": collect_openrouter,
 }
 GROUPS = {
-    "fast": ("containers", "dagster", "caddy"),
+    "fast": ("containers", "caddy"),
     "slow": ("postgres", "sources", "recovery", "openrouter"),
     "storage": ("storage",),
 }

@@ -1,7 +1,0 @@
-{
-  "version": "0.153.4",
-  "linux": {
-    "x86_64": "f479424eca092484dc40d87ae28c44f4cc40234a60045d6131e493800d814a30",
-    "aarch64": "5cda6182bd94c3a30f2eb63a495489ebf7f691fddb14d70f48c6c1a5071b6cde"
-  }
-}
