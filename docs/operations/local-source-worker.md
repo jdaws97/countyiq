@@ -80,9 +80,14 @@ verification enabled. The examples run from the repository root on the PC.
    Submitting the same bundle again returns its existing run ID and status. If
    that run failed, acquire a new bundle for the failed assets.
 
-5. Run the applicable deterministic enrichment job after successful imports if
-   derived screening needs rebuilding. Do not enable paid inference to complete
-   a source refresh. Verify a real property's relevant evidence and timestamps.
+5. After tax, DEP or transportation-project imports, launch
+   `deterministic_enrichment_refresh` with only `development_signals`,
+   `development_momentum` and `intelligence_events` selected. These outputs use
+   the refreshed source data. Roads and traffic are also read directly by the
+   property API. A full enrichment selection includes owner-candidate matching,
+   which can take many minutes and is not required for these five source assets.
+   Do not enable paid inference to complete a source refresh. Verify a real
+   property's relevant evidence and timestamps.
 
 ## Failure and retention behavior
 

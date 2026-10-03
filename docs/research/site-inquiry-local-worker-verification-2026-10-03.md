@@ -64,12 +64,13 @@ not committed as customer records.
 
 ## Validation
 
-The worker release passed the complete pipeline unit suite (2,082 tests), fresh
-isolated database integration suite (150 tests), Dagster definitions validation,
-CI and API Contract workflows before production import. The clock-offset follow-up
-passed 26 focused snapshot tests. Inquiry/workspace API tests passed (11), including
-account isolation, version conflicts and question-response validation. Frontend
-validation includes its 73 tests, applied Prettier formatting, TypeScript build,
+The final implementation passed the complete pipeline unit suite (2,084 tests),
+fresh isolated pipeline database integration suite (150 tests), API database
+suite (245 tests), Dagster definitions validation, CI and API Contract workflows.
+The clock-offset follow-up passed 26 focused snapshot tests. Inquiry/workspace
+API tests passed (11), including account isolation, version conflicts and
+question-response validation. Frontend validation includes its 73 tests,
+applied Prettier formatting, TypeScript build,
 ESLint and the production Vite build. Ruff formatting was applied to Python code.
 The map remains a separate lazy-loaded bundle; its existing bundle-size advisory
 still appears during builds.
