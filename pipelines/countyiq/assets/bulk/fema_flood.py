@@ -83,7 +83,14 @@ def _fetch_page(url: str, attempt: int = 1) -> dict:
     try:
         resp = requests.get(url, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
-        return resp.json()
+        page = resp.json()
+        if not isinstance(page, dict):
+            raise RuntimeError("FEMA returned an invalid page response")
+        if "error" in page:
+            raise RuntimeError("FEMA returned an ArcGIS service error")
+        if not isinstance(page.get("features"), list):
+            raise RuntimeError("FEMA response is missing its feature list")
+        return page
     except requests.exceptions.RequestException as e:
         status_code = e.response.status_code if e.response is not None else None
         retryable = not isinstance(e, requests.exceptions.HTTPError) or (
@@ -127,6 +134,8 @@ def _fetch_all_pages(base_url: str, layer_id: int, dfirm_id: str, context) -> di
             break
         offset += PAGE_SIZE
 
+    if not all_features:
+        raise RuntimeError("FEMA returned no flood hazard features for the county")
     return {"type": "FeatureCollection", "features": all_features}
 
 
@@ -183,8 +192,7 @@ def fema_flood_zones(
     context.log.info(f"Parsed {len(records)} flood zone records")
 
     if not records:
-        context.log.warning("No flood zone records parsed — skipping upsert")
-        return MaterializeResult(metadata={"record_count": MetadataValue.int(0)})
+        raise RuntimeError("No usable FEMA flood zone records parsed")
 
     # 3b. Truncation guard
     if len(records) < county.fema_min_records:

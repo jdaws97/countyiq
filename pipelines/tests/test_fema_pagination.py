@@ -74,3 +74,52 @@ def test_page_fetch_does_not_retry_non_retryable_4xx(monkeypatch):
         fema_flood._fetch_page("https://example.test")
     assert get.call_count == 1
     sleep.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (None, "invalid page response"),
+        ([], "invalid page response"),
+        ({"error": {"code": 500, "message": "query failed"}}, "ArcGIS service error"),
+        ({}, "missing its feature list"),
+        ({"features": None}, "missing its feature list"),
+        ({"features": {}}, "missing its feature list"),
+    ],
+)
+def test_http_success_cannot_hide_service_errors_or_invalid_pages(
+    monkeypatch, payload, message
+):
+    response = Mock()
+    response.json.return_value = payload
+    get = Mock(return_value=response)
+    monkeypatch.setattr(fema_flood.requests, "get", get)
+
+    with pytest.raises(RuntimeError, match=message):
+        fema_flood._fetch_page("https://example.test")
+    get.assert_called_once()
+
+
+def test_empty_county_response_cannot_be_reported_as_a_successful_refresh(monkeypatch):
+    fetch_page = Mock(return_value={"features": [], "exceededTransferLimit": False})
+    monkeypatch.setattr(fema_flood, "_fetch_page", fetch_page)
+
+    with pytest.raises(RuntimeError, match="no flood hazard features"):
+        fema_flood._fetch_all_pages("https://example.test", 28, "42133C", Mock())
+    fetch_page.assert_called_once()
+
+
+def test_error_on_a_later_page_does_not_publish_a_partial_county(monkeypatch):
+    first = Mock()
+    first.json.return_value = {
+        "features": [{"attributes": {"FLD_AR_ID": "one"}}],
+        "exceededTransferLimit": True,
+    }
+    failed = Mock()
+    failed.json.return_value = {"error": {"code": 500, "message": "query failed"}}
+    get = Mock(side_effect=[first, failed])
+    monkeypatch.setattr(fema_flood.requests, "get", get)
+
+    with pytest.raises(RuntimeError, match="ArcGIS service error"):
+        fema_flood._fetch_all_pages("https://example.test", 28, "42133C", Mock())
+    assert get.call_count == 2
