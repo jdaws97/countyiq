@@ -6,19 +6,26 @@ from api.lib.evidence import NFHL_FLOOD_HAZARD_LAYER, evidence_item, with_arcgis
 
 
 def parcel_flood_screening(cur, pidn: str) -> dict:
+    # County-wide Zone X geometries can contain hundreds of thousands of points.
+    # Clip to the parcel's envelope before repair, then intersect its actual
+    # footprint. The fast rectangular clip can be invalid, so repair is required:
+    # https://postgis.net/docs/ST_ClipByBox2D.html
+    # Materialization prevents the planner from repeating those spatial steps.
     cur.execute(
         """
-        WITH parcel AS (
+        WITH parcel AS MATERIALIZED (
             SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
             FROM staging.parcels WHERE pidn = %(pidn)s AND valid_to IS NULL
-        ), clips AS (
+        ), clips AS MATERIALIZED (
             SELECT f.fld_ar_id, f.fld_zone, f.sfha_tf, f.source_url, f.valid_from,
                    ST_CollectionExtract(ST_Intersection(
-                       ST_CollectionExtract(ST_MakeValid(f.geom), 3), p.geom
+                       ST_CollectionExtract(ST_MakeValid(
+                           ST_ClipByBox2D(f.geom, Box2D(p.geom))
+                       ), 3), p.geom
                    ), 3) AS geom
             FROM staging.flood_zones f CROSS JOIN parcel p
             WHERE f.valid_to IS NULL AND f.geom && p.geom
-        ), positive AS (
+        ), positive AS MATERIALIZED (
             SELECT * FROM clips WHERE NOT ST_IsEmpty(geom) AND ST_Area(geom) > 0
         ), coverage AS (
             SELECT ST_UnaryUnion(ST_Collect(geom)) AS mapped,

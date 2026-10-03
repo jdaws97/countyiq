@@ -82,6 +82,32 @@ def test_duplicate_polygons_do_not_inflate_overlap(client):
     assert flood["overlap_pct"] == pytest.approx(50, abs=0.1)
 
 
+@pytest.mark.parametrize(
+    ("hole", "expected_coverage"), [(PARCEL_RIGHT, 50.0), (PARCEL_FULL, None)]
+)
+def test_clipping_large_enclosing_polygon_preserves_coverage_holes(
+    client, hole, expected_coverage
+):
+    with psycopg2.connect(DB_ENV["DATABASE_URL"]) as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT ST_AsText(ST_Multi(ST_Difference(
+                ST_MakeEnvelope(-77, 39, -76, 40, 4326),
+                ST_GeomFromText(%s, 4326)
+            )))""",
+            (hole,),
+        )
+        geometry = cur.fetchone()[0]
+    set_mapping("X", "F", geometry)
+
+    response = client.get(f"/api/parcels/{TEST_PIDN}/summary")
+
+    assert response.status_code == 200
+    flood = response.json()["flood_zone"]
+    assert flood["status"] == "unknown"
+    assert flood["mapped_coverage_pct"] == expected_coverage
+    assert flood["overlap_pct"] is None
+
+
 def test_empty_coverage_and_missing_parcel_geometry_are_unknown(client):
     set_mapping(copies=0)
     flood = client.get(f"/api/parcels/{TEST_PIDN}").json()["flood_zone"]

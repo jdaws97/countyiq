@@ -105,6 +105,16 @@ null transitions, and an unchanged replay retains the same version. This can
 also create a version when a publisher reorders equivalent coordinates; it
 avoids running topological comparisons on invalid source geometries.
 
+The repaired production FEMA run `77b1c56f-d249-4d5a-9541-6479b55a31f0` completed
+with 5,263 distinct current rows and no missing geometries. The complete map
+exposed a serving cost hidden by the truncated snapshot: large Zone X polygons
+made a sample intake query exceed 20 seconds. Flood screening now clips each
+candidate to the parcel envelope before repairing and intersecting its actual
+footprint, and materializes intermediate results to prevent repeated work.
+Holes still remain coverage gaps. Read-only timings on three production parcels
+were 0.019–0.187 seconds with unchanged screening results, compared with
+0.256–16.216 seconds for materialization alone.
+
 Address recovery run `b050f6a7-8467-4b50-b7c6-0d6c95ef0908` downloaded 192,075
 features before the transaction rejected duplicate `Site_NGUID`
 `SSAP_6004861 @YCDES.ORG`. The official service returns two distinct objects,
