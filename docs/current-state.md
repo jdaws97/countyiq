@@ -7,6 +7,23 @@ use the [September 5 launch record](operations/production-launch-2026-09-05.md).
 The private app is live; municipal extraction publication and full backfill
 remain gated. The model defaults below are configuration, not quality approval.
 
+## October 3 direction and assessment status
+
+The selected next direction is [site-intake research for York County civil and
+land-planning firms](products/site-intake.md): a client-supplied property and
+proposed use become a cited research handoff with explicit unresolved questions.
+This deliberately reopens the earlier investor-only audience below. Customer
+demand and pricing remain unvalidated; implementation and live acceptance are
+unfinished.
+
+The current remote product baseline is `codex/emerging-intelligence-pilot`,
+35 commits ahead of `main`. Its release record documents production through
+September 9; the live deployed commit has not been re-read in this assessment.
+October 2 Grafana email reports 23 source warnings. See
+[the repair PR](https://github.com/jdaws97/countyiq/pull/36) for tested code changes
+and remaining runtime verification. The historical counts and status below are
+dated records, not current production measurements.
+
 ## What CountyIQ Is Right Now
 
 CountyIQ is a real-estate intelligence platform for York County, PA. The repo contains:

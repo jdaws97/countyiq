@@ -9,6 +9,21 @@ customer journey and durable documentation so subsequent agents would not restor
 the previous layout. This records that direction; it is not evidence of customer
 interviews or commercial validation.
 
+## October 3 site-intake direction
+
+[Site-intake research](../products/site-intake.md) is the selected next product
+direction. Its primary journey is **My site inquiries → identify property →
+describe intended use → review evidence and municipal history → retain or
+resolve questions → save/export → return when inputs change**.
+
+This direction is planned, not an implemented or commercially validated
+replacement for the journeys documented below. Preserve the shared shell,
+source viewer, current source-policy checks, private workspace state and existing
+saved work while implementing it. Property screening must distinguish missing,
+partial and stale data from a supported absence of a mapped constraint. The
+site, proposed use, findings and questions should lead the eventual handoff;
+broad opportunity rankings become supporting research.
+
 ## Customer and outcome
 
 CountyIQ helps a small developer or acquisition team investigate a place: notice
