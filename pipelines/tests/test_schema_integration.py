@@ -571,6 +571,80 @@ def test_asset_refresh_receipts_replay_without_losing_later_failures() -> None:
 
 
 @pytest.mark.integration
+def test_failed_asset_check_reports_without_advancing_verified_freshness(
+    monkeypatch,
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from countyiq.lib import run_reporting
+    from countyiq.lib.asset_refresh_status import (
+        AssetRefreshOutcome,
+        record_asset_refresh_outcome,
+    )
+    from dagster import DagsterRun, DagsterRunStatus
+
+    connection = _connect()
+    database = _TransactionalDatabase(connection)
+    run = DagsterRun(
+        job_name="schema_test_check_report",
+        run_id="schema-test-check-report",
+        status=DagsterRunStatus.SUCCESS,
+    )
+    asset_key = "plcb_licenses"
+    older = datetime(2026, 10, 1, 10, tzinfo=UTC)
+    newer = datetime(2026, 10, 2, 10, tzinfo=UTC)
+    instance = Mock()
+    instance.get_run_record_by_id.return_value = SimpleNamespace(
+        dagster_run=run,
+        start_time=older.timestamp(),
+        end_time=newer.timestamp(),
+    )
+    monkeypatch.setattr(
+        run_reporting,
+        "run_checks",
+        lambda *args: [{"asset": asset_key, "name": "verified_rows", "passed": False}],
+    )
+    monkeypatch.setattr(
+        run_reporting,
+        "collect_asset_refresh_outcomes",
+        lambda *args: [
+            AssetRefreshOutcome(asset_key, newer, "success", record_count=99)
+        ],
+    )
+    try:
+        database.execute(
+            "DELETE FROM meta.asset_refresh_status WHERE asset_key = %s",
+            (asset_key,),
+        )
+        record_asset_refresh_outcome(
+            database,
+            run=run,
+            outcome=AssetRefreshOutcome(asset_key, older, "success", record_count=42),
+        )
+        for _ in range(2):
+            report = run_reporting.record_run_outcome(instance, database, run.run_id)
+            assert report["status"] == "failure"
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT status, last_success_at, record_count, failure_reason
+                FROM meta.asset_refresh_status WHERE asset_key = %s
+                """,
+                (asset_key,),
+            )
+            assert cursor.fetchone() == ("failure", older, None, "unverified_result")
+            cursor.execute(
+                "SELECT status FROM meta.job_run_status WHERE job_name = %s",
+                (run.job_name,),
+            )
+            assert cursor.fetchone() == ("failure",)
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+@pytest.mark.integration
 def test_source_audit_ledgers_are_append_only() -> None:
     connection = _connect()
     try:
