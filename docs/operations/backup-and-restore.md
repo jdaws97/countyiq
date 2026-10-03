@@ -1,7 +1,7 @@
 # Backup and Restore
 
 `docker/backup.sh` creates one uniquely named custom-format dump for the
-CountyIQ product database and one for Dagster. It validates each dump locally,
+CountyIQ product database. It validates the dump locally,
 adds a portable SHA-256 sidecar, uploads immutable objects to private R2,
 download-checks them, and uploads/read-backs a manifest last. Only a backup ID
 with that completion manifest is eligible for restore.
@@ -14,7 +14,7 @@ for at least the required recovery window. Set
 `COUNTYIQ_BACKUP_BUCKET_LOCK_CONFIRMED=true` only after reviewing that lock.
 The dedicated `COUNTYIQ_BACKUP_R2_*` storage credential in
 `/etc/countyiq/production.env` should be scoped to the private backup bucket and must be
-different from Dagster's raw-archive credential. Bucket-configuration
+different from the pipeline's raw-archive credential. Bucket-configuration
 authority belongs to a third, operator-only credential that is not stored on
 the VPS.
 
@@ -41,11 +41,18 @@ systemctl status countyiq-backup.service --no-pager
 systemctl list-timers countyiq-backup.timer --no-pager
 ```
 
-The restore script downloads the completion manifest, dump, and checksum for
-both databases, restores them into exact disposable sibling databases, runs
-sanity queries, drops only those drill databases, and writes a root-readable
-receipt under `/var/lib/countyiq/restore-drills/`. It never targets the live
-database names.
+The restore script downloads the completion manifest, primary dump, and checksum.
+It restores schema and table data into an exact disposable sibling database,
+runs `ANALYZE`, then restores indexes, constraints, and materialized views.
+Statistics must exist before the view refreshes are planned; waiting for
+autovacuum can leave the first refresh using a slow plan.
+After sanity queries, it drops only its drill database and writes a root-readable
+receipt under `/var/lib/countyiq/restore-drills/`. It never targets the live database.
+Historical manifests containing a retired Dagster dump remain valid for restoring
+the primary database; the retired dump is not downloaded.
+
+Local Dagster history and subscription artifacts live on the operator PC and
+need a separate backup; see [Local pipeline commands](local-pipelines.md).
 
 ## Daily verification
 
@@ -70,13 +77,14 @@ configured receipt age can block a deployment.
 Recovery is intentionally not automated because choosing a backup and cutting
 over production are destructive decisions:
 
-1. Keep API, Dagster daemon, and Dagster webserver stopped. Preserve the failed
+1. Keep the API stopped and the local pipeline writer at `NOLOGIN`. Preserve the failed
    volume and release receipts; take a provider snapshot when the disk is
    healthy enough to do so.
 2. Select a completed backup ID from R2 and run `restore-drill.sh` first. This
    proves the exact off-host set is readable without touching production.
 3. Restore the selected dump to a new database, new Docker volume, or
-   replacement host. Never restore over the only production database.
+   replacement host. Use the same schema/data, `ANALYZE`, and post-data sequence
+   as the drill. Never restore over the only production database.
 4. Run Alembic only to the reviewed application's revision, refresh both
    runtime roles, and execute readiness/contract smoke checks against the new
    target.
