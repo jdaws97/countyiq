@@ -35,7 +35,7 @@ def source_health() -> dict:
             sources[name] = {
                 "healthy": source["status"] == "green",
                 "stale": bool(source.get("stale", False)),
-                "records": source.get("count"),
+                "records": source.get("record_count"),
                 "last_success": last_success.timestamp() if last_success else 0,
             }
         return {

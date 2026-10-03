@@ -55,6 +55,34 @@ class CollectorTests(unittest.TestCase):
             'countyiq_container_running{service="postgres"} 0', metrics.render()
         )
 
+    def test_tripped_guard_is_exported_when_capacity_receipt_is_incomplete(self):
+        def fake_command(arguments, **kwargs):
+            if arguments[0] == "journalctl":
+                return ""
+            if "countyiq-backup.timer" in arguments:
+                return "active\n"
+            return "ExecMainStatus=0\nResult=success\n"
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            guard = base / "cost-guard"
+            guard.mkdir()
+            (guard / "status.env").write_text(
+                "checked_at=2026-10-03T12:00:00Z\n", encoding="utf-8"
+            )
+            (guard / "tripped").touch()
+            metrics_dir = base / "metrics"
+            with patch.object(collect, "BASE_DIR", base):
+                with patch.object(collect, "command", side_effect=fake_command):
+                    self.assertTrue(collect.run_collector("recovery", metrics_dir))
+            rendered = (metrics_dir / "recovery.prom").read_text()
+        self.assertIn("countyiq_cost_guard_tripped 1\n", rendered)
+        self.assertNotIn("countyiq_r2_bytes", rendered)
+        self.assertNotIn("countyiq_r2_limit_bytes", rendered)
+        self.assertIn(
+            'countyiq_monitor_collector_success{collector="recovery"} 1\n', rendered
+        )
+
     def test_size_parser_distinguishes_decimal_and_binary_units(self):
         self.assertEqual(collect.size_bytes("1.5 GB"), 1_500_000_000)
         self.assertEqual(collect.size_bytes("1.5GiB"), 1.5 * 1024**3)

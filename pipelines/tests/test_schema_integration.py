@@ -353,8 +353,10 @@ def test_source_governance_and_site_readiness_schema() -> None:
                 ORDER BY rights_status
                 """
             )
+            # Revision 077 adds eight reviewed replacement bodies while the
+            # original misidentified source keys remain paused.
             assert dict(cursor.fetchall()) == {
-                "conditional": 104,
+                "conditional": 112,
                 "paused": 18,
             }
 

@@ -2,11 +2,11 @@
   {
     "uid": "host-telemetry-missing",
     "title": "Host telemetry missing",
-    "expr": "(max without (instance, job) (up{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 0)) or absent_over_time(up{instance=\"countyiq-production\",job=\"countyiq/host\"}[10m])",
-    "for": "10m",
+    "expr": "max((max_over_time(up{instance=\"countyiq-production\",job=\"countyiq/host\"}[10m]) == bool 0) or absent_over_time(up{instance=\"countyiq-production\",job=\"countyiq/host\"}[10m]))",
+    "for": "0m",
     "severity": "critical",
-    "summary": "Host telemetry is down or absent for ten minutes.",
-    "description": "Check the host exporter and metrics ingestion before interpreting dependent alerts."
+    "summary": "No successful host telemetry has been observed in the last ten minutes.",
+    "description": "The ten-minute query window supplies the delay; there is no additional pending period. A new installation with no telemetry history alerts immediately. Check the host exporter and metrics ingestion before interpreting dependent alerts."
   },
   {
     "uid": "filesystem-warning",
@@ -137,11 +137,11 @@
   {
     "uid": "r2-capacity-or-guard",
     "title": "R2 capacity high or guard tripped",
-    "expr": "(((countyiq_r2_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",bucket=\"total\"} / ignoring(bucket) countyiq_r2_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 0.85) + ignoring(bucket) (countyiq_cost_guard_tripped{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 1)) > bool 0",
+    "expr": "((max((countyiq_r2_bytes{instance=\"countyiq-production\",job=\"countyiq/host\",bucket=\"total\"} / ignoring(bucket) countyiq_r2_limit_bytes{instance=\"countyiq-production\",job=\"countyiq/host\"}) > bool 0.85) or vector(0)) + (max(countyiq_cost_guard_tripped{instance=\"countyiq-production\",job=\"countyiq/host\"} == bool 1) or vector(0))) > bool 0",
     "for": "15m",
     "severity": "critical",
     "summary": "R2 use exceeds 85% of the configured limit or the cost guard tripped.",
-    "description": "Reduce stored data or correct the limit and guard configuration."
+    "description": "Either capacity pressure or a tripped cost guard is sufficient. A missing capacity measurement must not suppress a tripped guard; collector and guard-freshness alerts own missing telemetry."
   },
   {
     "uid": "r2-cost-guard-stale",

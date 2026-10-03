@@ -302,6 +302,26 @@ cache. All six containers remained running, and current/previous release image
 identities were verified again after cleanup. The R2 query returned 7.91 GB of
 20 GB configured capacity (39.5%).
 
+### Alert behavior repairs — October 3, 2026
+
+These source changes require provisioning and a collector deployment before they
+change production behavior. A code review or CI result is not a live recovery
+receipt.
+
+- Host telemetry uses one ten-minute window with no additional pending delay.
+  Failed scrapes and missing ingestion share one alert identity. With no prior
+  telemetry at all, the rule alerts immediately; a successful scrape clears it.
+- R2 capacity pressure and the tripped guard flag are evaluated independently.
+  A missing capacity receipt cannot hide a tripped guard. Collector and guard
+  freshness alerts continue to own missing telemetry.
+- Source record totals use the API's `record_count` field. Explicit zero remains
+  zero, while an unknown count is omitted.
+
+Regression coverage includes incomplete recovery receipts, the API-to-metric
+record-count contract, independent R2 conditions, and actual alert firing times
+through failed scrapes, missing ingestion, and recovery. The host timing test
+retains the catalog's pending period rather than overriding it.
+
 ## Validation
 
 ```bash
