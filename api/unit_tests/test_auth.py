@@ -1,5 +1,8 @@
 """Validate Access signature and claims, not a caller-supplied email header."""
 
+import base64
+import io
+import json
 import time
 from types import SimpleNamespace
 import jwt
@@ -269,3 +272,73 @@ def test_session_operator_role_uses_verified_identity(configured, monkeypatch):
         request({"Cf-Access-Jwt-Assertion": token(email="operator@example.test")})
     )
     assert session_payload(operator, None)["operator"] is True
+
+
+@pytest.mark.parametrize("part", ["header", "payload"])
+def test_deeply_nested_token_json_returns_401(configured, part):
+    nested = b"[" * 1500 + b"0" + b"]" * 1500
+    if part == "header":
+        header = b'{"alg":"RS256","kid":"test-key","nested":' + nested + b"}"
+        segments = token().split(".")
+        segments[0] = base64.urlsafe_b64encode(header).rstrip(b"=").decode()
+        malformed = ".".join(segments)
+    else:
+        malformed = jwt.api_jws.encode(
+            b'{"nested":' + nested + b"}",
+            KEY,
+            algorithm="RS256",
+            headers={"kid": "test-key"},
+        )
+
+    assert len(malformed) < 16384
+    with pytest.raises(HTTPException) as exc:
+        auth.require_identity(request({"Cf-Access-Jwt-Assertion": malformed}))
+    assert exc.value.status_code == 401
+
+
+def test_real_jwks_client_bounds_refresh_and_accepts_rotation(monkeypatch):
+    monkeypatch.setenv("COUNTYIQ_AUTH_PROVIDER", "cloudflare_access")
+    monkeypatch.setenv("COUNTYIQ_ACCESS_ISSUER", ISSUER)
+    monkeypatch.setenv("COUNTYIQ_ACCESS_AUD", "test-audience")
+    monkeypatch.setattr(auth.verification_limiter, "allow", lambda ip: True)
+    clock = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    public_key = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(KEY.public_key()))
+    keys = [{**public_key, "kid": "test-key", "use": "sig"}]
+    fetched = []
+
+    def open_keys(remote_request, timeout):
+        fetched.append(remote_request.full_url)
+        return io.BytesIO(json.dumps({"keys": keys}).encode())
+
+    monkeypatch.setattr(
+        jwt.jwks_client.urllib.request,
+        "build_opener",
+        lambda *handlers: SimpleNamespace(open=open_keys),
+    )
+    auth.signing_keys.cache_clear()
+    try:
+        assert auth.require_identity(
+            request({"Cf-Access-Jwt-Assertion": token()})
+        ).subject == "user-one"
+        claims = jwt.decode(token(), options={"verify_signature": False})
+        keys.append({**public_key, "kid": "rotated-key", "use": "sig"})
+        rotated = jwt.encode(
+            claims, KEY, algorithm="RS256", headers={"kid": "rotated-key"}
+        )
+        for _ in range(3):
+            with pytest.raises(HTTPException) as exc:
+                auth.require_identity(
+                    request({"Cf-Access-Jwt-Assertion": rotated})
+                )
+            assert exc.value.status_code == 401
+        assert fetched == [ISSUER + "/cdn-cgi/access/certs"]
+
+        clock[0] += 31
+        identity = auth.require_identity(
+            request({"Cf-Access-Jwt-Assertion": rotated})
+        )
+        assert identity.subject == "user-one"
+        assert len(fetched) == 2
+    finally:
+        auth.signing_keys.cache_clear()
